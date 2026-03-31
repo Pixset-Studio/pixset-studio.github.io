@@ -172,6 +172,46 @@
     text-shadow: 0 0 8px var(--neon-cyan);
   }
 
+  /* DESKTOP DROPDOWN */
+  .nav-links .has-dropdown { position: relative; }
+  .nav-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 220px;
+    background: rgba(2, 6, 12, 0.97);
+    border: 1px solid rgba(0, 229, 255, 0.15);
+    backdrop-filter: blur(20px);
+    padding: 8px 0;
+    z-index: 500;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6), 0 0 20px rgba(0,229,255,0.05);
+  }
+  .nav-dropdown-menu::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-green), transparent);
+  }
+  .nav-dropdown-menu a {
+    display: block;
+    padding: 8px 20px;
+    border: none;
+    font-size: 11px;
+    color: rgba(180,220,255,0.7);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .nav-dropdown-menu a:hover {
+    color: var(--neon-cyan);
+    background: rgba(0,229,255,0.06);
+    padding-left: 26px;
+    border: none;
+  }
+  .has-dropdown:hover .nav-dropdown-menu { display: block; }
+
   /* HAMBURGER */
   .hamburger {
     display: none;
@@ -198,7 +238,39 @@
     padding: 20px;
     flex-direction: column;
     gap: 4px;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
   }
+  .mobile-nav.open { display: flex; }
+  .hamburger.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.active span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .hamburger.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* WIKI SUBMENU in mobile */
+  .mobile-submenu {
+    display: none;
+    flex-direction: column;
+    padding-left: 16px;
+    border-left: 1px solid rgba(0,229,255,0.2);
+    margin: 4px 0 4px 16px;
+  }
+  .mobile-submenu.open { display: flex; }
+  .mobile-nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+  .mobile-nav-item a { flex: 1; }
+  .mobile-expand {
+    color: rgba(0,229,255,0.5);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    padding: 10px 8px;
+    transition: color 0.2s, transform 0.2s;
+    display: inline-block;
+  }
+  .mobile-expand.open { transform: rotate(90deg); color: var(--neon-cyan); }
   .mobile-nav a {
     color: rgba(200, 230, 255, 0.8);
     text-decoration: none;
@@ -838,7 +910,7 @@
   @media (max-width: 900px) {
     .nav-links { display: none; }
     .hamburger { display: flex; }
-    .mobile-nav { display: flex; }
+    .mobile-nav { /* controlled by .open class only */ }
     .about-grid { grid-template-columns: 1fr; }
     .about-visual { display: none; }
     .stats-row { grid-template-columns: 1fr; }
@@ -921,27 +993,71 @@
   </a>
   <ul class="nav-links">
     <li><a href="#about">О нас</a></li>
-    <li><a href="https://sites.google.com/view/pixset-studio/Games" target="_blank">Наши игры</a></li>
-    <li><a href="https://sites.google.com/view/pixset-studio/News" target="_blank">Новости</a></li>
-    <li><a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank">Вики</a></li>
-    <li><a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank">Саундтреки</a></li>
-    <li><a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank">Команда</a></li>
-    <li><a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank">Поддержать</a></li>
+    <li><a href="https://pixset-studio.github.io/games">Наши игры</a></li>
+    <li><a href="https://pixset-studio.github.io/news">Новости</a></li>
+    <li class="has-dropdown">
+      <a href="https://pixset-studio.github.io/wikipedia">Вики ▾</a>
+      <div class="nav-dropdown-menu">
+        <a href="https://pixset-studio.github.io/wikipedia/madness-fight-alpha">Madness Fight [Alpha]</a>
+        <a href="https://pixset-studio.github.io/wikipedia/madness-fight-beta">Madness Fight [Beta]</a>
+        <a href="https://pixset-studio.github.io/wikipedia/first-games">Первые игры Pixset</a>
+        <a href="https://pixset-studio.github.io/wikipedia/the-castle">The Castle</a>
+        <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters">— Персонажи</a>
+        <a href="https://pixset-studio.github.io/wikipedia/the-castle/chapter1">— Chapter 1</a>
+        <a href="https://pixset-studio.github.io/wikipedia/the-castle/chapter2">— Chapter 2</a>
+        <a href="https://pixset-studio.github.io/wikipedia/the-castle/chapter3">— Chapter 3</a>
+        <a href="https://pixset-studio.github.io/wikipedia/pirate-event">Pirate Event</a>
+        <a href="https://pixset-studio.github.io/wikipedia/cybersport">Кибер спорт</a>
+        <a href="https://pixset-studio.github.io/wikipedia/collaboration">Pixset Studio × ORS</a>
+      </div>
+    </li>
+    <li><a href="https://pixset-studio.github.io/soundtracks">Саундтреки</a></li>
+    <li><a href="https://pixset-studio.github.io/team">Команда</a></li>
+    <li><a href="https://pixset-studio.github.io/job">Работа</a></li>
+    <li><a href="https://pixset-studio.github.io/donate">Поддержать</a></li>
   </ul>
   <div class="hamburger" id="hamburger" onclick="toggleMenu()">
     <span></span><span></span><span></span>
   </div>
 </nav>
 
+<!-- MOBILE NAV: hidden by default, opens only via hamburger click -->
 <div class="mobile-nav" id="mobileNav">
-  <a href="#about">О нас</a>
-  <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank">Наши игры</a>
-  <a href="https://sites.google.com/view/pixset-studio/News" target="_blank">Новости</a>
-  <a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank">Вики</a>
-  <a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank">Саундтреки</a>
-  <a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank">Команда</a>
-  <a href="https://sites.google.com/view/pixset-studio/Job" target="_blank">Устроиться на работу</a>
-  <a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank">Поддержать нас</a>
+  <a href="#about" onclick="toggleMenu()">О нас</a>
+  <a href="https://pixset-studio.github.io/games">Наши игры</a>
+  <a href="https://pixset-studio.github.io/news">Новости</a>
+
+  <!-- Wiki with submenu -->
+  <div class="mobile-nav-item">
+    <a href="https://pixset-studio.github.io/wikipedia">Вики</a>
+    <span class="mobile-expand" id="wikiToggle" onclick="toggleWiki()">›</span>
+  </div>
+  <div class="mobile-submenu" id="wikiSubmenu">
+    <a href="https://pixset-studio.github.io/wikipedia/madness-fight-alpha">Madness Fight [Alpha]</a>
+    <a href="https://pixset-studio.github.io/wikipedia/madness-fight-beta">Madness Fight [Beta]</a>
+    <a href="https://pixset-studio.github.io/wikipedia/first-games">Первые игры Pixset</a>
+    <a href="https://pixset-studio.github.io/wikipedia/first-games/stickman-game">&nbsp;&nbsp;↳ Приключение стикменов</a>
+    <a href="https://pixset-studio.github.io/wikipedia/first-games/shooter-game">&nbsp;&nbsp;↳ Шутер</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle">The Castle</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters">&nbsp;&nbsp;↳ Персонажи</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters/player">&nbsp;&nbsp;&nbsp;&nbsp;• Игрок(-и)</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters/dark-entity">&nbsp;&nbsp;&nbsp;&nbsp;• Тёмная сущность</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters/professor-payton">&nbsp;&nbsp;&nbsp;&nbsp;• Профессор Пейтон</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters/tenji">&nbsp;&nbsp;&nbsp;&nbsp;• Тенджи</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/characters/lumar">&nbsp;&nbsp;&nbsp;&nbsp;• Лумар</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/chapter1">&nbsp;&nbsp;↳ Chapter 1</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/chapter2">&nbsp;&nbsp;↳ Chapter 2</a>
+    <a href="https://pixset-studio.github.io/wikipedia/the-castle/chapter3">&nbsp;&nbsp;↳ Chapter 3</a>
+    <a href="https://pixset-studio.github.io/wikipedia/pirate-event">Pirate Event</a>
+    <a href="https://pixset-studio.github.io/wikipedia/cybersport">Кибер спорт по Madness Fight</a>
+    <a href="https://pixset-studio.github.io/wikipedia/collaboration">Pixset Studio × ORS</a>
+  </div>
+
+  <a href="https://pixset-studio.github.io/soundtracks">Саундтреки</a>
+  <a href="https://pixset-studio.github.io/team">Работники</a>
+  <a href="https://pixset-studio.github.io/job">Устроиться на работу</a>
+  <a href="https://pixset-studio.github.io/donate">Поддержать нас</a>
+  <a href="https://pixset-studio.github.io/economy">Лидеры экономики</a>
 </div>
 
 <!-- BANNER -->
@@ -971,7 +1087,7 @@
       Начинающая студия, которая создаёт игры в Roblox
     </p>
     <div class="hero-buttons">
-      <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank" class="btn btn-primary">
+      <a href="https://pixset-studio.github.io/games" class="btn btn-primary">
         ▶ Наши игры
       </a>
       <a href="https://www.roblox.com/groups/16590279/Pixset-Studio#!/about" target="_blank" class="btn btn-outline">
@@ -1014,20 +1130,20 @@
           У студии уже сформировалась история и своё комьюнити!
         </p>
         <p>
-          Игры от студии можно посмотреть в разделе <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank">«Наши игры»</a>.
-          Также следите за <a href="https://sites.google.com/view/pixset-studio/News" target="_blank">Новостями</a> — там всегда актуальная информация.
+          Игры от студии можно посмотреть в разделе <a href="https://pixset-studio.github.io/games">«Наши игры»</a>.
+          Также следите за <a href="https://pixset-studio.github.io/news">Новостями</a> — там всегда актуальная информация.
         </p>
         <p>
-          В разделе <a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank">«Работники»</a> можно посмотреть, кто трудится в студии.
-          Хочешь присоединиться? Пройди опрос в <a href="https://sites.google.com/view/pixset-studio/Job" target="_blank">«Устроиться на работу»</a>.
+          В разделе <a href="https://pixset-studio.github.io/team">«Работники»</a> можно посмотреть, кто трудится в студии.
+          Хочешь присоединиться? Пройди опрос в <a href="https://pixset-studio.github.io/job">«Устроиться на работу»</a>.
         </p>
         <p>
-          В наших играх есть саундтреки — послушай их в разделе <a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank">«Саундтреки»</a>.
-          А поддержать наш труд можно в <a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank">«Поддержать нас»</a>.
+          В наших играх есть саундтреки — послушай их в разделе <a href="https://pixset-studio.github.io/soundtracks">«Саундтреки»</a>.
+          А поддержать наш труд можно в <a href="https://pixset-studio.github.io/donate">«Поддержать нас»</a>.
         </p>
         <p>
           Хочешь узнать всё о студии и её играх?
-          Читай нашу <a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank">Вики</a>!
+          Читай нашу <a href="https://pixset-studio.github.io/wikipedia">Вики</a>!
         </p>
       </div>
       <div class="about-visual reveal" style="transition-delay:0.2s">
@@ -1055,49 +1171,49 @@
         <span class="card-icon">🎮</span>
         <div class="card-title">Наши игры</div>
         <div class="card-desc">Все игры студии Pixset: от первых прототипов до полноценных проектов в Roblox.</div>
-        <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank" class="card-arrow">Смотреть → </a>
+        <a href="https://pixset-studio.github.io/games" class="card-arrow">Смотреть → </a>
       </div>
       <div class="card reveal" style="transition-delay:0.1s">
         <span class="card-icon">📰</span>
         <div class="card-title">Новости</div>
         <div class="card-desc">Актуальные апдейты, анонсы и события от команды студии.</div>
-        <a href="https://sites.google.com/view/pixset-studio/News" target="_blank" class="card-arrow">Читать →</a>
+        <a href="https://pixset-studio.github.io/news" class="card-arrow">Читать →</a>
       </div>
       <div class="card reveal" style="transition-delay:0.2s">
         <span class="card-icon">📖</span>
         <div class="card-title">Вики / Энциклопедия</div>
         <div class="card-desc">Madness Fight, The Castle, Pirate Event, кибер-спорт и история студии.</div>
-        <a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank" class="card-arrow">Открыть →</a>
+        <a href="https://pixset-studio.github.io/wikipedia" class="card-arrow">Открыть →</a>
       </div>
       <div class="card reveal" style="transition-delay:0.3s">
         <span class="card-icon">🎵</span>
         <div class="card-title">Саундтреки</div>
         <div class="card-desc">Музыка из наших игр. Слушай прямо сейчас!</div>
-        <a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank" class="card-arrow">Слушать →</a>
+        <a href="https://pixset-studio.github.io/soundtracks" class="card-arrow">Слушать →</a>
       </div>
       <div class="card reveal" style="transition-delay:0.4s">
         <span class="card-icon">👥</span>
         <div class="card-title">Команда</div>
         <div class="card-desc">Все работники студии Pixset — узнай, кто стоит за нашими проектами.</div>
-        <a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank" class="card-arrow">Познакомиться →</a>
+        <a href="https://pixset-studio.github.io/team" class="card-arrow">Познакомиться →</a>
       </div>
       <div class="card reveal" style="transition-delay:0.5s">
         <span class="card-icon">💼</span>
         <div class="card-title">Устроиться на работу</div>
         <div class="card-desc">Хочешь стать частью команды? Пройди опрос и присоединяйся к нам!</div>
-        <a href="https://sites.google.com/view/pixset-studio/Job" target="_blank" class="card-arrow">Подать заявку →</a>
+        <a href="https://pixset-studio.github.io/job" class="card-arrow">Подать заявку →</a>
       </div>
       <div class="card reveal" style="transition-delay:0.6s">
         <span class="card-icon">💸</span>
         <div class="card-title">Поддержать нас</div>
         <div class="card-desc">Оцени и поддержи наш труд — это помогает нам делать игры лучше.</div>
-        <a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank" class="card-arrow">Поддержать →</a>
+        <a href="https://pixset-studio.github.io/donate" class="card-arrow">Поддержать →</a>
       </div>
       <div class="card reveal" style="transition-delay:0.7s">
         <span class="card-icon">🏆</span>
         <div class="card-title">Лидеры экономики</div>
         <div class="card-desc">Таблица лидеров по экономике на нашем сервере.</div>
-        <a href="https://sites.google.com/view/pixset-studio/economy" target="_blank" class="card-arrow">Смотреть →</a>
+        <a href="https://pixset-studio.github.io/economy" class="card-arrow">Смотреть →</a>
       </div>
     </div>
   </section>
@@ -1267,12 +1383,34 @@ const countObserver = new IntersectionObserver((entries) => {
 }, { threshold: 0.5 });
 counters.forEach(c => countObserver.observe(c));
 
-// MOBILE NAV
+// MOBILE NAV - hamburger only
 let menuOpen = false;
 function toggleMenu() {
   menuOpen = !menuOpen;
-  document.getElementById('mobileNav').style.display = menuOpen ? 'flex' : 'none';
+  const nav = document.getElementById('mobileNav');
+  const ham = document.getElementById('hamburger');
+  nav.classList.toggle('open', menuOpen);
+  ham.classList.toggle('active', menuOpen);
 }
+
+// WIKI SUBMENU TOGGLE
+function toggleWiki() {
+  const sub = document.getElementById('wikiSubmenu');
+  const tog = document.getElementById('wikiToggle');
+  sub.classList.toggle('open');
+  tog.classList.toggle('open');
+}
+
+// Close mobile nav on outside click
+document.addEventListener('click', function(e) {
+  const nav = document.getElementById('mobileNav');
+  const ham = document.getElementById('hamburger');
+  if (menuOpen && !nav.contains(e.target) && !ham.contains(e.target)) {
+    menuOpen = false;
+    nav.classList.remove('open');
+    ham.classList.remove('active');
+  }
+});
 </script>
 </body>
 </html>
