@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixset Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --neon-green: #00ff88;
+    --neon-cyan: #00e5ff;
+    --neon-purple: #bf00ff;
+    --neon-pink: #ff006e;
+    --bg-deep: #020408;
+    --bg-dark: #050d12;
+    --bg-card: #08141c;
+    --grid-color: rgba(0, 229, 255, 0.04);
+    --glow-green: 0 0 10px #00ff88, 0 0 30px #00ff8840, 0 0 60px #00ff8820;
+    --glow-cyan: 0 0 10px #00e5ff, 0 0 30px #00e5ff40, 0 0 60px #00e5ff20;
+    --glow-purple: 0 0 10px #bf00ff, 0 0 30px #bf00ff40;
+    --glow-pink: 0 0 10px #ff006e, 0 0 30px #ff006e40;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  ::selection { background: var(--neon-cyan); color: #000; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-deep);
+    color: #cce8ff;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* CUSTOM CURSOR */
+  .cursor {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--neon-cyan);
+    box-shadow: var(--glow-cyan);
+    position: fixed;
+    pointer-events: none;
+    z-index: 99999;
+    transform: translate(-50%, -50%);
+    transition: transform 0.1s, width 0.2s, height 0.2s;
+  }
+  .cursor-ring {
+    width: 36px; height: 36px;
+    border: 1px solid var(--neon-cyan);
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    z-index: 99998;
+    transform: translate(-50%, -50%);
+    transition: transform 0.15s ease-out, width 0.3s, height 0.3s, opacity 0.3s;
+    opacity: 0.5;
+  }
+
+  /* GRID BACKGROUND */
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid-color) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* SCANLINES */
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* CANVAS PARTICLES */
+  #particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: rgba(2, 4, 8, 0.88);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0, 229, 255, 0.15);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    transition: border-color 0.3s;
+  }
+  nav::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-green), transparent);
+    opacity: 0.5;
+    animation: navGlow 4s linear infinite;
+  }
+  @keyframes navGlow {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .nav-logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 18px;
+    color: var(--neon-green);
+    text-decoration: none;
+    text-shadow: var(--glow-green);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .nav-logo .logo-icon {
+    width: 32px; height: 32px;
+    border: 2px solid var(--neon-green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    box-shadow: var(--glow-green);
+    animation: logoRotate 8s linear infinite;
+  }
+  @keyframes logoRotate {
+    0%,100% { border-radius: 4px; }
+    50% { border-radius: 50%; }
+  }
+
+  .nav-links {
+    display: flex;
+    list-style: none;
+    gap: 4px;
+    align-items: center;
+  }
+  .nav-links a {
+    color: rgba(200, 230, 255, 0.7);
+    text-decoration: none;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    transition: all 0.25s;
+    text-transform: uppercase;
+    position: relative;
+  }
+  .nav-links a:hover {
+    color: var(--neon-cyan);
+    border-color: rgba(0, 229, 255, 0.4);
+    background: rgba(0, 229, 255, 0.05);
+    text-shadow: 0 0 8px var(--neon-cyan);
+  }
+
+  /* HAMBURGER */
+  .hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .hamburger span {
+    width: 26px; height: 2px;
+    background: var(--neon-cyan);
+    box-shadow: 0 0 6px var(--neon-cyan);
+    transition: all 0.3s;
+  }
+
+  /* MOBILE NAV */
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    top: 64px; left: 0; right: 0;
+    background: rgba(2, 4, 8, 0.97);
+    border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+    z-index: 999;
+    padding: 20px;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mobile-nav a {
+    color: rgba(200, 230, 255, 0.8);
+    text-decoration: none;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 10px 16px;
+    border-left: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .mobile-nav a:hover {
+    color: var(--neon-cyan);
+    border-left-color: var(--neon-cyan);
+    background: rgba(0,229,255,0.05);
+  }
+
+  /* BANNER */
+  .banner {
+    margin-top: 64px;
+    background: linear-gradient(90deg, rgba(191,0,255,0.15), rgba(0,229,255,0.1), rgba(191,0,255,0.15));
+    border-bottom: 1px solid rgba(191, 0, 255, 0.3);
+    padding: 10px 20px;
+    text-align: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: rgba(200, 180, 255, 0.9);
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .banner-dot { animation: blink 1.2s infinite; color: var(--neon-purple); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .banner a {
+    color: var(--neon-purple);
+    text-decoration: none;
+    border: 1px solid rgba(191,0,255,0.4);
+    padding: 4px 14px;
+    font-size: 11px;
+    transition: all 0.2s;
+  }
+  .banner a:hover {
+    background: rgba(191,0,255,0.15);
+    box-shadow: var(--glow-purple);
+  }
+
+  /* HERO */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    z-index: 2;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0,255,136,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(0,229,255,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse at 60% 80%, rgba(191,0,255,0.05) 0%, transparent 60%);
+    animation: bgPulse 8s ease-in-out infinite alternate;
+  }
+  @keyframes bgPulse {
+    0% { opacity: 0.6; }
+    100% { opacity: 1; }
+  }
+
+  /* HERO RINGS */
+  .hero-rings {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid;
+    transform: translate(-50%, -50%);
+    animation: ringExpand linear infinite;
+    opacity: 0;
+  }
+  .ring:nth-child(1) { width: 200px; height: 200px; border-color: rgba(0,255,136,0.2); animation-duration: 4s; }
+  .ring:nth-child(2) { width: 350px; height: 350px; border-color: rgba(0,229,255,0.15); animation-duration: 4s; animation-delay: 1s; }
+  .ring:nth-child(3) { width: 500px; height: 500px; border-color: rgba(191,0,255,0.1); animation-duration: 4s; animation-delay: 2s; }
+  .ring:nth-child(4) { width: 700px; height: 700px; border-color: rgba(0,229,255,0.08); animation-duration: 4s; animation-delay: 3s; }
+  @keyframes ringExpand {
+    0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
+    30% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%,-50%) scale(1); }
+  }
+
+  .hero-content {
+    position: relative;
+    text-align: center;
+    z-index: 10;
+    padding: 40px 20px;
+  }
+
+  .hero-tag {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--neon-green);
+    text-shadow: var(--glow-green);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    animation: fadeInDown 0.8s ease-out;
+  }
+  .hero-tag::before, .hero-tag::after {
+    content: '//';
+    color: rgba(0,255,136,0.4);
+    margin: 0 10px;
+  }
+
+  .hero-title {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: clamp(52px, 10vw, 110px);
+    line-height: 0.95;
+    letter-spacing: -2px;
+    margin-bottom: 8px;
+    animation: fadeInUp 0.8s ease-out 0.2s both;
+  }
+  .hero-title .line1 {
+    display: block;
+    color: #fff;
+    text-shadow: 0 0 40px rgba(255,255,255,0.3);
+  }
+  .hero-title .line2 {
+    display: block;
+    color: transparent;
+    -webkit-text-stroke: 2px var(--neon-cyan);
+    text-shadow: var(--glow-cyan);
+    animation: glitch 5s infinite;
+  }
+  @keyframes glitch {
+    0%,90%,100% { transform: translate(0); filter: none; }
+    91% { transform: translate(-3px, 0); filter: hue-rotate(30deg); }
+    93% { transform: translate(3px, 0); filter: hue-rotate(-30deg); }
+    95% { transform: translate(-2px, 0); filter: hue-rotate(20deg); }
+  }
+
+  .hero-subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(13px, 2vw, 16px);
+    color: rgba(140, 200, 255, 0.7);
+    letter-spacing: 2px;
+    margin-top: 20px;
+    margin-bottom: 48px;
+    animation: fadeInUp 0.8s ease-out 0.4s both;
+  }
+
+  .hero-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fadeInUp 0.8s ease-out 0.6s both;
+  }
+
+  .btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 14px 32px;
+    border: 2px solid;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .btn:hover::before { opacity: 0.1; }
+
+  .btn-primary {
+    color: var(--bg-deep);
+    background: var(--neon-green);
+    border-color: var(--neon-green);
+    box-shadow: var(--glow-green);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 0 20px #00ff88, 0 0 60px #00ff8840, 0 0 100px #00ff8820;
+    transform: translateY(-2px);
+  }
+
+  .btn-outline {
+    color: var(--neon-cyan);
+    background: transparent;
+    border-color: var(--neon-cyan);
+    box-shadow: inset 0 0 0 0 var(--neon-cyan);
+  }
+  .btn-outline:hover {
+    box-shadow: var(--glow-cyan);
+    transform: translateY(-2px);
+  }
+
+  /* SCROLL INDICATOR */
+  .scroll-indicator {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    animation: fadeInUp 1s ease-out 1.2s both;
+  }
+  .scroll-line {
+    width: 1px;
+    height: 60px;
+    background: linear-gradient(180deg, transparent, var(--neon-cyan));
+    animation: scrollAnim 2s ease-in-out infinite;
+  }
+  .scroll-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: rgba(0,229,255,0.5);
+    letter-spacing: 3px;
+    writing-mode: vertical-rl;
+  }
+  @keyframes scrollAnim {
+    0%,100% { opacity: 0.3; transform: scaleY(0.7); }
+    50% { opacity: 1; transform: scaleY(1); }
+  }
+
+  /* MAIN CONTENT */
+  main {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* SECTION BASE */
+  section {
+    padding: 100px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--neon-green);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    max-width: 80px;
+    background: linear-gradient(90deg, var(--neon-green), transparent);
+  }
+
+  .section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 48px;
+    line-height: 1.2;
+  }
+  .section-title span { color: var(--neon-cyan); text-shadow: var(--glow-cyan); }
+
+  /* ABOUT SECTION */
+  .about-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
+  }
+
+  .about-text p {
+    color: rgba(180, 220, 255, 0.75);
+    font-size: 16px;
+    line-height: 1.9;
+    margin-bottom: 16px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 400;
+  }
+  .about-text p a {
+    color: var(--neon-cyan);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(0,229,255,0.3);
+    transition: all 0.2s;
+  }
+  .about-text p a:hover {
+    border-bottom-color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-cyan);
+  }
+
+  .about-visual {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hex-display {
+    position: relative;
+    width: 280px;
+    height: 280px;
+  }
+  .hex-ring {
+    position: absolute;
+    inset: 0;
+    border: 2px solid;
+    border-radius: 50%;
+    animation: rotate linear infinite;
+  }
+  .hex-ring:nth-child(1) { border-color: rgba(0,255,136,0.4); animation-duration: 10s; }
+  .hex-ring:nth-child(2) { inset: 20px; border-color: rgba(0,229,255,0.3); animation-duration: 15s; animation-direction: reverse; border-style: dashed; }
+  .hex-ring:nth-child(3) { inset: 40px; border-color: rgba(191,0,255,0.25); animation-duration: 20s; }
+  @keyframes rotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+
+  .hex-center {
+    position: absolute;
+    inset: 60px;
+    background: rgba(0,229,255,0.05);
+    border: 1px solid rgba(0,229,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .hex-center .big-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--neon-green);
+    text-shadow: var(--glow-green);
+    line-height: 1;
+  }
+  .hex-center .big-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: rgba(0,229,255,0.7);
+    letter-spacing: 2px;
+  }
+
+  /* CARDS GRID */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    margin-top: 48px;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid rgba(0,229,255,0.08);
+    padding: 28px;
+    position: relative;
+    transition: all 0.3s;
+    overflow: hidden;
+    group: true;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
+    transform: scaleX(0);
+    transition: transform 0.3s;
+    transform-origin: left;
+  }
+  .card:hover::before { transform: scaleX(1); }
+  .card:hover {
+    border-color: rgba(0,229,255,0.2);
+    background: rgba(8,20,28,0.9);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 20px rgba(0,229,255,0.04);
+  }
+
+  .card-icon {
+    font-size: 28px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  .card-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px rgba(0,229,255,0.3);
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+  }
+  .card-desc {
+    font-size: 14px;
+    color: rgba(160, 210, 240, 0.65);
+    line-height: 1.6;
+  }
+  .card-arrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--neon-green);
+    text-decoration: none;
+    margin-top: 16px;
+    border-bottom: 1px solid transparent;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .card-arrow:hover {
+    border-bottom-color: var(--neon-green);
+    text-shadow: 0 0 8px var(--neon-green);
+    gap: 10px;
+  }
+
+  /* DIVIDER */
+  .divider {
+    position: relative;
+    z-index: 2;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,229,255,0.2), transparent);
+    margin: 0 40px;
+  }
+
+  /* SOCIAL SECTION */
+  .social-section {
+    padding: 80px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .social-grid {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 40px;
+  }
+
+  .social-card {
+    flex: 1;
+    min-width: 200px;
+    padding: 24px;
+    border: 1px solid rgba(0,229,255,0.1);
+    background: var(--bg-card);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .social-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.02));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .social-card:hover::after { opacity: 1; }
+  .social-card:hover { transform: translateY(-4px); }
+
+  .social-card.youtube { --accent: #ff0044; }
+  .social-card.roblox { --accent: #00bfff; }
+  .social-card.discord { --accent: #7289da; }
+  .social-card.telegram { --accent: #00aaff; }
+
+  .social-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+
+  .social-icon {
+    width: 48px; height: 48px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    color: var(--accent);
+    flex-shrink: 0;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .social-info { flex: 1; }
+  .social-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .social-handle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.08);
+    margin: 60px 40px 0;
+    position: relative;
+    z-index: 2;
+  }
+  .stat-item {
+    background: var(--bg-deep);
+    padding: 40px 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 60%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+  }
+  .stat-num {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(36px, 5vw, 56px);
+    font-weight: 900;
+    color: var(--neon-green);
+    text-shadow: var(--glow-green);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .stat-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(0,229,255,0.6);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* FOOTER */
+  footer {
+    position: relative;
+    z-index: 2;
+    padding: 60px 40px 40px;
+    border-top: 1px solid rgba(0,229,255,0.08);
+    background: rgba(2,4,8,0.9);
+  }
+  .footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .footer-logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--neon-green);
+    text-shadow: var(--glow-green);
+    letter-spacing: 3px;
+  }
+  .footer-copy {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(0,229,255,0.4);
+    letter-spacing: 2px;
+  }
+  .footer-line {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,229,255,0.15), transparent);
+    margin-bottom: 32px;
+  }
+
+  /* ANIMATIONS */
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* SCROLL REVEAL */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* NOISE OVERLAY */
+  .noise {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.02;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .nav-links { display: none; }
+    .hamburger { display: flex; }
+    .mobile-nav { display: flex; }
+    .about-grid { grid-template-columns: 1fr; }
+    .about-visual { display: none; }
+    .stats-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    section { padding: 60px 20px; }
+    .social-section { padding: 60px 20px; }
+    .stats-row { margin: 40px 20px 0; }
+    .divider { margin: 0 20px; }
+    footer { padding: 40px 20px; }
+    nav { padding: 0 20px; }
+  }
+
+  /* TYPEWRITER */
+  .typewriter {
+    overflow: hidden;
+    border-right: 2px solid var(--neon-cyan);
+    white-space: nowrap;
+    animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
+    display: inline-block;
+  }
+  @keyframes typing {
+    from { width: 0 }
+    to { width: 100% }
+  }
+  @keyframes blink-caret {
+    from, to { border-color: transparent }
+    50% { border-color: var(--neon-cyan) }
+  }
+
+  /* GLITCH TEXT */
+  .glitch-text {
+    position: relative;
+  }
+  .glitch-text::before, .glitch-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .glitch-text::before {
+    color: var(--neon-pink);
+    clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+    animation: glitch1 3s infinite;
+  }
+  .glitch-text::after {
+    color: var(--neon-cyan);
+    clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+    animation: glitch2 3s infinite;
+  }
+  @keyframes glitch1 {
+    0%,90%,100% { transform: translate(0); opacity:0 }
+    91%,95% { transform: translate(-3px, 0); opacity:1 }
+    93% { transform: translate(3px, 0); opacity:1 }
+  }
+  @keyframes glitch2 {
+    0%,90%,100% { transform: translate(0); opacity:0 }
+    92%,96% { transform: translate(3px, 0); opacity:1 }
+    94% { transform: translate(-3px, 0); opacity:1 }
+  }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+<canvas id="particles"></canvas>
+<div class="grid-bg"></div>
+<div class="scanlines"></div>
+<div class="noise"></div>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="logo-icon">PX</div>
+    Pixset
+  </a>
+  <ul class="nav-links">
+    <li><a href="#about">О нас</a></li>
+    <li><a href="https://sites.google.com/view/pixset-studio/Games" target="_blank">Наши игры</a></li>
+    <li><a href="https://sites.google.com/view/pixset-studio/News" target="_blank">Новости</a></li>
+    <li><a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank">Вики</a></li>
+    <li><a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank">Саундтреки</a></li>
+    <li><a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank">Команда</a></li>
+    <li><a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank">Поддержать</a></li>
+  </ul>
+  <div class="hamburger" id="hamburger" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<div class="mobile-nav" id="mobileNav">
+  <a href="#about">О нас</a>
+  <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank">Наши игры</a>
+  <a href="https://sites.google.com/view/pixset-studio/News" target="_blank">Новости</a>
+  <a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank">Вики</a>
+  <a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank">Саундтреки</a>
+  <a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank">Команда</a>
+  <a href="https://sites.google.com/view/pixset-studio/Job" target="_blank">Устроиться на работу</a>
+  <a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank">Поддержать нас</a>
+</div>
+
+<!-- BANNER -->
+<div class="banner">
+  <span class="banner-dot">◉</span>
+  Сайт редко обновляется — больше новостей в нашем ТГ канале
+  <a href="https://t.me/Pixset_Studio" target="_blank">Подписаться →</a>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-rings">
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="ring"></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-tag">Indie Game Studio</div>
+    <h1 class="hero-title">
+      <span class="line1 glitch-text" data-text="PIXSET">PIXSET</span>
+      <span class="line2">STUDIO</span>
+    </h1>
+    <p class="hero-subtitle">// ROBLOX GAME DEVELOPERS // SINCE DAY ONE //</p>
+    <p style="font-family:'Share Tech Mono',monospace; font-size:14px; color:rgba(140,200,255,0.6); margin-bottom:40px; letter-spacing:1px;">
+      Начинающая студия, которая создаёт игры в Roblox
+    </p>
+    <div class="hero-buttons">
+      <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank" class="btn btn-primary">
+        ▶ Наши игры
+      </a>
+      <a href="https://www.roblox.com/groups/16590279/Pixset-Studio#!/about" target="_blank" class="btn btn-outline">
+        ◈ Roblox
+      </a>
+    </div>
+  </div>
+  <div class="scroll-indicator">
+    <span class="scroll-text">SCROLL</span>
+    <div class="scroll-line"></div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-row">
+  <div class="stat-item reveal">
+    <div class="stat-num" data-target="3">0</div>
+    <div class="stat-label">Игры в разработке</div>
+  </div>
+  <div class="stat-item reveal" style="transition-delay:0.1s">
+    <div class="stat-num" data-target="4">0</div>
+    <div class="stat-label">Члена команды</div>
+  </div>
+  <div class="stat-item reveal" style="transition-delay:0.2s">
+    <div class="stat-num" data-target="1">0</div>
+    <div class="stat-label">Активный сервер</div>
+  </div>
+</div>
+
+<main>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <div class="section-label">01 // О студии</div>
+    <div class="about-grid">
+      <div class="about-text reveal">
+        <h2 class="section-title">Добро пожаловать в<br><span>Pixset Studio</span></h2>
+        <p>
+          Pixset Studio — это команда разработчиков, которая создаёт игры в Roblox.
+          У студии уже сформировалась история и своё комьюнити!
+        </p>
+        <p>
+          Игры от студии можно посмотреть в разделе <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank">«Наши игры»</a>.
+          Также следите за <a href="https://sites.google.com/view/pixset-studio/News" target="_blank">Новостями</a> — там всегда актуальная информация.
+        </p>
+        <p>
+          В разделе <a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank">«Работники»</a> можно посмотреть, кто трудится в студии.
+          Хочешь присоединиться? Пройди опрос в <a href="https://sites.google.com/view/pixset-studio/Job" target="_blank">«Устроиться на работу»</a>.
+        </p>
+        <p>
+          В наших играх есть саундтреки — послушай их в разделе <a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank">«Саундтреки»</a>.
+          А поддержать наш труд можно в <a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank">«Поддержать нас»</a>.
+        </p>
+        <p>
+          Хочешь узнать всё о студии и её играх?
+          Читай нашу <a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank">Вики</a>!
+        </p>
+      </div>
+      <div class="about-visual reveal" style="transition-delay:0.2s">
+        <div class="hex-display">
+          <div class="hex-ring"></div>
+          <div class="hex-ring"></div>
+          <div class="hex-ring"></div>
+          <div class="hex-center">
+            <div class="big-num">PX</div>
+            <div class="big-label">STUDIO</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SECTIONS CARDS -->
+  <section>
+    <div class="section-label">02 // Навигация</div>
+    <h2 class="section-title reveal">Разделы <span>сайта</span></h2>
+    <div class="cards-grid">
+      <div class="card reveal">
+        <span class="card-icon">🎮</span>
+        <div class="card-title">Наши игры</div>
+        <div class="card-desc">Все игры студии Pixset: от первых прототипов до полноценных проектов в Roblox.</div>
+        <a href="https://sites.google.com/view/pixset-studio/Games" target="_blank" class="card-arrow">Смотреть → </a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.1s">
+        <span class="card-icon">📰</span>
+        <div class="card-title">Новости</div>
+        <div class="card-desc">Актуальные апдейты, анонсы и события от команды студии.</div>
+        <a href="https://sites.google.com/view/pixset-studio/News" target="_blank" class="card-arrow">Читать →</a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.2s">
+        <span class="card-icon">📖</span>
+        <div class="card-title">Вики / Энциклопедия</div>
+        <div class="card-desc">Madness Fight, The Castle, Pirate Event, кибер-спорт и история студии.</div>
+        <a href="https://sites.google.com/view/pixset-studio/Wikipedia" target="_blank" class="card-arrow">Открыть →</a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.3s">
+        <span class="card-icon">🎵</span>
+        <div class="card-title">Саундтреки</div>
+        <div class="card-desc">Музыка из наших игр. Слушай прямо сейчас!</div>
+        <a href="https://sites.google.com/view/pixset-studio/SoundTracks" target="_blank" class="card-arrow">Слушать →</a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.4s">
+        <span class="card-icon">👥</span>
+        <div class="card-title">Команда</div>
+        <div class="card-desc">Все работники студии Pixset — узнай, кто стоит за нашими проектами.</div>
+        <a href="https://sites.google.com/view/pixset-studio/Workes" target="_blank" class="card-arrow">Познакомиться →</a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.5s">
+        <span class="card-icon">💼</span>
+        <div class="card-title">Устроиться на работу</div>
+        <div class="card-desc">Хочешь стать частью команды? Пройди опрос и присоединяйся к нам!</div>
+        <a href="https://sites.google.com/view/pixset-studio/Job" target="_blank" class="card-arrow">Подать заявку →</a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.6s">
+        <span class="card-icon">💸</span>
+        <div class="card-title">Поддержать нас</div>
+        <div class="card-desc">Оцени и поддержи наш труд — это помогает нам делать игры лучше.</div>
+        <a href="https://sites.google.com/view/pixset-studio/Donate" target="_blank" class="card-arrow">Поддержать →</a>
+      </div>
+      <div class="card reveal" style="transition-delay:0.7s">
+        <span class="card-icon">🏆</span>
+        <div class="card-title">Лидеры экономики</div>
+        <div class="card-desc">Таблица лидеров по экономике на нашем сервере.</div>
+        <a href="https://sites.google.com/view/pixset-studio/economy" target="_blank" class="card-arrow">Смотреть →</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SOCIAL -->
+  <div class="social-section">
+    <div class="section-label">03 // Соцсети</div>
+    <h2 class="section-title reveal">Следи за нами<br><span>в интернете</span></h2>
+    <div class="social-grid">
+      <a href="https://www.youtube.com/@pixset/featured" target="_blank" class="social-card youtube reveal">
+        <div class="social-icon">▶</div>
+        <div class="social-info">
+          <div class="social-name">YouTube</div>
+          <div class="social-handle">@pixset</div>
+        </div>
+      </a>
+      <a href="https://www.roblox.com/groups/16590279/Pixset-Studio#!/about" target="_blank" class="social-card roblox reveal" style="transition-delay:0.1s">
+        <div class="social-icon">◈</div>
+        <div class="social-info">
+          <div class="social-name">Roblox</div>
+          <div class="social-handle">Pixset-Studio</div>
+        </div>
+      </a>
+      <a href="https://discord.gg/4DvuhfJpTT" target="_blank" class="social-card discord reveal" style="transition-delay:0.2s">
+        <div class="social-icon">◉</div>
+        <div class="social-info">
+          <div class="social-name">Discord</div>
+          <div class="social-handle">4DvuhfJpTT</div>
+        </div>
+      </a>
+      <a href="https://t.me/Pixset_Studio" target="_blank" class="social-card telegram reveal" style="transition-delay:0.3s">
+        <div class="social-icon">✈</div>
+        <div class="social-info">
+          <div class="social-name">Telegram</div>
+          <div class="social-handle">@Pixset_Studio</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-line"></div>
+  <div class="footer-inner">
+    <div class="footer-logo">PIXSET STUDIO</div>
+    <div class="footer-copy">© 2024 PIXSET STUDIO // ALL RIGHTS RESERVED</div>
+  </div>
+</footer>
+
+<script>
+// CUSTOM CURSOR
+const cursor = document.getElementById('cursor');
+const ring = document.getElementById('cursorRing');
+let mx = 0, my = 0, rx = 0, ry = 0;
+document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+function animateCursor() {
+  rx += (mx - rx) * 0.12;
+  ry += (my - ry) * 0.12;
+  cursor.style.left = mx + 'px'; cursor.style.top = my + 'px';
+  ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+  requestAnimationFrame(animateCursor);
+}
+animateCursor();
+document.querySelectorAll('a,button,.btn').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    cursor.style.width = '6px'; cursor.style.height = '6px';
+    ring.style.width = '52px'; ring.style.height = '52px'; ring.style.opacity = '0.8';
+  });
+  el.addEventListener('mouseleave', () => {
+    cursor.style.width = '12px'; cursor.style.height = '12px';
+    ring.style.width = '36px'; ring.style.height = '36px'; ring.style.opacity = '0.5';
+  });
+});
+
+// PARTICLES
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+let W, H, particles = [];
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.size = Math.random() * 1.5 + 0.5;
+    this.alpha = Math.random() * 0.4 + 0.1;
+    this.color = Math.random() > 0.5 ? '#00e5ff' : '#00ff88';
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    if (this.x < 0 || this.x > W || this.y < 0 || this.y > H) this.reset();
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.shadowBlur = 6; ctx.shadowColor = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+for (let i = 0; i < 80; i++) particles.push(new Particle());
+
+function animateParticles() {
+  ctx.clearRect(0, 0, W, H);
+  particles.forEach(p => { p.update(); p.draw(); });
+  // draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 100) {
+        ctx.save();
+        ctx.globalAlpha = (1 - dist/100) * 0.06;
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+// SCROLL REVEAL
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// COUNT-UP ANIMATION
+const counters = document.querySelectorAll('.stat-num[data-target]');
+const countObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const el = entry.target;
+      const target = +el.dataset.target;
+      let start = 0;
+      const duration = 1500;
+      const step = timestamp => {
+        if (!start) start = timestamp;
+        const progress = Math.min((timestamp - start) / duration, 1);
+        el.textContent = Math.floor(progress * target);
+        if (progress < 1) requestAnimationFrame(step);
+        else el.textContent = target;
+      };
+      requestAnimationFrame(step);
+      countObserver.unobserve(el);
+    }
+  });
+}, { threshold: 0.5 });
+counters.forEach(c => countObserver.observe(c));
+
+// MOBILE NAV
+let menuOpen = false;
+function toggleMenu() {
+  menuOpen = !menuOpen;
+  document.getElementById('mobileNav').style.display = menuOpen ? 'flex' : 'none';
+}
+</script>
+</body>
+</html>
