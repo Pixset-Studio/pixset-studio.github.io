@@ -11,31 +11,20 @@
 <style>
 :root {
   --neon-yellow: #ffd700;
-  --neon-yellow-warm: #ffaa00;
-  --neon-green: #00ff88;
   --neon-cyan: #39ff14;
   --neon-purple: #bf00ff;
   --neon-pink: #ff006e;
   --bg-deep: #020408;
-  --bg-dark: #050d12;
   --bg-card: #08141c;
-  --bg-card2: #0a1a24;
   --grid-color: rgba(57, 255, 20, 0.04);
-  --glow-yellow: 0 0 10px #ffd700, 0 0 30px #ffd70050, 0 0 60px #ffd70025;
-  --glow-yellow-sm: 0 0 6px #ffd700, 0 0 18px #ffd70040;
-  --glow-green: 0 0 10px #00ff88, 0 0 30px #00ff8840, 0 0 60px #00ff8820;
   --glow-cyan: 0 0 10px #39ff14, 0 0 30px #39ff1440, 0 0 60px #39ff1420;
-  --glow-purple: 0 0 10px #bf00ff, 0 0 30px #bf00ff40;
-  --glow-pink: 0 0 10px #ff006e, 0 0 30px #ff006e40;
   --border-dim: rgba(57, 255, 20, 0.12);
-  --border-mid: rgba(57, 255, 20, 0.25);
   --text-dim: rgba(180, 220, 255, 0.6);
   --text-mid: rgba(200, 230, 255, 0.85);
   --text-bright: #cce8ff;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-::selection { background: var(--neon-cyan); color: #000; }
 html { scroll-behavior: smooth; }
 body {
   background: var(--bg-deep);
@@ -47,27 +36,6 @@ body {
   cursor: none;
 }
 
-/* ── CURSOR ── */
-.cursor {
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: var(--neon-cyan);
-  box-shadow: var(--glow-cyan);
-  position: fixed; pointer-events: none; z-index: 99999;
-  transform: translate(-50%, -50%);
-  transition: transform 0.1s, width 0.2s, height 0.2s;
-}
-.cursor-ring {
-  width: 36px; height: 36px;
-  border: 1px solid var(--neon-cyan);
-  border-radius: 50%;
-  position: fixed; pointer-events: none; z-index: 99998;
-  transform: translate(-50%, -50%);
-  transition: transform 0.15s ease-out, width 0.3s, height 0.3s, opacity 0.3s;
-  opacity: 0.5;
-}
-
-/* ── GRID BG ── */
 .grid-bg {
   position: fixed; inset: 0;
   background-image:
@@ -76,11 +44,13 @@ body {
   background-size: 40px 40px;
   z-index: 0; pointer-events: none;
 }
+
 .scanlines {
   position: fixed; inset: 0;
   background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
   z-index: 1; pointer-events: none;
 }
+
 #particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
 /* ── NAV ── */
@@ -93,54 +63,72 @@ nav {
   display: flex; align-items: center; justify-content: space-between;
   height: 64px;
 }
-nav::before {
-  content: '';
-  position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--neon-yellow), var(--neon-cyan), var(--neon-yellow), transparent);
-  opacity: 0.5;
-}
+
 .nav-logo {
   font-family: 'Orbitron', monospace; font-weight: 900; font-size: 15px;
   color: var(--neon-yellow); text-decoration: none;
-  text-shadow: var(--glow-yellow-sm); letter-spacing: 2px; text-transform: uppercase;
+  letter-spacing: 2px; text-transform: uppercase;
   display: flex; align-items: center; gap: 10px;
 }
+
 .nav-logo-badge {
   font-family: 'Share Tech Mono', monospace; font-size: 9px;
   background: rgba(57,255,20,0.1); border: 1px solid rgba(57,255,20,0.3);
   color: var(--neon-cyan); padding: 2px 8px; letter-spacing: 2px;
   text-transform: uppercase;
 }
-.nav-links { display: flex; list-style: none; gap: 4px; align-items: center; }
+
+.nav-links {
+  display: flex; list-style: none; gap: 4px; align-items: center;
+}
+
 .nav-links a {
   color: var(--text-dim); text-decoration: none;
   font-family: 'Share Tech Mono', monospace; font-size: 11px;
   letter-spacing: 1px; padding: 8px 14px;
   border: 1px solid transparent; transition: all 0.25s; text-transform: uppercase;
 }
-.nav-links a:hover, .nav-links a.active {
+
+.nav-links a:hover {
   color: var(--neon-cyan); border-color: rgba(57,255,20,0.4);
-  background: rgba(57,255,20,0.05); text-shadow: 0 0 8px var(--neon-cyan);
+  background: rgba(57,255,20,0.05);
 }
+
 .nav-auth {
   display: flex; align-items: center; gap: 12px;
 }
+
 .user-info {
   display: flex; align-items: center; gap: 8px; font-size: 12px;
   color: var(--neon-cyan); font-family: 'Share Tech Mono', monospace;
 }
+
 .user-avatar {
   width: 32px; height: 32px; border-radius: 50%;
   border: 1px solid var(--neon-cyan); object-fit: cover;
 }
+
 .logout-btn {
   font-family: 'Share Tech Mono', monospace; font-size: 10px;
   padding: 6px 12px; background: rgba(255,0,110,0.1);
   border: 1px solid var(--neon-pink); color: var(--neon-pink);
   cursor: pointer; transition: all 0.3s; text-transform: uppercase;
 }
+
 .logout-btn:hover {
   background: rgba(255,0,110,0.2); box-shadow: 0 0 8px var(--neon-pink);
+}
+
+.btn-primary {
+  font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
+  padding: 14px 32px; background: transparent;
+  border: 2px solid var(--neon-cyan); color: var(--neon-cyan);
+  cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
+}
+
+.btn-primary:hover {
+  color: #000; box-shadow: var(--glow-cyan);
 }
 
 /* ── AUTH MODAL ── */
@@ -149,33 +137,64 @@ nav::before {
   align-items: center; justify-content: center;
   background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
 }
+
 .auth-modal.hidden { display: none; }
+
 .auth-card {
-  background: var(--bg-card); border: 1px solid var(--border-mid);
+  background: var(--bg-card); border: 1px solid var(--border-dim);
   border-radius: 8px; padding: 40px; max-width: 400px;
   text-align: center; box-shadow: 0 0 30px rgba(57,255,20,0.2);
 }
+
 .auth-card h2 {
   font-family: 'Orbitron', monospace; font-size: 24px;
   color: var(--neon-cyan); margin-bottom: 20px;
 }
+
 .auth-card p {
   color: var(--text-dim); margin-bottom: 30px; font-size: 14px;
 }
-.telegram-login {
-  margin: 20px 0;
+
+/* ── SECTION ── */
+.section {
+  position: relative; z-index: 2; padding: 100px 40px;
+  max-width: 1200px; margin: 0 auto;
 }
-.telegram-login-btn {
-  font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700;
-  letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
-  padding: 14px 32px; background: #0088cc;
-  border: 2px solid #0088cc; color: #fff;
-  cursor: pointer; transition: all 0.3s; display: inline-block;
-  border-radius: 4px;
+
+.section-header { text-align: center; margin-bottom: 60px; }
+
+.section-title {
+  font-family: 'Orbitron', monospace; font-size: 42px; font-weight: 900;
+  color: #fff; margin-bottom: 16px;
 }
-.telegram-login-btn:hover {
-  background: #0077b3; border-color: #0077b3; box-shadow: 0 0 15px rgba(0,136,204,0.5);
+
+.section-title span { color: var(--neon-cyan); }
+
+/* ── TOOLS ── */
+.tools-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px; margin-top: 40px;
 }
+
+.tool-card {
+  background: linear-gradient(135deg, rgba(8,20,28,0.8), rgba(10,26,36,0.8));
+  border: 1px solid var(--border-dim); border-radius: 8px;
+  padding: 32px 24px; transition: all 0.3s; position: relative; overflow: hidden;
+}
+
+.tool-card:hover {
+  border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(57,255,20,0.2);
+  transform: translateY(-4px);
+}
+
+.tool-icon { font-size: 32px; margin-bottom: 16px; }
+
+.tool-name {
+  font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 700;
+  color: var(--neon-cyan); margin-bottom: 12px;
+}
+
+.tool-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
 
 /* ── HERO ── */
 .hero {
@@ -183,209 +202,51 @@ nav::before {
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; z-index: 2; padding-top: 64px;
 }
-.hero-bg {
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(0,255,136,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(57,255,20,0.05) 0%, transparent 60%),
-    radial-gradient(ellipse at 60% 80%, rgba(191,0,255,0.05) 0%, transparent 60%);
-  animation: bgPulse 8s ease-in-out infinite alternate;
-}
-@keyframes bgPulse { 0%{opacity:0.6} 100%{opacity:1} }
-.hero-rings { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-.ring {
-  position: absolute; border-radius: 50%; border: 1px solid;
-  transform: translate(-50%,-50%); animation: ringExpand linear infinite; opacity: 0;
-}
-.ring:nth-child(1){width:200px;height:200px;border-color:rgba(0,255,136,0.2);animation-duration:4s}
-.ring:nth-child(2){width:350px;height:350px;border-color:rgba(57,255,20,0.15);animation-duration:4s;animation-delay:1s}
-.ring:nth-child(3){width:500px;height:500px;border-color:rgba(191,0,255,0.1);animation-duration:4s;animation-delay:2s}
-.ring:nth-child(4){width:700px;height:700px;border-color:rgba(57,255,20,0.08);animation-duration:4s;animation-delay:3s}
-@keyframes ringExpand {
-  0%{opacity:0;transform:translate(-50%,-50%) scale(0.3)}
-  30%{opacity:1}
-  100%{opacity:0;transform:translate(-50%,-50%) scale(1)}
-}
+
 .hero-content { position: relative; text-align: center; z-index: 10; padding: 40px 20px; max-width: 900px; }
-.hero-tag {
-  display: inline-block; font-family: 'Share Tech Mono', monospace;
-  font-size: 11px; letter-spacing: 4px; color: var(--neon-yellow);
-  text-shadow: var(--glow-yellow); text-transform: uppercase; margin-bottom: 24px;
-  animation: fadeInDown 0.8s ease-out;
-}
-.hero-tag::before, .hero-tag::after { content: '//'; margin: 0 8px; opacity: 0.5; }
+
 .hero-title {
   font-family: 'Orbitron', monospace; font-weight: 900;
   font-size: clamp(36px, 6vw, 72px); line-height: 1.1;
-  color: #fff; margin-bottom: 8px; animation: fadeInUp 0.8s ease-out 0.2s both;
+  color: #fff; margin-bottom: 8px;
 }
-.hero-title span { color: var(--neon-cyan); text-shadow: var(--glow-cyan); }
-.hero-title .yellow { color: var(--neon-yellow); text-shadow: var(--glow-yellow); }
-.hero-sub {
-  font-family: 'Share Tech Mono', monospace; font-size: 13px;
-  color: var(--text-dim); letter-spacing: 3px; text-transform: uppercase;
-  margin-bottom: 32px; animation: fadeInUp 0.8s ease-out 0.4s both;
-}
+
+.hero-title span { color: var(--neon-cyan); }
+
 .hero-desc {
   font-size: 18px; color: var(--text-mid); max-width: 600px; margin: 0 auto 40px;
-  animation: fadeInUp 0.8s ease-out 0.5s both;
 }
+
 .hero-cta {
   display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
-  animation: fadeInUp 0.8s ease-out 0.6s both;
-}
-.btn-primary {
-  font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700;
-  letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
-  padding: 14px 32px; background: transparent;
-  border: 2px solid var(--neon-cyan); color: var(--neon-cyan);
-  cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
-}
-.btn-primary::before {
-  content: ''; position: absolute; inset: 0;
-  background: var(--neon-cyan); transform: translateX(-100%); transition: transform 0.3s; z-index: -1;
-}
-.btn-primary:hover { color: #000; text-shadow: none; box-shadow: var(--glow-cyan); }
-.btn-primary:hover::before { transform: translateX(0); }
-.btn-secondary {
-  font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700;
-  letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
-  padding: 14px 32px; background: transparent;
-  border: 2px solid var(--neon-yellow); color: var(--neon-yellow);
-  cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
-}
-.btn-secondary::before {
-  content: ''; position: absolute; inset: 0;
-  background: var(--neon-yellow); transform: translateX(-100%); transition: transform 0.3s; z-index: -1;
-}
-.btn-secondary:hover { color: #000; text-shadow: none; box-shadow: var(--glow-yellow); }
-.btn-secondary:hover::before { transform: translateX(0); }
-.hero-stats {
-  display: flex; gap: 40px; justify-content: center; margin-top: 60px; flex-wrap: wrap;
-  animation: fadeInUp 0.8s ease-out 0.8s both;
-}
-.stat-item { text-align: center; }
-.stat-num {
-  font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900;
-  color: var(--neon-cyan); text-shadow: var(--glow-cyan);
-}
-.stat-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
-
-/* ── TOOLS SECTION ── */
-.section {
-  position: relative; z-index: 2; padding: 100px 40px;
-  max-width: 1200px; margin: 0 auto;
-}
-.section-header { text-align: center; margin-bottom: 60px; }
-.section-tag {
-  font-family: 'Share Tech Mono', monospace; font-size: 10px;
-  letter-spacing: 3px; color: var(--neon-yellow); text-transform: uppercase;
-  margin-bottom: 16px; display: inline-block;
-}
-.section-tag::before, .section-tag::after { content: '['; margin: 0 8px; }
-.section-tag::after { content: ']'; }
-.section-title {
-  font-family: 'Orbitron', monospace; font-size: 42px; font-weight: 900;
-  color: #fff; margin-bottom: 16px;
-}
-.section-title span { color: var(--neon-cyan); }
-.section-desc {
-  font-size: 16px; color: var(--text-dim); max-width: 600px; margin: 0 auto;
-}
-.tools-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px; margin-top: 40px;
-}
-.tool-card {
-  background: linear-gradient(135deg, rgba(8,20,28,0.8), rgba(10,26,36,0.8));
-  border: 1px solid var(--border-dim); border-radius: 8px;
-  padding: 32px 24px; transition: all 0.3s; position: relative; overflow: hidden;
-}
-.tool-card::before {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(57,255,20,0.1), transparent);
-  opacity: 0; transition: opacity 0.3s;
-}
-.tool-card:hover {
-  border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(57,255,20,0.2);
-  transform: translateY(-4px);
-}
-.tool-card:hover::before { opacity: 1; }
-.tool-icon {
-  font-size: 32px; margin-bottom: 16px;
-}
-.tool-name {
-  font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 700;
-  color: var(--neon-cyan); margin-bottom: 12px;
-}
-.tool-desc {
-  font-size: 13px; color: var(--text-dim); line-height: 1.5;
 }
 
-/* ── PRICING ── */
-.pricing-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 24px; margin-top: 40px;
-}
-.price-card {
-  background: linear-gradient(135deg, rgba(8,20,28,0.8), rgba(10,26,36,0.8));
-  border: 1px solid var(--border-dim); border-radius: 8px;
-  padding: 32px 24px; text-align: center; transition: all 0.3s;
-}
-.price-card.featured {
-  border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(57,255,20,0.2);
-  transform: scale(1.05);
-}
-.price-name {
-  font-family: 'Orbitron', monospace; font-size: 18px; font-weight: 700;
-  color: var(--neon-cyan); margin-bottom: 12px;
-}
-.price-value {
-  font-family: 'Orbitron', monospace; font-size: 32px; font-weight: 900;
-  color: var(--neon-yellow); margin-bottom: 8px;
-}
-.price-period {
-  font-size: 12px; color: var(--text-dim); margin-bottom: 24px;
-}
-.price-features {
-  list-style: none; margin-bottom: 24px; text-align: left;
-}
-.price-features li {
-  font-size: 13px; color: var(--text-mid); padding: 8px 0;
-  border-bottom: 1px solid rgba(57,255,20,0.1);
-}
-.price-features li:last-child { border-bottom: none; }
-.price-btn {
-  font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700;
-  letter-spacing: 1px; text-transform: uppercase; text-decoration: none;
-  padding: 12px 24px; background: transparent;
-  border: 1px solid var(--neon-cyan); color: var(--neon-cyan);
-  cursor: pointer; transition: all 0.3s; display: inline-block;
-  border-radius: 4px;
-}
-.price-btn:hover {
-  background: var(--neon-cyan); color: #000; box-shadow: var(--glow-cyan);
+/* ── LIMITS DISPLAY ── */
+.limits-display {
+  background: rgba(57,255,20,0.05); border: 1px solid var(--neon-cyan);
+  border-radius: 8px; padding: 16px; margin-bottom: 20px;
+  font-family: 'Share Tech Mono', monospace; font-size: 12px;
 }
 
-/* ── FOOTER ── */
-footer {
-  position: relative; z-index: 2; background: rgba(2,4,8,0.8);
-  border-top: 1px solid var(--border-dim); padding: 40px;
-  text-align: center; color: var(--text-dim);
+.limit-item {
+  display: flex; justify-content: space-between; margin: 8px 0;
+  color: var(--text-mid);
 }
-footer a {
-  color: var(--neon-cyan); text-decoration: none; transition: all 0.3s;
-}
-footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
 
-/* ── ANIMATIONS ── */
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
+.limit-bar {
+  width: 100%; height: 4px; background: rgba(57,255,20,0.2);
+  border-radius: 2px; margin-top: 4px; overflow: hidden;
 }
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+
+.limit-fill {
+  height: 100%; background: var(--neon-cyan);
+  transition: width 0.3s;
+}
+
+/* ── TOAST ── */
+@keyframes slideIn {
+  from { transform: translateX(400px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 /* ── RESPONSIVE ── */
@@ -395,8 +256,6 @@ footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
   .section { padding: 60px 20px; }
   .hero-title { font-size: 36px; }
   .tools-grid { grid-template-columns: 1fr; }
-  .pricing-grid { grid-template-columns: 1fr; }
-  .price-card.featured { transform: scale(1); }
 }
 </style>
 </head>
@@ -404,8 +263,6 @@ footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
 
 <div class="grid-bg"></div>
 <div class="scanlines"></div>
-<div class="cursor"></div>
-<div class="cursor-ring"></div>
 <canvas id="particles"></canvas>
 
 <!-- NAV -->
@@ -416,7 +273,6 @@ footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
   </a>
   <div class="nav-links">
     <a href="#tools">ИНСТРУМЕНТЫ</a>
-    <a href="#pricing">ТАРИФЫ</a>
     <a href="https://t.me/PixsetAIStudioBot" target="_blank">TELEGRAM BOT</a>
     <a href="/" target="_blank">ГЛАВНАЯ</a>
   </div>
@@ -444,40 +300,17 @@ footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-bg"></div>
-  <div class="hero-rings">
-    <div class="ring"></div>
-    <div class="ring"></div>
-    <div class="ring"></div>
-    <div class="ring"></div>
-  </div>
   <div class="hero-content">
-    <div class="hero-tag">AI-студия нового поколения</div>
     <h1 class="hero-title">
       PIXSET<br>
-      <span>AI</span> <span class="yellow">STUDIO</span>
+      <span>AI</span> STUDIO
     </h1>
-    <div class="hero-sub">Веб-версия • Работает прямо в браузере</div>
     <p class="hero-desc">
       Генерация изображений, умный чат, QR-коды и апскейл фото — всё бесплатно, без регистрации.
     </p>
     <div class="hero-cta">
       <button class="btn-primary" onclick="scrollToTools()">⚡ ПОПРОБОВАТЬ</button>
-      <a href="https://t.me/PixsetAIStudioBot" target="_blank" class="btn-secondary">📱 TELEGRAM БОТ</a>
-    </div>
-    <div class="hero-stats">
-      <div class="stat-item">
-        <div class="stat-num">14+</div>
-        <div class="stat-label">AI-инструментов</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-num">∞</div>
-        <div class="stat-label">Возможностей</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-num">0₽</div>
-        <div class="stat-label">Базовый доступ</div>
-      </div>
+      <a href="https://t.me/PixsetAIStudioBot" target="_blank" class="btn-primary" style="text-decoration: none;">📱 TELEGRAM БОТ</a>
     </div>
   </div>
 </section>
@@ -485,10 +318,15 @@ footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
 <!-- TOOLS -->
 <section id="tools" class="section">
   <div class="section-header">
-    <div class="section-tag">ИНСТРУМЕНТЫ</div>
     <h2 class="section-title">Что умеет <span>AI Studio</span></h2>
-    <p class="section-desc">Все инструменты работают прямо в браузере через публичные API — без регистрации и установки.</p>
+    <p style="color: var(--text-dim); margin-top: 16px;">Все инструменты работают прямо в браузере через публичные API — без регистрации и установки.</p>
   </div>
+  
+  <div id="limits-display" class="limits-display" style="display:none;">
+    <div style="margin-bottom: 12px; color: var(--neon-cyan); font-weight: bold;">📊 Ваши лимиты на сегодня</div>
+    <div id="limits-content"></div>
+  </div>
+  
   <div class="tools-grid">
     <div class="tool-card">
       <div class="tool-icon">🖼</div>
@@ -523,96 +361,20 @@ footer a:hover { text-shadow: 0 0 8px var(--neon-cyan); }
   </div>
 </section>
 
-<!-- PRICING -->
-<section id="pricing" class="section">
-  <div class="section-header">
-    <div class="section-tag">ТАРИФЫ</div>
-    <h2 class="section-title">Выбери свой <span>план</span></h2>
-    <p class="section-desc">Начни бесплатно, переходи на Pro когда нужно больше. Оплата через Telegram Stars.</p>
-  </div>
-  <div class="pricing-grid">
-    <div class="price-card">
-      <div class="price-name">Free</div>
-      <div class="price-value">0 ₽</div>
-      <div class="price-period">навсегда бесплатно</div>
-      <ul class="price-features">
-        <li>✓ 10 картинок / день</li>
-        <li>✓ 10 сообщений PixGPT</li>
-        <li>✓ 5 анализов фото</li>
-        <li>✓ 5 удалений фона</li>
-        <li>✓ 10 QR-кодов</li>
-        <li>✓ 1 видео / день</li>
-      </ul>
-      <button class="price-btn" onclick="showAuthModal()">НАЧАТЬ</button>
-    </div>
-    <div class="price-card">
-      <div class="price-name">Basic</div>
-      <div class="price-value">149 ⭐</div>
-      <div class="price-period">в месяц</div>
-      <ul class="price-features">
-        <li>✓ 25 картинок / день</li>
-        <li>✓ 25 сообщений PixGPT</li>
-        <li>✓ 10 анализов фото</li>
-        <li>✓ 10 удалений фона</li>
-        <li>✓ 25 QR-кодов</li>
-        <li>✓ 3 видео / день</li>
-      </ul>
-      <button class="price-btn" onclick="showAuthModal()">ПОДКЛЮЧИТЬ</button>
-    </div>
-    <div class="price-card featured">
-      <div class="price-name">Pro</div>
-      <div class="price-value">349 ⭐</div>
-      <div class="price-period">в месяц</div>
-      <ul class="price-features">
-        <li>✓ 50 картинок / день</li>
-        <li>✓ 50 сообщений PixGPT</li>
-        <li>✓ 25 анализов фото</li>
-        <li>✓ 25 удалений фона</li>
-        <li>✓ 50 QR-кодов</li>
-        <li>✓ 5 видео / день</li>
-      </ul>
-      <button class="price-btn" onclick="showAuthModal()">ПОДКЛЮЧИТЬ PRO</button>
-    </div>
-    <div class="price-card">
-      <div class="price-name">Premium</div>
-      <div class="price-value">699 ⭐</div>
-      <div class="price-period">в месяц</div>
-      <ul class="price-features">
-        <li>✓ 100 картинок / день</li>
-        <li>✓ 100 сообщений PixGPT</li>
-        <li>✓ 50 анализов фото</li>
-        <li>✓ 50 удалений фона</li>
-        <li>✓ 100 QR-кодов</li>
-        <li>✓ 10 видео / день</li>
-      </ul>
-      <button class="price-btn" onclick="showAuthModal()">ПОДКЛЮЧИТЬ PREMIUM</button>
-    </div>
-  </div>
-  <p style="text-align: center; margin-top: 40px; font-size: 12px; color: var(--text-dim);">
-    ⭐ Telegram Stars — внутренняя валюта Telegram. 1 Star ≈ 1 ₽
-  </p>
-</section>
-
 <!-- FOOTER -->
-<footer>
+<footer style="position: relative; z-index: 2; background: rgba(2,4,8,0.8); border-top: 1px solid var(--border-dim); padding: 40px; text-align: center; color: var(--text-dim);">
   <p>© 2024 Pixset Studio. Все права защищены.</p>
   <p style="margin-top: 12px; font-size: 12px;">
-    <a href="/" target="_blank">Главная</a> • 
-    <a href="https://t.me/PixsetAIStudioBot" target="_blank">Telegram Бот</a> • 
-    <a href="https://github.com/pixset" target="_blank">GitHub</a>
+    <a href="/" target="_blank" style="color: var(--neon-cyan); text-decoration: none;">Главная</a> • 
+    <a href="https://t.me/PixsetAIStudioBot" target="_blank" style="color: var(--neon-cyan); text-decoration: none;">Telegram Бот</a> • 
+    <a href="https://github.com/pixset" target="_blank" style="color: var(--neon-cyan); text-decoration: none;">GitHub</a>
   </p>
 </footer>
 
 <script>
-// ── CURSOR ──
-const cursor = document.querySelector('.cursor');
-const cursorRing = document.querySelector('.cursor-ring');
-document.addEventListener('mousemove', e => {
-  cursor.style.left = e.clientX + 'px';
-  cursor.style.top = e.clientY + 'px';
-  cursorRing.style.left = e.clientX + 'px';
-  cursorRing.style.top = e.clientY + 'px';
-});
+// ── CONFIG ──
+const API_URL = localStorage.getItem('apiUrl') || 'http://localhost:3000';
+let currentUser = null;
 
 // ── PARTICLES ──
 const canvas = document.getElementById('particles');
@@ -651,27 +413,108 @@ window.addEventListener('resize', () => {
 function showAuthModal() {
   document.getElementById('auth-modal').classList.remove('hidden');
 }
+
 function hideAuthModal() {
   document.getElementById('auth-modal').classList.add('hidden');
 }
-function onTelegramAuth(user) {
-  console.log('User authenticated:', user);
-  localStorage.setItem('telegramUser', JSON.stringify(user));
-  document.getElementById('user-name').textContent = user.first_name || user.username || 'User';
-  if (user.photo_url) {
-    document.getElementById('user-avatar').src = user.photo_url;
+
+async function onTelegramAuth(user) {
+  try {
+    console.log('Telegram auth:', user);
+    
+    // Отправляем данные на API
+    const response = await fetch(`${API_URL}/api/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user })
+    });
+    
+    if (!response.ok) throw new Error('Auth failed');
+    
+    const data = await response.json();
+    currentUser = data.user;
+    
+    // Сохраняем в localStorage
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    
+    // Обновляем UI
+    document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
+    if (user.photo_url) {
+      document.getElementById('user-avatar').src = user.photo_url;
+    }
+    document.getElementById('user-info').style.display = 'flex';
+    document.getElementById('login-btn').style.display = 'none';
+    
+    hideAuthModal();
+    showToast('✓ Успешно авторизованы!');
+    
+    // Загружаем лимиты
+    await loadLimits();
+  } catch (error) {
+    console.error('Auth error:', error);
+    showToast('✗ Ошибка авторизации');
   }
-  document.getElementById('user-info').style.display = 'flex';
-  document.getElementById('login-btn').style.display = 'none';
-  hideAuthModal();
-  showToast('✓ Успешно авторизованы!');
 }
+
 function logout() {
-  localStorage.removeItem('telegramUser');
+  currentUser = null;
+  localStorage.removeItem('currentUser');
   document.getElementById('user-info').style.display = 'none';
   document.getElementById('login-btn').style.display = 'block';
+  document.getElementById('limits-display').style.display = 'none';
   showToast('Вы вышли из аккаунта');
 }
+
+// ── LIMITS ──
+async function loadLimits() {
+  if (!currentUser) return;
+  
+  try {
+    const actions = ['pixgen', 'pixgpt', 'pixcut', 'pixocr', 'pixqr', 'pixupscale'];
+    const limitsData = {};
+    
+    for (const action of actions) {
+      const response = await fetch(`${API_URL}/api/usage/check/${currentUser.id}/${action}`);
+      if (response.ok) {
+        limitsData[action] = await response.json();
+      }
+    }
+    
+    // Отображаем лимиты
+    const display = document.getElementById('limits-display');
+    const content = document.getElementById('limits-content');
+    
+    let html = '';
+    for (const [action, data] of Object.entries(limitsData)) {
+      const percentage = (data.used / data.limit) * 100;
+      const emoji = {
+        pixgen: '🖼',
+        pixgpt: '💬',
+        pixcut: '✂',
+        pixocr: '📝',
+        pixqr: '🔗',
+        pixupscale: '⬆'
+      }[action] || '⚙';
+      
+      html += `
+        <div class="limit-item">
+          <span>${emoji} ${action.toUpperCase()}: ${data.used}/${data.limit}</span>
+          <span>${data.remaining > 0 ? '✓' : '✗'}</span>
+        </div>
+        <div class="limit-bar">
+          <div class="limit-fill" style="width: ${percentage}%"></div>
+        </div>
+      `;
+    }
+    
+    content.innerHTML = html;
+    display.style.display = 'block';
+  } catch (error) {
+    console.error('Load limits error:', error);
+  }
+}
+
+// ── UTILS ──
 function showToast(msg) {
   const toast = document.createElement('div');
   toast.textContent = msg;
@@ -680,22 +523,25 @@ function showToast(msg) {
   setTimeout(() => toast.remove(), 3000);
 }
 
-// ── SCROLL ──
 function scrollToTools() {
   document.getElementById('tools').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ── CHECK AUTH ON LOAD ──
+// ── INIT ──
 window.addEventListener('load', () => {
-  const user = localStorage.getItem('telegramUser');
+  const user = localStorage.getItem('currentUser');
   if (user) {
-    const userData = JSON.parse(user);
-    document.getElementById('user-name').textContent = userData.first_name || userData.username || 'User';
-    if (userData.photo_url) {
-      document.getElementById('user-avatar').src = userData.photo_url;
-    }
+    currentUser = JSON.parse(user);
+    document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-btn').style.display = 'none';
+    loadLimits();
+  }
+  
+  // Проверяем Telegram Web App
+  if (window.Telegram?.WebApp) {
+    const webApp = window.Telegram.WebApp;
+    webApp.ready();
   }
 });
 </script>
