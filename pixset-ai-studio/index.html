@@ -309,7 +309,7 @@ nav {
       Генерация изображений, умный чат, QR-коды и апскейл фото — всё бесплатно, без регистрации.
     </p>
     <div class="hero-cta">
-      <button class="btn-primary" onclick="scrollToTools()">⚡ ПОПРОБОВАТЬ</button>
+      <button class="btn-primary" onclick="enterStudio()">⚡ ПОПРОБОВАТЬ</button>
       <a href="https://t.me/PixsetAIStudioBot" target="_blank" class="btn-primary" style="text-decoration: none;">📱 TELEGRAM БОТ</a>
     </div>
   </div>
@@ -525,6 +525,14 @@ function showToast(msg) {
 
 function scrollToTools() {
   document.getElementById('tools').scrollIntoView({ behavior: 'smooth' });
+}
+
+function enterStudio() {
+  if (currentUser) {
+    window.location.href = '/pixset-ai-studio/studio.html';
+  } else {
+    showAuthModal();
+  }
 }
 
 // ── INIT ──
