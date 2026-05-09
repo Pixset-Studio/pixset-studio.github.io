@@ -55,6 +55,7 @@ nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgb
 <nav>
   <a href="/" class="nav-logo">PIXSET STUDIO</a>
   <div class="user-info">
+    <img id="user-avatar" src="" alt="" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--neon-cyan); display: none;">
     <span id="user-name">User</span>
     <button class="logout-btn" onclick="logout()">ВЫХОД</button>
   </div>
@@ -105,6 +106,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!userStr) { window.location.href = '/pixset-ai-studio/'; return; }
   currentUser = JSON.parse(userStr);
   document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
+  if (currentUser.photoUrl) {
+    const avatar = document.getElementById('user-avatar');
+    avatar.src = currentUser.photoUrl;
+    avatar.style.display = 'block';
+  }
   
   document.querySelectorAll('.sidebar-item').forEach(item => {
     item.onclick = () => {

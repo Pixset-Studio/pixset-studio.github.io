@@ -541,6 +541,11 @@ window.addEventListener('load', () => {
   if (user) {
     currentUser = JSON.parse(user);
     document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
+    if (currentUser.photoUrl) {
+      const avatar = document.getElementById('user-avatar');
+      avatar.src = currentUser.photoUrl;
+      avatar.style.display = 'block';
+    }
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-btn').style.display = 'none';
     loadLimits();
