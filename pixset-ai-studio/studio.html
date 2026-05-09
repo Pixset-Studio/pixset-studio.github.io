@@ -12,223 +12,46 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root {
-  --neon-yellow: #ffd700;
-  --neon-cyan: #39ff14;
-  --neon-purple: #bf00ff;
-  --neon-pink: #ff006e;
-  --bg-deep: #020408;
-  --bg-card: #08141c;
-  --grid-color: rgba(57, 255, 20, 0.04);
-  --glow-cyan: 0 0 10px #39ff14, 0 0 30px #39ff1440, 0 0 60px #39ff1420;
-  --border-dim: rgba(57, 255, 20, 0.12);
-  --text-dim: rgba(180, 220, 255, 0.6);
-  --text-mid: rgba(200, 230, 255, 0.85);
-  --text-bright: #cce8ff;
+  --neon-yellow: #ffd700; --neon-cyan: #39ff14; --neon-purple: #bf00ff; --neon-pink: #ff006e;
+  --bg-deep: #020408; --bg-card: #08141c; --grid-color: rgba(57, 255, 20, 0.04);
+  --border-dim: rgba(57, 255, 20, 0.12); --text-dim: rgba(180, 220, 255, 0.6);
+  --text-mid: rgba(200, 230, 255, 0.85); --text-bright: #cce8ff;
 }
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  background: var(--bg-deep);
-  color: var(--text-bright);
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  overflow-x: hidden;
-}
-
-.grid-bg {
-  position: fixed; inset: 0;
-  background-image:
-    linear-gradient(var(--grid-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-  background-size: 40px 40px;
-  z-index: 0; pointer-events: none;
-}
-
-.scanlines {
-  position: fixed; inset: 0;
-  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
-  z-index: 1; pointer-events: none;
-}
-
-/* ── NAV ── */
-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-  background: rgba(2, 4, 8, 0.95);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border-dim);
-  padding: 0 32px;
-  display: flex; align-items: center; justify-content: space-between;
-  height: 64px;
-}
-
-.nav-logo {
-  font-family: 'Orbitron', monospace; font-weight: 900; font-size: 14px;
-  color: var(--neon-yellow); text-decoration: none;
-  letter-spacing: 2px; text-transform: uppercase;
-}
-
-.user-info {
-  display: flex; align-items: center; gap: 12px; font-size: 11px;
-  color: var(--neon-cyan); font-family: 'Share Tech Mono', monospace;
-}
-
-.logout-btn {
-  font-family: 'Share Tech Mono', monospace; font-size: 9px;
-  padding: 6px 12px; background: rgba(255,0,110,0.1);
-  border: 1px solid var(--neon-pink); color: var(--neon-pink);
-  cursor: pointer; transition: all 0.3s; text-transform: uppercase;
-}
-
-/* ── MAIN ── */
-.container {
-  position: relative; z-index: 2; margin-top: 64px;
-  display: flex; height: calc(100vh - 64px);
-}
-
-.sidebar {
-  width: 240px; background: rgba(8, 20, 28, 0.8);
-  border-right: 1px solid var(--border-dim);
-  overflow-y: auto; padding: 20px 0;
-}
-
-.sidebar-item {
-  padding: 12px 20px; cursor: pointer; transition: all 0.3s;
-  border-left: 2px solid transparent; color: var(--text-dim);
-  font-family: 'Share Tech Mono', monospace; font-size: 11px;
-  letter-spacing: 1px; text-transform: uppercase;
-}
-
-.sidebar-item:hover {
-  background: rgba(57, 255, 20, 0.05); color: var(--neon-cyan);
-}
-
-.sidebar-item.active {
-  border-left-color: var(--neon-cyan); background: rgba(57, 255, 20, 0.1);
-  color: var(--neon-cyan);
-}
-
-.content {
-  flex: 1; overflow-y: auto; padding: 40px;
-}
-
-.tool-section {
-  display: none;
-}
-
-.tool-section.active {
-  display: block;
-}
-
-.section-title {
-  font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900;
-  color: #fff; margin-bottom: 8px;
-}
-
-.section-desc {
-  color: var(--text-dim); font-size: 13px; margin-bottom: 24px;
-}
-
-/* ── FORM ── */
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-label {
-  display: block; font-family: 'Share Tech Mono', monospace;
-  font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
-  color: var(--neon-cyan); margin-bottom: 8px;
-}
-
-.form-input, .form-textarea, .form-select {
-  width: 100%; padding: 12px 16px;
-  background: rgba(8, 20, 28, 0.6); border: 1px solid var(--border-dim);
-  color: var(--text-bright); font-family: 'Rajdhani', sans-serif;
-  font-size: 14px; border-radius: 4px; transition: all 0.3s;
-}
-
-.btn {
-  font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700;
-  letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
-  padding: 12px 24px; background: transparent;
-  border: 2px solid var(--neon-cyan); color: var(--neon-cyan);
-  cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
-  border-radius: 4px;
-}
-
-.btn:hover {
-  color: #000; box-shadow: var(--glow-cyan);
-  background: var(--neon-cyan);
-}
-
-.btn:disabled {
-  opacity: 0.5; cursor: not-allowed;
-}
-
-/* ── OUTPUT ── */
-.output-box {
-  background: rgba(8, 20, 28, 0.6); border: 1px solid var(--border-dim);
-  border-radius: 4px; padding: 20px; margin-top: 24px;
-}
-
-.chat-messages {
-  display: flex; flex-direction: column; gap: 12px;
-  max-height: 400px; overflow-y: auto; margin-bottom: 20px;
-}
-
-.message {
-  padding: 12px 16px; border-radius: 4px;
-  font-size: 13px; line-height: 1.5;
-}
-
-.message.user {
-  background: rgba(57, 255, 20, 0.1); border-left: 2px solid var(--neon-cyan);
-  align-self: flex-end; max-width: 80%;
-}
-
-.message.assistant {
-  background: rgba(191, 0, 255, 0.1); border-left: 2px solid var(--neon-purple);
-  align-self: flex-start; max-width: 80%;
-}
-
-.image-preview {
-  max-width: 100%; border-radius: 4px;
-  border: 1px solid var(--border-dim); margin-top: 12px;
-}
-
-/* ── LIMITS ── */
-.limits-bar {
-  background: rgba(57, 255, 20, 0.05); border: 1px solid var(--neon-cyan);
-  border-radius: 4px; padding: 12px; margin-bottom: 20px;
-  font-family: 'Share Tech Mono', monospace; font-size: 11px;
-}
-
-.limit-item {
-  display: flex; justify-content: space-between; margin: 6px 0;
-}
-
-.limit-fill-bg {
-  width: 100%; height: 2px; background: rgba(57, 255, 20, 0.1);
-  border-radius: 1px; margin-top: 4px;
-}
-
-.limit-fill {
-  height: 100%; background: var(--neon-cyan); border-radius: 1px;
-  transition: width 0.3s;
-}
-
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
+body { background: var(--bg-deep); color: var(--text-bright); font-family: 'Rajdhani', sans-serif; font-size: 15px; overflow-x: hidden; }
+.grid-bg { position: fixed; inset: 0; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; z-index: 0; pointer-events: none; }
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(2, 4, 8, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-dim); padding: 0 32px; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.nav-logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 14px; color: var(--neon-yellow); text-decoration: none; letter-spacing: 2px; }
+.user-info { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--neon-cyan); font-family: 'Share Tech Mono', monospace; }
+.logout-btn { font-family: 'Share Tech Mono', monospace; font-size: 9px; padding: 6px 12px; background: rgba(255,0,110,0.1); border: 1px solid var(--neon-pink); color: var(--neon-pink); cursor: pointer; text-transform: uppercase; }
+.container { position: relative; z-index: 2; margin-top: 64px; display: flex; height: calc(100vh - 64px); }
+.sidebar { width: 240px; background: rgba(8, 20, 28, 0.8); border-right: 1px solid var(--border-dim); overflow-y: auto; padding: 20px 0; }
+.sidebar-item { padding: 12px 20px; cursor: pointer; border-left: 2px solid transparent; color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+.sidebar-item.active { border-left-color: var(--neon-cyan); background: rgba(57, 255, 20, 0.1); color: var(--neon-cyan); }
+.content { flex: 1; overflow-y: auto; padding: 40px; }
+.tool-section { display: none; }
+.tool-section.active { display: block; }
+.section-title { font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900; color: #fff; margin-bottom: 8px; }
+.section-desc { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+.form-group { margin-bottom: 20px; }
+.form-label { display: block; font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--neon-cyan); margin-bottom: 8px; }
+.form-input, .form-textarea, .form-select { width: 100%; padding: 12px 16px; background: rgba(8, 20, 28, 0.6); border: 1px solid var(--border-dim); color: var(--text-bright); font-family: 'Rajdhani', sans-serif; font-size: 14px; border-radius: 4px; }
+.btn { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 12px 24px; background: transparent; border: 2px solid var(--neon-cyan); color: var(--neon-cyan); cursor: pointer; border-radius: 4px; }
+.btn:hover { color: #000; background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); }
+.output-box { background: rgba(8, 20, 28, 0.6); border: 1px solid var(--border-dim); border-radius: 4px; padding: 20px; margin-top: 24px; }
+.chat-messages { display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; margin-bottom: 20px; }
+.message { padding: 12px 16px; border-radius: 4px; font-size: 13px; line-height: 1.5; }
+.message.user { background: rgba(57, 255, 20, 0.1); border-left: 2px solid var(--neon-cyan); align-self: flex-end; max-width: 80%; }
+.message.assistant { background: rgba(191, 0, 255, 0.1); border-left: 2px solid var(--neon-purple); align-self: flex-start; max-width: 80%; }
+.image-preview { max-width: 100%; border-radius: 4px; border: 1px solid var(--border-dim); margin-top: 12px; }
+.limits-bar { background: rgba(57, 255, 20, 0.05); border: 1px solid var(--neon-cyan); border-radius: 4px; padding: 12px; margin-bottom: 20px; font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+.limit-item { display: flex; justify-content: space-between; margin: 6px 0; }
+.limit-fill-bg { width: 100%; height: 2px; background: rgba(57, 255, 20, 0.1); border-radius: 1px; margin-top: 4px; }
+.limit-fill { height: 100%; background: var(--neon-cyan); border-radius: 1px; transition: width 0.3s; }
 </style>
 </head>
 <body>
-
 <div class="grid-bg"></div>
-<div class="scanlines"></div>
-
 <nav>
   <a href="/" class="nav-logo">PIXSET STUDIO</a>
   <div class="user-info">
@@ -236,7 +59,6 @@ nav {
     <button class="logout-btn" onclick="logout()">ВЫХОД</button>
   </div>
 </nav>
-
 <div class="container">
   <div class="sidebar">
     <div class="sidebar-item active" data-tool="pixgen">🖼 PixGen</div>
@@ -246,200 +68,67 @@ nav {
     <div class="sidebar-item" data-tool="pixcut">✂ PixCut</div>
     <div class="sidebar-item" data-tool="pixocr">📝 PixOCR</div>
   </div>
-
   <div class="content">
-    <!-- PIXGEN -->
     <div id="pixgen" class="tool-section active">
       <h2 class="section-title">🖼 PixGen</h2>
-      <p class="section-desc">Генерация изображений по описанию</p>
-      
-      <div class="limits-bar">
-        <div class="limit-item">
-          <span>Осталось сегодня:</span>
-          <span id="pixgen-limit">--/--</span>
-        </div>
-        <div class="limit-fill-bg"><div class="limit-fill" id="pixgen-fill"></div></div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Описание</label>
-        <textarea id="pixgen-prompt" class="form-textarea" placeholder="Например: Cyberpunk city, neon, ultra detailed..."></textarea>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Модель</label>
-        <select id="pixgen-model" class="form-select">
-          <option value="flux">Flux (Default)</option>
-          <option value="flux-realism">Realism</option>
-          <option value="flux-anime">Anime</option>
-        </select>
-      </div>
-
+      <div class="limits-bar"><div class="limit-item"><span>Осталось сегодня:</span><span id="pixgen-limit">--/--</span></div><div class="limit-fill-bg"><div class="limit-fill" id="pixgen-fill"></div></div></div>
+      <div class="form-group"><label class="form-label">Описание</label><textarea id="pixgen-prompt" class="form-textarea" placeholder="Например: Cyberpunk cat..."></textarea></div>
       <button class="btn" onclick="generateImage()">🚀 Генерировать</button>
-
-      <div id="pixgen-output" class="output-box" style="display: none;">
-        <img id="pixgen-result" class="image-preview" alt="Result">
-        <div style="margin-top: 12px; display: flex; gap: 8px;">
-          <button class="btn" onclick="downloadFile('pixgen-result', 'pixgen.png')">⬇ Скачать</button>
-        </div>
-      </div>
+      <div id="pixgen-output" class="output-box" style="display: none;"><img id="pixgen-result" class="image-preview" alt="Result"></div>
     </div>
-
-    <!-- PIXGPT -->
     <div id="pixgpt" class="tool-section">
       <h2 class="section-title">💬 PixGPT</h2>
-      <p class="section-desc">Умный чат с AI</p>
-
-      <div class="limits-bar">
-        <div class="limit-item">
-          <span>Осталось сегодня:</span>
-          <span id="pixgpt-limit">--/--</span>
-        </div>
-        <div class="limit-fill-bg"><div class="limit-fill" id="pixgpt-fill"></div></div>
-      </div>
-
-      <div class="output-box">
-        <div class="chat-messages" id="pixgpt-messages"></div>
-        <div class="form-group">
-          <input id="pixgpt-input" class="form-input" type="text" placeholder="Ваш вопрос...">
-        </div>
-        <button class="btn" onclick="sendMessage()" style="width: 100%;">📤 Отправить</button>
-      </div>
+      <div class="limits-bar"><div class="limit-item"><span>Осталось сегодня:</span><span id="pixgpt-limit">--/--</span></div><div class="limit-fill-bg"><div class="limit-fill" id="pixgpt-fill"></div></div></div>
+      <div class="output-box"><div class="chat-messages" id="pixgpt-messages"></div><div class="form-group"><input id="pixgpt-input" class="form-input" type="text" placeholder="Ваш вопрос..."></div><button class="btn" onclick="sendMessage()" style="width: 100%;">📤 Отправить</button></div>
     </div>
-
-    <!-- PIXQR -->
     <div id="pixqr" class="tool-section">
       <h2 class="section-title">🔗 PixQR</h2>
-      <p class="section-desc">Генерация QR-кодов</p>
-
-      <div class="limits-bar">
-        <div class="limit-item">
-          <span>Осталось сегодня:</span>
-          <span id="pixqr-limit">--/--</span>
-        </div>
-        <div class="limit-fill-bg"><div class="limit-fill" id="pixqr-fill"></div></div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">URL или Текст</label>
-        <input id="pixqr-input" class="form-input" type="text" placeholder="https://...">
-      </div>
-      <button class="btn" onclick="generateQR()">🎨 Создать</button>
-
-      <div id="pixqr-output" class="output-box" style="display: none; text-align: center;">
-        <div id="qr-code-display" style="display: inline-block; padding: 10px; background: white; border-radius: 4px;"></div>
-      </div>
+      <div class="limits-bar"><div class="limit-item"><span>Осталось сегодня:</span><span id="pixqr-limit">--/--</span></div><div class="limit-fill-bg"><div class="limit-fill" id="pixqr-fill"></div></div></div>
+      <div class="form-group"><input id="pixqr-input" class="form-input" type="text" placeholder="https://..."><button class="btn" onclick="generateQR()" style="margin-top:10px">🎨 Создать</button></div>
+      <div id="pixqr-output" class="output-box" style="display: none; text-align: center;"><div id="qr-code-display" style="display: inline-block; padding: 10px; background: white;"></div></div>
     </div>
-
-    <!-- PIXUPSCALE -->
     <div id="pixupscale" class="tool-section">
       <h2 class="section-title">⬆ PixUpscale</h2>
-      <p class="section-desc">Увеличение качества фото</p>
-
-      <div class="limits-bar">
-        <div class="limit-item">
-          <span>Осталось сегодня:</span>
-          <span id="pixupscale-limit">--/--</span>
-        </div>
-        <div class="limit-fill-bg"><div class="limit-fill" id="pixupscale-fill"></div></div>
-      </div>
-
-      <div class="form-group">
-        <input id="pixupscale-input" class="form-input" type="file" accept="image/*">
-      </div>
-      <button class="btn" onclick="upscaleImage()">⬆ Увеличить</button>
-
-      <div id="pixupscale-output" class="output-box" style="display: none;">
-        <img id="pixupscale-result" class="image-preview" alt="Upscaled">
-      </div>
+      <div class="form-group"><input id="pixupscale-input" class="form-input" type="file" accept="image/*"><button class="btn" onclick="upscaleImage()" style="margin-top:10px">⬆ Увеличить</button></div>
+      <div id="pixupscale-output" class="output-box" style="display: none;"><img id="pixupscale-result" class="image-preview" alt="Upscaled"></div>
     </div>
-
-    <!-- PIXCUT -->
-    <div id="pixcut" class="tool-section">
-      <h2 class="section-title">✂ PixCut</h2>
-      <p class="section-desc">Удаление фона (через AI)</p>
-
-      <div class="limits-bar">
-        <div class="limit-item">
-          <span>Осталось сегодня:</span>
-          <span id="pixcut-limit">--/--</span>
-        </div>
-        <div class="limit-fill-bg"><div class="limit-fill" id="pixcut-fill"></div></div>
-      </div>
-
-      <div class="form-group">
-        <input id="pixcut-input" class="form-input" type="file" accept="image/*">
-      </div>
-      <button class="btn" onclick="removeBackground()">✂ Удалить фон</button>
-
-      <div id="pixcut-output" class="output-box" style="display: none;">
-        <img id="pixcut-result" class="image-preview" alt="Cutout">
-      </div>
-    </div>
-
-    <!-- PIXOCR -->
-    <div id="pixocr" class="tool-section">
-      <h2 class="section-title">📝 PixOCR</h2>
-      <p class="section-desc">Распознавание текста</p>
-
-      <div class="limits-bar">
-        <div class="limit-item">
-          <span>Осталось сегодня:</span>
-          <span id="pixocr-limit">--/--</span>
-        </div>
-        <div class="limit-fill-bg"><div class="limit-fill" id="pixocr-fill"></div></div>
-      </div>
-
-      <div class="form-group">
-        <input id="pixocr-input" class="form-input" type="file" accept="image/*">
-      </div>
-      <button class="btn" onclick="recognizeText()">📝 Найти текст</button>
-
-      <div id="pixocr-output" class="output-box" style="display: none;">
-        <textarea id="pixocr-result" class="form-textarea" readonly></textarea>
-      </div>
-    </div>
+    <div id="pixcut" class="tool-section"><h2 class="section-title">✂ PixCut</h2><p>⏳ В разработке...</p></div>
+    <div id="pixocr" class="tool-section"><h2 class="section-title">📝 PixOCR</h2><p>⏳ В разработке...</p></div>
   </div>
 </div>
-
 <script>
 const API_URL = 'https://pixset-api-production.up.railway.app';
 let currentUser = null;
 
-// ── INITIALIZATION ──
 document.addEventListener('DOMContentLoaded', async () => {
   const userStr = localStorage.getItem('currentUser');
-  if (!userStr) {
-    window.location.href = '/pixset-ai-studio/';
-    return;
-  }
+  if (!userStr) { window.location.href = '/pixset-ai-studio/'; return; }
   currentUser = JSON.parse(userStr);
   document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
   
-  // Sidebar logic
   document.querySelectorAll('.sidebar-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.onclick = () => {
       const tool = item.getAttribute('data-tool');
       document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
       document.querySelectorAll('.tool-section').forEach(s => s.classList.remove('active'));
       item.classList.add('active');
       document.getElementById(tool).classList.add('active');
-    });
+    };
   });
-
-  await loadAllLimits();
+  loadAllLimits();
 });
 
-// ── LIMITS ──
 async function loadAllLimits() {
-  const actions = ['pixgen', 'pixgpt', 'pixqr', 'pixupscale', 'pixcut', 'pixocr'];
+  const actions = ['pixgen', 'pixgpt', 'pixqr'];
   for (const action of actions) {
     try {
       const res = await fetch(`${API_URL}/api/usage/check/${currentUser.id}/${action}`);
       const data = await res.json();
-      document.getElementById(`${action}-limit`).textContent = `${data.used}/${data.limit}`;
-      document.getElementById(`${action}-fill`).style.width = (data.used / data.limit * 100) + '%';
-    } catch (e) { console.error(e); }
+      const el = document.getElementById(`${action}-limit`);
+      if (el) el.textContent = `${data.used}/${data.limit}`;
+      const fill = document.getElementById(`${action}-fill`);
+      if (fill) fill.style.width = (data.used / data.limit * 100) + '%';
+    } catch (e) { console.warn('Limit fetch failed, using default'); }
   }
 }
 
@@ -450,55 +139,42 @@ async function logUsage(action) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUser.id, action })
     });
-    await loadAllLimits();
-  } catch (e) { console.error(e); }
+    loadAllLimits();
+  } catch (e) { console.warn('Log failed'); }
 }
 
-// ── PIXGEN ──
 async function generateImage() {
   const prompt = document.getElementById('pixgen-prompt').value;
-  const model = document.getElementById('pixgen-model').value;
-  if (!prompt) return showToast('Введите описание');
-
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = '⏳...';
-
-  const url = `https://api.pollinations.ai/v1/images?prompt=${encodeURIComponent(prompt)}&model=${model}&seed=${Math.floor(Math.random()*1000000)}`;
-  
+  if (!prompt) return showToast('Введите текст');
+  const btn = event.target; btn.disabled = true; btn.textContent = '⏳...';
+  const url = `https://api.pollinations.ai/v1/images?prompt=${encodeURIComponent(prompt)}&seed=${Math.floor(Math.random()*1000000)}`;
   const img = document.getElementById('pixgen-result');
-  img.onload = async () => {
+  img.onload = () => {
     document.getElementById('pixgen-output').style.display = 'block';
     btn.disabled = false; btn.textContent = '🚀 Генерировать';
-    await logUsage('pixgen');
+    logUsage('pixgen');
     showToast('✓ Готово');
   };
   img.src = url;
 }
 
-// ── PIXGPT ──
 let chatHistory = [];
 async function sendMessage() {
   const input = document.getElementById('pixgpt-input');
   const text = input.value.trim();
   if (!text) return;
-
-  input.value = '';
-  addMsg('user', text);
-
+  input.value = ''; addMsg('user', text);
   try {
     const res = await fetch('https://api.pollinations.ai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'openai',
-        messages: [...chatHistory, { role: 'user', content: text }]
-      })
+      body: JSON.stringify({ model: 'openai', messages: [...chatHistory, { role: 'user', content: text }] })
     });
     const data = await res.json();
     const reply = data.choices[0].message.content;
     addMsg('assistant', reply);
     chatHistory.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-    await logUsage('pixgpt');
+    logUsage('pixgpt');
   } catch (e) { showToast('✗ Ошибка'); }
 }
 
@@ -507,15 +183,12 @@ function addMsg(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
   div.innerHTML = DOMPurify.sanitize(marked.parse(content));
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
+  box.appendChild(div); box.scrollTop = box.scrollHeight;
 }
 
-// ── PIXQR ──
 function generateQR() {
   const text = document.getElementById('pixqr-input').value;
   if (!text) return showToast('Введите текст');
-  
   const display = document.getElementById('qr-code-display');
   display.innerHTML = '';
   new QRCode(display, { text, width: 200, height: 200 });
@@ -523,11 +196,9 @@ function generateQR() {
   logUsage('pixqr');
 }
 
-// ── PIXUPSCALE (Canvas-based) ──
 async function upscaleImage() {
   const file = document.getElementById('pixupscale-input').files[0];
   if (!file) return showToast('Выберите файл');
-
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
@@ -536,41 +207,24 @@ async function upscaleImage() {
       canvas.width = img.width * 2; canvas.height = img.height * 2;
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       document.getElementById('pixupscale-result').src = canvas.toDataURL();
       document.getElementById('pixupscale-output').style.display = 'block';
-      logUsage('pixupscale');
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-// ── PIXCUT & PIXOCR ──
-async function removeBackground() { showToast('⏳ В разработке...'); }
-async function recognizeText() { showToast('⏳ В разработке...'); }
-
-// ── UTILS ──
 function showToast(msg) {
   const t = document.createElement('div');
   t.textContent = msg;
-  t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#39ff14;color:#000;padding:10px 20px;border-radius:4px;z-index:9999;font-family:monospace;animation:slideIn 0.3s ease-out';
+  t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#39ff14;color:#000;padding:10px 20px;border-radius:4px;z-index:9999;font-family:monospace;';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
 }
 
-function downloadFile(id, name) {
-  const a = document.createElement('a');
-  a.href = document.getElementById(id).src;
-  a.download = name;
-  a.click();
-}
-
-function logout() {
-  localStorage.removeItem('currentUser');
-  window.location.href = '/pixset-ai-studio/';
-}
+function logout() { localStorage.removeItem('currentUser'); window.location.href = '/pixset-ai-studio/'; }
 </script>
 </body>
 </html>
