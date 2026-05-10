@@ -373,7 +373,7 @@ nav {
 
 <script>
 // ── CONFIG ──
-const API_URL = 'https://pixset-api-production.up.railway.app';
+const API_URL = 'https://pixset-api.robloksosipov.workers.dev';
 let currentUser = null;
 
 // ── PARTICLES ──
@@ -432,15 +432,23 @@ async function onTelegramAuth(user) {
     if (!response.ok) throw new Error('Auth failed');
     
     const data = await response.json();
-    currentUser = data.user;
+    // Normalize field names: Supabase stores snake_case, frontend expects camelCase
+    const rawUser = data.user;
+    currentUser = {
+      id: rawUser.user_id ?? rawUser.id,
+      username: rawUser.username || '',
+      firstName: rawUser.first_name || rawUser.firstName || '',
+      plan: rawUser.plan || 'free',
+      photoUrl: user.photo_url || rawUser.photoUrl || ''
+    };
     
     // Сохраняем в localStorage
     localStorage.setItem('currentUser', JSON.stringify(currentUser));
     
     // Обновляем UI
     document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
-    if (user.photo_url) {
-      document.getElementById('user-avatar').src = user.photo_url;
+    if (currentUser.photoUrl) {
+      document.getElementById('user-avatar').src = currentUser.photoUrl;
     }
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-btn').style.display = 'none';
