@@ -18,109 +18,147 @@
   --text-dim: rgba(180, 220, 255, 0.6); --text-mid: rgba(200, 230, 255, 0.85); --text-bright: #cce8ff;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; width: 100%; overflow: hidden; background: var(--bg-deep); }
-body { color: var(--text-bright); font-family: 'Rajdhani', sans-serif; font-size: 15px; position: fixed; inset: 0; }
-
-.grid-bg { position: fixed; inset: 0; background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 40px 40px; z-index: 0; pointer-events: none; }
-
-/* ── LAYOUT ── */
-.app-container { position: relative; z-index: 2; display: flex; height: 100%; width: 100%; overflow: hidden; }
-
-/* SIDEBAR */
-.sidebar { width: 280px; background: var(--bg-sidebar); border-right: 1px solid var(--border-dim); display: flex; flex-direction: column; z-index: 1000; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-dim); }
-.sidebar-title { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; color: var(--neon-cyan); letter-spacing: 1px; text-transform: uppercase; }
-.sidebar-content { flex: 1; overflow-y: auto; padding: 10px 0; }
-.sidebar-item { padding: 12px 20px; cursor: pointer; border-left: 3px solid transparent; color: var(--text-dim); font-size: 13px; transition: all 0.2s; text-transform: uppercase; font-family: 'Share Tech Mono', monospace; display: flex; align-items: center; gap: 10px; }
-.sidebar-item:hover { background: rgba(57, 255, 20, 0.05); color: var(--neon-cyan); }
-.sidebar-item.active { border-left-color: var(--neon-cyan); background: rgba(57, 255, 20, 0.1); color: var(--neon-cyan); }
-.sidebar-footer { padding: 15px; border-top: 1px solid var(--border-dim); display: flex; gap: 10px; }
-
-/* MAIN CHAT */
-.chat-container { flex: 1; display: flex; flex-direction: column; background: rgba(2, 4, 8, 0.7); position: relative; min-width: 0; }
-.chat-header { height: 64px; min-height: 64px; padding: 0 20px; border-bottom: 1px solid var(--border-dim); display: flex; align-items: center; justify-content: space-between; background: rgba(2, 4, 8, 0.9); backdrop-filter: blur(10px); z-index: 10; }
-.chat-title { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; color: var(--neon-cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-section { display: flex; align-items: center; gap: 10px; }
-.user-avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--neon-cyan); object-fit: cover; }
-.user-name { font-size: 12px; color: var(--text-mid); font-family: 'Share Tech Mono', monospace; display: block; }
-
-/* MESSAGES */
-.messages-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
-.message { display: flex; gap: 12px; width: 100%; }
-.message.user { flex-direction: row-reverse; }
-.message-content { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.6; word-wrap: break-word; position: relative; }
-.message.user .message-content { background: rgba(57, 255, 20, 0.1); border: 1px solid rgba(57, 255, 20, 0.3); color: var(--text-bright); border-bottom-right-radius: 2px; }
-.message.assistant .message-content { background: rgba(191, 0, 255, 0.05); border: 1px solid rgba(191, 0, 255, 0.2); color: var(--text-bright); border-bottom-left-radius: 2px; }
-.message img { max-width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid var(--border-dim); }
-
-/* INPUT AREA */
-.input-area { padding: 20px; background: linear-gradient(to top, var(--bg-deep) 80%, transparent); z-index: 10; }
-.input-wrapper { max-width: 800px; margin: 0 auto; display: flex; gap: 12px; background: rgba(10, 22, 32, 0.9); border: 1px solid var(--border-dim); padding: 8px 12px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-.input-field { flex: 1; background: transparent; border: none; color: var(--text-bright); font-family: 'Rajdhani', sans-serif; font-size: 15px; outline: none; padding: 8px 4px; resize: none; min-height: 24px; max-height: 150px; line-height: 1.4; }
-.send-btn { background: transparent; border: none; color: var(--neon-cyan); cursor: pointer; padding: 4px 8px; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
-.send-btn:hover { transform: scale(1.1); }
-.send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-/* UTILS */
-.btn-small { padding: 8px 12px; background: rgba(57, 255, 20, 0.05); border: 1px solid var(--border-dim); color: var(--text-dim); cursor: pointer; font-size: 11px; font-family: 'Share Tech Mono', monospace; text-transform: uppercase; border-radius: 4px; transition: all 0.2s; }
-.btn-small:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); }
-.logout-btn:hover { border-color: var(--neon-pink); color: var(--neon-pink); }
-
-.sidebar-toggle { display: none; background: transparent; border: none; color: var(--neon-cyan); font-size: 24px; cursor: pointer; margin-right: 15px; }
-
-/* MOBILE */
-@media (max-width: 768px) {
-  .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8); }
-  .sidebar.open { transform: translateX(0); }
-  .sidebar-toggle { display: block; }
-  .message-content { max-width: 90%; font-size: 13px; }
-  .input-area { padding: 12px; }
-  .user-name { display: none; }
-  .chat-header { padding: 0 15px; }
+body {
+  background-color: var(--bg-deep); color: var(--text-mid);
+  font-family: 'Rajdhani', sans-serif; height: 100vh; overflow: hidden;
+  background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 30px 30px;
 }
 
-/* EMPTY STATE */
-.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; opacity: 0.5; }
-.empty-icon { font-size: 64px; margin-bottom: 20px; filter: drop-shadow(0 0 10px var(--neon-cyan)); }
-.empty-title { font-family: 'Orbitron', monospace; font-size: 20px; color: var(--neon-cyan); margin-bottom: 10px; }
+/* Layout */
+.app-container { display: flex; height: 100vh; width: 100%; position: relative; }
 
-@keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.main-content {
+  flex: 1; display: flex; flex-direction: column; position: relative;
+  background: radial-gradient(circle at 50% 50%, rgba(8, 20, 28, 0.5) 0%, transparent 100%);
+}
+
+/* Header */
+header {
+  height: 60px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border-dim); background: rgba(2, 4, 8, 0.8); backdrop-filter: blur(10px); z-index: 10;
+}
+.chat-info { display: flex; align-items: center; gap: 12px; }
+.chat-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; color: var(--neon-cyan); text-transform: uppercase; }
+
+.user-profile { display: flex; align-items: center; gap: 10px; }
+.user-name { font-size: 13px; font-weight: 600; color: var(--text-bright); }
+.user-avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--neon-cyan); object-fit: cover; background: var(--bg-card); }
+
+/* Chat Area */
+.messages-area {
+  flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px;
+  scrollbar-width: thin; scrollbar-color: var(--border-dim) transparent;
+}
+.messages-area::-webkit-scrollbar { width: 4px; }
+.messages-area::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 10px; }
+
+.message { max-width: 85%; display: flex; flex-direction: column; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.message.user { align-self: flex-end; }
+.message.assistant { align-self: flex-start; }
+
+.message-content {
+  padding: 12px 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; position: relative;
+  word-wrap: break-word; font-family: 'Rajdhani', sans-serif;
+}
+.message.user .message-content {
+  background: rgba(57, 255, 20, 0.08); border: 1px solid rgba(57, 255, 20, 0.2);
+  color: var(--text-bright); border-bottom-right-radius: 2px;
+}
+.message.assistant .message-content {
+  background: rgba(180, 220, 255, 0.05); border: 1px solid rgba(180, 220, 255, 0.1);
+  color: var(--text-mid); border-bottom-left-radius: 2px;
+}
+.message-content img { max-width: 100%; border-radius: 8px; margin: 10px 0; border: 1px solid var(--border-dim); }
+
+/* Empty State */
+.empty-state {
+  margin: auto; display: flex; flex-direction: column; align-items: center; gap: 15px; opacity: 0.5;
+}
+.empty-icon { font-size: 40px; filter: drop-shadow(0 0 10px var(--neon-cyan)); }
+.empty-title { font-family: 'Orbitron', sans-serif; font-size: 14px; letter-spacing: 3px; color: var(--neon-cyan); }
+
+/* Input Area */
+.input-container {
+  padding: 15px 20px 25px; background: linear-gradient(to top, var(--bg-deep) 80%, transparent);
+  border-top: 1px solid var(--border-dim); position: relative;
+}
+
+/* Tool Bar - New */
+.tool-bar {
+  display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.tool-bar::-webkit-scrollbar { display: none; }
+
+.tool-btn {
+  background: rgba(2, 4, 8, 0.6); border: 1px solid var(--border-dim);
+  color: var(--text-dim); padding: 6px 12px; border-radius: 20px;
+  font-size: 11px; font-family: 'Orbitron', sans-serif; cursor: pointer;
+  transition: all 0.2s ease; white-space: nowrap; display: flex; align-items: center; gap: 6px;
+}
+.tool-btn:hover { border-color: var(--neon-cyan); color: var(--text-bright); background: rgba(57, 255, 20, 0.05); }
+.tool-btn.active { 
+  background: rgba(57, 255, 20, 0.1); border-color: var(--neon-cyan); color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
+}
+
+.input-wrapper {
+  background: rgba(10, 22, 32, 0.8); border: 1px solid var(--border-dim);
+  border-radius: 16px; display: flex; align-items: flex-end; padding: 10px 15px;
+  transition: all 0.3s ease; box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+}
+.input-wrapper:focus-within { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(57, 255, 20, 0.1), inset 0 0 15px rgba(0,0,0,0.5); }
+
+textarea {
+  flex: 1; background: none; border: none; outline: none; color: var(--text-bright);
+  font-family: 'Rajdhani', sans-serif; font-size: 16px; resize: none; max-height: 150px;
+  padding: 5px 0; margin-right: 10px;
+}
+textarea::placeholder { color: var(--text-dim); }
+
+.action-buttons { display: flex; gap: 10px; align-items: center; }
+.icon-btn {
+  background: none; border: none; cursor: pointer; color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.icon-btn:hover { color: var(--neon-cyan); filter: drop-shadow(0 0 5px var(--neon-cyan)); }
+#send-btn { color: var(--neon-cyan); }
+#send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Utility Buttons */
+.util-btns { display: flex; gap: 10px; }
+.util-btn {
+  background: none; border: 1px solid var(--border-dim); color: var(--text-dim);
+  padding: 5px 10px; border-radius: 4px; font-size: 10px; font-family: 'Orbitron', sans-serif;
+  cursor: pointer; transition: 0.2s;
+}
+.util-btn:hover { border-color: var(--neon-pink); color: var(--neon-pink); }
+
+@media (max-width: 768px) {
+  .message { max-width: 92%; }
+  .input-container { padding: 10px 15px 20px; }
+  .tool-bar { margin-bottom: 8px; }
+}
 </style>
 </head>
 <body>
 
-<div class="grid-bg"></div>
-
 <div class="app-container">
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-title">📚 Инструменты</div>
-    </div>
-    <div class="sidebar-content">
-      <div class="sidebar-item active" onclick="switchMode('chat', this)">💬 PixGPT</div>
-      <div class="sidebar-item" onclick="switchMode('pixgen', this)">🖼 PixGen</div>
-      <div class="sidebar-item" onclick="switchMode('pixqr', this)">🔗 PixQR</div>
-      <div class="sidebar-item" onclick="switchMode('pixupscale', this)">⬆ PixUpscale</div>
-      <div class="sidebar-item" onclick="switchMode('pixcut', this)">✂ PixCut</div>
-      <div class="sidebar-item" onclick="switchMode('pixocr', this)">📝 PixOCR</div>
-    </div>
-    <div class="sidebar-footer">
-      <button class="btn-small" onclick="clearChat()">🗑 Очистить</button>
-      <button class="btn-small logout-btn" onclick="logout()">🚪 Выход</button>
-    </div>
-  </aside>
-
-  <!-- MAIN CHAT -->
-  <main class="chat-container">
-    <header class="chat-header">
-      <div style="display: flex; align-items: center;">
-        <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+  <div class="main-content">
+    <header>
+      <div class="chat-info">
         <div class="chat-title" id="chat-title">💬 PixGPT</div>
       </div>
-      <div class="user-section">
+      <div class="user-profile">
+        <div class="util-btns">
+          <button class="util-btn" onclick="clearChat()">🗑 ОЧИСТИТЬ</button>
+          <button class="util-btn" onclick="logout()">🚪 ВЫХОД</button>
+        </div>
         <span class="user-name" id="user-name">User</span>
-        <img id="user-avatar" class="user-avatar" src="" alt="">
+        <img src="" alt="" class="user-avatar" id="user-avatar">
       </div>
     </header>
 
@@ -128,19 +166,28 @@ body { color: var(--text-bright); font-family: 'Rajdhani', sans-serif; font-size
       <div class="empty-state">
         <div class="empty-icon">🤖</div>
         <div class="empty-title">PIXSET STUDIO</div>
-        <p style="font-size: 12px; font-family: 'Share Tech Mono';">READY FOR INPUT_</p>
       </div>
     </div>
 
-    <div class="input-area">
+    <div class="input-container">
+      <div class="tool-bar" id="tool-bar">
+        <button class="tool-btn active" onclick="switchMode('chat', this)">💬 CHAT</button>
+        <button class="tool-btn" onclick="switchMode('pixgen', this)">🖼 PIXGEN</button>
+        <button class="tool-btn" onclick="switchMode('pixqr', this)">🔗 PIXQR</button>
+        <button class="tool-btn" onclick="switchMode('pixupscale', this)">⬆ UPSCALE</button>
+        <button class="tool-btn" onclick="switchMode('pixcut', this)">✂ CUT</button>
+        <button class="tool-btn" onclick="switchMode('pixocr', this)">📝 OCR</button>
+      </div>
       <div class="input-wrapper">
-        <textarea id="input-field" class="input-field" placeholder="Напишите сообщение..." rows="1"></textarea>
-        <button class="send-btn" id="send-btn" onclick="sendMessage()">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        </button>
+        <textarea id="input-field" placeholder="Напишите сообщение..." rows="1"></textarea>
+        <div class="action-buttons">
+          <button class="icon-btn" id="send-btn" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
       </div>
     </div>
-  </main>
+  </div>
 </div>
 
 <script>
@@ -150,23 +197,24 @@ let currentMode = 'chat';
 let chatHistory = [];
 let isLoading = false;
 
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
   const userStr = localStorage.getItem('currentUser');
-  if (!userStr) { window.location.href = './'; return; }
-  
-  currentUser = JSON.parse(userStr);
-  document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
-  if (currentUser.photoUrl) {
-    document.getElementById('user-avatar').src = currentUser.photoUrl;
+  if (!userStr) {
+    window.location.href = './';
+    return;
   }
-
-  const input = document.getElementById('input-field');
-  input.addEventListener('input', function() {
+  currentUser = JSON.parse(userStr);
+  document.getElementById('user-name').textContent = currentUser.firstName;
+  document.getElementById('user-avatar').src = currentUser.photoUrl || 'https://via.placeholder.com/32';
+  
+  const textarea = document.getElementById('input-field');
+  textarea.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
   });
-
-  input.addEventListener('keydown', (e) => {
+  
+  textarea.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -174,13 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-}
-
 function switchMode(mode, el) {
   currentMode = mode;
-  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.tool-btn').forEach(i => i.classList.remove('active'));
   el.classList.add('active');
   
   const titles = {
@@ -193,21 +237,20 @@ function switchMode(mode, el) {
   };
   document.getElementById('chat-title').textContent = titles[mode];
   
-  if (window.innerWidth <= 768) toggleSidebar();
-  addMessage('assistant', `Режим **${mode.toUpperCase()}** активирован. Чем могу помочь?`);
+  if (mode !== 'chat') {
+    addMessage('assistant', `Режим **${mode.toUpperCase()}** активирован. Чем могу помочь?`);
+  }
 }
 
 async function sendMessage() {
   const input = document.getElementById('input-field');
   const text = input.value.trim();
   if (!text || isLoading) return;
-
   input.value = '';
   input.style.height = 'auto';
   addMessage('user', text);
   isLoading = true;
   document.getElementById('send-btn').disabled = true;
-
   try {
     if (currentMode === 'chat') {
       await handleChat(text);
@@ -227,7 +270,6 @@ async function sendMessage() {
 }
 
 async function handleChat(text) {
-  // Используем более стабильный текстовый API Pollinations
   const systemPrompt = "You are Pixset GPT, a helpful AI assistant in Pixset AI Studio. Respond in the same language as the user.";
   const messages = [{ role: 'system', content: systemPrompt }, ...chatHistory, { role: 'user', content: text }];
   
@@ -246,7 +288,7 @@ async function handleChat(text) {
   const reply = await res.text();
   addMessage('assistant', reply);
   chatHistory.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-  logUsage('pixgpt'); // Без await, чтобы не блокировать UI
+  logUsage('pixgpt');
 }
 
 async function handlePixGen(text) {
@@ -286,7 +328,7 @@ async function handlePixQR(text) {
   msg.appendChild(content);
   area.appendChild(msg);
   area.scrollTop = area.scrollHeight;
-    logUsage('pixqr');
+  logUsage('pixqr');
 }
 
 function addMessage(role, text) {
@@ -302,7 +344,7 @@ function addMessage(role, text) {
 
 async function logUsage(action) {
   try {
-    await fetch(`${API_URL}/api/usage/log`, {
+    fetch(`${API_URL}/api/usage/log`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUser.id, action })
