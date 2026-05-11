@@ -152,7 +152,7 @@ let isLoading = false;
 
 document.addEventListener('DOMContentLoaded', () => {
   const userStr = localStorage.getItem('currentUser');
-  if (!userStr) { window.location.href = '/pixset-ai-studio/'; return; }
+  if (!userStr) { window.location.href = './'; return; }
   
   currentUser = JSON.parse(userStr);
   document.getElementById('user-name').textContent = currentUser.firstName || currentUser.username || 'User';
@@ -310,7 +310,7 @@ function clearChat() {
 
 function logout() {
   localStorage.removeItem('currentUser');
-  window.location.href = '/pixset-ai-studio/';
+  window.location.href = './';
 }
 </script>
 </body>
