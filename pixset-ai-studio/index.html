@@ -454,13 +454,19 @@ async function onTelegramAuth(user) {
     document.getElementById('login-btn').style.display = 'none';
     
     hideAuthModal();
-    showToast('✓ Успешно авторизованы!');
+    showToast('✓ Успешно авторизованы! Переходим в студию...');
     
-    // Загружаем лимиты
-    await loadLimits();
+    // Загружаем лимиты (фоном)
+    loadLimits();
+    
+    // Автоматический переход в студию через небольшую задержку
+    setTimeout(() => {
+      window.location.href = 'studio.html';
+    }, 1000);
   } catch (error) {
     console.error('Auth error:', error);
-    showToast('✗ Ошибка авторизации');
+    showToast('✗ Ошибка авторизации: ' + error.message);
+    alert('Ошибка входа: ' + error.message);
   }
 }
 
