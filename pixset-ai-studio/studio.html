@@ -227,19 +227,26 @@ async function sendMessage() {
 }
 
 async function handleChat(text) {
-  const res = await fetch('https://api.pollinations.ai/v1/chat/completions', {
+  // Используем более стабильный текстовый API Pollinations
+  const systemPrompt = "You are Pixset GPT, a helpful AI assistant in Pixset AI Studio. Respond in the same language as the user.";
+  const messages = [{ role: 'system', content: systemPrompt }, ...chatHistory, { role: 'user', content: text }];
+  
+  const res = await fetch('https://text.pollinations.ai/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      messages: messages,
       model: 'openai',
-      messages: [...chatHistory, { role: 'user', content: text }]
+      seed: Math.floor(Math.random() * 1000000)
     })
   });
-  const data = await res.json();
-  const reply = data.choices[0].message.content;
+  
+  if (!res.ok) throw new Error('API чата временно недоступно');
+  
+  const reply = await res.text();
   addMessage('assistant', reply);
   chatHistory.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-  logUsage('pixgpt');
+  logUsage('pixgpt'); // Без await, чтобы не блокировать UI
 }
 
 async function handlePixGen(text) {
@@ -279,7 +286,7 @@ async function handlePixQR(text) {
   msg.appendChild(content);
   area.appendChild(msg);
   area.scrollTop = area.scrollHeight;
-  logUsage('pixqr');
+    logUsage('pixqr');
 }
 
 function addMessage(role, text) {
