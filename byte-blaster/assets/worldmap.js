@@ -26,6 +26,13 @@
     {id:9, name:'FINAL FORTRESS', icon:'🔱', accent:'#f44', dark:'#2a0000', mid:'#440000', range:[91,100]},
   ];
 
+  // Localized world name (falls back to the English constant). Uses the shared
+  // helper from index.html so the map matches the in-game watermark.
+  function wName(world) {
+    if (typeof window.worldName === 'function') return window.worldName(world.id);
+    return world.name;
+  }
+
   // Generate 100 level nodes positioned along a winding path
   const LEVELS = [];
 
@@ -318,9 +325,11 @@
       <div style="position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 10;">
         <div style="background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
           <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
-          <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ WORLD MAP</div>
+          <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
           <!-- CLEARED count + current zone now live under the logo (top-left). -->
-          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;">CLEARED: <span id="mapClearedCount">0</span> / 100</div>
+          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / 100</div>
+          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / 300</div>
+          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
           <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
         </div>
         <button id="mapAchBtn" data-i18n="achievements" style="pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">🏆 ACHIEVEMENTS</button>
@@ -335,7 +344,8 @@
       </div>
       <div id="mapLevelPanel" style="position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.92); border: 2px solid #0ff; padding: 11px 28px; text-align: center; min-width: 310px; display: none;">
         <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: 12px; font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
-        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #555; letter-spacing: 2px; margin-bottom: 9px;">CYBER CITY</div>
+        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
+        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
         <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px;"></div>
       </div>
     `;
@@ -509,7 +519,7 @@
       const pos = worldRender[world.id];
       const accent = worldAccent(world);
       const R = Math.max(60, pos.spread);
-      const label = world.name;
+      const label = wName(world);
 
       const fs = Math.max(13, Math.round(14 * nodeScale));
       ctx.font = `bold ${fs}px "Share Tech Mono", monospace`;
@@ -705,6 +715,35 @@
       ctx.fillText(level.num, level.x, level.y + 1);
     }
 
+    // Star rating row (completed levels only): 3 tiny stars below the node.
+    if (level.completed && window.levelStars) {
+      const stars = window.levelStars(level.num, MAP_STATE.hard);
+      if (stars > 0) {
+        const sy = level.y + R + 8;
+        const gap = R * 0.45;
+        ctx.shadowBlur = 0;
+        for (let i = 0; i < 3; i++) {
+          const sx = level.x + (i - 1) * gap;
+          const lit = i < stars;
+          ctx.globalAlpha = lit ? 0.9 : 0.2;
+          ctx.fillStyle = lit ? '#ffd23f' : '#3a3a4a';
+          // Tiny 5-point star
+          const r = R * 0.18;
+          ctx.beginPath();
+          for (let p = 0; p < 10; p++) {
+            const rad = (p % 2 === 0) ? r : r * 0.45;
+            const ang = Math.PI * p / 5 - Math.PI / 2;
+            const px = sx + rad * Math.cos(ang);
+            const py = sy + rad * Math.sin(ang);
+            if (p === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
     ctx.restore();
   }
 
@@ -792,6 +831,15 @@
   let animationFrame;
 
   function update() {
+    // Honor the shared FPS limiter/counter (settings.js). Without this the map
+    // ran at full refresh rate doing a heavy full redraw every frame, ignoring
+    // the user's FPS-limit setting and never updating the FPS counter here.
+    if (typeof window._fpsShouldSkip === 'function' && window._fpsShouldSkip()) {
+      animationFrame = requestAnimationFrame(update);
+      return;
+    }
+    if (typeof window._fpsTick === 'function') window._fpsTick();
+
     MAP_STATE.time += 0.016;
     stepWalk();
     render();
@@ -831,11 +879,23 @@
     const clearedCount = LEVELS.filter(l => l.completed).length;
 
     document.getElementById('mapClearedCount').textContent = clearedCount;
-    document.getElementById('mapCurrentZone').textContent = world.name;
+
+    // Update star count (total earned across all 100 levels)
+    const starsCount = window.totalStars ? window.totalStars(MAP_STATE.hard) : 0;
+    document.getElementById('mapStarsCount').textContent = starsCount;
+
+    // Total campaign score (sum of every level's best score).
+    const totalScoreEl = document.getElementById('mapTotalScore');
+    if (totalScoreEl) {
+      const ts = window.totalScore ? window.totalScore(MAP_STATE.hard) : 0;
+      totalScoreEl.textContent = ts.toLocaleString();
+    }
+
+    document.getElementById('mapCurrentZone').textContent = wName(world);
     document.getElementById('mapCurrentZone').style.color = worldAccent(world);
 
     const zoneTag = document.getElementById('mapZoneTag');
-    zoneTag.textContent = world.name;
+    zoneTag.textContent = wName(world);
     zoneTag.style.color = worldAccent(world);
     zoneTag.style.borderColor = worldAccent(world);
 
@@ -843,17 +903,30 @@
     panel.style.display = 'block';
     panel.style.borderColor = worldAccent(world);
 
-    document.getElementById('mapLevelName').textContent = `LEVEL ${current.num}${current.type === 'boss' ? ' — BOSS' : ''}`;
+    const tt = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
+    document.getElementById('mapLevelName').textContent = `${tt('level','LEVEL')} ${current.num}${current.type === 'boss' ? ' — ' + tt('mapBoss','BOSS') : ''}`;
     document.getElementById('mapLevelName').style.color = worldAccent(world);
-    document.getElementById('mapLevelSub').textContent = world.name;
+    document.getElementById('mapLevelSub').textContent = wName(world);
+
+    // Per-level best score (when the player has completed it at least once).
+    const scoreEl = document.getElementById('mapLevelScore');
+    if (scoreEl) {
+      const best = window.levelScore ? window.levelScore(current.num, MAP_STATE.hard) : 0;
+      if (current.completed && best > 0) {
+        scoreEl.textContent = `★ ${tt('mapBest','BEST')}: ${best.toLocaleString()}`;
+        scoreEl.style.display = 'block';
+      } else {
+        scoreEl.style.display = 'none';
+      }
+    }
 
     const action = document.getElementById('mapLevelAction');
     if (!current.unlocked) {
-      action.innerHTML = '<span style="color:#444">[ LOCKED ]</span>';
+      action.innerHTML = `<span style="color:#444">[ ${tt('mapLocked','LOCKED')} ]</span>`;
     } else if (current.completed) {
-      action.innerHTML = '<span style="color:#0f0">[ COMPLETED ✓ ]</span>';
+      action.innerHTML = `<span style="color:#0f0">[ ${tt('mapCompleted','COMPLETED')} ✓ ]</span>`;
     } else {
-      action.innerHTML = `<span style="color:${worldAccent(world)}">[ ENTER / SPACE TO START ]</span>`;
+      action.innerHTML = `<span style="color:${worldAccent(world)}">[ ${tt('mapStart','ENTER / SPACE TO START')} ]</span>`;
     }
   }
 
@@ -969,6 +1042,12 @@
     applyModeChrome();
 
     mapOverlay.style.display = 'flex';
+    // Re-translate the HUD on every open so a language change made elsewhere
+    // (e.g. in settings) is reflected when the map is reopened.
+    if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
+    // Cancel any previous map loop before starting a fresh one, so re-opening
+    // the map can never leave two update() RAF chains running at once.
+    if (animationFrame) { cancelAnimationFrame(animationFrame); animationFrame = null; }
     update();
 
     // Setup input handlers
@@ -982,7 +1061,10 @@
     const titleEl = mapOverlay && mapOverlay.querySelector('#worldMapTitle');
     const subEl = mapOverlay && mapOverlay.querySelector('#worldMapSub');
     if (titleEl) { titleEl.textContent = hard ? '💀 BYTE BLASTER' : '⚡ BYTE BLASTER'; titleEl.style.color = col; titleEl.style.textShadow = '0 0 10px ' + col; }
-    if (subEl) subEl.textContent = hard ? '▸ HARDCORE MAP' : '▸ WORLD MAP';
+    if (subEl) {
+      const tt = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
+      subEl.textContent = '▸ ' + (hard ? tt('mapHardcoreMap', 'HARDCORE MAP') : tt('mapWorldMap', 'WORLD MAP'));
+    }
   }
 
   function hideWorldMap() {

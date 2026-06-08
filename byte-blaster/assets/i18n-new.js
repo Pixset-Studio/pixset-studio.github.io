@@ -21,9 +21,26 @@
   const DIR = 'localisation';
   const FALLBACK_CODES = ['en', 'ru'];
 
+  // Flag emoji per language code, shown to the LEFT of the language name in the
+  // settings picker. Keyed by locale code so it works regardless of each file's
+  // own langName. Unknown codes fall back to a generic globe.
+  const FLAGS = {
+    en: '🇬🇧', ru: '🇷🇺',
+    'zh-CN': '🇨🇳', 'zh-TW': '🇹🇼', hi: '🇮🇳', es: '🇪🇸', fr: '🇫🇷', ar: '🇸🇦',
+    bn: '🇧🇩', pt: '🇵🇹', ja: '🇯🇵', be: '🇧🇾', uk: '🇺🇦', kk: '🇰🇿', de: '🇩🇪',
+    tr: '🇹🇷', ko: '🇰🇷', ur: '🇵🇰', it: '🇮🇹', hu: '🇭🇺',
+    et: '🇪🇪', lt: '🇱🇹', lv: '🇱🇻', hy: '🇦🇲', ka: '🇬🇪', az: '🇦🇿', uz: '🇺🇿',
+    tg: '🇹🇯', ky: '🇰🇬', tk: '🇹🇲',
+    pl: '🇵🇱', he: '🇮🇱', nl: '🇳🇱', el: '🇬🇷', ro: '🇷🇴', th: '🇹🇭', vi: '🇻🇳',
+    id: '🇮🇩', fil: '🇵🇭',
+  };
+  window.langFlag = function (code) { return FLAGS[code] || '🌐'; };
+
   let LANG = 'en';
   let LOCALES = {};          // code -> { key: string }
   let CURRENT = {};          // active language strings
+  let LOADED = false;        // have the locale files finished loading?
+  let PENDING_LANG = null;   // a setLanguage() request that arrived before load
 
   // Work out which locale files exist, without hard-coding the list.
   async function discoverCodes() {
@@ -112,12 +129,32 @@
 
   window.i18nLang = function () { return LANG; };
 
-  // Languages available for the picker: [{ code, name }].
+  // English (reference) name per language code. Shown in parentheses after the
+  // native name in the picker — e.g. "Русский (Russian)" — so a language is
+  // recognisable no matter what language the UI is currently in. Centralised
+  // here so it stays correct without editing every locale file.
+  const ENGLISH_NAMES = {
+    en: 'English', ru: 'Russian',
+    'zh-CN': 'Chinese Simplified', 'zh-TW': 'Chinese Traditional', hi: 'Hindi',
+    es: 'Spanish', fr: 'French', ar: 'Arabic', bn: 'Bengali', pt: 'Portuguese',
+    ja: 'Japanese', be: 'Belarusian', uk: 'Ukrainian', kk: 'Kazakh', de: 'German',
+    tr: 'Turkish', ko: 'Korean', ur: 'Urdu', it: 'Italian', hu: 'Hungarian',
+    et: 'Estonian', lt: 'Lithuanian', lv: 'Latvian', hy: 'Armenian', ka: 'Georgian',
+    az: 'Azerbaijani', uz: 'Uzbek', tg: 'Tajik', ky: 'Kyrgyz', tk: 'Turkmen',
+    pl: 'Polish', he: 'Hebrew', nl: 'Dutch', el: 'Greek', ro: 'Romanian',
+    th: 'Thai', vi: 'Vietnamese', id: 'Indonesian', fil: 'Filipino',
+  };
+  window.langEnglishName = function (code) { return ENGLISH_NAMES[code] || ''; };
+
+  // Languages available for the picker: [{ code, name }] where name is
+  // "Native (English)" (or just the native name when they're identical).
   window.getAvailableLanguages = function () {
-    return Object.keys(LOCALES).map(code => ({
-      code,
-      name: (LOCALES[code] && LOCALES[code].langName) || code.toUpperCase(),
-    }));
+    return Object.keys(LOCALES).map(code => {
+      const native = (LOCALES[code] && LOCALES[code].langName) || code.toUpperCase();
+      const eng = ENGLISH_NAMES[code] || '';
+      const name = (eng && eng !== native) ? `${native} (${eng})` : native;
+      return { code, name };
+    });
   };
 
   function applyDOM() {
@@ -131,6 +168,9 @@
   window.applyI18nDOM = applyDOM;
 
   window.setLanguage = function (lang) {
+    // Requests can arrive before the async locale load finishes (e.g. settings.js
+    // applies the saved language on startup). Queue it and apply once loaded.
+    if (!LOADED) { PENDING_LANG = lang; return; }
     if (!LOCALES[lang]) { console.warn(`Language "${lang}" not available`); return; }
     LANG = lang;
     CURRENT = LOCALES[lang];
@@ -149,6 +189,12 @@
 
   // Load locales, then translate the DOM and let the rest of the UI know.
   loadLocales().then(() => {
+    LOADED = true;
+    // Apply any language request that arrived before loading finished.
+    if (PENDING_LANG) {
+      const want = PENDING_LANG; PENDING_LANG = null;
+      if (LOCALES[want]) { LANG = want; CURRENT = LOCALES[want]; }
+    }
     const done = () => {
       applyDOM();
       document.documentElement.lang = LANG;

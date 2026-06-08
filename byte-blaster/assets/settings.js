@@ -23,8 +23,11 @@
     sfxVolume: 100,
     // Gameplay settings
     screenShake: true,
+    shakeIntensity: 100,     // 0-150% multiplier on screen shake strength
     particles: true,
+    combatText: true,        // floating damage/pickup text
     autoSave: true,
+    showHints: true,         // bottom control-hint bar
     // Control settings (key codes)
     controls: {
       p1Left: 'KeyA',
@@ -338,6 +341,7 @@
     applyResolution(settings.resolution);
     setTimeout(() => applyGameScale(settings.gameScale), 200);
     if (settings.showFPS) { createFPSCounter(); } else { removeFPSCounter(); }
+    if (typeof window.applyGameplaySettings === 'function') window.applyGameplaySettings();
   }
 
   // Create settings overlay
@@ -414,6 +418,13 @@
               <option value="fullscreen" data-i18n="fullscreen">⛶ Fullscreen</option>
               <option value="frameless" data-i18n="borderless">▣ Borderless</option>
             </select>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+              <input type="checkbox" id="showHintsCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="showHints">Show Hint Bar</span>
+            </label>
           </div>
         </div>
 
@@ -537,9 +548,20 @@
             <span data-i18n="screenShake">Screen Shake</span>
           </label>
 
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="shakeIntensity" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Shake Intensity:</label>
+            <input type="range" id="shakeIntensitySlider" min="0" max="150" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="shakeIntensityVal">100</span>%</div>
+          </div>
+
           <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
             <input type="checkbox" id="particlesCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
             <span data-i18n="particles">Particles</span>
+          </label>
+
+          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
+            <input type="checkbox" id="combatTextCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="combatText">Floating Combat Text</span>
           </label>
 
           <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
@@ -552,7 +574,7 @@
         <div class="setPanel" data-panel="general" style="display:none;">
           <div style="margin-bottom: 20px;">
             <label data-i18n="lang" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Language:</label>
-            <select id="languageSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <select id="languageSelect" style="width: 100%; padding: 10px; font-family: 'Twemoji Country Flags', 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <!-- options are populated dynamically from the localisation/ folder -->
             </select>
           </div>
@@ -634,9 +656,23 @@
     const screenShakeCheck = document.getElementById('screenShakeCheckbox');
     const particlesCheck = document.getElementById('particlesCheckbox');
     const autoSaveCheck = document.getElementById('autoSaveCheckbox');
+    const combatTextCheck = document.getElementById('combatTextCheckbox');
+    const showHintsCheck = document.getElementById('showHintsCheckbox');
     if (screenShakeCheck) screenShakeCheck.checked = window.gameSettings.screenShake !== false;
     if (particlesCheck) particlesCheck.checked = window.gameSettings.particles !== false;
     if (autoSaveCheck) autoSaveCheck.checked = window.gameSettings.autoSave !== false;
+    if (combatTextCheck) combatTextCheck.checked = window.gameSettings.combatText !== false;
+    if (showHintsCheck) showHintsCheck.checked = window.gameSettings.showHints !== false;
+
+    // Shake intensity slider
+    const shakeIntensitySlider = document.getElementById('shakeIntensitySlider');
+    const shakeIntensityVal = document.getElementById('shakeIntensityVal');
+    if (shakeIntensitySlider) {
+      const si = (typeof window.gameSettings.shakeIntensity === 'number') ? window.gameSettings.shakeIntensity : 100;
+      shakeIntensitySlider.value = si;
+      shakeIntensityVal.textContent = si;
+      shakeIntensitySlider.oninput = function() { shakeIntensityVal.textContent = this.value; };
+    }
 
     // ── Controls: key rebinding ───────────────────────────────────────────
     // Edits go to a pending copy; they are only committed to gameSettings on Save
@@ -725,7 +761,8 @@
       langs.forEach(l => {
         const opt = document.createElement('option');
         opt.value = l.code;
-        opt.textContent = l.name;
+        const flag = (typeof window.langFlag === 'function') ? window.langFlag(l.code) : '';
+        opt.textContent = (flag ? flag + '  ' : '') + l.name;
         sel.appendChild(opt);
       });
       sel.value = langs.some(l => l.code === current) ? current : (langs[0] && langs[0].code) || 'en';
@@ -803,6 +840,9 @@
       if (screenShakeCheck) window.gameSettings.screenShake = screenShakeCheck.checked;
       if (particlesCheck) window.gameSettings.particles = particlesCheck.checked;
       if (autoSaveCheck) window.gameSettings.autoSave = autoSaveCheck.checked;
+      if (combatTextCheck) window.gameSettings.combatText = combatTextCheck.checked;
+      if (showHintsCheck) window.gameSettings.showHints = showHintsCheck.checked;
+      if (shakeIntensitySlider) window.gameSettings.shakeIntensity = parseInt(shakeIntensitySlider.value);
 
       // Control bindings
       if (typeof window._commitControls === 'function') window._commitControls();
@@ -812,6 +852,8 @@
 
       // Apply audio volumes immediately
       if (typeof window.applyAudioVolumes === 'function') window.applyAudioVolumes();
+      // Apply gameplay settings (infinite lives, hint bar, etc.)
+      if (typeof window.applyGameplaySettings === 'function') window.applyGameplaySettings();
 
       overlay.style.display = 'none';
       

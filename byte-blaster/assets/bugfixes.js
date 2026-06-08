@@ -22,21 +22,11 @@ window.addEventListener('load', function() {
     };
   }
 
-  // Retry кнопка сбрасывает жизни (BUG #7)
-  if (typeof window.showGameover === 'function') {
-    const _orig7 = window.showGameover;
-    window.showGameover = function() {
-      const r = _orig7.apply(this, arguments);
-      const btn = document.getElementById('retryBtn');
-      if (btn && window.advMode && window.advLevel) {
-        btn.onclick = function() {
-          window.SFX && window.SFX.menu && window.SFX.menu();
-          window.startAdv(window.advLevel, true);
-        };
-      }
-      return r;
-    };
-  }
+  // NOTE: the Game Over "retry" action is wired directly in index.html
+  // (doHurtPlayer → showGameover(retry)). For adventure mode it calls
+  // startAdv(advLevel, false), which preserves cpSave so the player resumes
+  // from their last checkpoint rather than the level start. Do not override it
+  // here with startAdv(..., true) — that would wipe the checkpoint.
 
   console.log('✔ Safe patches applied');
 });
