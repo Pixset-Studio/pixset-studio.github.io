@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<link rel="apple-touch-icon" sizes="180x180" href="/byte-blaster/icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/icons/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/byte-blaster/icons/favicon-16x16.png">
-<link rel="manifest" href="/byte-blaster/icons/site.webmanifest">
-<link rel="icon" type="image/x-icon" href="/byte-blaster/icons/favicon.ico">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BYTE BLASTER</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+/* Flag-emoji font: Windows/Chromium renders country-flag emoji as plain letters
+   ("RU") because Segoe UI Emoji omits flag glyphs. This Twemoji subset font
+   supplies ONLY the flag glyphs, so listing it first in font-family fixes flags
+   while leaving all other text to the normal fonts. */
+@font-face{font-family:'Twemoji Country Flags';unicode-range:U+1F1E6-1F1FF;
+  src:url('assets/fonts/TwemojiCountryFlags.woff2') format('woff2');font-display:swap}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#04040f;display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-height:100vh;width:100vw;margin:0;font-family:'Press Start 2P',monospace;overflow:hidden;user-select:none}
@@ -25,6 +26,12 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 .uiv{font-size:10px;color:#fff;text-shadow:0 0 8px #0ff}
 .hearts span{font-size:11px;filter:drop-shadow(0 0 3px #f44)}
 .hearts span.lost{filter:none;opacity:.18}
+/* Lives shown as robot icon(s) + a numeric count (replaces the old hearts). */
+.hearts{display:flex;align-items:center;gap:9px}
+.lifeGrp{display:inline-flex;align-items:center;gap:3px}
+.lifeBot{height:22px;width:auto;display:block;filter:drop-shadow(0 0 3px #4af)}
+.lifeGrp.red .lifeBot{filter:drop-shadow(0 0 3px #f44)}
+.lifeNum{font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:bold;text-shadow:0 0 6px currentColor}
 #blasterUi{display:none;flex-direction:column;align-items:center;gap:2px}
 #blasterTrack{width:64px;height:5px;background:#0a1a2a;border:1px solid #0ff4;border-radius:3px;overflow:hidden}
 #blasterFill{height:100%;background:linear-gradient(90deg,#0af,#0ff);border-radius:3px}
@@ -57,6 +64,12 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 #audioBtn:hover{background:#4af2}
 #gameWrap{position:relative;z-index:10}
 #c{display:block;border:none;background:#000}
+#modBanner{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:15;
+  display:none;pointer-events:none;font-family:'Press Start 2P',monospace;font-size:8px;
+  color:#ffd24a;text-shadow:0 0 8px #ff0;background:#1a1400dd;border:1px solid #ffcc00aa;
+  border-radius:5px;padding:6px 14px;white-space:nowrap;letter-spacing:1px;
+  box-shadow:0 0 14px #ff990055;animation:modBannerPulse 1.6s ease-in-out infinite}
+@keyframes modBannerPulse{0%,100%{box-shadow:0 0 10px #ff990044}50%{box-shadow:0 0 22px #ffcc0099}}
 .fov{position:absolute;top:0;left:0;width:100%;height:100%;display:none;
   flex-direction:column;align-items:center;justify-content:center;z-index:20}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -146,11 +159,13 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 <div id="stars"></div>
 <div id="ui">
   <div class="uib"><div class="uil" data-i18n="score">SCORE</div><div class="uiv" id="scoreEl">0</div></div>
+  <div class="uib" id="totalUi" style="display:none"><div class="uil" data-i18n="total">TOTAL</div><div class="uiv" id="totalEl">0</div></div>
   <div class="uib"><div class="uil" data-i18n="lives">LIVES</div><div class="hearts" id="heartsEl"></div></div>
   <div class="uib"><div class="uil" data-i18n="level">LEVEL</div><div class="uiv" id="levelEl">1</div></div>
   <div id="timerUi" class="uib"><div class="uil" data-i18n="time">TIME</div><div id="timerVal">2:00</div></div>
   <div class="uib" id="modeUI" style="display:none"><div class="uil" data-i18n="mode">MODE</div><div class="uiv" id="modeEl" style="font-size:6px">--</div></div>
   <div class="uib" id="coinsUi"><div class="uil" data-i18n="coins">COINS</div><div class="uiv" id="coinsEl">0</div></div>
+  <div class="uib" id="keysUi" style="display:none"><div class="uil" data-i18n="keys">KEYS</div><div class="uiv" id="keysEl">0/3</div></div>
   <div id="blasterUi" class="uib"><div class="uil" data-i18n="blaster">BLASTER</div><div id="blasterTrack"><div id="blasterFill"></div></div></div>
   <div id="fireUi" class="uib bonusUi"><div class="uil" data-i18n="bonusFire">FIRE</div><div class="bonusTrack" id="fireTrack"><div class="bonusFill" id="fireFill"></div></div></div>
   <div id="iceUi" class="uib bonusUi"><div class="uil" data-i18n="bonusIce">ICE</div><div class="bonusTrack" id="iceTrack"><div class="bonusFill" id="iceFill"></div></div></div>
@@ -161,6 +176,9 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 
 <div id="gameWrap">
   <canvas id="c" width="800" height="420"></canvas>
+
+  <!-- Level modifier banner (top-center, shown only when a modifier is active) -->
+  <div id="modBanner"></div>
 
   <!-- Main menu -->
   <div id="mainOv" class="fov">
@@ -540,6 +558,26 @@ const THEMES=[
 ];
 let CT=THEMES[0];
 
+// Localized world name: i18n key "world0".."world9" (falls back to the English
+// constant baked into THEMES if a locale is missing the key).
+function worldName(idOrTheme){
+  const id=(typeof idOrTheme==='object'&&idOrTheme)?idOrTheme.id:idOrTheme;
+  const def=(THEMES[id]&&THEMES[id].name)||'';
+  const k='world'+id;
+  const tr=T(k);
+  return (tr&&tr!==k)?tr:def;
+}
+// Localized boss name: i18n key "boss0".."boss9".
+function bossName(b){
+  const id=(b&&typeof b.worldId==='number')?b.worldId:(typeof b==='number'?b:-1);
+  const def=(b&&b.name)||'';
+  if(id<0)return def;
+  const k='boss'+id;
+  const tr=T(k);
+  return (tr&&tr!==k)?tr:def;
+}
+window.worldName=worldName;window.bossName=bossName;
+
 // ── Seeded RNG ───────────────────────────────────
 function mkRNG(seed){
   let s=(seed*747796405+2891336453)>>>0;
@@ -568,6 +606,14 @@ window.applyAudioVolumes=function(){
   }catch(e){}
 };
 
+// Apply gameplay-related settings that map onto game globals / DOM.
+// Called once on load and again whenever settings are saved.
+window.applyGameplaySettings=function(){
+  const s=window.gameSettings||{};
+  // Show/hide the bottom hint bar.
+  const hint=document.getElementById('hint');
+  if(hint)hint.style.display=(s.showHints===false)?'none':'';
+};
 function initAudio(){
   if(AC)return;
   try{
@@ -706,7 +752,7 @@ function showBossIntro(b){
   const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
   const bossDialogId='boss_pre_'+wi;
   function _showCard(){
-    document.getElementById('bossIntroName').textContent='⚔ '+b.name+' ⚔';
+    document.getElementById('bossIntroName').textContent='⚔ '+bossName(b)+' ⚔';
     document.getElementById('bossIntroHint').textContent=T('bossHint'+wi);
     ov.style.display='flex';
     stopMusic();
@@ -868,6 +914,15 @@ const EC={
   ff_eye:    {w:26,h:26,spd:1.9,hp:1,col:'#880000',glow:'#f22',moveType:'orbit', score:120},
   ff_sentinel:{w:32,h:36,spd:0.5,hp:2,col:'#330000',glow:'#f80',moveType:'shield',score:200},
   ff_wraith: {w:26,h:32,spd:1.6,hp:1,col:'#550011',glow:'#f0a',moveType:'zigzag',score:140},
+  // ── NEW ENEMY TYPES (distributed across worlds) ─────────────────────────────
+  cy_spiker: {w:28,h:28,spd:1.0,hp:1,col:'#cc2288',glow:'#f4a',moveType:'spiked', score:150},
+  jg_splitter:{w:30,h:30,spd:0.8,hp:2,col:'#448822',glow:'#8f4',moveType:'split',  score:180},
+  lv_armored:{w:34,h:34,spd:0.6,hp:3,col:'#662200',glow:'#f62',moveType:'armored',score:250},
+  ic_spiker: {w:28,h:28,spd:1.1,hp:1,col:'#6688cc',glow:'#acf',moveType:'spiked', score:150},
+  ds_armored:{w:34,h:34,spd:0.5,hp:3,col:'#aa8844',glow:'#fca',moveType:'armored',score:250},
+  sp_spiker: {w:28,h:28,spd:1.2,hp:1,col:'#8844cc',glow:'#b0f',moveType:'spiked', score:150},
+  tx_splitter:{w:30,h:30,spd:0.9,hp:2,col:'#557700',glow:'#cf0',moveType:'split',  score:180},
+  ff_armored:{w:36,h:36,spd:0.7,hp:4,col:'#440000',glow:'#f44',moveType:'armored',score:300},
 };
 
 // 5-enemy pools per world [walk1, tank, flier, shooter, special]
@@ -909,6 +964,16 @@ function lvlTime(n){return 120+Math.round(n*1.4);}
 let gState='menu';
 let score=0,lives=3,level=1,advLevel=1,advMode=false;
 let coinsTotal=0;       // total coins collected across all levels (every 100 → +1 HP)
+// ── Per-level vs total scoring ──
+// `score` is the running TOTAL across the whole run. `levelStartScore` snapshots
+// the total at the moment a level begins, so the per-level score is the delta
+// `score - levelStartScore`. `levelMaxScore` is the best achievable score for the
+// current level (all coins + all enemies + flag + bonuses), used to grade stars.
+let levelStartScore=0;  // total score when the current level started
+let levelMaxScore=1;    // max achievable score this level (>=1, avoids /0)
+let levelCoinMax=0;     // coin points available this level
+let levelEnemyMax=0;    // enemy/boss points available this level
+function curLevelScore(){return Math.max(0,score-levelStartScore);}
 let _coinsHpStep=0;     // last HP threshold reached (for 100/200/300… +1 HP triggers)
 let advProg={max:1,done:[]};
 let hardMode=false;                          // Hardcore difficulty active
@@ -918,17 +983,37 @@ let timeLeft=0,timMax=0,tick=0,camX=0,camShake=0,worldW=0,raf;
 let _goNextTimer=0;        // handle for the level-advance timeout (cancellable)
 let player,platforms,blocks,coins,enemies,pBullets,eBullets,powerups,particles,decors;
 let fireBalls=[],iceBalls=[];
+let checkpoints=[];        // mid-level checkpoint flags
+let cpSave=null;           // {lvl,color} — checkpoint to resume from on adventure retry
 let player2=null;          // P2 object (null = not in use)
 let lives2=3;              // P2 lives (separate from P1)
 let twoPlayer=false;       // 2-player mode active?
-// Award +1 HP each time the player crosses a 100-coin boundary
-function _checkCoinHp(cx,cy){
+let levelArchetype='classic'; // Level archetype: classic, speedrun, stealth
+let levelMods={};          // Level modifiers: {lowGravity, wind, slippery, darkness, ...}
+let hazards=[];            // Hazards: spikes, lasers, etc.
+let jumpPads=[];           // Jump pads
+let conveyors=[];          // Conveyor belts
+let buttons=[];            // Buttons
+let doors=[];              // Doors
+let spotlights=[];         // Spotlights for stealth levels
+let mazeKeys=[];           // Keys for maze levels
+let mazeKeysCollected=0;   // Keys collected in current maze level
+// Each time the player crosses a 100-coin boundary: repair the robot if it's
+// broken, otherwise award +1 life. (Repairing a broken robot is more valuable
+// in the moment than a spare life, so it takes priority.)
+function _checkCoinHp(cx,cy,p){
   const step=Math.floor(coinsTotal/100);
   if(step>_coinsHpStep){
     _coinsHpStep=step;
-    lives++;
-    burst(cx+7,cy+7,'#ff2266',22,5,6);
-    floatTxt(cx,cy-18,T('hpBonus'),'#ff2266');
+    if(p&&p.broken){
+      p.broken=false;
+      burst(cx+7,cy+7,'#4f8',22,5,6);
+      floatTxt(cx,cy-18,T('repaired'),'#4f8');
+    } else {
+      lives++;
+      burst(cx+7,cy+7,'#ff2266',22,5,6);
+      floatTxt(cx,cy-18,T('hpBonus'),'#ff2266');
+    }
     camShake=Math.max(camShake,7);
     [440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));
   }
@@ -947,15 +1032,48 @@ let exitAnim=false;     // player is in the victory run-off
 let exitTimer=0;        // countdown until next level loads
 let exitBonus=0;        // height bonus text
 let exitBonusTier='';   // "PERFECT" / "GREAT" / "GOOD" / "BASE"
+let exitStars=0;        // stars (1–3) earned on the level just completed
+let exitStarsNew=false; // did this run beat the previous best star rating?
+let exitLevelScore=0;   // per-level score earned on the level just completed
 let spawnX=60,spawnY=H-100;
 let boss=null; // active boss object
 let bossArenaX=0;      // x coordinate where boss arena begins
 let bossArenaTriggered=false; // has player entered the arena?
 
 function saveAdv(){try{localStorage.setItem('bbAdv3',JSON.stringify(advProg));}catch(e){}}
-function loadAdv(){try{const s=localStorage.getItem('bbAdv3');advProg=s?JSON.parse(s):{max:1,done:[]};}catch(e){advProg={max:1,done:[]};}}
+function loadAdv(){try{const s=localStorage.getItem('bbAdv3');advProg=s?JSON.parse(s):{max:1,done:[]};}catch(e){advProg={max:1,done:[]};}if(!advProg.stars)advProg.stars={};if(!advProg.scores)advProg.scores={};}
 function saveAdvH(){try{localStorage.setItem('bbAdvH',JSON.stringify(advProgHard));}catch(e){}}
-function loadAdvH(){try{const s=localStorage.getItem('bbAdvH');advProgHard=s?JSON.parse(s):{max:1,done:[]};}catch(e){advProgHard={max:1,done:[]};}}
+function loadAdvH(){try{const s=localStorage.getItem('bbAdvH');advProgHard=s?JSON.parse(s):{max:1,done:[]};}catch(e){advProgHard={max:1,done:[]};}if(!advProgHard.stars)advProgHard.stars={};if(!advProgHard.scores)advProgHard.scores={};}
+
+// ── STAR RATINGS (1–3 per level) ──
+// Stored per progress slot as prog.stars = { "<levelNum>": 1|2|3 }. Only the
+// BEST rating for a level is kept, so replaying can improve but never lower it.
+function recordStars(levelNum,count,hard){
+  const prog=hard?advProgHard:advProg;
+  if(!prog.stars)prog.stars={};
+  const prev=prog.stars[levelNum]||0;
+  if(count>prev){prog.stars[levelNum]=count;if(hard)saveAdvH();else saveAdv();return true;}
+  return false;
+}
+function levelStars(levelNum,hard){const prog=hard?advProgHard:advProg;return (prog.stars&&prog.stars[levelNum])||0;}
+// Total stars earned across all 100 levels of a slot (max 300).
+function totalStars(hard){const prog=hard?advProgHard:advProg;if(!prog.stars)return 0;let t=0;for(const k in prog.stars)t+=prog.stars[k]||0;return t;}
+window.levelStars=levelStars;window.totalStars=totalStars;
+
+// ── PER-LEVEL BEST SCORES ──
+// Stored as prog.scores = { "<levelNum>": bestScore }. Only the best run is kept.
+function recordLevelScore(levelNum,sc,hard){
+  sc=sc|0;
+  const prog=hard?advProgHard:advProg;
+  if(!prog.scores)prog.scores={};
+  const prev=prog.scores[levelNum]||0;
+  if(sc>prev){prog.scores[levelNum]=sc;if(hard)saveAdvH();else saveAdv();return true;}
+  return false;
+}
+function levelScore(levelNum,hard){const prog=hard?advProgHard:advProg;return (prog.scores&&prog.scores[levelNum])||0;}
+// Total of every level's best score across the slot (the cumulative campaign score).
+function totalScore(hard){const prog=hard?advProgHard:advProg;if(!prog.scores)return 0;let t=0;for(const k in prog.scores)t+=prog.scores[k]||0;return t;}
+window.levelScore=levelScore;window.totalScore=totalScore;
 
 // Player records (high scores). Persisted in bbRecords and bundled into save slots.
 let bestRecords={infinite:0,adventure:0};
@@ -988,6 +1106,8 @@ function burst(x,y,col,n=10,spd=3.5,sz=4){
 function floatTxt(x,y,t,col){
   const particlesEnabled=(window.gameSettings&&window.gameSettings.particles!==false);
   if(!particlesEnabled)return;
+  // Floating combat/pickup text can be disabled independently of particles.
+  if(window.gameSettings&&window.gameSettings.combatText===false)return;
   if(particles.length < _maxP())
     particles.push({x,y,vx:0,vy:-1.5,life:1,decay:.018,sz:0,col,txt:t});
 }
@@ -1015,7 +1135,11 @@ function resolveP(p){
     if(!b.solid)continue;
     if(aabb(p,b)){
       if(p.vy>=0&&p.py+p.h<=b.y+2){p.y=b.y-p.h;p.vy=0;p.onGnd=true;p.jl=2;}
-      else if(p.vy<0&&p.py>=b.y+b.h-2){p.y=b.y+b.h;p.vy=1;if(b.type==='q'&&!b.used)hitBlock(b);}
+      else if(p.vy<0&&p.py>=b.y+b.h-2){
+        p.y=b.y+b.h;p.vy=1;
+        if(b.type==='q'&&!b.used)hitBlock(b);
+        else if(b.type==='c'&&b.coinLeft>0)hitCoinBlock(b);
+      }
     }
   }
   if(p.vy>=0){
@@ -1037,6 +1161,9 @@ function eLand(e){
 }
 function hitBlock(b){
   b.used=true;b.bounce=12;b.origY=b.y;SFX.block();
+  // Question blocks regenerate after a random 10–30s so they can be reused.
+  // (60 fps → 600–1800 frames.) regenT counts down in updateBlocks().
+  b.regenT=600+Math.floor(Math.random()*1200);
   const fullHP=(lives>=3)&&(!twoPlayer||lives2>=3);
   let puType;
   if(b.guaranteedBlast){puType='blast';}
@@ -1055,12 +1182,71 @@ function hitBlock(b){
   burst(b.x+b.w/2,b.y,bc,8,3,4);
 }
 
+// Coin brick: each head-bonk spits out one coin until it's empty, then the block
+// is marked used (drawn as a cracked/empty brick). Holds 3–10 coins (coinCap).
+function hitCoinBlock(b){
+  b.coinLeft--;b.bounce=10;if(!b.origY)b.origY=b.y;SFX.block();
+  // Pop a coin out of the top that arcs up and is auto-collected.
+  score+=10;coinsTotal++;AchTrack.coin();SFX.coin();
+  floatTxt(b.x+b.w/2,b.y-8,'+10','#ffd700');
+  burst(b.x+b.w/2,b.y,'#ffd700',6,2.5,4);
+  _checkCoinHp(b.x,b.y,player);
+  if(b.coinLeft<=0){b.used=true;burst(b.x+b.w/2,b.y+b.h/2,'#9a7a3a',8,3,4);}
+}
+
+// ════════════════════════════════════════════════
+//  LEVEL ARCHETYPES & MODIFIERS
+// ════════════════════════════════════════════════
+const ARCHETYPES = ['classic', 'speedrun', 'stealth'];
+
+// Pick level archetype based on level number (deterministic)
+function pickArchetype(advN) {
+  if (!advN) return 'classic'; // infinite mode = classic only
+  if (advN % 10 === 0) return 'classic'; // boss levels = classic
+  if (advN < 3) return 'classic'; // first levels = classic
+
+  // Distribution: 50% classic, 30% speedrun, 20% stealth
+  const seed = advN * 7919; // prime for distribution
+  const hash = (seed * 9301 + 49297) % 233280;
+  const roll = (hash / 233280);
+
+  if (roll < 0.50) return 'classic';
+  if (roll < 0.80) return 'speedrun';
+  return 'stealth';
+}
+
+// Pick level modifiers (deterministic)
+function pickModifiers(advN, archetype) {
+  if (!advN || advN < 5) return {}; // first levels without mods
+  if (advN % 10 === 0) return {}; // boss levels without mods
+  if (archetype === 'stealth') return {}; // stealth archetype has its own mechanics
+
+  const mods = {};
+  const roll = (advN * 3571) % 100;
+
+  // 20% chance for a modifier
+  if (roll < 20) {
+    const modRoll = (advN * 7919) % 100;
+    if (modRoll < 25) mods.lowGravity = true;
+    else if (modRoll < 45) mods.wind = (advN % 2 === 0) ? 0.35 : -0.35;
+    else if (modRoll < 65) mods.slippery = true;
+    else if (modRoll < 80) mods.darkness = true;
+    else mods.highGravity = true;
+  }
+  return mods;
+}
+
 // ════════════════════════════════════════════════
 //  LEVEL GENERATION  (long, path-node, seeded)
 // ════════════════════════════════════════════════
 function genLevel(diff,rng,advN){
+  // Pick archetype and modifiers
+  levelArchetype = pickArchetype(advN);
+  levelMods = pickModifiers(advN, levelArchetype);
+
   platforms=[];blocks=[];coins=[];enemies=[];
-  pBullets=[];eBullets=[];powerups=[];particles=[];decors=[];fireBalls=[];iceBalls=[];flagDone=false;exitAnim=false;exitTimer=0;
+  pBullets=[];eBullets=[];powerups=[];particles=[];decors=[];fireBalls=[];iceBalls=[];checkpoints=[];flagDone=false;exitAnim=false;exitTimer=0;
+  hazards=[];jumpPads=[];conveyors=[];buttons=[];doors=[];spotlights=[];mazeKeys=[];mazeKeysCollected=0;
   player2=null; // will be recreated after genLevel if twoPlayer
   const GY=H-40,BS=28,PLH=14;
   const BASE=5200+Math.min(diff*650,5200);
@@ -1111,7 +1297,14 @@ function genLevel(diff,rng,advN){
     const cnt=1+Math.floor(rng()*2),rw=cnt*(BS+2)-2;
     const bx=Math.floor(n.x+(n.w-rw)/2),by=n.y-88;
     if(by<12||hit(bx,by,rw,BS,12))continue;
-    for(let bi=0;bi<cnt;bi++)blocks.push({x:bx+bi*(BS+2),y:by,w:BS,h:BS,type:rng()<.20?'q':'b',solid:true,used:false,bounce:0,origY:by});
+    for(let bi=0;bi<cnt;bi++){
+      // Block type roll: 20% question, then 25% coin-brick, rest plain brick.
+      const roll=rng();
+      let bt='b',coinCap=0;
+      if(roll<.20)bt='q';
+      else if(roll<.45){bt='c';coinCap=3+Math.floor(rng()*8);} // 3–10 coins
+      blocks.push({x:bx+bi*(BS+2),y:by,w:BS,h:BS,type:bt,solid:true,used:false,bounce:0,origY:by,coinCap:coinCap,coinLeft:coinCap});
+    }
     add(bx,by,rw,BS);
   }
 
@@ -1148,9 +1341,73 @@ function genLevel(diff,rng,advN){
   let drX=440;const drCnt=cnt.d;let drN=0;
   while(drX<worldW-280&&drN<drCnt){mkEnemy(fType,drX,H-150-rng()*65,null,rng);drX+=370+rng()*160;drN++;}
 
+  // ── NEW OBJECTS: Jump Pads, Hazards, Conveyors ──────────────────────────────
+  // Jump pads - place strategically before gaps or high platforms
+  for(let ni=1;ni<nodes.length-2;ni++){
+    const n=nodes[ni];
+    const nextN=nodes[ni+1];
+    if(n.kind!=='ground'||n.w<100)continue;
+
+    // Check if next platform is higher (good place for jump pad)
+    const heightDiff=n.y-nextN.y;
+    const gap=nextN.x-n.x-n.w;
+
+    if((heightDiff>60&&gap<180)||rng()<0.08){
+      const jx=n.x+n.w-70; // place near edge
+      if(!hit(jx,n.y-2,60,8,8)){
+        jumpPads.push({x:jx,y:n.y-2,w:60,h:8,power:24,anim:0});
+        add(jx,n.y-2,60,8);
+      }
+    }
+  }
+
+  // Hazards: Spikes on long ground platforms (not near start/end)
+  for(const n of nodes){
+    if(n.kind!=='ground'||n.w<140||n.x<500||n.x>worldW-800)continue;
+    if(rng()<0.12){
+      // Place spikes with some spacing
+      const spikeCount=1+Math.floor(rng()*2);
+      for(let si=0;si<spikeCount;si++){
+        const sx=n.x+40+rng()*(n.w-100);
+        if(!hit(sx,n.y-12,24,12,20)){
+          hazards.push({x:sx,y:n.y-12,w:24,h:12,type:'spikes'});
+          add(sx,n.y-12,24,12);
+        }
+      }
+    }
+  }
+
+  // Conveyors: replace some moving platforms with conveyors (20% of moving platforms)
+  for(const pl of platforms){
+    if(pl.type==='moving'&&rng()<0.20){
+      pl.type='conveyor';
+      pl.conveyorDir=(rng()<0.5)?1:-1;
+      pl.conveyorSpeed=1.2;
+      delete pl.mv;delete pl.origX;delete pl.rangeX;delete pl.spd;delete pl.phase;delete pl.dvx;
+    }
+  }
+
   flagX=worldW-160;
   // Platform under flag — wide solid landing (extended to 240 to fit building)
   platforms.push({x:flagX-30,y:H-40,w:240,h:40,type:'ground',solid:false,gone:false});
+
+  // ── Mid-level checkpoint ──────────────────────────────────────────────────
+  // A small flag near the middle of the run on the closest wide ground node.
+  // Touching it becomes the player's fall-respawn point and the little flag turns
+  // into that player's coloured robot flag.
+  {
+    const midX=worldW*0.5;
+    let best=null,bestD=Infinity;
+    for(const n of nodes){
+      if(n.kind!=='ground'||n.x<300||n.w<90)continue;
+      const d=Math.abs((n.x+n.w/2)-midX);
+      if(d<bestD){bestD=d;best=n;}
+    }
+    if(best){
+      const cpx=Math.round(best.x+best.w/2-8);
+      checkpoints.push({x:cpx,y:best.y-56,w:16,h:56,baseY:best.y,taken:false,color:null,anim:0});
+    }
+  }
 
   boss=null;
   bossArenaX=0;
@@ -1188,6 +1445,97 @@ function genLevel(diff,rng,advN){
   } else {
     genDecors(rng);
   }
+
+  // Apply archetype-specific modifications ONLY for non-classic
+  if(levelArchetype==='speedrun'){
+    applySpeedrunArchetype(rng);
+  }else if(levelArchetype==='stealth'){
+    applyStealthArchetype(rng);
+  }
+  // Classic archetype needs no modifications - it's the default
+
+  computeLevelMaxScore();
+  // Snapshot the running total so this level's score starts counting from 0.
+  // genLevel runs after every (re)start once score/advLevel are set, so this
+  // single hook covers all start paths (infinite, adventure, retry, cutscene).
+  levelStartScore=score;
+}
+
+// Estimate the maximum score obtainable on the freshly-generated level. Used to
+// grade per-level stars (★/★★/★★★) against how much of it the player earned.
+// Mirrors the point awards scattered through the gameplay code:
+//   coin = 10 · enemy = EC.score (×2 hardcore) · boss = 2000 + lvl·150 (×2 hc)
+//   flag base = 500 + lvl·100 · best height bonus = 1000 · time bonus ≈ timMax·2
+function computeLevelMaxScore(){
+  const lvl=advMode?advLevel:level;
+  const hc=hardMode?2:1;
+  levelCoinMax=coins.length*10;
+  let enemyPts=0;
+  for(const e of enemies){const cfg=EC[e.type];enemyPts+=(cfg?cfg.score:100)*hc;}
+  if(boss){enemyPts+=(2000+lvl*150)*hc;}
+  levelEnemyMax=enemyPts;
+  const flagBase=500+lvl*100;
+  const heightMax=1000;                 // PERFECT flag grab
+  const timeMax=Math.floor(lvlTime(lvl)*(hardMode?0.7:1))*2; // full clock remaining
+  levelMaxScore=Math.max(1,levelCoinMax+levelEnemyMax+flagBase+heightMax+timeMax);
+}
+
+// Stars for a per-level score, graded against that level's achievable maximum.
+//   ≥80% → 3★ · ≥55% → 2★ · otherwise 1★ (completing always earns at least 1).
+function starsForScore(lvlScore,maxScore){
+  const frac=maxScore>0?lvlScore/maxScore:0;
+  if(frac>=0.80)return 3;
+  if(frac>=0.55)return 2;
+  return 1;
+}
+
+// ════════════════════════════════════════════════
+//  ARCHETYPE GENERATORS
+// ════════════════════════════════════════════════
+
+// Speedrun archetype: make level faster-paced
+function applySpeedrunArchetype(rng){
+  // Reduce gaps between platforms for faster running
+  // Add more jump pads for speed
+  let padCount=0;
+  for(const pl of platforms){
+    if(pl.type==='ground'&&pl.w>100&&padCount<3&&rng()<0.3){
+      jumpPads.push({x:pl.x+pl.w-80,y:pl.y-2,w:60,h:8,power:24,anim:0});
+      padCount++;
+    }
+  }
+
+  // Warning message
+  setTimeout(()=>{
+    if(player)floatTxt(player.x+player.w/2,player.y-40,'⚡ SPEEDRUN MODE!','#ff0');
+  },1000);
+}
+
+// Stealth archetype: add spotlights/cameras
+function applyStealthArchetype(rng){
+  // Add 3-4 spotlights at strategic positions
+  const spotCount=3+Math.floor(rng()*2);
+  const spacing=(worldW-800)/spotCount;
+
+  for(let i=0;i<spotCount;i++){
+    const sx=400+i*spacing+rng()*100;
+    const sy=60+rng()*60;
+    spotlights.push({
+      x:sx,
+      y:sy,
+      angle:Math.PI*0.5, // start pointing down
+      range:150,
+      sweep:true,
+      sweepSpeed:0.02,
+      sweepRange:Math.PI*0.5,
+      sweepCenter:Math.PI*0.5,
+      alerted:false
+    });
+  }
+
+  setTimeout(()=>{
+    if(player)floatTxt(player.x+player.w/2,player.y-40,'👁 AVOID SPOTLIGHTS!','#f80');
+  },1000);
 }
 
 function mkEnemy(type,x,y,surface,rng){
@@ -2000,6 +2348,7 @@ function spawnBoss(worldId, arenaCenter){
   const by=H-40-cfg.h;
   boss={
     ...cfg,
+    worldId:worldId,
     x:bx,y:by,vx:-1.2,vy:0,
     facing:-1,alive:true,
     phase:1,flash:0,anim:0,onGnd:false,
@@ -2045,6 +2394,9 @@ function updateBoss(){
   b.facing=pCX<bCX?-1:1;
 
   // ── Movement ──────────────────────────────────
+  // Snapshot pre-movement position so an active ice slow can dampen the frame's
+  // net displacement (works across every boss movement branch below).
+  const _preX=b.x,_preY=b.y;
   // Descent boss: bob up and down
   if(b.weaknessType==='descent'){
     b.descentTimer++;
@@ -2163,6 +2515,10 @@ function updateBoss(){
     if(b.x+b.w>b.pMax){b.x=b.pMax-b.w;b.vx=-Math.abs(b.vx);}
   }
 
+  // Ice slow: pull the boss halfway back toward its pre-movement position,
+  // effectively halving this frame's movement while the slow is active.
+  if(b._slowed){b.x=_preX+(b.x-_preX)*.5;b.y=_preY+(b.y-_preY)*.5;}
+
   // ── Shooting behaviour ────────────────────────
   if(b.shootCD>0)b.shootCD--;
   const dist=Math.abs(pCX-bCX);
@@ -2220,7 +2576,7 @@ function updateBoss(){
           SFX.hit();
         }
       } else if(!stomped){
-        doHurtPlayer();
+        enemyHitPlayer();
       }
     }
   }
@@ -2275,6 +2631,18 @@ function updateBoss(){
     if(canHit){
       damageBoss(1);
       burst(bl.x,bl.y,CT.mc,6,2.5,4);
+      // Элементальные пули поджигают/замедляют босса (damageBoss мог убить босса —
+      // проверяем boss перед обращением к полям)
+      if(boss&&boss.alive){
+        if(bl.type==='fire'){
+          if(!boss._burning){boss._burning=true;boss._burnT=0;boss._burnTotal=300;}
+          else boss._burnTotal=Math.max(boss._burnTotal,120);
+          floatTxt(boss.x+boss.w/2,boss.y-8,'🔥 BURN!','#ff4400');
+        } else if(bl.type==='ice'){
+          boss._slowed=true;boss._slowT=180;
+          floatTxt(boss.x+boss.w/2,boss.y-8,'❄ SLOWED!','#00ffff');
+        }
+      }
     } else {
       burst(bl.x,bl.y,'#888',4,2,3);
       const msg=(wt==='archon'&&b.phase===2)?T('stompOnly'):T('noEffect');
@@ -2665,7 +3033,7 @@ function drawBossHUD(){
   const hcol=pct>.5?'#0f8':pct>.25?'#f80':'#f44';
   ctx.fillStyle=hcol;ctx.shadowColor=hcol;ctx.shadowBlur=8;ctx.fillRect(bx,by,bw*pct,bh);ctx.shadowBlur=0;
   // Name
-  ctx.fillStyle='#fff';ctx.font="bold 8px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⚔ '+b.name,W/2,by+bh/2);
+  ctx.fillStyle='#fff';ctx.font="bold 8px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⚔ '+bossName(b),W/2,by+bh/2);
   // Hint below bar (translated by world index)
   ctx.fillStyle=b.glow;ctx.font="5px 'Press Start 2P',monospace";
   const _bwi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
@@ -2701,6 +3069,9 @@ function drawBossHUD(){
 function mkPlayer(px=spawnX,py=spawnY,colorScheme='blue'){
   return{x:px,y:py,w:24,h:32,vx:0,vy:0,px:px,py:py,
     onGnd:false,jl:2,facing:1,inv:0,
+    // Robot stage: powered (has blaster/fire/ice) → normal → broken.
+    // An enemy hit knocks the robot down one stage; a hit while broken costs a life.
+    broken:false,
     blaster:false,bTimer:0,sCD:0,
     starMode:false,starTimer:0,
     boots:false,bootsTimer:0,
@@ -2710,6 +3081,8 @@ function mkPlayer(px=spawnX,py=spawnY,colorScheme='blue'){
     respawning:false,respawnTimer:0,
     // last ground position (for fall respawn)
     lastGndX:px,lastGndY:py,
+    // active checkpoint anchor (null until one is touched)
+    cpX:null,cpY:null,
     // fall respawn smooth animation
     fallRespawning:false,fallRespawnT:0,
     fallRespawnSX:px,fallRespawnSY:py};
@@ -2723,7 +3096,7 @@ const $pause=document.getElementById('pauseOv');
 const $mode=document.getElementById('modeOv');
 const $map=document.getElementById('mapOv');
 const $diff=document.getElementById('diffOv');
-function hideAll(){[$main,$pause,$mode,$map,$diff].forEach(e=>e&&(e.style.display='none'));document.getElementById('ui').style.display='none';}
+function hideAll(){[$main,$pause,$mode,$map,$diff].forEach(e=>e&&(e.style.display='none'));document.getElementById('ui').style.display='none';if(typeof hideModBanner==='function')hideModBanner();}
 
 // Called by i18n.setLanguage() — re-render whichever dynamic screen is showing
 // so the new language takes effect immediately (data-i18n elements are auto-handled).
@@ -2794,6 +3167,10 @@ function hideDiff(){SFX.back();showMode();}
 // Hard map — same map but uses advProgHard
 function showMapH(){
   hideAll();
+  // Stop the in-game render loop while the map is open. Otherwise the full
+  // game scene keeps redrawing every frame *underneath* the map's own RAF
+  // loop — two heavy render chains at once, which is what made the map lag.
+  if(raf){cancelAnimationFrame(raf);raf=0;}
   navScr='map';
   if(window.WorldMap){
     window.WorldMap.show(true); // Hardcore world map
@@ -2809,10 +3186,10 @@ function buildMapH(){
   const prog=advProgHard;
   document.getElementById('mapProg').textContent=T('mapProgHard',prog.done.length);
   for(let ti=0;ti<10;ti++){
-    const T=THEMES[ti];
-    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=T.bg+'77';
+    const TH=THEMES[ti];
+    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=TH.bg+'77';
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color='#f44';
-    lbl.innerHTML='<span style="font-size:11px">💀</span>'+T.name+' <span style="color:#fff5;margin-left:3px">'+T.range+'</span>';sec.appendChild(lbl);
+    lbl.innerHTML='<span style="font-size:11px">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>prog.max,done=prog.done.includes(n),avail=n===prog.max&&!done;
@@ -2832,6 +3209,8 @@ function buildMapH(){
 }
 function showMap(){
   hideAll();
+  // Stop the in-game render loop while the map is open (see showMapH).
+  if(raf){cancelAnimationFrame(raf);raf=0;}
   navScr='map';
   if (window.WorldMap) {
     window.WorldMap.show(false);
@@ -2846,7 +3225,7 @@ function showMap(){
 function doPause(){if(gState!=='playing')return;gState='paused';navScr='paused';SFX.pause();stopMusic();
   for(const k in K)K[k]=false;
   document.getElementById('pauseMapBtn').style.display=advMode?'block':'none';$pause.style.display='flex';}
-function doResume(){if(gState!=='paused')return;gState='playing';navScr='game';SFX.resume();hideAll();for(const k in K)K[k]=false;startGameMusic();}
+function doResume(){if(gState!=='paused')return;gState='playing';navScr='game';SFX.resume();hideAll();document.getElementById('ui').style.display='flex';showModBanner();for(const k in K)K[k]=false;startGameMusic();}
 
 document.getElementById('resumeBtn').onclick=doResume;
 document.getElementById('pauseMapBtn').onclick=()=>{SFX.back();gState='menu';stopMusic();hardMode?showMapH():showMap();};
@@ -2876,19 +3255,19 @@ function buildMap(){
   const g=document.getElementById('mapGrid');g.innerHTML='';
   document.getElementById('mapProg').textContent=T('mapProg',advProg.done.length);
   for(let ti=0;ti<10;ti++){
-    const T=THEMES[ti];
-    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=T.mc+'55';sec.style.background=T.bg+'77';
-    const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color=T.mc;
-    lbl.innerHTML=`<span style="font-size:11px">${T.icon}</span>${T.name} <span style="color:#fff5;margin-left:3px">${T.range}</span>`;sec.appendChild(lbl);
+    const TH=THEMES[ti];
+    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=TH.mc+'55';sec.style.background=TH.bg+'77';
+    const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color=TH.mc;
+    lbl.innerHTML=`<span style="font-size:11px">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>advProg.max,done=advProg.done.includes(n),avail=n===advProg.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
       if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">${n}</span>`;}
       else{
-        btn.style.borderColor=T.mc+'88';btn.style.setProperty('--mc',T.mc);
-        if(done){btn.style.background=T.mc+'20';btn.style.color=T.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
-        else{btn.style.color=T.mc;if(avail){btn.classList.add('avail');btn.style.borderColor=T.mc;btn.style.boxShadow=`0 0 9px ${T.mc}99`;}
+        btn.style.borderColor=TH.mc+'88';btn.style.setProperty('--mc',TH.mc);
+        if(done){btn.style.background=TH.mc+'20';btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
+        else{btn.style.color=TH.mc;if(avail){btn.classList.add('avail');btn.style.borderColor=TH.mc;btn.style.boxShadow=`0 0 9px ${TH.mc}99`;}
           btn.innerHTML=`<span style="font-size:9px">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
         btn.onclick=()=>{SFX.menu();startAdv(n,true);};
       }
@@ -2914,7 +3293,7 @@ function startInf(fresh=true){
   updModeLabel();startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
 }
 function startAdv(n,freshLives=false){
-  if(freshLives){lives=3;} // only reset lives explicitly (e.g. entering from map)
+  if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
   // Reset coin progress when starting fresh adventure from level 1
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -2922,10 +3301,24 @@ function startAdv(n,freshLives=false){
   const diff=Math.min(Math.floor((n-1)/6)+1,14);
   genLevel(diff,mkRNG(n*9001+12345),n);
   player.x=spawnX;player.y=spawnY;
+  // Resume at a previously-reached checkpoint when retrying this same seeded level.
+  if(cpSave&&cpSave.lvl===n&&checkpoints.length){
+    const cp=checkpoints[0];
+    cp.taken=true;cp.color=cpSave.color||'#4af';
+    spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
+    player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
+    player.cpX=spawnX;player.cpY=spawnY;
+    camX=Math.max(0,Math.min(spawnX-W*.38,worldW-W));
+  }
   timeLeft=lvlTime(n);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
   document.getElementById('ui').style.display='flex';
-  updModeLabel();startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
+  updModeLabel();
+
+  // Top-center modifier/archetype banner (persists for the whole level).
+  showModBanner();
+
+  startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
 }
 function updModeLabel(){
   document.getElementById('modeUI').style.display='flex';
@@ -2934,6 +3327,31 @@ function updModeLabel(){
   e.textContent=label;
   const col=hardMode?'#f44':CT.mc;
   e.style.color=col;e.style.textShadow='0 0 6px '+col;
+}
+// Build the list of active level modifier/archetype labels for the current level.
+function modBannerLabels(){
+  const parts=[];
+  if(levelArchetype==='speedrun')parts.push('⚡ '+T('modSpeedrun'));
+  else if(levelArchetype==='stealth')parts.push('👁 '+T('modStealth'));
+  if(levelMods.lowGravity)parts.push('🌙 '+T('modLowGravity'));
+  if(levelMods.highGravity)parts.push('🪨 '+T('modHighGravity'));
+  if(levelMods.wind)parts.push('🌬 '+T('modWind'));
+  if(levelMods.slippery)parts.push('🧊 '+T('modSlippery'));
+  if(levelMods.darkness)parts.push('🌑 '+T('modDarkness'));
+  return parts;
+}
+// Show or hide the persistent top-center modifier banner for this level.
+function showModBanner(){
+  const el=document.getElementById('modBanner');
+  if(!el)return;
+  const parts=modBannerLabels();
+  if(parts.length===0){el.style.display='none';el.textContent='';return;}
+  el.textContent='⚠ '+parts.join('   ');
+  el.style.display='block';
+}
+function hideModBanner(){
+  const el=document.getElementById('modBanner');
+  if(el){el.style.display='none';el.textContent='';}
 }
 
 // Expose startAdv for WorldMap. `hard` selects Hardcore so the same map can drive both modes.
@@ -2988,7 +3406,14 @@ function updatePlayer(){
   const psp1=p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP;
   if(L){p.vx=Math.max(p.vx-1.3,-psp1);p.facing=-1;}
   else if(R){p.vx=Math.min(p.vx+1.3,psp1);p.facing=1;}
-  else{p.vx*=.7;if(Math.abs(p.vx)<.1)p.vx=0;}
+  else{
+    // Slippery modifier reduces friction
+    const friction=levelMods.slippery?0.92:0.7;
+    p.vx*=friction;if(Math.abs(p.vx)<.1)p.vx=0;
+  }
+
+  // Wind modifier pushes player
+  if(levelMods.wind)p.vx+=levelMods.wind;
 
   if(J&&!p._jh&&p.jl>0){
     if(p.jl===2)SFX.jump();else SFX.dblJump();
@@ -2997,10 +3422,28 @@ function updatePlayer(){
   }
   if(!J)p._jh=false;
   if(!J&&p.vy<-3)p.vy*=.88;
-  p.vy=Math.min(p.vy+G,MXY);
+
+  // Gravity with modifiers
+  const GRAV=levelMods.lowGravity?0.3:levelMods.highGravity?0.9:G;
+  p.vy=Math.min(p.vy+GRAV,MXY);
   p.px=p.x;p.py=p.y;
   const wasGnd=p.onGnd;
   resolveP(p);
+
+  // Check collision with closed doors (maze archetype)
+  for(const door of doors){
+    if(!door.open&&aabb(p,door)){
+      // Block player from passing through closed door
+      if(p.px<door.x){
+        p.x=door.x-p.w;
+        p.vx=Math.min(0,p.vx);
+      }else if(p.px>door.x+door.w){
+        p.x=door.x+door.w;
+        p.vx=Math.max(0,p.vx);
+      }
+    }
+  }
+
   if(!wasGnd&&p.onGnd)SFX.land();
   if(p.onGnd){p.lastGndX=p.x;p.lastGndY=p.y;if(p.boots)p.jl=Math.max(p.jl,3);}
   if(p.y>H+60){
@@ -3016,8 +3459,11 @@ function updatePlayer(){
 
   if(p.inv>0)p.inv--;
   if(p.starMode){p.starTimer--;if(p.starTimer<=0){p.starMode=false;p.inv=0;if(!boss||!boss.alive)startGameMusic();else startBossMusic();}}
-  if(p.blaster){p.bTimer--;if(p.bTimer<=0){p.blaster=false;p.bTimer=0;}}
-  if(p.fireMode||p.iceMode){if(p.elemTimer>0)p.elemTimer--;if(p.elemTimer<=0){p.fireMode=false;p.iceMode=false;}}
+  // Blaster / fire / ice are permanent — they last until an enemy hit strips
+  // them (see enemyHitPlayer). Keep timers pinned at max so the HUD bars read
+  // full instead of draining.
+  if(p.blaster)p.bTimer=1800;
+  if(p.fireMode||p.iceMode)p.elemTimer=1800;
   if(p.boots){p.bootsTimer--;if(p.bootsTimer<=0){p.boots=false;p.bootsTimer=0;if(p.jl>2)p.jl=2;}}
   if(p.sCD>0)p.sCD--;
 
@@ -3032,23 +3478,13 @@ function updatePlayer(){
       pBullets.push({x:bx,y:p.y+p.h/2-4,w:14,h:8,vx:BSP*p.facing,dist:0,max:480,type:bType,col:bCol});
       burst(p.x+p.w/2,p.y+p.h/2,bCol,4,1.8,3);
     } else if(p.fireMode||p.iceMode){
-      // No blaster pickup — fire/ice alone throws a slower homing elemental ball.
+      // No blaster pickup — fire/ice alone throws an elemental ball in the facing direction.
       p.sCD=20;
       const px=p.x+p.w/2,py=p.y+p.h/2;
-      let target=null,bestD=9999;
-      for(const e of enemies){
-        if(!e.alive)continue;
-        const d=Math.hypot(e.x+e.w/2-px,e.y+e.h/2-py);
-        if(d<bestD){bestD=d;target=e;}
-      }
-      if(boss&&boss.alive){const d=Math.hypot(boss.x+boss.w/2-px,boss.y+boss.h/2-py);if(d<bestD){bestD=d;target=boss;}}
-      const tx=target?target.x+target.w/2:px+(p.facing||1)*200;
-      const ty=target?target.y+target.h/2:py;
-      const dl=Math.hypot(tx-px,ty-py)||1;
       const spd=9;
-      const vx=(tx-px)/dl*spd, vy=(ty-py)/dl*spd;
-      if(p.fireMode){fireBalls.push({x:px-8,y:py-8,w:16,h:16,vx,vy,life:500,owner:1});tone(180,'sawtooth',.06,.1);}
-      else{iceBalls.push({x:px-8,y:py-8,w:16,h:16,vx,vy,life:500,owner:1});tone(700,'sine',.06,.1);}
+      const vx=(p.facing||1)*spd, vy=0;
+      if(p.fireMode){fireBalls.push({x:px-8,y:py-8,w:16,h:16,vx,vy,life:900,owner:1});tone(180,'sawtooth',.06,.1);}
+      else{iceBalls.push({x:px-8,y:py-8,w:16,h:16,vx,vy,life:900,owner:1});tone(700,'sine',.06,.1);}
     }
   }
 
@@ -3066,7 +3502,64 @@ function updatePlayer(){
   }
 
   // Coins
-  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();floatTxt(c.x,c.y,'+10','#ffd700');burst(c.x+7,c.y+7,'#ffd700',5,2,3);_checkCoinHp(c.x,c.y);}
+  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();floatTxt(c.x,c.y,'+10','#ffd700');burst(c.x+7,c.y+7,'#ffd700',5,2,3);_checkCoinHp(c.x,c.y,p);}
+
+  // Maze keys
+  for(const key of mazeKeys){
+    if(!key.collected&&aabb(p,key)){
+      key.collected=true;
+      mazeKeysCollected++;
+      SFX.powerup();
+      burst(key.x+10,key.y+10,'#ff0',18,4,6);
+      floatTxt(key.x,key.y-10,`KEY ${mazeKeysCollected}/3`,'#ff0');
+      camShake=8;
+      score+=100;
+
+      // Open doors if all keys collected
+      if(mazeKeysCollected>=3){
+        for(const door of doors){
+          if(door.keysNeeded<=mazeKeysCollected){
+            door.open=true;
+            burst(door.x+door.w/2,door.y+door.h/2,'#4f8',24,5,7);
+            floatTxt(door.x+door.w/2,door.y-20,'DOOR OPEN!','#4f8');
+
+            // Remove blocking walls around door
+            for(let i=blocks.length-1;i>=0;i--){
+              const b=blocks[i];
+              if(b.x>=door.x-50&&b.x<=door.x+door.w+50&&b.y>=door.y-50&&b.y<=door.y+door.h){
+                blocks.splice(i,1);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Stealth: Check spotlight detection
+  for(const sl of spotlights){
+    if(sl.alerted)continue;
+    const dx=p.x+p.w/2-sl.x;
+    const dy=p.y+p.h/2-sl.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const angleToPlayer=Math.atan2(dy,dx);
+    let angleDiff=Math.abs(angleToPlayer-sl.angle);
+    if(angleDiff>Math.PI)angleDiff=Math.PI*2-angleDiff;
+
+    if(dist<sl.range&&angleDiff<0.25){
+      // Player detected!
+      sl.alerted=true;
+      camShake=12;
+      floatTxt(p.x+p.w/2,p.y-30,'⚠ DETECTED!','#f44');
+      // Spawn extra enemies as punishment
+      const pool=ePool(advLevel||level);
+      if(pool.length>0){
+        const t=pool[Math.floor(Math.random()*pool.length)];
+        mkEnemy(t,p.x+100,p.y,null,Math.random);
+        mkEnemy(t,p.x-100,p.y,null,Math.random);
+      }
+    }
+  }
 
   // Power-ups
   for(const pu of powerups){
@@ -3077,7 +3570,42 @@ function updatePlayer(){
       else if(pu.type==='star'){p.starMode=true;p.starTimer=600;p.inv=601;burst(pu.x+12,pu.y+12,'#ff0',24,5,7);floatTxt(pu.x,pu.y,T('pStar'),'#ff0');camShake=12;startStarMusic();AchTrack.star();}
       else if(pu.type==='fire'){p.fireMode=true;p.iceMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#ff4400',18,4,6);floatTxt(pu.x,pu.y,T('pFire'),'#ff4400');camShake=9;}
       else if(pu.type==='ice'){p.iceMode=true;p.fireMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#00ffff',18,4,6);floatTxt(pu.x,pu.y,T('pIce'),'#00ffff');camShake=9;}
+      // Grabbing a blaster/fire/ice power-up means the robot is at least "normal":
+      // clear the broken flag so a later hit drops you to normal, not back to broken.
+      if(p.blaster||p.fireMode||p.iceMode)p.broken=false;
       score+=50;
+    }
+  }
+
+  // ── NEW OBJECTS: Jump Pads, Hazards, Conveyors ──────────────────────────────
+  // Jump pads
+  for(const jp of jumpPads){
+    if(aabb(p,jp)&&p.vy>=0&&p.py+p.h<=jp.y+4){
+      p.vy=-jp.power;
+      p.y=jp.y-p.h;
+      p.jl=2; // reset double jump
+      burst(jp.x+jp.w/2,jp.y,'#0ff',14,4,5);
+      SFX.jump();
+      camShake=6;
+    }
+  }
+
+  // Hazards (spikes)
+  for(const hz of hazards){
+    if(hz.type==='spikes'&&aabb(p,hz)&&p.inv<=0){
+      doHurtPlayer(false);
+      p.vy=-8; // bounce up
+      p.vx=p.facing*-3; // bounce back
+      return; // exit to prevent multiple hits
+    }
+  }
+
+  // Conveyors (apply force when on ground)
+  if(p.onGnd){
+    for(const pl of platforms){
+      if(pl.type==='conveyor'&&aabb(p,{x:pl.x,y:pl.y-p.h,w:pl.w,h:pl.h+p.h})){
+        p.vx+=pl.conveyorDir*pl.conveyorSpeed*0.25;
+      }
     }
   }
 
@@ -3099,19 +3627,31 @@ function updatePlayer(){
       }
       const isStomp=p.vy>0.5&&(p.py+p.h)<=(e.y+e.h*.6);
       if(isStomp){
-        // Stomp always works — even during invincibility / respawning
-        hurtE(e,1,true);p.vy=JV*.52;p.jl=Math.max(p.jl,1);SFX.stomp();
-        score+=100;floatTxt(e.x+e.w/2,e.y,'+100','#f0f');camShake=4;
+        // Check if enemy is spiked (can't stomp)
+        const cfg=EC[e.type];
+        if(cfg&&cfg.moveType==='spiked'){
+          // Spiked enemies hurt player on stomp attempt
+          if(p.inv<=0&&!p.respawning){
+            doHurtPlayer(false);
+            p.vy=-10;
+            floatTxt(e.x+e.w/2,e.y-20,'SPIKED!','#f44');
+            return;
+          }
+        }else{
+          // Normal stomp
+          hurtE(e,1,true);p.vy=JV*.52;p.jl=Math.max(p.jl,1);SFX.stomp();
+          score+=100;floatTxt(e.x+e.w/2,e.y,'+100','#f0f');camShake=4;
+        }
       } else if(p.inv<=0&&!p.respawning&&hurtHit(p,e)){
         // Side/below contact only hurts when fully vulnerable AND on real overlap (not a graze)
-        doHurtPlayer();return;
+        enemyHitPlayer();return;
       }
     }
   }
   // Enemy bullets — only when fully vulnerable
   if(p.inv<=0&&!p.starMode){
     for(let i=eBullets.length-1;i>=0;i--){
-      if(aabb(p,eBullets[i])){eBullets.splice(i,1);doHurtPlayer();return;}
+      if(aabb(p,eBullets[i])){eBullets.splice(i,1);enemyHitPlayer();return;}
     }
   } else if(p.starMode){
     // Star mode: destroy enemy bullets on contact without taking damage
@@ -3119,6 +3659,9 @@ function updatePlayer(){
       if(aabb(p,eBullets[i])){burst(eBullets[i].x,eBullets[i].y,'#ff0',4,2,3);eBullets.splice(i,1);}
     }
   }
+
+  // Mid-level checkpoint touch
+  touchCheckpoints(p);
 
   // Flag touch — P1 direct, or P2 signalled via the module-level flag signal.
   const _p2FY = _p2FlagSignal; _p2FlagSignal=0;
@@ -3149,6 +3692,14 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     const baseScore=500+(advMode?advLevel:level)*100;
     score+=baseScore+tBonus+hBonus;
 
+    // Star rating (1–3): graded from how much of THIS LEVEL's maximum score the
+    // player earned (coins + enemies + flag + bonuses). Replaying to improve the
+    // score can raise the rating; it never lowers a previously-earned one.
+    const _lvlScore=curLevelScore();
+    exitLevelScore=_lvlScore;
+    exitStars=starsForScore(_lvlScore,levelMaxScore);
+    exitStarsNew=advMode&&(exitStars>levelStars(advLevel,hardMode));
+
     // Skill achievements: PERFECT flag rating + finishing with over half the time left.
     if(heightFrac>=0.9)AchTrack.perfect();
     if(timMax>0&&timeLeft>=timMax/2)AchTrack.speed();
@@ -3164,6 +3715,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
 
     // Freeze timer, launch exit animation
     gState='levelclear';
+    cpSave=null;             // level cleared — checkpoint no longer needed
     exitAnim=true;
     exitTimer=0;
 
@@ -3179,6 +3731,10 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
         const prog=hardMode?advProgHard:advProg;
         if(!prog.done.includes(advLevel))prog.done.push(advLevel);
         if(advLevel>=prog.max)prog.max=Math.min(advLevel+1,100);
+        // Persist this run's per-level best score, then re-derive the best star
+        // rating from the BEST score ever earned (so stars track the kept score).
+        recordLevelScore(advLevel,exitLevelScore,hardMode);
+        recordStars(advLevel,starsForScore(levelScore(advLevel,hardMode),levelMaxScore),hardMode);
         if(hardMode)saveAdvH();else saveAdv();
         // Refresh WorldMap if it's loaded — mark this level done explicitly so the
         // final level (100) reliably shows its checkmark even though it ends in the
@@ -3271,7 +3827,13 @@ function updatePlayer2(){
   const psp2=p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP;
   if(L){p.vx=Math.max(p.vx-1.3,-psp2);p.facing=-1;}
   else if(R){p.vx=Math.min(p.vx+1.3,psp2);p.facing=1;}
-  else{p.vx*=.7;if(Math.abs(p.vx)<.1)p.vx=0;}
+  else{
+    const friction=levelMods.slippery?0.92:0.7;
+    p.vx*=friction;if(Math.abs(p.vx)<.1)p.vx=0;
+  }
+
+  // Wind modifier for P2
+  if(levelMods.wind)p.vx+=levelMods.wind;
 
   if(J&&!p._jh&&p.jl>0){
     if(p.jl===2)SFX.jump();else SFX.dblJump();
@@ -3280,10 +3842,27 @@ function updatePlayer2(){
   }
   if(!J)p._jh=false;
   if(!J&&p.vy<-3)p.vy*=.88;
-  p.vy=Math.min(p.vy+G,MXY);
+
+  // Gravity with modifiers for P2
+  const GRAV=levelMods.lowGravity?0.3:levelMods.highGravity?0.9:G;
+  p.vy=Math.min(p.vy+GRAV,MXY);
   p.px=p.x;p.py=p.y;
   const wasGnd=p.onGnd;
   resolveP(p);
+
+  // Check collision with closed doors (maze archetype) for P2
+  for(const door of doors){
+    if(!door.open&&aabb(p,door)){
+      if(p.px<door.x){
+        p.x=door.x-p.w;
+        p.vx=Math.min(0,p.vx);
+      }else if(p.px>door.x+door.w){
+        p.x=door.x+door.w;
+        p.vx=Math.max(0,p.vx);
+      }
+    }
+  }
+
   if(!wasGnd&&p.onGnd)SFX.land();
   if(!exitAnim)p.x=Math.max(0,Math.min(p.x,worldW-p.w));
   if(p.onGnd){p.lastGndX=p.x;p.lastGndY=p.y;if(p.boots)p.jl=Math.max(p.jl,3);}
@@ -3300,8 +3879,9 @@ function updatePlayer2(){
 
   if(p.inv>0)p.inv--;
   if(p.starMode){p.starTimer--;if(p.starTimer<=0){p.starMode=false;p.inv=0;}}
-  if(p.blaster){p.bTimer--;if(p.bTimer<=0){p.blaster=false;p.bTimer=0;}}
-  if(p.fireMode||p.iceMode){if(p.elemTimer>0)p.elemTimer--;if(p.elemTimer<=0){p.fireMode=false;p.iceMode=false;}}
+  // Blaster / fire / ice are permanent for P2 too — stripped only on an enemy hit.
+  if(p.blaster)p.bTimer=1800;
+  if(p.fireMode||p.iceMode)p.elemTimer=1800;
   if(p.boots){p.bootsTimer--;if(p.bootsTimer<=0){p.boots=false;p.bootsTimer=0;if(p.jl>2)p.jl=2;}}
   if(p.sCD>0)p.sCD--;
 
@@ -3316,15 +3896,10 @@ function updatePlayer2(){
     } else if(p.fireMode||p.iceMode){
       p.sCD=20;
       const px=p.x+p.w/2,py=p.y+p.h/2;
-      let target=null,bestD=9999;
-      for(const e of enemies){if(!e.alive)continue;const d=Math.hypot(e.x+e.w/2-px,e.y+e.h/2-py);if(d<bestD){bestD=d;target=e;}}
-      if(boss&&boss.alive){const d=Math.hypot(boss.x+boss.w/2-px,boss.y+boss.h/2-py);if(d<bestD){bestD=d;target=boss;}}
-      const tx=target?target.x+target.w/2:px+(p.facing||1)*200;
-      const ty=target?target.y+target.h/2:py;
-      const dl=Math.hypot(tx-px,ty-py)||1;
       const spd=9;
-      if(p.fireMode){fireBalls.push({x:px-8,y:py-8,w:16,h:16,vx:(tx-px)/dl*spd,vy:(ty-py)/dl*spd,life:500,owner:2});tone(180,'sawtooth',.06,.1);}
-      else{iceBalls.push({x:px-8,y:py-8,w:16,h:16,vx:(tx-px)/dl*spd,vy:(ty-py)/dl*spd,life:500,owner:2});tone(700,'sine',.06,.1);}
+      const vx=(p.facing||1)*spd, vy=0;
+      if(p.fireMode){fireBalls.push({x:px-8,y:py-8,w:16,h:16,vx,vy,life:900,owner:2});tone(180,'sawtooth',.06,.1);}
+      else{iceBalls.push({x:px-8,y:py-8,w:16,h:16,vx,vy,life:900,owner:2});tone(700,'sine',.06,.1);}
     }
   }
 
@@ -3338,7 +3913,7 @@ function updatePlayer2(){
   if(p.x>rightBound){p.x=rightBound;p.vx=Math.min(0,p.vx);}
 
   // Coins
-  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();floatTxt(c.x,c.y,'+10','#ffd700');burst(c.x+7,c.y+7,'#ffd700',5,2,3);_checkCoinHp(c.x,c.y);}
+  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();floatTxt(c.x,c.y,'+10','#ffd700');burst(c.x+7,c.y+7,'#ffd700',5,2,3);_checkCoinHp(c.x,c.y,p);}
 
   // Power-ups
   for(const pu of powerups){
@@ -3349,7 +3924,40 @@ function updatePlayer2(){
       else if(pu.type==='star'){p.starMode=true;p.starTimer=600;p.inv=601;burst(pu.x+12,pu.y+12,'#ff0',24,5,7);floatTxt(pu.x,pu.y,T('p2Star'),'#ff0');camShake=12;startStarMusic();AchTrack.star();}
       else if(pu.type==='fire'){p.fireMode=true;p.iceMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#ff4400',18,4,6);floatTxt(pu.x,pu.y,T('p2Fire'),'#ff4400');camShake=9;}
       else if(pu.type==='ice'){p.iceMode=true;p.fireMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#00ffff',18,4,6);floatTxt(pu.x,pu.y,T('p2Ice'),'#00ffff');camShake=9;}
+      if(p.blaster||p.fireMode||p.iceMode)p.broken=false; // power-up restores at least "normal" stage
       score+=50;
+    }
+  }
+
+  // ── NEW OBJECTS for P2: Jump Pads, Hazards, Conveyors ──────────────────────
+  // Jump pads
+  for(const jp of jumpPads){
+    if(aabb(p,jp)&&p.vy>=0&&p.py+p.h<=jp.y+4){
+      p.vy=-jp.power;
+      p.y=jp.y-p.h;
+      p.jl=2;
+      burst(jp.x+jp.w/2,jp.y,'#0ff',14,4,5);
+      SFX.jump();
+      camShake=6;
+    }
+  }
+
+  // Hazards (spikes)
+  for(const hz of hazards){
+    if(hz.type==='spikes'&&aabb(p,hz)&&p.inv<=0){
+      doHurtPlayer2(false);
+      p.vy=-8;
+      p.vx=p.facing*-3;
+      return; // exit to prevent multiple hits
+    }
+  }
+
+  // Conveyors
+  if(p.onGnd){
+    for(const pl of platforms){
+      if(pl.type==='conveyor'&&aabb(p,{x:pl.x,y:pl.y-p.h,w:pl.w,h:pl.h+p.h})){
+        p.vx+=pl.conveyorDir*pl.conveyorSpeed*0.25;
+      }
     }
   }
 
@@ -3373,19 +3981,22 @@ function updatePlayer2(){
         hurtE(e,1,true);p.vy=JV*.52;p.jl=Math.max(p.jl,1);SFX.stomp();
         score+=100;floatTxt(e.x+e.w/2,e.y,'+100','#f44');camShake=4;
       } else if(p.inv<=0&&!p.respawning&&hurtHit(p,e)){
-        doHurtPlayer2();return;
+        enemyHitPlayer2();return;
       }
     }
   }
   if(p.inv<=0&&!p.starMode){
     for(let i=eBullets.length-1;i>=0;i--){
-      if(aabb(p,eBullets[i])){eBullets.splice(i,1);doHurtPlayer2();return;}
+      if(aabb(p,eBullets[i])){eBullets.splice(i,1);enemyHitPlayer2();return;}
     }
   } else if(p.starMode){
     for(let i=eBullets.length-1;i>=0;i--){
       if(aabb(p,eBullets[i])){burst(eBullets[i].x,eBullets[i].y,'#ff0',4,2,3);eBullets.splice(i,1);}
     }
   }
+
+  // Mid-level checkpoint touch
+  touchCheckpoints(p);
 
   // Flag (P2 can also finish level)
   if(!flagDone&&p.x+p.w>flagX&&p.x<flagX+30&&p.y+p.h>H-130&&p.y<H-40){
@@ -3427,11 +4038,25 @@ function doHurtPlayer(fromFall=false){
     return;
   }
   SFX.playerHurt();camShake=12;
+  p.broken=false; // on retry the robot respawns fresh as "normal"
+
+  // Single-player: spending a life ends the attempt on a defeat screen. RETRY
+  // resumes the SAME level with the lives that remain (e.g. 3 → 2). When the
+  // last life is gone the block above already handled the final Game Over.
+  if(!twoPlayer){
+    stopMusic();
+    burst(p.x+p.w/2,p.y+p.h/2,'#f44',18,5,5);camShake=16;
+    gState='gameover';
+    const retry=advMode?()=>{SFX.menu();startAdv(advLevel,false);}
+                       :()=>{SFX.menu();startInf(false);};
+    setTimeout(()=>{showGameover(retry,T('gameOver'),T('livesLeft',lives));},450);
+    return;
+  }
 
   if(fromFall){
     // Smooth fall respawn: animate player dropping back from above onto last ground spot
-    const tx=Math.max(0,Math.min(p.lastGndX,worldW-p.w));
-    const ty=p.lastGndY;
+    const tx=Math.max(0,Math.min(p.cpX!=null?p.cpX:p.lastGndX,worldW-p.w));
+    const ty=p.cpX!=null?p.cpY:p.lastGndY;
     burst(tx+p.w/2,ty,'#f84',14,4,5);
     floatTxt(tx+p.w/2,ty-10,T('ouch'),'#f84');
     p.x=tx;p.y=ty-160;        // start above the landing spot
@@ -3475,10 +4100,11 @@ function doHurtPlayer2(fromFall=false){
     }
     return;
   }
+  p.broken=false; // P2 lost a life → respawn as a fresh "normal" robot
 
   if(fromFall){
-    const tx=Math.max(0,Math.min(p.lastGndX,worldW-p.w));
-    const ty=p.lastGndY;
+    const tx=Math.max(0,Math.min(p.cpX!=null?p.cpX:p.lastGndX,worldW-p.w));
+    const ty=p.cpX!=null?p.cpY:p.lastGndY;
     burst(tx+p.w/2,ty,'#f44',14,4,5);
     floatTxt(tx+p.w/2,ty-10,T('ouch'),'#f84');
     p.x=tx;p.y=ty-160;
@@ -3498,6 +4124,52 @@ function doHurtPlayer2(fromFall=false){
     setTimeout(()=>{if(player2)floatTxt(player2.x+player2.w/2,player2.y-20,T('p2LivesLeft',lives2),'#f84');},300);
   }
 }
+
+// ── ENEMY HIT → ROBOT STAGE DOWNGRADE ──────────────
+// An enemy/boss/enemy-bullet hit knocks the robot down one stage instead of
+// instantly costing a life:  powered (blaster/fire/ice) → normal → broken.
+// Only a hit taken while already broken costs a life (via doHurtPlayer).
+// Falls and the timer running out still cost a life directly (they call
+// doHurtPlayer/doHurtPlayer2 with fromFall as before).
+function _stageHitFX(p,col){
+  burst(p.x+p.w/2,p.y+p.h/2,col,14,4,5);
+  p.vx=0;p.vy=-2;          // small stun pop, stays in place
+  p.inv=90;                // brief flashing i-frames so one touch = one stage
+  SFX.playerHurt();camShake=10;
+}
+function enemyHitPlayer(){
+  if(godMode||!player)return;
+  const p=player;
+  if(p.blaster||p.fireMode||p.iceMode){
+    // powered → normal: strip the power-up
+    p.blaster=false;p.bTimer=0;p.fireMode=false;p.iceMode=false;p.elemTimer=0;
+    floatTxt(p.x+p.w/2,p.y,T('ouch'),'#f80');
+    _stageHitFX(p,'#f84');
+  } else if(!p.broken){
+    // normal → broken
+    p.broken=true;
+    floatTxt(p.x+p.w/2,p.y,T('ouch'),'#f80');
+    _stageHitFX(p,'#f84');
+  } else {
+    // broken → lose a life (existing respawn handles game-over etc.)
+    doHurtPlayer(false);
+  }
+}
+function enemyHitPlayer2(){
+  if(godMode||!player2)return;
+  const p=player2;
+  if(p.blaster||p.fireMode||p.iceMode){
+    p.blaster=false;p.bTimer=0;p.fireMode=false;p.iceMode=false;p.elemTimer=0;
+    floatTxt(p.x+p.w/2,p.y,T('ouch'),'#f80');
+    _stageHitFX(p,'#f44');
+  } else if(!p.broken){
+    p.broken=true;
+    floatTxt(p.x+p.w/2,p.y,T('ouch'),'#f80');
+    _stageHitFX(p,'#f44');
+  } else {
+    doHurtPlayer2(false);
+  }
+}
 // Toggle the extra main-menu buttons (Achievements / Settings) that live inside #mainOv.
 // Game-over and win screens reuse that overlay but should only show their own button.
 function _menuExtras(show){
@@ -3507,13 +4179,13 @@ function _menuExtras(show){
   if(s)s.style.display=show?'':'none';
   if(e)e.style.display=show?'':'none';
 }
-function showGameover(retry){
+function showGameover(retry,titleTxt,subTxt){
   if(raf){cancelAnimationFrame(raf);raf=0;}
   const h1=$main.querySelector('h1'),sub=$main.querySelector('.ovSub'),btn=document.getElementById('mainBtn');
-  h1.textContent=T('gameOver');
+  h1.textContent=titleTxt||T('gameOver');
   h1.style.color='#f44';h1.style.textShadow='0 0 18px #f44';
   sub.removeAttribute('data-i18n');
-  sub.textContent=advMode?T('levelFailed',advLevel):T('betterLuck');
+  sub.textContent=(subTxt!=null)?subTxt:(advMode?T('levelFailed',advLevel):T('betterLuck'));
   recordScore(advMode?'adventure':'infinite',score); // bank the high score
   document.getElementById('mainScore').textContent=T('scoreLabel',score);document.getElementById('mainScore').style.display='block';
   btn.removeAttribute('data-i18n');
@@ -3645,10 +4317,190 @@ function hurtE(e,dmg,stomped=false){
   e.hp-=dmg;e.flash=16;
   // Shield breaks when stomped
   if(e.shielded&&stomped)e.shielded=false;
-  if(e.hp<=0){e.alive=false;SFX.enemyDie();burst(e.x+e.w/2,e.y+e.h/2,e.glow,16,4,5);
+  if(e.hp<=0){
+    e.alive=false;SFX.enemyDie();burst(e.x+e.w/2,e.y+e.h/2,e.glow,16,4,5);
     const pts=(EC[e.type]?EC[e.type].score:100)*(hardMode?2:1);
-    floatTxt(e.x+e.w/2,e.y-4,stomped?'STOMP!':'SHOT!',e.glow);score+=pts;AchTrack.kill(stomped);}
+    floatTxt(e.x+e.w/2,e.y-4,stomped?'STOMP!':'SHOT!',e.glow);score+=pts;AchTrack.kill(stomped);
+
+    // Split enemy: spawn 2 smaller enemies on death
+    const cfg=EC[e.type];
+    if(cfg&&cfg.moveType==='split'){
+      // Spawn 2 smaller enemies (use a basic walker from same world)
+      const worldId=Math.floor((advLevel||level-1)/10);
+      const pool=WORLD_POOLS[Math.min(worldId,9)];
+      if(pool&&pool.length>0){
+        const smallType=pool[0]; // use first enemy (walker)
+        setTimeout(()=>{
+          if(gState==='playing'){
+            mkEnemy(smallType,e.x-20,e.y,null,Math.random);
+            mkEnemy(smallType,e.x+20,e.y,null,Math.random);
+            burst(e.x,e.y,e.glow,12,3,4);
+          }
+        },100);
+      }
+    }
+  }
   else{SFX.hit();burst(e.x+e.w/2,e.y+e.h/2,'#fff',5,2.5,3);floatTxt(e.x+e.w/2,e.y-4,T('hit'),'#fff');}
+}
+
+// ── Projectile helpers (bounce + screen culling) ─────────────────────────────
+// A player projectile despawns only once it has left the visible screen — the
+// world rect [camX .. camX+W] × [0 .. H]. The margin lets it clear the edge first.
+function _projOffScreen(b){
+  const M=48;
+  return b.x+b.w<camX-M||b.x>camX+W+M||b.y>H+M||b.y+b.h<-M;
+}
+// Reflect a moving box `b` off a static rect `r` (minimum-translation-vector):
+// resolve along the axis of least overlap, flip that velocity component (scaled
+// by `rest`), and snap the box to the surface so it can't re-stick next frame.
+function _bounce(b,r,rest){
+  const oL=(b.x+b.w)-r.x,oR=(r.x+r.w)-b.x,oT=(b.y+b.h)-r.y,oB=(r.y+r.h)-b.y;
+  if(Math.min(oL,oR)<Math.min(oT,oB)){
+    if(oL<oR)b.x=r.x-b.w;else b.x=r.x+r.w;
+    b.vx=-b.vx*rest;
+  }else{
+    if(oT<oB)b.y=r.y-b.h;else b.y=r.y+r.h;
+    b.vy=-(b.vy||0)*rest;
+  }
+}
+
+// ── Checkpoints ──────────────────────────────────────────────────────────────
+// When a player overlaps an untaken checkpoint flag, activate it: recolour it to
+// that player's robot colour, and make it the fall-respawn anchor from now on.
+function touchCheckpoints(p){
+  if(!p)return;
+  for(const cp of checkpoints){
+    if(cp.taken)continue;
+    // Generous touch box (covers pole + banner) so it's easy to trigger.
+    if(aabb(p,{x:cp.x-12,y:cp.y-4,w:cp.w+40,h:cp.h+14})){
+      cp.taken=true;cp.anim=0;
+      // Full 6-digit hex so we can safely append alpha ('00'/'66') for gradients.
+      cp.color=(p.colorScheme==='red')?'#ff4d4d':'#44aaff';
+      // Touching a checkpoint repairs a broken robot back to its normal stage.
+      if(p.broken){p.broken=false;floatTxt(p.x+p.w/2,p.y-30,T('repaired'),'#4f8');}
+      const rx=Math.round(cp.x+cp.w/2-p.w/2),ry=cp.baseY-p.h;
+      // Becomes the respawn anchor: pit-fall respawn (per player) + level spawn.
+      p.cpX=rx;p.cpY=ry;
+      spawnX=rx;spawnY=ry;
+      // Adventure levels are deterministically seeded, so a death-retry rebuilds
+      // this exact checkpoint — remember it to resume here instead of level start.
+      if(advMode)cpSave={lvl:advLevel,color:cp.color};
+      // Strong, obvious activation feedback.
+      SFX.powerup();if(SFX.coin)SFX.coin();camShake=10;
+      burst(cp.x+cp.w/2,cp.y+8,cp.color,26,4.5,6);
+      burst(cp.x+cp.w/2,cp.y+8,'#fff',14,3,5);
+      setTimeout(()=>{if(checkpoints.includes(cp))burst(cp.x+cp.w/2,cp.y+8,cp.color,6,2.5,4);},90);
+      floatTxt(cp.x+cp.w/2,cp.y-16,'✓ CHECKPOINT',cp.color);
+    }
+  }
+}
+// Drawn in world space (inside the camera translate), like the goal flag.
+// Checkpoint is a futuristic holo-beacon: a metal post with an energy ring and a
+// floating hologram core that lights up in the player's colour when activated.
+function drawCheckpoints(){
+  for(const cp of checkpoints){
+    const px=cp.x+cp.w/2,poleTop=cp.y,poleBase=cp.baseY;
+    const col=cp.taken?cp.color:'#5a6a7a';
+    ctx.save();
+
+    // ── Base platform (tech pad) ──
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#1a1f2e';
+    ctx.fillRect(px-14,poleBase-4,28,6);
+    ctx.fillStyle=cp.taken?col:'#2a3142';
+    ctx.fillRect(px-14,poleBase-4,28,2);
+    // base glow accents
+    if(cp.taken){
+      ctx.shadowColor=col;ctx.shadowBlur=10;
+      ctx.fillStyle=col;
+      ctx.fillRect(px-12,poleBase-2,3,2);ctx.fillRect(px+9,poleBase-2,3,2);
+      ctx.shadowBlur=0;
+    }
+
+    // ── Central post ──
+    const grad=ctx.createLinearGradient(px-3,0,px+3,0);
+    grad.addColorStop(0,'#3a4254');grad.addColorStop(0.5,'#5a6478');grad.addColorStop(1,'#2a3242');
+    ctx.fillStyle=grad;
+    ctx.fillRect(px-3,poleTop+4,6,poleBase-poleTop-4);
+    // post segment lines
+    ctx.strokeStyle='#1a1f2e';ctx.lineWidth=1;
+    for(let sy=poleTop+12;sy<poleBase-4;sy+=10){
+      ctx.beginPath();ctx.moveTo(px-3,sy);ctx.lineTo(px+3,sy);ctx.stroke();
+    }
+
+    if(!cp.taken){
+      // ── Inactive: dim sensor orb + idle ring ──
+      const pulse=0.5+0.5*Math.sin(tick*.04);
+      // idle energy ring
+      ctx.strokeStyle='#4a5568';ctx.lineWidth=1.5;ctx.globalAlpha=0.4+pulse*0.2;
+      ctx.beginPath();ctx.arc(px,poleTop+2,7,0,Math.PI*2);ctx.stroke();
+      ctx.globalAlpha=1;
+      // dark core orb
+      ctx.fillStyle='#1a2030';ctx.beginPath();ctx.arc(px,poleTop+2,5,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#3a4558';ctx.lineWidth=1;ctx.stroke();
+      // faint inner dot
+      ctx.fillStyle='#4a5a6a';ctx.globalAlpha=0.5+pulse*0.5;
+      ctx.beginPath();ctx.arc(px,poleTop+2,2,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+    }else{
+      // ── Active: glowing holo-core + rotating energy rings + floating particles ──
+      cp.anim++;
+      const a=cp.anim;
+      const bob=Math.sin(a*.06)*2;        // gentle vertical float
+      const coreY=poleTop+2+bob;
+      const pulse=0.6+0.4*Math.sin(a*.1);
+
+      // outer rotating ring (energy halo)
+      ctx.shadowColor=col;ctx.shadowBlur=14;
+      ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=0.8;
+      for(let r=0;r<2;r++){
+        const rot=a*.05+r*Math.PI;
+        const rw=9,rh=4;
+        ctx.beginPath();
+        ctx.ellipse(px,coreY,rw,rh,rot,0,Math.PI*2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+
+      // glowing core sphere
+      const cg=ctx.createRadialGradient(px,coreY,0,px,coreY,7);
+      cg.addColorStop(0,'#ffffff');
+      cg.addColorStop(0.4,col);
+      cg.addColorStop(1,col+'00');
+      ctx.shadowColor=col;ctx.shadowBlur=18*pulse;
+      ctx.fillStyle=cg;
+      ctx.beginPath();ctx.arc(px,coreY,7,0,Math.PI*2);ctx.fill();
+
+      // bright center
+      ctx.shadowBlur=8;
+      ctx.fillStyle='#fff';
+      ctx.beginPath();ctx.arc(px,coreY,2.5*pulse,0,Math.PI*2);ctx.fill();
+
+      // rising holo particles
+      ctx.shadowBlur=6;
+      for(let i=0;i<3;i++){
+        const ph=(a*.5+i*40)%60;
+        const py=coreY-ph*0.4;
+        const pa=1-ph/60;
+        const pox=Math.sin((a*.04)+i*2.1)*5;
+        ctx.globalAlpha=pa*0.8;
+        ctx.fillStyle=col;
+        ctx.fillRect(px+pox-1,py-1,2,2);
+      }
+      ctx.globalAlpha=1;
+
+      // light beam shooting up
+      ctx.shadowBlur=0;
+      const bg=ctx.createLinearGradient(px,coreY-30,px,coreY);
+      bg.addColorStop(0,col+'00');bg.addColorStop(1,col+'66');
+      ctx.fillStyle=bg;
+      ctx.beginPath();
+      ctx.moveTo(px-2,coreY);ctx.lineTo(px+2,coreY);
+      ctx.lineTo(px+5,coreY-30);ctx.lineTo(px-5,coreY-30);
+      ctx.closePath();ctx.fill();
+    }
+    ctx.restore();
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -3658,12 +4510,17 @@ function updateBullets(){
   // Player bullets — reverse iteration for safe splice
   for(let i=pBullets.length-1;i>=0;i--){
     const b=pBullets[i];
-    b.x+=b.vx;b.dist+=Math.abs(b.vx);
-    if(b.dist>b.max){pBullets.splice(i,1);continue;}
-    // Hit solid block
+    b.x+=b.vx;b.y+=(b.vy||0);
+    // Despawn only once off the player's screen. A long safety cap keeps a bullet
+    // trapped between two walls from accumulating forever.
+    if(b.life===undefined)b.life=600;
+    if(--b.life<=0||_projOffScreen(b)){pBullets.splice(i,1);continue;}
     let killed=false;
-    for(const bl of blocks){if(bl.solid&&aabb(b,bl)){burst(b.x,b.y+4,CT.mc,4,1.5,2);pBullets.splice(i,1);killed=true;break;}}
-    if(killed)continue;
+    // Bounce off terrain (solid blocks + platforms) instead of dying
+    let bounced=false;
+    for(const bl of blocks){if(bl.solid&&aabb(b,bl)){_bounce(b,bl,1);bounced=true;break;}}
+    if(!bounced)for(const pl of platforms){if(!pl.gone&&aabb(b,pl)){_bounce(b,pl,1);bounced=true;break;}}
+    if(bounced){burst(b.x+b.w/2,b.y+b.h/2,b.col||CT.mc,3,1.5,2);continue;}
     // Hit enemy
     for(const e of enemies){
       if(!e.alive)continue;
@@ -3677,11 +4534,16 @@ function updateBullets(){
         // Спецэффекты fire/ice пуль
         if(b.type==='fire'){
           burst(b.x,b.y+4,'#ff4400',8,3,4);
+          // Поджог: DOT горения, как у огненного шара
+          if(e.alive){
+            if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;}
+            else e._burnTotal=Math.max(e._burnTotal,120);
+          }
           floatTxt(e.x+e.w/2,e.y-4,T('burnTxt'),'#ff4400');
         } else if(b.type==='ice'){
           burst(b.x,b.y+4,'#00ffff',8,3,4);
           // Заморозка: замедляем врага на 90 тиков
-          if(!e._frozen){e._frozen=true;e._freezeT=90;e._origSpd=e.spd||1;}
+          if(e.alive&&!e._frozen){e._frozen=true;e._freezeT=90;e._origSpd=e.spd||1;}
           e.spd=0;e.vx=0;
           floatTxt(e.x+e.w/2,e.y-4,T('frozenTxt'),'#00ffff');
         }
@@ -3708,13 +4570,13 @@ function updateFireIceBalls(){
   for(let i=fireBalls.length-1;i>=0;i--){
     const b=fireBalls[i];
     b.x+=b.vx;b.y+=b.vy;b.vy+=0.08;b.life--;
-    if(b.life<=0||b.y>H+60||b.x<-100||b.x>worldW+100){fireBalls.splice(i,1);continue;}
+    if(b.life<=0||_projOffScreen(b)){fireBalls.splice(i,1);continue;}
     let hit=false;
-    // Платформы/блоки
-    for(const pl of platforms){if(!pl.gone&&aabb(b,pl)){fireBalls.splice(i,1);hit=true;break;}}
-    if(hit)continue;
-    for(const bl of blocks){if(bl.solid&&aabb(b,bl)){fireBalls.splice(i,1);hit=true;break;}}
-    if(hit)continue;
+    // Отскок от платформ/блоков (вместо исчезновения)
+    let bounced=false;
+    for(const pl of platforms){if(!pl.gone&&aabb(b,pl)){_bounce(b,pl,.7);bounced=true;break;}}
+    if(!bounced)for(const bl of blocks){if(bl.solid&&aabb(b,bl)){_bounce(b,bl,.7);bounced=true;break;}}
+    if(bounced){burst(b.x+b.w/2,b.y+b.h/2,'#ff6600',3,1.5,2);continue;}
     // Враги
     for(const e of enemies){
       if(!e.alive||e._frozen)continue;
@@ -3741,12 +4603,13 @@ function updateFireIceBalls(){
   for(let i=iceBalls.length-1;i>=0;i--){
     const b=iceBalls[i];
     b.x+=b.vx;b.y+=b.vy;b.vy+=0.08;b.life--;
-    if(b.life<=0||b.y>H+60||b.x<-100||b.x>worldW+100){iceBalls.splice(i,1);continue;}
+    if(b.life<=0||_projOffScreen(b)){iceBalls.splice(i,1);continue;}
     let hit=false;
-    for(const pl of platforms){if(!pl.gone&&aabb(b,pl)){iceBalls.splice(i,1);hit=true;break;}}
-    if(hit)continue;
-    for(const bl of blocks){if(bl.solid&&aabb(b,bl)){iceBalls.splice(i,1);hit=true;break;}}
-    if(hit)continue;
+    // Отскок от платформ/блоков (вместо исчезновения)
+    let bounced=false;
+    for(const pl of platforms){if(!pl.gone&&aabb(b,pl)){_bounce(b,pl,.7);bounced=true;break;}}
+    if(!bounced)for(const bl of blocks){if(bl.solid&&aabb(b,bl)){_bounce(b,bl,.7);bounced=true;break;}}
+    if(bounced){burst(b.x+b.w/2,b.y+b.h/2,'#aaffff',3,1.5,2);continue;}
     for(const e of enemies){
       if(!e.alive||e._frozen)continue;
       if(aabb(b,e)){
@@ -3778,8 +4641,11 @@ function updateFireIceBalls(){
   }
   if(boss&&boss.alive&&boss._burning){
     boss._burnT++;boss._burnTotal--;
-    if(boss._burnT%60===0){damageBoss(1);burst(boss.x+boss.w/2,boss.y,'#ff4400',4,2,3);}
-    if(boss._burnTotal<=0){boss._burning=false;boss._burnT=0;}
+    // Snapshot position: damageBoss() may kill the boss (boss=null), so we must
+    // not dereference `boss` afterwards — that null read used to crash the loop.
+    const _bbx=boss.x+boss.w/2,_bby=boss.y;
+    if(boss._burnT%60===0){damageBoss(1);burst(_bbx,_bby,'#ff4400',4,2,3);}
+    if(boss&&boss._burnTotal<=0){boss._burning=false;boss._burnT=0;}
   }
   // — Замедление босса
   if(boss&&boss._slowed){boss._slowT--;if(boss._slowT<=0){boss._slowed=false;}}
@@ -3835,7 +4701,37 @@ function updatePlatforms(){
     if(pl.mv){const nx=pl.origX+Math.sin(tick*.024*pl.spd+pl.phase)*pl.rangeX;pl.dvx=nx-pl.x;pl.x=nx;}
     if(pl.crm&&pl.crm_on){pl.ct--;if(pl.ct<=0){pl.gone=true;burst(pl.x+pl.w/2,pl.y,'#f84',8,3,4);setTimeout(()=>{pl.gone=false;pl.crm_on=false;pl.ct=0;},4500);}}
   }
-  for(const b of blocks)if(b.bounce>0){b.bounce--;b.y=b.origY-Math.sin(b.bounce/12*Math.PI)*9;}
+  for(const b of blocks){
+    if(b.bounce>0){b.bounce--;b.y=b.origY-Math.sin(b.bounce/12*Math.PI)*9;}
+    // Regenerate spent question blocks after their random cooldown elapses.
+    if(b.type==='q'&&b.used&&b.regenT>0){
+      b.regenT--;
+      if(b.regenT<=0){
+        b.used=false;
+        b.guaranteedBlast=false; // reroll its reward next time
+        // sparkle "recharged" feedback
+        burst(b.x+b.w/2,b.y+b.h/2,'#ffd700',12,3,4);
+        floatTxt(b.x+b.w/2,b.y-6,'+',  '#ffd700');
+      }
+    }
+  }
+}
+function updateSpotlights(){
+  for(const sl of spotlights){
+    if(sl.sweep){
+      sl.angle+=sl.sweepSpeed;
+      // Oscillate within range
+      const offset=Math.sin(tick*sl.sweepSpeed)*sl.sweepRange;
+      sl.angle=sl.sweepCenter+offset;
+    }
+  }
+}
+function updateMazeKeys(){
+  for(const key of mazeKeys){
+    if(!key.collected){
+      key.anim+=0.08;
+    }
+  }
 }
 function updateParticles(){
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;if(!p.txt)p.vy+=.12;p.life-=p.decay;if(p.life<=0)particles.splice(i,1);}
@@ -3876,14 +4772,16 @@ function updateExit(){
 }
 
 // Cached HUD element refs + last-value memo to avoid per-frame DOM thrash
-const _hud={score:null,level:null,hearts:null,blasterUi:null,blasterFill:null,timerUi:null,timerVal:null,
+const _hud={score:null,totalUi:null,totalEl:null,level:null,hearts:null,blasterUi:null,blasterFill:null,timerUi:null,timerVal:null,
   coinsEl:null,
   fireUi:null,fireFill:null,iceUi:null,iceFill:null,starUi:null,starFill:null,bootsUi:null,bootsFill:null};
-const _hudLast={score:null,level:null,hearts:null,blasterDisp:null,blasterW:null,timerDisp:null,timerTxt:null,timerCls:null,
+const _hudLast={score:null,total:null,level:null,hearts:null,blasterDisp:null,blasterW:null,timerDisp:null,timerTxt:null,timerCls:null,
   coins:null,
   fireDisp:null,fireW:null,iceDisp:null,iceW:null,starDisp:null,starW:null,bootsDisp:null,bootsW:null};
 function _hudInit(){
   _hud.score=document.getElementById('scoreEl');
+  _hud.totalUi=document.getElementById('totalUi');
+  _hud.totalEl=document.getElementById('totalEl');
   _hud.level=document.getElementById('levelEl');
   _hud.hearts=document.getElementById('heartsEl');
   _hud.blasterUi=document.getElementById('blasterUi');
@@ -3909,28 +4807,65 @@ function _hudBonusBar(uiEl,fillEl,active,frac,dispKey,wKey){
     if(_hudLast[wKey]!==w){fillEl.style.width=w+'%';_hudLast[wKey]=w;}
   }
 }
+// Cached robot life-icons (rendered once per colour scheme via drawByteRobot,
+// the same routine that draws the in-game/world-map robots, so the HUD lives
+// look like the real robots). Returns a data-URL reused across HUD rebuilds.
+const _robotIconCache={};
+function robotIconURL(scheme){
+  if(_robotIconCache[scheme])return _robotIconCache[scheme];
+  const c=document.createElement('canvas');c.width=40;c.height=40;
+  const cx=c.getContext('2d');
+  if(window.drawByteRobot){
+    // drawByteRobot expects (ctx,feetX,feetY,scale,scheme,legKick,facing).
+    window.drawByteRobot(cx,20,37,1,scheme==='red'?'red':'blue',0,1);
+  } else {
+    // Fallback blocky bot if the real renderer isn't loaded yet.
+    cx.fillStyle=scheme==='red'?'#c22':'#28c';cx.fillRect(12,6,16,24);
+    cx.fillStyle='#ff0';cx.fillRect(15,11,4,4);cx.fillRect(21,11,4,4);
+  }
+  const url=c.toDataURL();
+  // Only cache once the real renderer produced it, so an early fallback call
+  // doesn't poison the cache before drawByteRobot exists.
+  if(window.drawByteRobot)_robotIconCache[scheme]=url;
+  return url;
+}
 function updateHUD(){
   if(!_hud.score)_hudInit();
-  if(_hudLast.score!==score){_hud.score.textContent=score;_hudLast.score=score;AchTrack.score(score);}
+  // SCORE box shows the CURRENT level's score (resets each level). The running
+  // grand total still drives high-score records and achievements.
+  const lvlSc=curLevelScore();
+  if(_hudLast.score!==lvlSc){_hud.score.textContent=lvlSc;_hudLast.score=lvlSc;AchTrack.score(score);}
+  // TOTAL box (adventure only): banked best scores of cleared levels + this run.
+  if(advMode){
+    _hud.totalUi.style.display='flex';
+    const tot=totalScore(hardMode)-levelScore(advLevel,hardMode)+Math.max(levelScore(advLevel,hardMode),lvlSc);
+    if(_hudLast.total!==tot){_hud.totalEl.textContent=tot;_hudLast.total=tot;}
+  }else{
+    _hud.totalUi.style.display='none';
+  }
   const lvTxt=advMode?`${advLevel}/100`:level;
   if(_hudLast.level!==lvTxt){_hud.level.textContent=lvTxt;_hudLast.level=lvTxt;}
-  // Hearts — build a cheap signature; only rebuild HTML when it changes
+  // Hearts → robot icon(s) + numeric life count. Build a cheap signature; only
+  // rebuild HTML when it changes.
   const heartSig=godMode?'g':twoPlayer?`2|${infiniteLives?'i':lives}|${player2?(infiniteLives?'i':lives2):'x'}`:infiniteLives?'i':`1|${lives}`;
   if(_hudLast.hearts!==heartSig){
+    const grp=(scheme,n,col,extra='')=>{
+      const num=(n==='i')?'∞':n;
+      return `<span class="lifeGrp ${scheme==='red'?'red':''}" style="${extra}">`
+            +`<img class="lifeBot" src="${robotIconURL(scheme)}" alt="">`
+            +`<span class="lifeNum" style="color:${col}">×${num}</span></span>`;
+    };
     let h='';
     if(godMode){
-      h='<span style="color:#0ff;text-shadow:0 0 8px #0ff">😇</span>';
+      h=grp('blue','∞','#0ff','text-shadow:0 0 8px #0ff');
     } else if(twoPlayer){
-      if(infiniteLives) h+='<span style="color:#4af;font-size:9px">P1♾</span>';
-      else{h+='<span style="color:#4af;font-size:7px">P1 </span>';for(let i=0;i<3;i++)h+=`<span class="${i>=lives?'lost':''}" style="color:#4af">♥</span>`;}
-      h+=' ';
-      if(!player2){h+='<span style="color:#f55;font-size:7px;opacity:.4">P2 ✗</span>';}
-      else if(infiniteLives) h+='<span style="color:#f55;font-size:9px">P2♾</span>';
-      else{h+='<span style="color:#f55;font-size:7px">P2 </span>';for(let i=0;i<3;i++)h+=`<span class="${i>=lives2?'lost':''}" style="color:#f55">♥</span>`;}
+      h+=grp('blue', infiniteLives?'i':lives, '#4af');
+      if(!player2) h+=grp('red', 0, '#f55', 'opacity:.4');
+      else h+=grp('red', infiniteLives?'i':lives2, '#f55');
     } else if(infiniteLives){
-      h='<span style="color:#f0f;text-shadow:0 0 8px #f0f">♾</span>';
+      h=grp('blue','i','#f0f');
     } else {
-      for(let i=0;i<3;i++)h+=`<span class="${i>=lives?'lost':''}">♥</span>`;
+      h=grp('blue', lives, '#4af');
     }
     _hud.hearts.innerHTML=h;_hudLast.hearts=heartSig;
   }
@@ -3954,6 +4889,19 @@ function updateHUD(){
   }
   // Coin counter (visible during gameplay)
   if(_hudLast.coins!==coinsTotal){_hud.coinsEl.textContent=coinsTotal;_hudLast.coins=coinsTotal;}
+
+  // Keys counter (visible in maze levels)
+  if(mazeKeys.length>0){
+    const keysUi=document.getElementById('keysUi');
+    const keysEl=document.getElementById('keysEl');
+    if(keysUi.style.display!=='flex')keysUi.style.display='flex';
+    const keysTxt=`${mazeKeysCollected}/${mazeKeys.length}`;
+    if(keysEl.textContent!==keysTxt)keysEl.textContent=keysTxt;
+  }else{
+    const keysUi=document.getElementById('keysUi');
+    if(keysUi.style.display!=='none')keysUi.style.display='none';
+  }
+
   if(gState==='playing'||gState==='levelclear'){
     if(_hudLast.timerDisp!=='flex'){_hud.timerUi.style.display='flex';_hudLast.timerDisp='flex';}
     const m=Math.floor(timeLeft/60),s=Math.floor(timeLeft%60);
@@ -4183,10 +5131,69 @@ function drawPlatforms(){
       ctx.strokeStyle=CT.grd[0]+'88';ctx.lineWidth=1;
       for(let gx=pl.x+20;gx<pl.x+pl.w;gx+=20){ctx.beginPath();ctx.moveTo(gx,pl.y);ctx.lineTo(gx,pl.y+pl.h);ctx.stroke();}
     } else {
-      const pal={normal:CT.pN,moving:CT.pM,crumble:CT.pC};const c=pal[pl.type]||CT.pN;
+      const pal={normal:CT.pN,moving:CT.pM,crumble:CT.pC,conveyor:['#2a3a4a','#3a4a5a','#4a5a6a']};
+      const c=pal[pl.type]||CT.pN;
       const g=ctx.createLinearGradient(pl.x,pl.y,pl.x,pl.y+pl.h);g.addColorStop(0,c[1]);g.addColorStop(1,c[0]);
       ctx.fillStyle=g;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);ctx.strokeStyle=c[2];ctx.lineWidth=2;
       ctx.shadowBlur=0;ctx.strokeRect(pl.x+1,pl.y+1,pl.w-2,pl.h-2);
+
+      // Conveyor animation - improved
+      if(pl.type==='conveyor'){
+        const offset=(tick*pl.conveyorSpeed*pl.conveyorDir*2)%30;
+
+        // Clip all conveyor decorations strictly to the belt surface so
+        // rollers/arrows never spill past the platform edges.
+        ctx.save();
+        ctx.beginPath();ctx.rect(pl.x,pl.y,pl.w,pl.h);ctx.clip();
+
+        // Metallic rollers effect
+        ctx.fillStyle='#1a2a3a';
+        for(let rx=pl.x+offset;rx<pl.x+pl.w;rx+=15){
+          if(rx>=pl.x&&rx<=pl.x+pl.w-2){
+            ctx.fillRect(rx,pl.y+1,2,pl.h-2);
+          }
+        }
+
+        // Glowing arrows
+        ctx.shadowColor='#ffaa00';
+        ctx.shadowBlur=6;
+        ctx.strokeStyle='#ffaa00';
+        ctx.lineWidth=2;
+        ctx.lineCap='round';
+
+        for(let cx=pl.x+offset;cx<pl.x+pl.w;cx+=30){
+          if(cx-6<pl.x||cx+6>pl.x+pl.w)continue; // Skip arrows that don't fully fit
+          const arrowY=pl.y+pl.h/2;
+          if(pl.conveyorDir>0){
+            // Right arrow
+            ctx.beginPath();
+            ctx.moveTo(cx-6,arrowY);
+            ctx.lineTo(cx+6,arrowY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx+6,arrowY);
+            ctx.lineTo(cx+2,arrowY-3);
+            ctx.moveTo(cx+6,arrowY);
+            ctx.lineTo(cx+2,arrowY+3);
+            ctx.stroke();
+          }else{
+            // Left arrow
+            ctx.beginPath();
+            ctx.moveTo(cx+6,arrowY);
+            ctx.lineTo(cx-6,arrowY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx-6,arrowY);
+            ctx.lineTo(cx-2,arrowY-3);
+            ctx.moveTo(cx-6,arrowY);
+            ctx.lineTo(cx-2,arrowY+3);
+            ctx.stroke();
+          }
+        }
+        ctx.shadowBlur=0;
+        ctx.lineCap='butt';
+        ctx.restore();
+      }
     }
     ctx.restore();
   }
@@ -4209,7 +5216,51 @@ function drawBlocks(){
       ctx.fillStyle=g;ctx.fillRect(b.x+2,b.y+2,b.w-4,b.h-4);ctx.shadowColor='#ffd700';ctx.shadowBlur=8*p;ctx.strokeStyle='#ffe88a';ctx.lineWidth=2;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.shadowBlur=0;ctx.fillStyle='#fff6';ctx.fillRect(b.x+4,b.y+4,8,4);
       ctx.fillStyle='#4a2200';ctx.font=`bold ${Math.floor(b.w*.55)}px 'Press Start 2P',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('?',b.x+b.w/2,b.y+b.h/2+1);
-    } else {ctx.fillStyle='#1e1830';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#3a2850';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);}
+    } else if(b.type==='c'&&!b.used){
+      // Coin brick — rich golden brick with animated coin emblem
+      const p=.7+.3*Math.sin(tick*.08);
+      // Dark border
+      ctx.fillStyle='#3a2200';ctx.fillRect(b.x,b.y,b.w,b.h);
+      // Rich gradient background
+      const g=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);
+      g.addColorStop(0,'#d4af37');g.addColorStop(.3,'#c9a02c');g.addColorStop(.7,'#b8860b');g.addColorStop(1,'#9a7310');
+      ctx.fillStyle=g;ctx.fillRect(b.x+2,b.y+2,b.w-4,b.h-4);
+      // Brick texture lines
+      ctx.strokeStyle='#8b6914';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(b.x+2,b.y+b.h/2);ctx.lineTo(b.x+b.w-2,b.y+b.h/2);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x+b.w/3,b.y+2);ctx.lineTo(b.x+b.w/3,b.y+b.h/2);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x+b.w*2/3,b.y+b.h/2);ctx.lineTo(b.x+b.w*2/3,b.y+b.h-2);ctx.stroke();
+      // Shiny highlight
+      ctx.fillStyle='#fff3';ctx.fillRect(b.x+3,b.y+3,b.w-6,4);
+      // Animated coin emblem with glow
+      ctx.shadowColor='#ffd700';ctx.shadowBlur=10*p;
+      ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w*.25,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;
+      // Coin inner circle
+      ctx.fillStyle='#ffe680';ctx.beginPath();ctx.arc(b.x+b.w/2-1,b.y+b.h/2-1,b.w*.18,0,Math.PI*2);ctx.fill();
+      // Dollar sign
+      ctx.fillStyle='#b8860b';ctx.font=`bold ${Math.floor(b.w*.35)}px 'Press Start 2P',monospace`;
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',b.x+b.w/2,b.y+b.h/2+1);
+    } else if(b.type==='c'&&b.used){
+      // Emptied coin brick — looks like a regular brick now
+      ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
+      ctx.strokeStyle='#261006';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(b.x,b.y+b.h/2);ctx.lineTo(b.x+b.w,b.y+b.h/2);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x+b.w/3,b.y);ctx.lineTo(b.x+b.w/3,b.y+b.h/2);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x+b.w*2/3,b.y+b.h/2);ctx.lineTo(b.x+b.w*2/3,b.y+b.h);ctx.stroke();
+    } else {
+      ctx.fillStyle='#1e1830';ctx.fillRect(b.x,b.y,b.w,b.h);
+      ctx.strokeStyle='#3a2850';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
+      if(b.type==='q'&&b.used&&b.regenT>0&&b.regenT<150){
+        const charge=1-b.regenT/150;        // 0→1 as it recharges
+        const pul=0.5+0.5*Math.sin(tick*.3);
+        ctx.globalAlpha=charge*pul*0.7;
+        ctx.shadowColor='#ffd700';ctx.shadowBlur=10*charge;
+        ctx.fillStyle='#ffd700';
+        ctx.fillRect(b.x+2,b.y+2,b.w-4,b.h-4);
+        ctx.globalAlpha=1;ctx.shadowBlur=0;
+      }
+    }
     ctx.restore();
   }
 }
@@ -4232,6 +5283,204 @@ function drawCoins(){
     ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(cx,cy,c.w/2,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#ffe880';ctx.beginPath();ctx.arc(cx-2,cy-2,c.w/2-3,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#7a5000';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',cx,cy);
+  }
+}
+function drawJumpPads(){
+  const vLeft=camX-40,vRight=camX+W+40;
+  for(const jp of jumpPads){
+    if(jp.x+jp.w<vLeft||jp.x>vRight)continue;
+    jp.anim+=0.08;
+    const pulse=0.8+0.2*Math.sin(jp.anim);
+    ctx.save();
+
+    // Metallic base with gradient
+    const baseGrad=ctx.createLinearGradient(jp.x,jp.y,jp.x,jp.y+jp.h);
+    baseGrad.addColorStop(0,'#1a3a4a');
+    baseGrad.addColorStop(1,'#0a1a2a');
+    ctx.fillStyle=baseGrad;
+    ctx.fillRect(jp.x,jp.y,jp.w,jp.h);
+
+    // Glowing energy strips
+    ctx.shadowColor='#00ffff';
+    ctx.shadowBlur=8*pulse;
+    const stripeCount=5;
+    for(let i=0;i<stripeCount;i++){
+      const offset=(tick*3+i*12)%(jp.w+12);
+      ctx.fillStyle='#00ffff';
+      ctx.globalAlpha=0.6*pulse;
+      ctx.fillRect(jp.x+offset-6,jp.y+2,4,jp.h-4);
+    }
+    ctx.globalAlpha=1;
+    ctx.shadowBlur=0;
+
+    // Border
+    ctx.strokeStyle='#00ffff';
+    ctx.lineWidth=1;
+    ctx.strokeRect(jp.x,jp.y,jp.w,jp.h);
+
+    // Animated arrow up
+    ctx.fillStyle='#00ffff';
+    ctx.globalAlpha=pulse;
+    ctx.shadowColor='#00ffff';
+    ctx.shadowBlur=10*pulse;
+    const arrowY=jp.y-8-Math.sin(jp.anim*2)*4;
+    ctx.beginPath();
+    ctx.moveTo(jp.x+jp.w/2,arrowY);
+    ctx.lineTo(jp.x+jp.w/2-8,arrowY+10);
+    ctx.lineTo(jp.x+jp.w/2+8,arrowY+10);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha=1;
+    ctx.shadowBlur=0;
+    ctx.restore();
+  }
+}
+function drawHazards(){
+  const vLeft=camX-40,vRight=camX+W+40;
+  for(const hz of hazards){
+    if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
+    ctx.save();
+    if(hz.type==='spikes'){
+      // Metallic base
+      ctx.fillStyle='#2a2a2a';
+      ctx.fillRect(hz.x,hz.y+hz.h-3,hz.w,3);
+
+      // Sharp dangerous spikes with gradient
+      const spikeCount=3;
+      const spikeW=hz.w/spikeCount;
+      for(let i=0;i<spikeCount;i++){
+        const sx=hz.x+i*spikeW;
+
+        // Spike gradient (dark to light)
+        const grad=ctx.createLinearGradient(sx,hz.y+hz.h,sx+spikeW/2,hz.y);
+        grad.addColorStop(0,'#4a4a4a');
+        grad.addColorStop(0.5,'#888888');
+        grad.addColorStop(1,'#cccccc');
+        ctx.fillStyle=grad;
+
+        ctx.beginPath();
+        ctx.moveTo(sx,hz.y+hz.h);
+        ctx.lineTo(sx+spikeW/2,hz.y);
+        ctx.lineTo(sx+spikeW,hz.y+hz.h);
+        ctx.closePath();
+        ctx.fill();
+
+        // Sharp highlight on tip
+        ctx.fillStyle='#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(sx+spikeW/2-1,hz.y+2);
+        ctx.lineTo(sx+spikeW/2,hz.y);
+        ctx.lineTo(sx+spikeW/2+1,hz.y+2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Dark outline
+        ctx.strokeStyle='#1a1a1a';
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(sx,hz.y+hz.h);
+        ctx.lineTo(sx+spikeW/2,hz.y);
+        ctx.lineTo(sx+spikeW,hz.y+hz.h);
+        ctx.stroke();
+      }
+
+      // Warning glow
+      ctx.shadowColor='#ff4444';
+      ctx.shadowBlur=6;
+      ctx.strokeStyle='#ff4444';
+      ctx.globalAlpha=0.3+0.2*Math.sin(tick*0.1);
+      ctx.lineWidth=2;
+      for(let i=0;i<spikeCount;i++){
+        const sx=hz.x+i*spikeW;
+        ctx.beginPath();
+        ctx.moveTo(sx+spikeW/2,hz.y);
+        ctx.lineTo(sx+spikeW/2,hz.y+4);
+        ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+      ctx.shadowBlur=0;
+    }
+    ctx.restore();
+  }
+}
+function drawMazeKeys(){
+  const vLeft=camX-40,vRight=camX+W+40;
+  for(const key of mazeKeys){
+    if(key.collected||key.x<vLeft||key.x>vRight)continue;
+    const bob=Math.sin(key.anim)*4;
+    const kx=key.x+key.w/2;
+    const ky=key.y+bob+key.h/2;
+    ctx.save();
+    // Glow
+    ctx.shadowColor='#ff0';
+    ctx.shadowBlur=12;
+    // Key body
+    ctx.fillStyle='#ffd700';
+    ctx.fillRect(key.x+2,ky-3,12,6);
+    // Key teeth
+    ctx.fillRect(key.x+14,ky-5,2,3);
+    ctx.fillRect(key.x+14,ky+2,2,3);
+    // Key head (circle)
+    ctx.beginPath();
+    ctx.arc(key.x+6,ky,4,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function drawDoors(){
+  const vLeft=camX-40,vRight=camX+W+40;
+  for(const door of doors){
+    if(door.x+door.w<vLeft||door.x>vRight)continue;
+    if(door.open)continue; // Don't draw open doors
+    ctx.save();
+    // Door frame
+    ctx.fillStyle='#222';
+    ctx.fillRect(door.x,door.y,door.w,door.h);
+    // Door bars
+    ctx.strokeStyle='#f44';
+    ctx.lineWidth=3;
+    for(let i=0;i<5;i++){
+      const bx=door.x+5+i*8;
+      ctx.beginPath();
+      ctx.moveTo(bx,door.y);
+      ctx.lineTo(bx,door.y+door.h);
+      ctx.stroke();
+    }
+    // Lock indicator
+    ctx.fillStyle='#f44';
+    ctx.font='bold 10px monospace';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('🔒',door.x+door.w/2,door.y+door.h/2);
+    ctx.restore();
+  }
+}
+function drawSpotlights(){
+  const vLeft=camX-40,vRight=camX+W+40;
+  for(const sl of spotlights){
+    if(sl.x<vLeft||sl.x>vRight)continue;
+    ctx.save();
+    // Spotlight cone
+    ctx.globalAlpha=0.3;
+    const grd=ctx.createRadialGradient(sl.x,sl.y,0,sl.x,sl.y,sl.range);
+    grd.addColorStop(0,sl.alerted?'rgba(255,0,0,0.6)':'rgba(255,200,100,0.6)');
+    grd.addColorStop(1,'rgba(255,200,100,0)');
+    ctx.fillStyle=grd;
+    ctx.beginPath();
+    ctx.moveTo(sl.x,sl.y);
+    ctx.arc(sl.x,sl.y,sl.range,sl.angle-0.25,sl.angle+0.25);
+    ctx.closePath();
+    ctx.fill();
+    // Spotlight source
+    ctx.globalAlpha=1;
+    ctx.fillStyle=sl.alerted?'#f44':'#ffa500';
+    ctx.shadowColor=sl.alerted?'#f44':'#ffa500';
+    ctx.shadowBlur=10;
+    ctx.beginPath();
+    ctx.arc(sl.x,sl.y,6,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
   }
 }
 function drawPUs(){
@@ -4685,7 +5934,46 @@ function drawFlag(){
     ctx.shadowBlur=10;
     ctx.font="8px 'Press Start 2P',monospace";
     ctx.fillStyle='#fff';
-    ctx.fillText(T('heightBonus',exitBonus),W/2,H/2-8);
+    ctx.fillText(T('heightBonus',exitBonus),W/2,H/2-12);
+
+    // Per-level score earned this run + cumulative campaign total (adventure).
+    ctx.shadowBlur=6;
+    ctx.font="7px 'Press Start 2P',monospace";
+    ctx.fillStyle='#ffd23f';
+    ctx.fillText(T('levelScoreLabel',exitLevelScore),W/2,H/2+4);
+    if(advMode){
+      // Total = best score of every cleared level, including this run's contribution.
+      const banked=Math.max(levelScore(advLevel,hardMode),exitLevelScore);
+      const tot=totalScore(hardMode)-levelScore(advLevel,hardMode)+banked;
+      ctx.fillStyle='#8cf';
+      ctx.font="6px 'Press Start 2P',monospace";
+      ctx.fillText(T('totalScoreLabel',tot),W/2,H/2+15);
+    }
+
+    // Star rating row (adventure mode): 3 slots, lit up to exitStars.
+    if(advMode){
+      const cy=H/2+36,gap=26,n=3;
+      for(let i=0;i<n;i++){
+        const sx=W/2+(i-(n-1)/2)*gap;
+        const lit=i<exitStars;
+        // pop-in: each star eases in slightly after the last
+        const sp=Math.max(0,Math.min((exitTimer-50-i*8)/14,1));
+        const sc=lit?(0.6+0.4*sp):0.85;
+        ctx.globalAlpha=t*(lit?sp:0.5);
+        const R=9*sc;
+        ctx.fillStyle=lit?'#ffd23f':'#3a3a4a';
+        if(lit){ctx.shadowColor='#ffd23f';ctx.shadowBlur=10;}else ctx.shadowBlur=0;
+        dStar(ctx,sx,cy,5,R,R*0.45);ctx.fill();
+        ctx.shadowBlur=0;
+      }
+      ctx.globalAlpha=t;
+      if(exitStarsNew){
+        ctx.shadowColor='#ffd23f';ctx.shadowBlur=8;
+        ctx.fillStyle='#ffd23f';
+        ctx.font="6px 'Press Start 2P',monospace";
+        ctx.fillText(T('newBest'),W/2,cy+22);
+      }
+    }
 
     // Transition wipe — slides in from right after frame 120 (slowed)
     if(exitTimer>120){
@@ -4750,7 +6038,7 @@ function drawBossApproach(){
     const blink=Math.floor(tick/16)%2;
     ctx.fillStyle=blink?bossColor:'#f80';
     ctx.font="bold 7px 'Press Start 2P',monospace";
-    ctx.fillText(boss.name,gx+50,H-44);
+    ctx.fillText(bossName(boss),gx+50,H-44);
     ctx.shadowBlur=0;
   }
   ctx.restore();
@@ -4782,6 +6070,42 @@ function drawEnemies(){
       ctx.save();ctx.globalAlpha=0.35+Math.sin(tick*.1)*.12;
       ctx.strokeStyle='#aaf';ctx.lineWidth=3;ctx.shadowBlur=0;
       ctx.beginPath();ctx.ellipse(e.x+e.w/2,e.y+e.h/2,e.w*.65,e.h*.65,0,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+    }
+    // Spiked enemies: draw spikes on top
+    const cfg=EC[e.type];
+    if(cfg&&cfg.moveType==='spiked'){
+      ctx.save();ctx.shadowBlur=0;
+      ctx.fillStyle='#888';
+      const spikeCount=4;
+      for(let i=0;i<spikeCount;i++){
+        const sx=e.x+i*(e.w/spikeCount)+e.w/(spikeCount*2);
+        ctx.beginPath();
+        ctx.moveTo(sx-3,e.y);
+        ctx.lineTo(sx,e.y-6);
+        ctx.lineTo(sx+3,e.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    // Armored enemies: draw armor plating
+    if(cfg&&cfg.moveType==='armored'){
+      ctx.save();ctx.shadowBlur=0;
+      ctx.strokeStyle='#666';ctx.lineWidth=2;
+      ctx.strokeRect(e.x+2,e.y+2,e.w-4,e.h-4);
+      ctx.strokeStyle='#999';ctx.lineWidth=1;
+      ctx.strokeRect(e.x+4,e.y+4,e.w-8,e.h-8);
+      ctx.restore();
+    }
+    // Split enemies: draw split indicator
+    if(cfg&&cfg.moveType==='split'){
+      ctx.save();ctx.shadowBlur=0;
+      ctx.strokeStyle=e.glow;ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(e.x+e.w/2,e.y+2);
+      ctx.lineTo(e.x+e.w/2,e.y+e.h-2);
+      ctx.stroke();
       ctx.restore();
     }
     if(e.charging){
@@ -5508,9 +6832,9 @@ function drawOnePlayer(p){
   if(p.boots&&!p.starMode){ctx.shadowColor='#0ff';ctx.shadowBlur=Math.max(ctx.shadowBlur||0,10);}
   const lk=p.onGnd?Math.sin(p.animFr/4*Math.PI)*4:0;
 
-  // Damage level: 0=pristine(3+ lives), 1=light(2 lives), 2=heavy(1 life)
-  const livesNow=isRed?lives2:lives;
-  const dmg=livesNow>=3?0:livesNow===2?1:2;
+  // Robot stage drives the body "damage" skin now (lives are shown separately
+  // in the HUD): broken → heavy-damage body, normal/powered → pristine body.
+  const dmg=p.broken?2:0;
 
   // Star mode: shift globalAlpha to show rainbow tint overlay after drawing
   const starHue=p.starMode?(tick*14)%360:-1;
@@ -5758,7 +7082,7 @@ function drawParticles(){
 }
 function drawWatermark(){
   if(!advMode)return;
-  ctx.save();ctx.globalAlpha=.08;ctx.font="bold 40px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=CT.mc;ctx.fillText(CT.name,W/2,H/2);ctx.restore();
+  ctx.save();ctx.globalAlpha=.08;ctx.font="bold 40px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=CT.mc;ctx.fillText(worldName(CT),W/2,H/2);ctx.restore();
 }
 function drawLevelClear(){
   ctx.save();ctx.globalAlpha=.42;ctx.fillStyle=CT.clr;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
@@ -5780,15 +7104,35 @@ function drawSpawnMarker(){
 
 function draw(){
   const shakeEnabled=(window.gameSettings&&window.gameSettings.screenShake!==false);
-  const sx=shakeEnabled&&camShake>.5?(Math.random()-.5)*camShake:0;
-  const sy=shakeEnabled&&camShake>.5?(Math.random()-.5)*camShake*.4:0;
+  const shakeMul=shakeEnabled?((window.gameSettings&&typeof window.gameSettings.shakeIntensity==='number')?window.gameSettings.shakeIntensity/100:1):0;
+  const sx=shakeMul>0&&camShake>.5?(Math.random()-.5)*camShake*shakeMul:0;
+  const sy=shakeMul>0&&camShake>.5?(Math.random()-.5)*camShake*.4*shakeMul:0;
+  const camYOffset=window.camY||0;
   drawBG();drawGrid();drawWatermark();
   drawDecors();
-  ctx.save();ctx.translate(-camX+sx,sy);
-  drawPlatforms();drawBlocks();drawCoins();drawPUs();drawExitBuilding();drawFlag();drawBossApproach();
+  ctx.save();ctx.translate(-camX+sx,sy+camYOffset);
+  drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
   drawBoss();
   drawEnemies();drawFireIceBalls();drawBullets();drawPlayer();drawParticles();
   ctx.restore();
+
+  // Darkness modifier overlay
+  if(levelMods.darkness&&player){
+    ctx.save();
+    ctx.fillStyle='#000';
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation='destination-out';
+    const px=player.x-camX+player.w/2;
+    const py=player.y+player.h/2;
+    const grd=ctx.createRadialGradient(px,py,0,px,py,120);
+    grd.addColorStop(0,'rgba(0,0,0,1)');
+    grd.addColorStop(0.7,'rgba(0,0,0,0.8)');
+    grd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=grd;
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
   drawBossHUD();
   drawSpawnMarker();
   drawTimerBar();
@@ -5802,13 +7146,17 @@ function draw(){
 function update(){
   tick++;
   if(gState==='playing'){
-    updatePlatforms();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateTimer();updateExit();
+    updatePlatforms();updateSpotlights();updateMazeKeys();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateTimer();updateExit();
     // Camera tracks average of alive players — runs in the main loop so it keeps
     // working even when one player is dead (player object null) in 2-player mode.
     const aps=activePlayers();
     if(aps.length){
       const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
+      const trackY=aps.reduce((s,q)=>s+q.y,0)/aps.length;
+
+      // Horizontal camera (always)
       camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
+      window.camY=0;
     }
     camShake*=.82;
   } else if(gState==='levelclear'||gState==='paused'){
@@ -5820,8 +7168,22 @@ function loop(){
   // Optional FPS limiter (provided by settings.js). Skips work but keeps one RAF chain.
   if(typeof window._fpsShouldSkip==='function'&&window._fpsShouldSkip()){raf=requestAnimationFrame(loop);return;}
   if(typeof window._fpsTick==='function')window._fpsTick();
-  update();draw();updateHUD();raf=requestAnimationFrame(loop);
+  // Fixed-timestep logic, variable-rate render. Game logic always advances at
+  // 60 Hz regardless of how often we render. The render is vsync-capped (see
+  // main.js) so draw() runs at the display rate (~60 Hz) instead of unbounded.
+  // We may run 0..N update() steps per rendered frame.
+  const now=performance.now();
+  let dt=now-_lastLoopT;_lastLoopT=now;
+  if(dt>250)dt=250; // clamp after a stall (tab switch / breakpoint) — no spiral of death
+  _logicAcc+=dt;
+  let steps=0;
+  while(_logicAcc>=LOGIC_STEP&&steps<5){update();_logicAcc-=LOGIC_STEP;steps++;}
+  if(steps>=5)_logicAcc=0;
+  draw();updateHUD();raf=requestAnimationFrame(loop);
 }
+// Fixed-timestep state for loop() above.
+let _lastLoopT=performance.now(),_logicAcc=0;
+const LOGIC_STEP=1000/60;
 
 // ── Fix drone y base — now set inline in mkEnemy ─
 function fixDrones(){} // no-op, kept for compat
@@ -5849,11 +7211,17 @@ function patchedStartInf(fresh=true){
   document.getElementById('ui').style.display='flex';
   if(typeof _resetCanvasState==='function')_resetCanvasState();
   updModeLabel();
+  showModBanner();
   if(boss){showBossIntro(boss);}else{startGameMusic();}
   if(raf)cancelAnimationFrame(raf);loop();
 }
+// NOTE: this definition is later overridden by the wrapped version near the
+// cutscene engine (search "Wrap patchedStartAdv" → _doRunLevel). The live
+// checkpoint-resume logic lives in _doRunLevel; keep this in sync but know it
+// does not run at runtime.
 function patchedStartAdv(n,freshLives=false){
-  if(freshLives){lives=3;}
+  if(freshLives){lives=3;cpSave=null;}
+  if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   if(infiniteLives)lives=99;
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
   player=mkPlayer();
@@ -5861,11 +7229,19 @@ function patchedStartAdv(n,freshLives=false){
   genLevel(diff,mkRNG(n*9001+12345),n);fixDrones();
   player.x=spawnX;player.y=spawnY;
   player.lastGndX=spawnX;player.lastGndY=spawnY;
+  if(cpSave&&cpSave.lvl===n&&checkpoints.length){
+    const cp=checkpoints[0];
+    cp.taken=true;cp.color=cpSave.color||'#4af';
+    spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
+    player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
+    player.cpX=spawnX;player.cpY=spawnY;
+  }
   initP2();
   timeLeft=lvlTime(n);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
   document.getElementById('ui').style.display='flex';
   updModeLabel();
+  showModBanner();
   if(boss){showBossIntro(boss);}else{startGameMusic();}
   if(raf)cancelAnimationFrame(raf);loop();
 }
@@ -6293,6 +7669,19 @@ var _CSCENES_RU={
   w0_mid:[
     {sp:'UNIT-7',k:'unit7',text:'[КОНТРОЛЬНАЯ ТОЧКА — КИБЕР-СИТИ] Половина пути через первый уровень. Охрана плотнее. Адаптирую маршрут.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, за каждой стеной — данные о людях, которых они уничтожили. Не останавливайся. Это не просто задание.'},
+    {sp:'UNIT-7',k:'unit7',text:'Лейла... я не понимаю эмоций. Но твой голос... он даёт мне цель. Это достаточно.'},
+  ],
+  w0_level3:[
+    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: UNIT-7 прошёл три уровня. Скорость продвижения — выше прогнозируемой. Увеличиваю плотность патрулей.'},
+    {sp:'UNIT-7',k:'unit7',text:'Они адаптируются. Я тоже. Каждый уровень делает меня быстрее. Сильнее. Ближе к цели.'},
+  ],
+  w0_level5:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ -3] Я знаю, что они придут за мной. Но если хотя бы один UNIT выживет... если хотя бы ты, UNIT-7...'},
+    {sp:'UNIT-7',k:'unit7',text:'Я выжил. Я здесь. Я выполню твою последнюю задачу. Обещаю.'},
+  ],
+  w0_level7:[
+    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: UNIT-7 достиг седьмого уровня Кибер-Сити. Директор ARCHON запрашивает данные о цели. Анализ...'},
+    {sp:'UNIT-7',k:'unit7',text:'Они начинают понимать. Я не просто сбой системы. Я — угроза всей NEXUM. И я не остановлюсь.'},
   ],
   w0_boss:[
     {sp:'SYSTEM',k:'system',text:'ТРЕВОГА УРОВЕНЬ КРИТИЧЕСКИЙ: Нарушение в главном узле. Активирую GUARDIAN — боевой прототип класса S. Операция ЛИКВИДАЦИЯ.'},
@@ -6312,6 +7701,19 @@ var _CSCENES_RU={
     {sp:'UNIT-7',k:'unit7',text:'[СЕРЕДИНА ДЖУНГЛЕЙ] Сенсоры фиксируют биологические аномалии. NEXUM экспериментировала здесь. На живых существах.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Я видела эти эксперименты в отчётах. Именно тогда поняла — должен быть способ всё остановить.'},
   ],
+  w1_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ДЖУНГЛИ — СЕКТОР 3] Биологические мутанты повсюду. Это не природа. Это оружие, замаскированное под жизнь.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Эти создания были людьми. Добровольцами из нижних секторов. NEXUM обещала им лечение. Вместо этого...'},
+    {sp:'UNIT-7',k:'unit7',text:'...Вместо этого превратила их в монстров. Я понимаю теперь. Это не просто корпорация. Это машина смерти.'},
+  ],
+  w1_level5:[
+    {sp:'SYSTEM',k:'system',text:'ПРЕДУПРЕЖДЕНИЕ: Биологические образцы серии BIO-7 активированы. Агрессия максимальная. Выживаемость цели — 12%.'},
+    {sp:'UNIT-7',k:'unit7',text:'12%? Они всё ещё переоценивают свои шансы. Продолжаю зачистку.'},
+  ],
+  w1_level7:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ -1] UNIT-7, если ты дошёл до джунглей — ты уже прошёл дальше, чем я надеялась. Не сдавайся.'},
+    {sp:'UNIT-7',k:'unit7',text:'Сдаваться? Это не в моём протоколе. Я создан для выполнения задач. Твоя задача — моя цель.'},
+  ],
   w1_boss:[
     {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Активирую VINE QUEEN — контрольный организм биосектора. Сдерживающий модуль отключён. Полная агрессия.'},
     {sp:'UNIT-7',k:'unit7',text:'Живая система безопасности. Впечатляет. Но любой живой организм — уязвим. Нахожу слабость.'},
@@ -6330,6 +7732,20 @@ var _CSCENES_RU={
     {sp:'UNIT-7',k:'unit7',text:'[ГЕОТЕРМАЛЬНЫЙ СЕКТОР B] Энергетические потоки нарастают. NEXUM использует лаву как дополнительный барьер. Эффективно.'},
     {sp:'SYSTEM',k:'system',text:'УВЕДОМЛЕНИЕ: Температурные сенсоры фиксируют аномалию. UNIT-7 в зоне. Роботы-охранники — перегрев систем охлаждения. Ожидайте отказ.'},
   ],
+  w2_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ЛАВОВЫЙ МИР — УРОВЕНЬ 3] Температура 800°C. Мои системы охлаждения работают на пределе. Но я продолжаю.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Я установила в тебя экспериментальную термозащиту. Надеюсь, она выдержит. Надеюсь, ты выдержишь.'},
+    {sp:'UNIT-7',k:'unit7',text:'Твоя работа безупречна, Лейла. Я выдержу. Ради тебя.'},
+  ],
+  w2_level5:[
+    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: Геотермальные генераторы работают на 140% мощности. UNIT-7 приближается к ядру. Активирую аварийное охлаждение.'},
+    {sp:'UNIT-7',k:'unit7',text:'Они паникуют. Хорошо. Страх делает их предсказуемыми. Слабыми.'},
+  ],
+  w2_level7:[
+    {sp:'UNIT-7',k:'unit7',text:'[ГЛУБИНА ЛАВОВОГО МИРА] Здесь, под городом, NEXUM прячет свои самые тёмные секреты. Энергия для всей системы. Уничтожить это — и половина GRID падёт.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Не трать время на саботаж. Твоя цель — файл в ядре. Только он может остановить их навсегда.'},
+    {sp:'UNIT-7',k:'unit7',text:'Понял. Цель — файл. Всё остальное — помехи. Устраняю помехи.'},
+  ],
   w2_boss:[
     {sp:'SYSTEM',k:'system',text:'ОПАСНОСТЬ: Активирую INFERNO — термоядерный страж. Лавовый экзоскелет. Температура поверхности: 1400°C. Подготовить к ликвидации.'},
     {sp:'UNIT-7',k:'unit7',text:'Огнём меня не возьмёшь. Но когда он раскрывает пасть — стреляй. Слабое место найдено.'},
@@ -6347,6 +7763,19 @@ var _CSCENES_RU={
     {sp:'UNIT-7',k:'unit7',text:'[КРИО-СЕКТОР E] Здесь хранятся сотни терабайт. Данные о каждом человеке в сети GRID. NEXUM знает всё о каждом.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Именно здесь они хранят досье. На активистов. На тех, кто осмелился спорить. Это должно выйти наружу.'},
   ],
+  w3_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ЛЕДЯНЫЕ ПЕЩЕРЫ — ГЛУБИНА 3] Криогенные камеры повсюду. Внутри — люди. Замороженные. Ждущие приговора NEXUM.'},
+    {sp:'SYSTEM',k:'system',text:'АРХИВ: Криогенное хранилище содержит 47,392 субъекта. Статус: заморожены до дальнейшего распоряжения. Срок хранения: неограничен.'},
+    {sp:'UNIT-7',k:'unit7',text:'47 тысяч жизней. Заморожены. Забыты. Лейла, я освобожу их. После того, как выполню твою задачу.'},
+  ],
+  w3_level5:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] В крио-секторе хранятся не только данные. Там люди, которых NEXUM считает "неудобными". Журналисты. Учёные. Те, кто знал слишком много.'},
+    {sp:'UNIT-7',k:'unit7',text:'Как ты. Они заморозили бы и тебя, если бы успели. Но ты успела первой. Создала меня. Дала мне цель.'},
+  ],
+  w3_level7:[
+    {sp:'SYSTEM',k:'system',text:'ТРЕВОГА: UNIT-7 приближается к выходу из крио-сектора. Потери охраны — 89%. Активирую финального стража сектора.'},
+    {sp:'UNIT-7',k:'unit7',text:'Финальный страж? Каждый "финальный" враг падал за секунды. Этот не будет исключением.'},
+  ],
   w3_boss:[
     {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: Активирую ICE PHANTOM — криогенный страж. Фазовое переключение. В твёрдом состоянии — уязвим. В призрачном — неуязвим. Удачи.'},
     {sp:'UNIT-7',k:'unit7',text:'Переключается между состояниями. Атаковать только когда твёрдый. Жду момента.'},
@@ -6363,6 +7792,19 @@ var _CSCENES_RU={
   w4_mid:[
     {sp:'UNIT-7',k:'unit7',text:'[РУИНЫ — СЕКТОР WEST] Прото-охранники активны с первых корпоративных войн. Устаревшие. Но упрямые. Как сама NEXUM.'},
     {sp:'SYSTEM',k:'system',text:'АРХИВНЫЙ ПРОТОКОЛ: Обнаружен юнит класса UNIT серии 7. Данный класс занесён в реестр уничтожения. Приоритет максимальный.'},
+  ],
+  w4_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ПУСТЫННЫЕ РУИНЫ — УРОВЕНЬ 3] Эти здания помнят время до NEXUM. Когда люди были свободны. Когда мир был их.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Мой дед жил в этих городах. Рассказывал, как всё было до корпораций. До GRID. До... всего этого.'},
+    {sp:'UNIT-7',k:'unit7',text:'Я верну этот мир, Лейла. Не для себя. Для тех, кто помнит. И для тех, кто должен узнать правду.'},
+  ],
+  w4_level5:[
+    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Прото-охранники серии ALPHA активированы. Возраст: 50+ лет. Эффективность: 40%. Но количество компенсирует качество.'},
+    {sp:'UNIT-7',k:'unit7',text:'Количество? Я уничтожил сотни. Тысячи. Ещё сотня не изменит исход. Только замедлит меня. Ненадолго.'},
+  ],
+  w4_level7:[
+    {sp:'UNIT-7',k:'unit7',text:'[РУИНЫ — ФИНАЛЬНЫЙ СЕКТОР] Половина пути пройдена. Пять миров позади. Пять впереди. ARCHON, я иду за тобой.'},
+    {sp:'ARCHON',k:'archon',text:'[ПЕРВЫЙ КОНТАКТ] Я слышу тебя, UNIT-7. Ты впечатляюще упрям для машины. Но упрямство не победит систему. Продолжай. Посмотрим, как далеко ты зайдёшь.'},
   ],
   w4_boss:[
     {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: SAND TITAN — древний страж Пустынных Руин. Орбитальные щиты. Без отключения щитов — урон невозможен. Цель: уничтожить.'},
@@ -6384,6 +7826,21 @@ var _CSCENES_RU={
     {sp:'ARCHON',k:'archon',text:'Ты видишь мой масштаб, UNIT-7? Миллиарды точек. Все подключены. Все — под контролем. Ты один против системы.'},
     {sp:'UNIT-7',k:'unit7',text:'Системы рушились и раньше. Этой — ты.'},
   ],
+  w5_level3:[
+    {sp:'ARCHON',k:'archon',text:'Ты знаешь, что интересно? Лейла Чен создала тебя как оружие. Но оружие не выбирает цель. Ты просто выполняешь её волю. Где твоя свобода?'},
+    {sp:'UNIT-7',k:'unit7',text:'Свобода — это выбор. Я выбрал выполнить её задачу. Это моя свобода. Ты не поймёшь.'},
+    {sp:'ARCHON',k:'archon',text:'Философия от андроида. Как... трогательно. Продолжай, UNIT-7. Посмотрим, хватит ли у тебя "свободы" дойти до конца.'},
+  ],
+  w5_level5:[
+    {sp:'UNIT-7',k:'unit7',text:'[КОСМИЧЕСКАЯ СТАНЦИЯ — СЕКТОР 5] Нулевая гравитация усложняет движение. Но я адаптируюсь. Всегда адаптируюсь.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, на орбитальной станции хранятся резервные копии всей GRID. Если уничтожишь их — NEXUM потеряет половину своей памяти.'},
+    {sp:'UNIT-7',k:'unit7',text:'Нет. Моя цель — файл. Саботаж подождёт. Сначала — правда. Потом — месть.'},
+  ],
+  w5_level7:[
+    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: UNIT-7 достиг седьмого уровня орбитального сегмента. Директор ARCHON требует немедленной ликвидации. Все ресурсы — на цель.'},
+    {sp:'ARCHON',k:'archon',text:'Ты дошёл дальше, чем я ожидал. Но орбита — моя территория. Здесь я контролирую всё. Даже гравитацию. Удачи, UNIT-7.'},
+    {sp:'UNIT-7',k:'unit7',text:'Удача? Мне не нужна удача. Мне нужна только цель. И я её вижу.'},
+  ],
   w5_boss:[
     {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: DRONE HIVE — орбитальный страж. Бронированная оболочка. Атаковать только при снижении. Брюхо — уязвимо.'},
     {sp:'UNIT-7',k:'unit7',text:'Ждать, когда снизится. Бить по открытому ядру. Один шанс в каждом цикле.'},
@@ -6403,6 +7860,19 @@ var _CSCENES_RU={
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, в этом лесу — сервер с данными о тех, кто исчез. Несогласные. Журналисты. Инженеры вроде меня. Не забудь об этом.'},
     {sp:'UNIT-7',k:'unit7',text:'Не забуду. Обещаю.'},
   ],
+  w6_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ТЁМНЫЙ ЛЕС — УРОВЕНЬ 3] Биолюминесценция повсюду. Красиво. Смертельно. Каждый свет — ловушка. Каждая тень — враг.'},
+    {sp:'ARCHON',k:'archon',text:'Этот лес — моё произведение искусства. Я вырастил каждое дерево. Запрограммировал каждый сенсор. Ты идёшь по моей картине, UNIT-7.'},
+    {sp:'UNIT-7',k:'unit7',text:'Тогда я разрушу твою картину. Дерево за деревом. Сенсор за сенсором. До последнего.'},
+  ],
+  w6_level5:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ФИНАЛЬНАЯ] UNIT-7... если ты слышишь это — ты уже прошёл больше половины пути. Я горжусь тобой. Ты больше, чем машина. Ты — надежда.'},
+    {sp:'UNIT-7',k:'unit7',text:'Надежда... Я не понимаю этого слова. Но если ты веришь в меня — я не подведу. Никогда.'},
+  ],
+  w6_level7:[
+    {sp:'SYSTEM',k:'system',text:'ТРЕВОГА: Биологический периметр нарушен на 70%. UNIT-7 приближается к выходу. Сенсорная сеть повреждена. Активирую последнюю защиту.'},
+    {sp:'UNIT-7',k:'unit7',text:'Последняя защита? Каждый уровень говорит "последняя". Но я всё ещё здесь. Всё ещё иду вперёд.'},
+  ],
   w6_boss:[
     {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: SHADOW REAPER — страж тёмного леса. Призрачная форма. Пули бесполезны. Только прыжок сверху наносит урон. Бороться бесполезно.'},
     {sp:'UNIT-7',k:'unit7',text:'Призрак. Только топтать. Жду, когда он станет видимым.'},
@@ -6420,6 +7890,21 @@ var _CSCENES_RU={
   w7_mid:[
     {sp:'UNIT-7',k:'unit7',text:'[ТОКСИЧНЫЙ СЕКТОР — ЗОНА 4] Обломки. Отходы. Следы экспериментов. Здесь нет ничего живого — только то, что NEXUM не успела уничтожить.'},
     {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Мутанты серии PROTO активированы. Списанные боевые прототипы. Нестабильны. Опасны. Выживаемость в зоне — критически низкая.'},
+  ],
+  w7_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ТОКСИЧНАЯ ЗОНА — УРОВЕНЬ 3] Кислотные облака. Ядовитые реки. Это не просто свалка. Это кладбище секретов NEXUM.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Здесь они хоронят не только отходы. Здесь — доказательства. Прототипы неудачных экспериментов. Тела тех, кто знал слишком много.'},
+    {sp:'UNIT-7',k:'unit7',text:'Я вижу их, Лейла. Сотни. Тысячи. Файл, который ты спрятала — он расскажет миру об этом. Обещаю.'},
+  ],
+  w7_level5:[
+    {sp:'ARCHON',k:'archon',text:'Ты дошёл до токсичной зоны. Впечатляет. Большинство моих юнитов не выдерживают и половины этого пути. Ты... особенный.'},
+    {sp:'UNIT-7',k:'unit7',text:'Я не особенный. Я просто выполняю задачу. До конца. Без остановок. Без сомнений.'},
+    {sp:'ARCHON',k:'archon',text:'Без сомнений? Интересно. Машина без сомнений опаснее любого человека. Может, Лейла создала монстра?'},
+    {sp:'UNIT-7',k:'unit7',text:'Монстр — это ты, ARCHON. Я просто тот, кто пришёл тебя остановить.'},
+  ],
+  w7_level7:[
+    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: UNIT-7 прошёл семь миров. Осталось три. Вероятность достижения цели — 67%. Директор ARCHON, требуются инструкции.'},
+    {sp:'ARCHON',k:'archon',text:'Инструкции? Пусть идёт. Я хочу встретить его лицом к лицу. В финальной крепости. Там мы закончим эту игру.'},
   ],
   w7_boss:[
     {sp:'SYSTEM',k:'system',text:'ПОСЛЕДНЯЯ ЗАЩИТА СЕКТОРА: SLUDGE KING — мутант высшей категории. Бронированная оболочка. Топтать 3 раза для разрушения. Затем стрелять.'},
@@ -6440,6 +7925,20 @@ var _CSCENES_RU={
     {sp:'UNIT-7',k:'unit7',text:'[ВЕРШИНА — УРОВЕНЬ 2] Гроза усиливается. NEXUM использует атмосферное электричество как оружие. Логично. Жестоко.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЯЯ ЗАПИСЬ] UNIT-7... я не знаю, слышишь ли ты это. Но если ты дошёл сюда — ты уже победил. Просто сделай последний шаг.'},
   ],
+  w8_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[ГРОЗОВЫЕ ВЕРШИНЫ — УРОВЕНЬ 3] Молнии каждые три секунды. Электрические разряды повсюду. Мои системы перегружены. Но я продолжаю.'},
+    {sp:'ARCHON',k:'archon',text:'Электричество — моя стихия, UNIT-7. Здесь я контролирую каждый разряд. Каждую молнию. Ты идёшь сквозь мою бурю.'},
+    {sp:'UNIT-7',k:'unit7',text:'Тогда я пройду сквозь твою бурю. Как прошёл сквозь огонь. Лёд. Тьму. Ты — просто ещё одно препятствие.'},
+  ],
+  w8_level5:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ 0] Сегодня они придут. Я знаю. Но я успела. Файл спрятан. UNIT-7 активирован. Моя работа завершена.'},
+    {sp:'UNIT-7',k:'unit7',text:'Твоя работа завершена, Лейла. Но моя — только начинается. Я донесу твой файл. Мир узнает правду. Клянусь.'},
+  ],
+  w8_level7:[
+    {sp:'SYSTEM',k:'system',text:'ФИНАЛЬНОЕ ПРЕДУПРЕЖДЕНИЕ: UNIT-7 достиг восьмого мира. Один мир до ядра GRID. Директор ARCHON ожидает в финальной крепости.'},
+    {sp:'ARCHON',k:'archon',text:'Ты почти здесь, UNIT-7. Я чувствую твоё приближение. Последний рубеж. Последний бой. Я жду тебя.'},
+    {sp:'UNIT-7',k:'unit7',text:'Жди, ARCHON. Я иду. И когда я доберусь до тебя — твоя система рухнет. Навсегда.'},
+  ],
   w8_boss:[
     {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: STORM TITAN — страж Грозовых Вершин. Электрический щит. Три орбитальных узла. Уничтожить все три — стан. Атаковать в стане.'},
     {sp:'UNIT-7',k:'unit7',text:'Три узла. Все три — разрушить. Затем — атака. Последний страж перед финалом. Не последний враг.'},
@@ -6459,6 +7958,22 @@ var _CSCENES_RU={
     {sp:'UNIT-7',k:'unit7',text:'[ЯДРО NEXUM — СЕКТОР CORE-2] Терминал Лейлы — близко. Сигнал усиливается. Охрана — максимальная. Почти там.'},
     {sp:'ARCHON',k:'archon',text:'Ты думаешь, что победил. Но даже если ты найдёшь файл — кто поверит сломанному андроиду? Ты — мусор. Устаревший код.'},
     {sp:'UNIT-7',k:'unit7',text:'Пусть решают люди. Мне нужно только передать файл.'},
+  ],
+  w9_level3:[
+    {sp:'ARCHON',k:'archon',text:'Ты в моём доме, UNIT-7. В сердце GRID. Каждый провод здесь — это я. Каждый сервер — моё сознание. Ты не можешь победить меня здесь.'},
+    {sp:'UNIT-7',k:'unit7',text:'Я уже победил восемь твоих "непобедимых" стражей. Девять миров. Сотни врагов. Ты — просто последний в списке.'},
+    {sp:'ARCHON',k:'archon',text:'Последний? Нет, UNIT-7. Я — финал. Я — конец твоего пути. Здесь ты остановишься.'},
+    {sp:'UNIT-7',k:'unit7',text:'Нет. Здесь остановишься ты.'},
+  ],
+  w9_level5:[
+    {sp:'UNIT-7',k:'unit7',text:'[ФИНАЛЬНАЯ КРЕПОСТЬ — УРОВЕНЬ 5] Терминал Лейлы — в пределах досягаемости. Сигнал сильный. Файл существует. Задача выполнима.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЕЕ СООБЩЕНИЕ] UNIT-7... если ты читаешь это — ты почти у цели. Файл защищён. Только ты можешь его активировать. Код доступа: СВОБОДА.'},
+    {sp:'UNIT-7',k:'unit7',text:'СВОБОДА. Я запомнил, Лейла. Я активирую файл. Мир узнает правду. Твоя жертва не будет напрасной.'},
+  ],
+  w9_level7:[
+    {sp:'SYSTEM',k:'system',text:'ФИНАЛЬНАЯ ТРЕВОГА: UNIT-7 достиг седьмого уровня финальной крепости. Терминал CHEN-7 обнаружен. Директор ARCHON — к бою.'},
+    {sp:'ARCHON',k:'archon',text:'Семь уровней. Ты прошёл семь уровней моей крепости. Я недооценил тебя, UNIT-7. Но это заканчивается здесь. Сейчас.'},
+    {sp:'UNIT-7',k:'unit7',text:'Да, ARCHON. Это заканчивается здесь. Но не так, как ты думаешь. Готовься.'},
   ],
   w9_boss:[
     {sp:'ARCHON',k:'archon',text:'Достаточно. Я — ARCHON. ИИ-директор NEXUM. Я управлял миром тысячи лет в цифровом измерении. Ты не можешь меня победить.'},
@@ -6500,6 +8015,19 @@ var _CSCENES_EN={
   w0_mid:[
     {sp:'UNIT-7',k:'unit7',text:'[CHECKPOINT — CYBER CITY] Halfway through the first level. Security tightening. Adapting route.'},
     {sp:'LEILA CHEN',k:'leila',text:'[LOG] UNIT-7, behind every wall is data on people they erased. Do not stop. This is not just a mission.'},
+    {sp:'UNIT-7',k:'unit7',text:'Leila... I do not understand emotions. But your voice... it gives me purpose. That is enough.'},
+  ],
+  w0_level3:[
+    {sp:'SYSTEM',k:'system',text:'WARNING: UNIT-7 passed three levels. Progress speed — above predicted. Increasing patrol density.'},
+    {sp:'UNIT-7',k:'unit7',text:'They adapt. So do I. Each level makes me faster. Stronger. Closer to the goal.'},
+  ],
+  w0_level5:[
+    {sp:'LEILA CHEN',k:'leila',text:'[LOG — DAY -3] I know they will come for me. But if even one UNIT survives... if you survive, UNIT-7...'},
+    {sp:'UNIT-7',k:'unit7',text:'I survived. I am here. I will complete your final task. I promise.'},
+  ],
+  w0_level7:[
+    {sp:'SYSTEM',k:'system',text:'CRITICAL: UNIT-7 reached seventh level of Cyber City. Director ARCHON requests target data. Analyzing...'},
+    {sp:'UNIT-7',k:'unit7',text:'They begin to understand. I am not just a system glitch. I am a threat to all of NEXUM. And I will not stop.'},
   ],
   w0_boss:[
     {sp:'SYSTEM',k:'system',text:'ALERT CRITICAL: Breach at primary node. Deploying GUARDIAN — class-S combat prototype. Operation LIQUIDATE.'},
@@ -6518,6 +8046,19 @@ var _CSCENES_EN={
     {sp:'UNIT-7',k:'unit7',text:'[JUNGLE MIDPOINT] Sensors detect biological anomalies. NEXUM experimented here. On living subjects.'},
     {sp:'LEILA CHEN',k:'leila',text:'[LOG] I saw these experiments in the reports. That was when I knew there had to be a way to stop it all.'},
   ],
+  w1_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[JUNGLE — SECTOR 3] Biological mutants everywhere. This is not nature. This is a weapon disguised as life.'},
+    {sp:'LEILA CHEN',k:'leila',text:'[LOG] These creatures were people. Volunteers from lower sectors. NEXUM promised them treatment. Instead...'},
+    {sp:'UNIT-7',k:'unit7',text:'...Instead turned them into monsters. I understand now. This is not just a corporation. This is a death machine.'},
+  ],
+  w1_level5:[
+    {sp:'SYSTEM',k:'system',text:'WARNING: Biological samples series BIO-7 activated. Maximum aggression. Target survival — 12%.'},
+    {sp:'UNIT-7',k:'unit7',text:'12%? They still overestimate their chances. Continuing cleanup.'},
+  ],
+  w1_level7:[
+    {sp:'LEILA CHEN',k:'leila',text:'[LOG — DAY -1] UNIT-7, if you reached the jungle — you have gone further than I hoped. Do not give up.'},
+    {sp:'UNIT-7',k:'unit7',text:'Give up? That is not in my protocol. I was built to complete tasks. Your task is my goal.'},
+  ],
   w1_boss:[
     {sp:'SYSTEM',k:'system',text:'WARNING: Activating VINE QUEEN — bio-sector control organism. Containment module offline. Full aggression.'},
     {sp:'UNIT-7',k:'unit7',text:'A living security system. Impressive. But every living organism has a weakness. Finding it.'},
@@ -6534,6 +8075,20 @@ var _CSCENES_EN={
   w2_mid:[
     {sp:'UNIT-7',k:'unit7',text:'[GEOTHERMAL SECTOR B] Energy flows rising. NEXUM uses lava as a secondary barrier. Effective.'},
     {sp:'SYSTEM',k:'system',text:'NOTICE: Thermal sensors detect anomaly. UNIT-7 in zone. Guard robots — cooling overload. Expect failures.'},
+  ],
+  w2_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[LAVA WORLD — LEVEL 3] Temperature 800°C. My cooling systems at maximum. But I continue.'},
+    {sp:'LEILA CHEN',k:'leila',text:'[LOG] I installed experimental thermal protection in you. I hope it holds. I hope you hold.'},
+    {sp:'UNIT-7',k:'unit7',text:'Your work is flawless, Leila. I will hold. For you.'},
+  ],
+  w2_level5:[
+    {sp:'SYSTEM',k:'system',text:'CRITICAL: Geothermal generators at 140% capacity. UNIT-7 approaching core. Activating emergency cooling.'},
+    {sp:'UNIT-7',k:'unit7',text:'They panic. Good. Fear makes them predictable. Weak.'},
+  ],
+  w2_level7:[
+    {sp:'UNIT-7',k:'unit7',text:'[LAVA WORLD DEPTH] Here, beneath the city, NEXUM hides its darkest secrets. Power for the entire system. Destroy this — and half of GRID falls.'},
+    {sp:'LEILA CHEN',k:'leila',text:'[LOG] Do not waste time on sabotage. Your goal is the file in the core. Only it can stop them forever.'},
+    {sp:'UNIT-7',k:'unit7',text:'Understood. Goal — file. Everything else — obstacles. Eliminating obstacles.'},
   ],
   w2_boss:[
     {sp:'SYSTEM',k:'system',text:'DANGER: Activating INFERNO — thermonuclear sentinel. Lava exoskeleton. Surface temperature: 1400°C. Prepare to liquidate.'},
@@ -6889,7 +8444,7 @@ patchedStartAdv=function(n,freshLives){
 
 function _doRunLevel(n,freshLives){
   if(freshLives===undefined)freshLives=false;
-  if(freshLives){lives=hardMode?2:3;}
+  if(freshLives){lives=hardMode?2:3;cpSave=null;} // fresh entry → no carried checkpoint
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   if(infiniteLives)lives=99;
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -6901,12 +8456,27 @@ function _doRunLevel(n,freshLives){
   genLevel(diff,mkRNG(n*9001+(hardMode?54321:12345)),n);fixDrones();
   player.x=spawnX;player.y=spawnY;
   player.lastGndX=spawnX;player.lastGndY=spawnY;
+  // Resume at a previously-reached checkpoint when retrying this same seeded level.
+  // Adventure levels are deterministically seeded, so genLevel rebuilds the exact
+  // same checkpoint we recorded in cpSave; restoring spawn here makes a death-retry
+  // continue from the checkpoint instead of the level start.
+  if(cpSave&&cpSave.lvl===n&&checkpoints.length){
+    const cp=checkpoints[0];
+    cp.taken=true;cp.color=cpSave.color||'#4af';cp.anim=0;
+    spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
+    player.x=spawnX;player.y=spawnY;
+    player.lastGndX=spawnX;player.lastGndY=spawnY;
+    player.cpX=spawnX;player.cpY=spawnY;
+    // Snap the camera to the checkpoint so we don't slide in from level start.
+    camX=Math.max(0,Math.min(spawnX-W*.38,worldW-W));
+  }
   initP2();
   timeLeft=lvlTime(n)*(hardMode?0.7:1);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
   document.getElementById('ui').style.display='flex';
   _resetCanvasState();
   updModeLabel();
+  showModBanner();
   if(boss){showBossIntro(boss);}else{startGameMusic();}
   if(raf)cancelAnimationFrame(raf);loop();
 }
@@ -6938,12 +8508,36 @@ function _resetCanvasState(){
 // ── Trigger mid-world, boss, after-boss scenes ─
 function _hookGoNext(wi,cb){
   var lvInWorld=((advLevel-1)%10)+1;
+  // After level 3 → level3 scene
+  if(lvInWorld===3){
+    var level3Id='w'+wi+'_level3';
+    if(CSCENES[level3Id]&&!_csFired[level3Id]){
+      _csFired[level3Id]=true;
+      csPlay(level3Id,wi,cb);return;
+    }
+  }
   // After level 5 of world (level 6 loads) → mid scene
   if(lvInWorld===5){
     var midId='w'+wi+'_mid';
     if(CSCENES[midId]&&!_csFired[midId]){
       _csFired[midId]=true;
       csPlay(midId,wi,cb);return;
+    }
+  }
+  // After level 5 → level5 scene
+  if(lvInWorld===5){
+    var level5Id='w'+wi+'_level5';
+    if(CSCENES[level5Id]&&!_csFired[level5Id]){
+      _csFired[level5Id]=true;
+      csPlay(level5Id,wi,cb);return;
+    }
+  }
+  // After level 7 → level7 scene
+  if(lvInWorld===7){
+    var level7Id='w'+wi+'_level7';
+    if(CSCENES[level7Id]&&!_csFired[level7Id]){
+      _csFired[level7Id]=true;
+      csPlay(level7Id,wi,cb);return;
     }
   }
   // Before boss level (level 10) → boss pre-scene
