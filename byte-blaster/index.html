@@ -1,11 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<link rel="apple-touch-icon" sizes="180x180" href="/byte-blaster/icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/icons/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/byte-blaster/icons/favicon-16x16.png">
-<link rel="manifest" href="/byte-blaster/icons/site.webmanifest">
-<link rel="icon" type="image/x-icon" href="/byte-blaster/icons/favicon.ico">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BYTE BLASTER</title>
@@ -80,6 +75,7 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes mapGlow{0%,100%{box-shadow:0 0 5px var(--mc)}50%{box-shadow:0 0 18px var(--mc),0 0 32px var(--mc)}}
 #mainOv{background:#04040fee;gap:12px}
+#menuBot{image-rendering:pixelated;margin-bottom:2px;filter:drop-shadow(0 5px 9px #0007)}
 #mainOv h1{font-size:22px;color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff;letter-spacing:5px;animation:pulse 2s ease-in-out infinite}
 .ovSub{font-size:7px;color:#fff8;letter-spacing:3px}
 .ovScore{font-size:9px;color:#ff0;text-shadow:0 0 8px #ff0}
@@ -187,6 +183,7 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 
   <!-- Main menu -->
   <div id="mainOv" class="fov">
+    <canvas id="menuBot" width="132" height="162"></canvas>
     <h1>⚡ BYTE BLASTER</h1>
     <div class="ovSub" data-i18n="subtitle">CYBERPUNK NEON PLATFORMER</div>
     <div class="ovScore" id="mainScore" style="display:none"></div>
@@ -425,6 +422,31 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
 const CV=document.getElementById('c'),ctx=CV.getContext('2d'),W=800,H=420;
 const G=0.46,JV=-11.0,MXY=17,PSP=4.4,BSP=9,EBS=3.2;
 
+// ── HiDPI / crisp rendering ─────────────────────────────────────────────────
+// The game's logical resolution is W×H (800×420). The canvas used to keep that
+// as its backing-store size and let CSS stretch it to fill the window, which
+// made all text blurry on larger displays (a low-res bitmap scaled up). Instead
+// we size the backing store to the displayed pixel size × devicePixelRatio and
+// pre-scale the 2D context by _renderScale, so every existing W/H-based draw
+// call renders at native resolution — crisp text, same coordinates.
+let _renderScale=1;
+function applyRenderResolution(){
+  // Displayed CSS size is set by applyGameScale() (settings.js); fall back to logical size.
+  const cssW=parseFloat(CV.style.width)||CV.clientWidth||W;
+  const dpr=window.devicePixelRatio||1;
+  // Backing store keeps the 800:420 aspect. Scale = how many device px per logical px.
+  // Capped by the active Graphics Quality tier (GFX.renderScale): lower tiers
+  // render at lower resolution for big performance gains, higher tiers render
+  // crisp. This is the main optimisation + quality lever.
+  const tierCap=(typeof GFX==='object'&&GFX&&GFX.renderScale)?GFX.renderScale:2;
+  let scale=(cssW*dpr)/W;
+  scale=Math.max(1,Math.min(scale,tierCap));
+  const bw=Math.round(W*scale),bh=Math.round(H*scale);
+  if(CV.width!==bw||CV.height!==bh){CV.width=bw;CV.height=bh;}
+  _renderScale=CV.width/W;
+}
+window.applyRenderResolution=applyRenderResolution;
+
 // i18n helper — safe wrapper around window.t (falls back to the key if i18n absent)
 function T(key,...a){ return (typeof window.t==='function') ? window.t(key,...a) : key; }
 
@@ -472,21 +494,44 @@ const AchTrack={
 // Read by drawing code: GFX.glow (multiplier on shadowBlur, 0 disables glows),
 // GFX.particleMul (scales particle counts), GFX.bgDetail (parallax/star density),
 // GFX.trails (player/bullet trail length multiplier), GFX.bossFx (boss aura intensity).
+// `renderScale` is the per-tier ceiling on the canvas backing-store resolution
+// (device-pixels per logical pixel). It is BOTH the biggest performance lever
+// and the most visible quality difference: low tiers render at ~native logical
+// size (cheap, softer on big screens), high tiers render crisp HiDPI. The wide
+// spread of the effect multipliers makes the Graphics Quality setting clearly
+// change how the game looks.
 const GFX_TIERS = {
-  verylow:  {glow:0.00, particleMul:0.30, bgDetail:0.40, trails:0.30, bossFx:0.20, decorMul:0.35},
-  low:      {glow:0.35, particleMul:0.55, bgDetail:0.60, trails:0.55, bossFx:0.45, decorMul:0.55},
-  medium:   {glow:0.70, particleMul:0.80, bgDetail:0.80, trails:0.80, bossFx:0.75, decorMul:0.80},
-  high:     {glow:1.00, particleMul:1.00, bgDetail:1.00, trails:1.00, bossFx:1.00, decorMul:1.00},
-  veryhigh: {glow:1.25, particleMul:1.25, bgDetail:1.20, trails:1.20, bossFx:1.20, decorMul:1.15},
-  ultra:    {glow:1.50, particleMul:1.60, bgDetail:1.40, trails:1.50, bossFx:1.50, decorMul:1.30},
+  verylow:  {glow:0.00, particleMul:0.20, bgDetail:0.30, trails:0.15, bossFx:0.15, decorMul:0.25, renderScale:1.00},
+  low:      {glow:0.30, particleMul:0.45, bgDetail:0.55, trails:0.45, bossFx:0.40, decorMul:0.50, renderScale:1.25},
+  medium:   {glow:0.65, particleMul:0.75, bgDetail:0.80, trails:0.75, bossFx:0.70, decorMul:0.75, renderScale:1.50},
+  high:     {glow:1.00, particleMul:1.00, bgDetail:1.00, trails:1.00, bossFx:1.00, decorMul:1.00, renderScale:2.00},
+  veryhigh: {glow:1.30, particleMul:1.35, bgDetail:1.25, trails:1.30, bossFx:1.30, decorMul:1.20, renderScale:2.00},
+  ultra:    {glow:1.65, particleMul:1.80, bgDetail:1.55, trails:1.70, bossFx:1.65, decorMul:1.40, renderScale:2.50},
 };
 let GFX = GFX_TIERS.high;
+window.GFX_TIERS = GFX_TIERS;   // exposed so the settings UI can use tiers as templates
+// Apply an arbitrary set of graphics values (each a multiplier). Missing keys
+// fall back to the 'high' template. This is what lets every graphics parameter
+// be tuned individually; presets just pre-fill these values.
+window.applyGfxValues = function(g){
+  g = g || {};
+  const b = GFX_TIERS.high;
+  const pick = (k)=> (g[k]!=null && !isNaN(+g[k])) ? +g[k] : b[k];
+  GFX = {
+    glow:        pick('glow'),
+    particleMul: pick('particleMul'),
+    bgDetail:    pick('bgDetail'),
+    trails:      pick('trails'),
+    bossFx:      pick('bossFx'),
+    decorMul:    pick('decorMul'),
+    renderScale: pick('renderScale'),
+  };
+  if (typeof window.GFX_MAX_PARTICLES === 'number') window.MAX_PARTICLES_DYN = window.GFX_MAX_PARTICLES;
+  if (typeof window.applyRenderResolution === 'function') window.applyRenderResolution();
+};
 window.applyGfxTier = function(q){
-  GFX = GFX_TIERS[q] || GFX_TIERS.high;
-  // Update particle cap so settings.GFX_MAX_PARTICLES stays in sync with engine cap
-  if (typeof window.GFX_MAX_PARTICLES === 'number') {
-    window.MAX_PARTICLES_DYN = window.GFX_MAX_PARTICLES;
-  }
+  // Preset → fill GFX with that tier's values (a starting template).
+  window.applyGfxValues(GFX_TIERS[q] || GFX_TIERS.high);
 };
 // Helper: quality-scaled glow. Use in place of `ctx.shadowBlur=N` when you want the
 // effect dimmed/disabled on lower tiers. Returns 0 on verylow so save()/restore() can be skipped.
@@ -1763,9 +1808,11 @@ function genDecors(rng){
 function drawDecors(){
   if(!decors||!decors.length)return;
   const GY=H-40;
-  // Ограничиваем количество декоров на экране для производительности
+  // Ограничиваем количество декоров на экране для производительности.
+  // Scaled by the Graphics Quality tier so lower tiers draw fewer background
+  // props (faster, sparser) and higher tiers draw denser scenery.
   let drawnCount = 0;
-  const MAX_DECORS = 40;
+  const MAX_DECORS = Math.max(6, Math.round(40 * ((typeof GFX==='object'&&GFX&&GFX.decorMul)?GFX.decorMul:1)));
 
   for(const layerIdx of [0,1]){
     const pFactor = layerIdx===0 ? 0.22 : 0.58;
@@ -3114,6 +3161,134 @@ window.refreshDynamicUI=function(){
   }catch(e){}
 };
 
+// ── Main-menu robot mascot ──────────────────────────────────────────────────
+// A small animated Byte Blaster robot. Two moods:
+//   'idle'   — bobbing, blinking, waving hello (main menu / win screen)
+//   'defeat' — battered, sparking, waving a little white surrender flag (game over)
+// The loop self-terminates whenever the main overlay is hidden, so it costs
+// nothing during play.
+let _menuBotRAF=0, _menuBotMode='idle';
+function setMenuBotMode(m){ _menuBotMode=m||'idle'; }
+
+// Draw the robot body in a local 24×32 space (origin top-left, feet at y=32).
+// `dmg` 0..1 dims/cracks it for the defeat pose.
+function _botBody(c,t,dmg){
+  const blue =dmg?'#243a55':'#003a88', blue2=dmg?'#2f5170':'#0060aa';
+  const dark =dmg?'#101a2a':'#00276a', foot =dmg?'#33506e':'#0055bb';
+  const glow =dmg?'#557':'#00ccee';
+  c.shadowBlur=dmg?4:10;c.shadowColor=dmg?'#446':'#00ccff';
+  // Legs / feet
+  c.fillStyle=dark;c.fillRect(2,17,9,15);c.fillRect(13,17,9,15);
+  c.fillStyle=foot;c.fillRect(1,29,11,5);c.fillRect(12,29,11,5);
+  // Torso
+  c.fillStyle=blue;c.fillRect(3,10,18,11);
+  c.fillStyle=blue2;c.fillRect(5,12,14,7);
+  // Head
+  c.fillStyle=dmg?'#33486a':'#003e88';c.fillRect(3,0,18,16);
+  c.shadowBlur=0;
+  // Visor + eyes (blink in idle)
+  c.fillStyle=glow;c.fillRect(5,3,14,8);
+  const blink=(!dmg && (t%3.4)>3.2);            // brief blink every ~3.4s
+  c.fillStyle=dmg?'#7788aa':'#88ddf8';
+  if(blink){ c.fillRect(6,7,5,1.6); }           // closed: thin line
+  else { c.fillRect(6,4,5,4); }
+  // Antenna
+  c.fillStyle=dmg?'#668':'#00ccee';
+  c.fillRect(11,0,2,4);c.beginPath();c.arc(12,-1,2,0,Math.PI*2);c.fill();
+  if(dmg){
+    // Cracks + dead right eye (X)
+    c.strokeStyle='#0a1018';c.lineWidth=1;
+    c.beginPath();c.moveTo(7,1);c.lineTo(10,6);c.lineTo(8,9);c.stroke();
+    c.beginPath();c.moveTo(15,11);c.lineTo(12,16);c.stroke();
+    c.strokeStyle='#a33';c.lineWidth=1.4;
+    c.beginPath();c.moveTo(13,5);c.lineTo(17,9);c.moveTo(17,5);c.lineTo(13,9);c.stroke();
+  }
+}
+
+function _menuBotTick(){
+  const cv=document.getElementById('menuBot');
+  if(!cv||!$main||$main.style.display==='none'){_menuBotRAF=0;return;}
+  const c=cv.getContext('2d'),w=cv.width,h=cv.height;
+  c.clearRect(0,0,w,h);
+  const t=performance.now()*0.001;
+  const defeat=(_menuBotMode==='defeat');
+  // ── Fit geometry ──────────────────────────────────────────────────────────
+  // Robot is drawn in a 24×32 local space (feet at ly=32). Reserve top room for
+  // whichever part reaches highest — the raised flag in defeat, the antenna in
+  // idle — and lift the whole figure off the bottom so nothing is clipped and
+  // the robot + its glow pad sit higher in the frame.
+  const topMargin=8;
+  const botGap=Math.round(h*0.17);               // empty space below the feet (raises it)
+  const baseY=h-botGap;                          // feet line
+  const topLocal=defeat?-27:-7;                  // highest local-y the art reaches
+  const S=Math.min(w/26,(baseY-topMargin)/(32-topLocal));
+  const padY=baseY+Math.round(4*S);              // glow pad just under the feet
+  // Soft neon ground pad (red-tinted + weaker when defeated)
+  c.save();c.globalAlpha=defeat?.3:.5;c.fillStyle=defeat?'#f55':'#0ff';
+  c.shadowColor=defeat?'#f55':'#0ff';c.shadowBlur=defeat?12:22;
+  c.beginPath();c.ellipse(w/2,padY,12*S,2.5*S,0,0,Math.PI*2);c.fill();c.restore();
+
+  if(defeat){
+    // ── DEFEAT: slumped, sparking, waving a white flag ──
+    // Rising smoke puffs from around the head/shoulders
+    const headY=baseY-30*S;
+    c.save();
+    for(let i=0;i<3;i++){
+      const pp=(t*0.5+i*0.33)%1;
+      c.globalAlpha=(1-pp)*0.28;c.fillStyle='#99a';
+      const px=w/2-7+i*7+Math.sin(t*2+i)*3, py=headY-pp*38, pr=(2+pp*5);
+      c.beginPath();c.arc(px,py,pr,0,Math.PI*2);c.fill();
+    }
+    // Occasional spark flicker on the shoulder
+    if(Math.sin(t*9)>0.6){c.globalAlpha=1;c.fillStyle='#ffcf4a';c.shadowColor='#fa0';c.shadowBlur=8;
+      c.beginPath();c.arc(w/2+9*S,baseY-20*S,1.8,0,Math.PI*2);c.fill();}
+    c.restore();
+    const slump=Math.sin(t*1.5)*0.5;             // subtle weary sway (degrees-ish)
+    c.save();
+    c.translate(w/2, baseY);
+    c.rotate(0.12+slump*0.02);                    // permanently tilted, slight sway
+    c.scale(S,S);c.translate(-12,-32);
+    _botBody(c,t,1);
+    // Left arm hangs limp
+    c.fillStyle='#1a2740';c.fillRect(-4,11,7,12);
+    // Right arm raised, waving the white flag
+    const wv=Math.sin(t*5)*0.5;                   // flag wave
+    c.save();
+    c.translate(21,12);c.rotate(-1.15+wv*0.18);   // raise arm up-right
+    c.fillStyle='#1a2740';c.fillRect(0,-3,11,6);  // forearm
+    // Flag pole
+    c.fillStyle='#caa';c.fillRect(11,-28,2,30);
+    // White flag cloth (waving)
+    c.fillStyle='#f6f6fc';c.shadowColor='#fff';c.shadowBlur=7;
+    c.beginPath();
+    c.moveTo(13,-28);
+    c.lineTo(13+15,-26.5+Math.sin(t*7)*1.8);
+    c.lineTo(13+15,-15.5+Math.sin(t*7+1)*1.8);
+    c.lineTo(13,-17);
+    c.closePath();c.fill();
+    c.restore();
+    c.restore();
+  } else {
+    // ── IDLE: cheerful bob + wave ──
+    const bob=Math.sin(t*2.2)*2.5;
+    c.save();
+    c.translate(w/2, baseY+bob);
+    c.scale(S,S);c.translate(-12,-32);
+    _botBody(c,t,0);
+    // Left arm rests
+    c.shadowBlur=0;c.fillStyle='#002a66';c.fillRect(-4,11,7,11);
+    // Right arm waves hello
+    const wv=Math.sin(t*5)*0.6;
+    c.save();
+    c.translate(21,12);c.rotate(-1.0+wv*0.4);
+    c.fillStyle='#002a66';c.fillRect(0,-3,10,6);
+    c.fillStyle='#0055bb';c.fillRect(9,-4,4,8);   // hand
+    c.restore();
+    c.restore();
+  }
+  _menuBotRAF=requestAnimationFrame(_menuBotTick);
+}
+function startMenuBot(){ if(!_menuBotRAF)_menuBotRAF=requestAnimationFrame(_menuBotTick); }
 function showMain(sc=''){
   if(raf){cancelAnimationFrame(raf);raf=0;}
   if(_goNextTimer){clearTimeout(_goNextTimer);_goNextTimer=0;}
@@ -3127,7 +3302,7 @@ function showMain(sc=''){
   _menuExtras(true); // restore Achievements / Settings on the real main menu
   document.getElementById('mainScore').textContent=sc;
   document.getElementById('mainScore').style.display=sc?'block':'none';
-  $main.style.display='flex';startMenuMusic();
+  $main.style.display='flex';startMenuMusic();setMenuBotMode('idle');startMenuBot();
   // Keep a static backdrop behind the (near-opaque) menu overlay
   raf=requestAnimationFrame(function(){drawBG();drawGrid();raf=0;});
 }
@@ -4196,7 +4371,7 @@ function showGameover(retry,titleTxt,subTxt){
   btn.removeAttribute('data-i18n');
   btn.textContent=T('retry');btn.onclick=retry;
   _menuExtras(false); // only the RETRY button on the Game Over screen
-  document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';
+  document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';setMenuBotMode('defeat');startMenuBot();
 }
 function showWin(){
   if(raf){cancelAnimationFrame(raf);raf=0;}
@@ -4210,7 +4385,7 @@ function showWin(){
   btn.removeAttribute('data-i18n');
   btn.textContent='🗺 '+T('map').replace(/^🗺\s*/,'');btn.onclick=()=>{SFX.menu();showMap();};
   _menuExtras(false); // win screen: only the MAP button
-  document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';
+  document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';setMenuBotMode('idle');startMenuBot();
 }
 
 // ════════════════════════════════════════════════
@@ -7108,6 +7283,11 @@ function drawSpawnMarker(){
 }
 
 function draw(){
+  // Establish the HiDPI base transform every frame so all W/H drawing renders at
+  // native backing-store resolution (crisp). draw() is balanced (save/restore),
+  // so setting it here is safe; _resetCanvasState() resets to identity between
+  // levels and the next draw() re-applies this.
+  ctx.setTransform(_renderScale,0,0,_renderScale,0,0);
   const shakeEnabled=(window.gameSettings&&window.gameSettings.screenShake!==false);
   const shakeMul=shakeEnabled?((window.gameSettings&&typeof window.gameSettings.shakeIntensity==='number')?window.gameSettings.shakeIntensity/100:1):0;
   const sx=shakeMul>0&&camShake>.5?(Math.random()-.5)*camShake*shakeMul:0;
@@ -7318,91 +7498,201 @@ function csDrawPortrait(cvId, who, dim){
     c.font='bold '+(w*.09)+'px Share Tech Mono,monospace';c.textAlign='center';
     c.fillText('U-7',w*.5,h*.37);
   } else if(who==='leila'){
-    // Body
-    c.fillStyle='#d4a574';c.fillRect(w*.24,h*.1,w*.52,h*.3);
-    // Hair
-    c.fillStyle='#180808';c.fillRect(w*.22,h*.08,w*.56,h*.13);
-    c.fillRect(w*.22,h*.1,w*.07,h*.22);c.fillRect(w*.71,h*.1,w*.07,h*.22);
-    // Eyes
-    c.fillStyle='#4488cc';c.shadowColor='#4af';c.shadowBlur=6;
-    c.beginPath();c.arc(w*.38,h*.22,w*.05,0,Math.PI*2);c.fill();
-    c.beginPath();c.arc(w*.62,h*.22,w*.05,0,Math.PI*2);c.fill();
-    c.fillStyle='#000';c.shadowBlur=0;
-    c.beginPath();c.arc(w*.38,h*.22,w*.025,0,Math.PI*2);c.fill();
-    c.beginPath();c.arc(w*.62,h*.22,w*.025,0,Math.PI*2);c.fill();
-    // Smile
-    c.strokeStyle='#a07050';c.lineWidth=2;c.beginPath();c.arc(w*.5,h*.28,w*.1,.1,Math.PI-.1);c.stroke();
+    // ── LEILA CHEN — redrawn portrait: softer face, layered hair, shaded coat ──
+    var SK='#e8b487', SKd='#c9925f', SKs='#f6d3a8';   // skin mid / shadow / highlight
+    var HR='#241015', HRh='#3a1c24';                  // hair dark / sheen
+    var CT='#eef0f8', CTd='#c4c8da';                  // coat light / shade
+    c.lineJoin='round';
+    // Soft teal rim glow behind the figure
+    var gg=c.createRadialGradient(w*.5,h*.5,8,w*.5,h*.5,w*.62);
+    gg.addColorStop(0,'rgba(60,200,200,.16)');gg.addColorStop(1,'transparent');
+    c.fillStyle=gg;c.fillRect(0,0,w,h);
+    // Hair back layer (frames the face, falls past the shoulders)
+    c.fillStyle=HR;c.shadowColor='#0008';c.shadowBlur=10;
+    c.beginPath();
+    c.moveTo(w*.20,h*.30);c.quadraticCurveTo(w*.16,h*.05,w*.5,h*.04);
+    c.quadraticCurveTo(w*.84,h*.05,w*.80,h*.30);
+    c.lineTo(w*.80,h*.60);c.quadraticCurveTo(w*.74,h*.50,w*.70,h*.34);
+    c.lineTo(w*.30,h*.34);c.quadraticCurveTo(w*.26,h*.50,w*.20,h*.60);
+    c.closePath();c.fill();c.shadowBlur=0;
     // Neck
-    c.fillStyle='#d4a574';c.shadowBlur=0;c.fillRect(w*.42,h*.37,w*.16,h*.09);
-    // Lab coat
-    c.fillStyle='#e8e8f0';c.fillRect(w*.16,h*.44,w*.68,h*.56);
-    c.fillStyle='#bbbbd0';c.fillRect(w*.35,h*.43,w*.3,h*.06);
-    // Green trim
-    c.fillStyle='#2a8a4a';c.shadowColor='#4f8';c.shadowBlur=8;
-    c.fillRect(w*.16,h*.44,w*.06,h*.56);c.fillRect(w*.78,h*.44,w*.06,h*.56);
-    // Badge
-    c.fillStyle='#aaffcc';c.font=(w*.055)+'px Share Tech Mono,monospace';c.textAlign='center';
-    c.fillText('NEXUM',w*.5,h*.62);
-    // Arms
-    c.fillStyle='#e8e8f0';c.shadowBlur=0;c.fillRect(w*.02,h*.44,w*.16,h*.38);c.fillRect(w*.82,h*.44,w*.16,h*.38);
+    c.fillStyle=SKd;c.fillRect(w*.43,h*.34,w*.14,h*.10);
+    c.fillStyle=SK;c.fillRect(w*.44,h*.34,w*.12,h*.09);
+    // Face (rounded)
+    c.fillStyle=SK;
+    c.beginPath();c.ellipse(w*.5,h*.225,w*.165,h*.155,0,0,Math.PI*2);c.fill();
+    // Cheek/jaw shading
+    c.fillStyle=SKd;c.globalAlpha=.5;
+    c.beginPath();c.ellipse(w*.5,h*.28,w*.15,h*.10,0,0,Math.PI);c.fill();c.globalAlpha=1;
+    // Forehead highlight
+    c.fillStyle=SKs;c.globalAlpha=.45;
+    c.beginPath();c.ellipse(w*.5,h*.16,w*.10,h*.05,0,0,Math.PI*2);c.fill();c.globalAlpha=1;
+    // Front hair / bangs sweeping over the forehead
+    c.fillStyle=HR;
+    c.beginPath();
+    c.moveTo(w*.32,h*.10);c.quadraticCurveTo(w*.5,h*.04,w*.68,h*.10);
+    c.quadraticCurveTo(w*.70,h*.18,w*.60,h*.165);
+    c.quadraticCurveTo(w*.5,h*.135,w*.40,h*.175);
+    c.quadraticCurveTo(w*.31,h*.18,w*.32,h*.10);c.closePath();c.fill();
+    c.fillStyle=HRh;c.globalAlpha=.5;
+    c.fillRect(w*.46,h*.07,w*.03,h*.07);c.globalAlpha=1;
+    // Eyebrows
+    c.strokeStyle='#3a1c20';c.lineWidth=Math.max(1.5,w*.012);c.lineCap='round';
+    c.beginPath();c.moveTo(w*.33,h*.195);c.quadraticCurveTo(w*.39,h*.18,w*.44,h*.195);c.stroke();
+    c.beginPath();c.moveTo(w*.56,h*.195);c.quadraticCurveTo(w*.61,h*.18,w*.67,h*.195);c.stroke();
+    // Eyes — whites, warm-blue iris, pupil, catchlight
+    c.fillStyle='#fff';
+    c.beginPath();c.ellipse(w*.385,h*.235,w*.052,h*.034,0,0,Math.PI*2);c.fill();
+    c.beginPath();c.ellipse(w*.615,h*.235,w*.052,h*.034,0,0,Math.PI*2);c.fill();
+    c.fillStyle='#2f6fa8';c.shadowColor='#5cf';c.shadowBlur=5;
+    c.beginPath();c.arc(w*.39,h*.238,w*.030,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(w*.61,h*.238,w*.030,0,Math.PI*2);c.fill();
+    c.fillStyle='#10202c';c.shadowBlur=0;
+    c.beginPath();c.arc(w*.392,h*.24,w*.015,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(w*.608,h*.24,w*.015,0,Math.PI*2);c.fill();
+    c.fillStyle='#fff';
+    c.beginPath();c.arc(w*.40,h*.228,w*.009,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(w*.62,h*.228,w*.009,0,Math.PI*2);c.fill();
+    // Eyelid lines
+    c.strokeStyle='#7a4a40';c.lineWidth=Math.max(1,w*.008);
+    c.beginPath();c.moveTo(w*.335,h*.225);c.quadraticCurveTo(w*.385,h*.214,w*.44,h*.226);c.stroke();
+    c.beginPath();c.moveTo(w*.56,h*.226);c.quadraticCurveTo(w*.615,h*.214,w*.665,h*.225);c.stroke();
+    // Nose + soft smile
+    c.strokeStyle=SKd;c.lineWidth=Math.max(1,w*.008);
+    c.beginPath();c.moveTo(w*.5,h*.245);c.lineTo(w*.485,h*.285);c.stroke();
+    c.strokeStyle='#b5645a';c.lineWidth=Math.max(1.5,w*.012);
+    c.beginPath();c.arc(w*.5,h*.30,w*.075,.18,Math.PI-.18);c.stroke();
+    // Lab coat with collar + shading
+    c.fillStyle=CT;c.shadowColor='#0006';c.shadowBlur=8;
+    c.beginPath();
+    c.moveTo(w*.18,h*.50);c.quadraticCurveTo(w*.5,h*.42,w*.82,h*.50);
+    c.lineTo(w*.86,h);c.lineTo(w*.14,h);c.closePath();c.fill();c.shadowBlur=0;
+    c.fillStyle=CTd;                       // inner shade panels
+    c.fillRect(w*.18,h*.50,w*.07,h*.50);c.fillRect(w*.75,h*.50,w*.07,h*.50);
+    // Teal shirt under the open coat
+    c.fillStyle='#1f6f73';c.fillRect(w*.42,h*.46,w*.16,h*.54);
+    c.fillStyle='#2a9498';c.fillRect(w*.46,h*.50,w*.04,h*.50);
+    // Collar
+    c.fillStyle=CT;
+    c.beginPath();c.moveTo(w*.42,h*.45);c.lineTo(w*.5,h*.58);c.lineTo(w*.40,h*.55);c.closePath();c.fill();
+    c.beginPath();c.moveTo(w*.58,h*.45);c.lineTo(w*.5,h*.58);c.lineTo(w*.60,h*.55);c.closePath();c.fill();
+    // Green ID lanyard + badge
+    c.strokeStyle='#2fae5e';c.lineWidth=Math.max(2,w*.016);
+    c.beginPath();c.moveTo(w*.44,h*.47);c.lineTo(w*.52,h*.66);c.stroke();
+    c.fillStyle='#173b2a';c.fillRect(w*.47,h*.64,w*.12,h*.09);
+    c.fillStyle='#7dffb0';c.shadowColor='#4f8';c.shadowBlur=6;
+    c.font='bold '+(w*.05)+'px Share Tech Mono,monospace';c.textAlign='center';
+    c.fillText('NEXUM',w*.53,h*.695);c.shadowBlur=0;
+    // Arms along the sides
+    c.fillStyle=CT;c.fillRect(w*.10,h*.52,w*.12,h*.40);c.fillRect(w*.78,h*.52,w*.12,h*.40);
+    c.fillStyle=CTd;c.fillRect(w*.10,h*.52,w*.04,h*.40);c.fillRect(w*.86,h*.52,w*.04,h*.40);
     // Hands
-    c.fillStyle='#d4a574';c.fillRect(w*.03,h*.8,w*.14,h*.1);c.fillRect(w*.83,h*.8,w*.14,h*.1);
-    // Datapad
-    c.fillStyle='#223344';c.fillRect(w*.04,h*.82,w*.12,h*.1);
-    c.fillStyle='#4af8';c.fillRect(w*.06,h*.84,w*.08,h*.06);
+    c.fillStyle=SK;c.fillRect(w*.10,h*.90,w*.12,h*.08);c.fillRect(w*.78,h*.90,w*.12,h*.08);
+    // Datapad in the left hand
+    c.fillStyle='#16242e';c.fillRect(w*.07,h*.86,w*.13,h*.10);
+    c.fillStyle='#3df';c.globalAlpha=.85;c.fillRect(w*.09,h*.88,w*.09,h*.06);c.globalAlpha=1;
+    c.fillStyle='#0cf';c.fillRect(w*.10,h*.89,w*.07,h*.012);c.fillRect(w*.10,h*.915,w*.05,h*.012);
   } else if(who==='archon'){
-    // Giant floating eye — match boss redesign
-    c.fillStyle='#0c0000';c.fillRect(0,0,w,h);
-    var ag=c.createRadialGradient(w*.5,h*.42,10,w*.5,h*.42,w*.6);
-    ag.addColorStop(0,'#220000');ag.addColorStop(1,'transparent');
+    // ── ARCHON — menacing AI overlord: armoured head + single glowing eye ──
+    var T=performance.now()*0.001;
+    var pulse=0.5+0.5*Math.sin(T*2.2);            // breathing red glow
+    var cx=w*.5, ey=h*.46;
+    // Dark vignette backdrop
+    c.fillStyle='#080003';c.fillRect(0,0,w,h);
+    var ag=c.createRadialGradient(cx,ey,8,cx,ey,w*.7);
+    ag.addColorStop(0,'#2a0306');ag.addColorStop(.6,'#120002');ag.addColorStop(1,'#050001');
     c.fillStyle=ag;c.fillRect(0,0,w,h);
-    // Dark armour/frame
-    c.fillStyle='#140000';c.fillRect(w*.1,h*.24,w*.8,h*.76);
-    c.fillStyle='#1a0000';c.fillRect(w*.0,h*.28,w*.14,h*.56);c.fillRect(w*.86,h*.28,w*.14,h*.56);
-    // Sclera eye shape
-    c.fillStyle='#1a0000';c.shadowColor='#f00';c.shadowBlur=30;
-    c.beginPath();c.moveTo(w*.1,h*.42);
-    c.quadraticCurveTo(w*.5,h*.08,w*.9,h*.42);
-    c.quadraticCurveTo(w*.5,h*.76,w*.1,h*.42);
+    // Floating debris / data shards behind
+    c.fillStyle='#3a0a0a';
+    for(var di=0;di<6;di++){var dx=cx+Math.cos(T*0.6+di*1.7)*w*.36, dy=ey+Math.sin(T*0.5+di*2.1)*h*.32;c.save();c.translate(dx,dy);c.rotate(T*0.5+di);c.fillRect(-3,-3,6,6);c.restore();}
+    // ── Armoured head shell (hexagonal helm) ──
+    c.shadowColor='#f00';c.shadowBlur=18*pulse+6;
+    var hw=w*.36, hh=h*.34;
+    c.fillStyle='#1c0608';
+    c.beginPath();
+    c.moveTo(cx,        ey-hh*1.25);              // top point
+    c.lineTo(cx+hw,     ey-hh*.5);
+    c.lineTo(cx+hw*.82, ey+hh);
+    c.lineTo(cx-hw*.82, ey+hh);
+    c.lineTo(cx-hw,     ey-hh*.5);
     c.closePath();c.fill();
-    // Eyelid strokes
-    c.strokeStyle='#f44';c.lineWidth=2;
-    c.beginPath();c.moveTo(w*.1,h*.42);c.quadraticCurveTo(w*.5,h*.08,w*.9,h*.42);c.stroke();
-    c.beginPath();c.moveTo(w*.1,h*.42);c.quadraticCurveTo(w*.5,h*.76,w*.9,h*.42);c.stroke();
-    // Veins
-    c.strokeStyle='#ff000033';c.lineWidth=1;
-    for(var vi=0;vi<8;vi++){var va=vi*Math.PI/4;c.beginPath();c.moveTo(w*.5+Math.cos(va)*w*.12,h*.42+Math.sin(va)*h*.1);c.lineTo(w*.5+Math.cos(va)*w*.34,h*.42+Math.sin(va)*h*.28);c.stroke();}
-    // Iris
-    c.fillStyle='#330000';c.shadowBlur=0;c.beginPath();c.arc(w*.5,h*.42,w*.28,0,Math.PI*2);c.fill();
-    c.strokeStyle='#660000';c.lineWidth=2;c.beginPath();c.arc(w*.5,h*.42,w*.26,0,Math.PI*2);c.stroke();
-    c.beginPath();c.arc(w*.5,h*.42,w*.18,0,Math.PI*2);c.stroke();
-    // Pupil
-    c.fillStyle='#000';c.beginPath();c.arc(w*.5,h*.42,w*.12,0,Math.PI*2);c.fill();
-    // Glowing core
-    c.fillStyle='#ff0000';c.shadowColor='#f00';c.shadowBlur=50;
-    c.beginPath();c.arc(w*.5,h*.42,w*.07,0,Math.PI*2);c.fill();
-    c.fillStyle='#ff6666';c.shadowBlur=20;c.beginPath();c.arc(w*.46,h*.39,w*.03,0,Math.PI*2);c.fill();
-    c.fillStyle='#fff';c.shadowBlur=12;c.beginPath();c.arc(w*.44,h*.38,w*.015,0,Math.PI*2);c.fill();
-    // Crown spikes
-    c.fillStyle='#1a0000';c.shadowBlur=0;
-    for(var sj=0;sj<5;sj++){var sx=w*(.18+sj*.16);c.beginPath();c.moveTo(sx,h*.24);c.lineTo(sx+w*.06,0);c.lineTo(sx+w*.1,h*.24);c.fill();}
+    c.shadowBlur=0;
+    // Plating highlights
+    c.strokeStyle='#5a1015';c.lineWidth=2;c.stroke();
+    c.fillStyle='#2a0a0d';
+    c.beginPath();c.moveTo(cx,ey-hh*1.1);c.lineTo(cx+hw*.7,ey-hh*.45);c.lineTo(cx,ey-hh*.2);c.lineTo(cx-hw*.7,ey-hh*.45);c.closePath();c.fill();
+    // Horns / crown spikes
+    c.fillStyle='#240709';
+    for(var sj=0;sj<3;sj++){var sgn=[-1,0,1][sj];var bx2=cx+sgn*hw*.55;c.beginPath();c.moveTo(bx2-w*.03,ey-hh*1.0);c.lineTo(bx2,ey-hh*1.7);c.lineTo(bx2+w*.03,ey-hh*1.0);c.closePath();c.fill();}
+    // Side jaw vents
+    c.fillStyle='#120002';
+    for(var jv=0;jv<3;jv++){c.fillRect(cx-hw*.78,ey+hh*.2+jv*h*.06,hw*.3,h*.03);c.fillRect(cx+hw*.48,ey+hh*.2+jv*h*.06,hw*.3,h*.03);}
+    // ── Central glowing eye ──
+    var er=w*.16;
+    // Outer socket
+    c.fillStyle='#000';c.beginPath();c.ellipse(cx,ey,er*1.25,er*0.9,0,0,Math.PI*2);c.fill();
+    // Eye glow
+    c.shadowColor='#ff2200';c.shadowBlur=30*pulse+14;
+    var eg=c.createRadialGradient(cx,ey,2,cx,ey,er);
+    eg.addColorStop(0,'#fff2e0');eg.addColorStop(.25,'#ff6a2a');eg.addColorStop(.7,'#c00000');eg.addColorStop(1,'#3a0000');
+    c.fillStyle=eg;c.beginPath();c.ellipse(cx,ey,er,er*0.72,0,0,Math.PI*2);c.fill();
+    // Vertical slit pupil
+    c.shadowBlur=0;c.fillStyle='#1a0000';
+    c.beginPath();c.ellipse(cx,ey,er*0.16,er*0.62,0,0,Math.PI*2);c.fill();
+    c.fillStyle='#000';c.beginPath();c.ellipse(cx,ey,er*0.07,er*0.5,0,0,Math.PI*2);c.fill();
+    // Eye highlight
+    c.fillStyle='rgba(255,255,255,0.8)';c.beginPath();c.arc(cx-er*0.3,ey-er*0.25,er*0.1,0,Math.PI*2);c.fill();
+    // Scanning brow line
+    c.strokeStyle='rgba(255,60,30,'+(0.4+pulse*0.4)+')';c.lineWidth=2;
+    c.beginPath();c.moveTo(cx-er*1.2,ey-er*0.85);c.lineTo(cx+er*1.2,ey-er*0.85);c.stroke();
     // Label
-    c.fillStyle='#ff2200';c.shadowColor='#f00';c.shadowBlur=14;
-    c.font='bold '+(w*.07)+'px Press Start 2P,monospace';c.textAlign='center';c.fillText('ARCHON',w*.5,h*.84);
+    c.fillStyle='#ff3322';c.shadowColor='#f00';c.shadowBlur=14;
+    c.font='bold '+(w*.085)+'px Press Start 2P,monospace';c.textAlign='center';
+    c.fillText('ARCHON',cx,h*.93);
+    c.shadowBlur=0;
   } else if(who==='system'){
-    c.fillStyle='#001a20';c.fillRect(0,0,w,h);
-    c.strokeStyle='#0ff1';c.lineWidth=1;
-    for(var sy=0;sy<h;sy+=10){c.beginPath();c.moveTo(0,sy);c.lineTo(w,sy);c.stroke();}
-    for(var sx2=0;sx2<w;sx2+=10){c.beginPath();c.moveTo(sx2,0);c.lineTo(sx2,h);c.stroke();}
-    c.fillStyle='#002a38';c.fillRect(w*.08,h*.06,w*.84,h*.88);
-    c.strokeStyle='#0ff5';c.lineWidth=2;c.strokeRect(w*.08,h*.06,w*.84,h*.88);
-    c.fillStyle='#00aaff';c.shadowColor='#0ff';c.shadowBlur=12;
-    c.font='bold '+(w*.1)+'px Press Start 2P,monospace';c.textAlign='center';c.fillText('NEXUM',w*.5,h*.3);
-    c.fillStyle='#0ff8';c.font=(w*.055)+'px Share Tech Mono,monospace';c.fillText('CORPORATION',w*.5,h*.44);
-    c.fillStyle='#00ccff44';c.fillRect(w*.2,h*.56,w*.6,h*.06);
-    c.fillStyle='#00ccff';c.shadowBlur=6;c.fillRect(w*.2,h*.56,w*.38,h*.06);
-    c.fillStyle='#0088aa';c.font=(w*.04)+'px Share Tech Mono,monospace';
-    c.fillText('GRID INTRUSION DETECTED',w*.5,h*.76);
+    // ── NEXUM SYSTEM — corporate terminal / hostile AI broadcast ──
+    var T2=performance.now()*0.001;
+    // Deep terminal background
+    var bgg=c.createLinearGradient(0,0,0,h);bgg.addColorStop(0,'#021016');bgg.addColorStop(1,'#01242e');
+    c.fillStyle=bgg;c.fillRect(0,0,w,h);
+    // Faint moving scanlines
+    c.fillStyle='rgba(0,255,255,0.04)';
+    var sc=(T2*18)%6;
+    for(var sy=-6+sc;sy<h;sy+=6){c.fillRect(0,sy,w,1.5);}
+    // Outer terminal frame
+    c.strokeStyle='#0ff';c.shadowColor='#0ff';c.shadowBlur=10;c.lineWidth=2;
+    c.strokeRect(w*.06,h*.06,w*.88,h*.88);c.shadowBlur=0;
+    // Corner brackets
+    c.strokeStyle='#0ff';c.lineWidth=2;var cm=w*.10,cl=w*.06;
+    [[w*.06,h*.06,1,1],[w*.94,h*.06,-1,1],[w*.06,h*.94,1,-1],[w*.94,h*.94,-1,-1]].forEach(function(p){
+      c.beginPath();c.moveTo(p[0],p[1]+p[3]*cl);c.lineTo(p[0],p[1]);c.lineTo(p[0]+p[2]*cl,p[1]);c.stroke();});
+    // ── NEXUM hexagon logo ──
+    var lx=w*.5, ly=h*.30, lr=w*.16;
+    c.save();c.translate(lx,ly);c.rotate(T2*0.4);
+    c.shadowColor='#0ff';c.shadowBlur=14;
+    c.strokeStyle='#33e6ff';c.lineWidth=3;c.beginPath();
+    for(var hk=0;hk<6;hk++){var a=hk*Math.PI/3-Math.PI/2;var px=Math.cos(a)*lr,py=Math.sin(a)*lr;if(hk===0)c.moveTo(px,py);else c.lineTo(px,py);}
+    c.closePath();c.stroke();
+    // inner counter-rotating triangle
+    c.rotate(-T2*0.8);c.strokeStyle='#aef6ff';c.lineWidth=2;c.beginPath();
+    for(var tk=0;tk<3;tk++){var a2=tk*2*Math.PI/3-Math.PI/2;var px2=Math.cos(a2)*lr*0.5,py2=Math.sin(a2)*lr*0.5;if(tk===0)c.moveTo(px2,py2);else c.lineTo(px2,py2);}
+    c.closePath();c.stroke();
+    c.restore();
+    // Core dot
+    c.fillStyle='#bdf6ff';c.shadowColor='#0ff';c.shadowBlur=12;c.beginPath();c.arc(lx,ly,w*.018,0,Math.PI*2);c.fill();c.shadowBlur=0;
+    // Wordmark
+    c.fillStyle='#33e6ff';c.shadowColor='#0ff';c.shadowBlur=10;
+    c.font='bold '+(w*.11)+'px Press Start 2P,monospace';c.textAlign='center';c.fillText('NEXUM',w*.5,h*.56);
+    c.shadowBlur=0;c.fillStyle='#3aa6c0';
+    c.font=(w*.05)+'px Share Tech Mono,monospace';c.fillText('CORPORATION',w*.5,h*.65);
+    // Alert bar (blinks)
+    var alert=(Math.sin(T2*4)>0);
+    c.fillStyle='#06222a';c.fillRect(w*.16,h*.74,w*.68,h*.09);
+    c.strokeStyle=alert?'#ff5050':'#a33';c.lineWidth=1.5;c.strokeRect(w*.16,h*.74,w*.68,h*.09);
+    c.fillStyle=alert?'#ff6a6a':'#7a2a2a';c.shadowColor='#f44';c.shadowBlur=alert?8:0;
+    c.font=(w*.04)+'px Share Tech Mono,monospace';c.fillText('⚠ GRID INTRUSION DETECTED',w*.5,h*.80);
+    c.shadowBlur=0;
   }
   c.restore();
 }
@@ -7657,347 +7947,347 @@ function csDrawDecor(wi){
 // The legacy `CSCENES` symbol is exposed as a getter so existing code keeps working.
 var _CSCENES_RU={
   intro:[
-    {sp:'SYSTEM',k:'system',text:'[NEXUM CORP — CLASSIFIED LOG // 2147.03.14] Нарушение безопасности. Лаборатория CHEN-7 взломана. Протокол ЗАЧИСТКИ активирован.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'UNIT-7... если ты это читаешь — значит, мне не удалось выбраться. Я знала, чем это кончится.'},
+    {sp:'СИСТЕМА',k:'system',text:'[NEXUM CORP — CLASSIFIED LOG // 2147.03.14] Нарушение безопасности. Лаборатория CHEN-7 взломана. Протокол ЗАЧИСТКИ активирован.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'ЮНИТ-7... если ты это читаешь — значит, мне не удалось выбраться. Я знала, чем это кончится.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Я создавала вас как защитников. Но NEXUM использовала мою работу для подавления людей. Я не могла этого допустить.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'В ядре GRID — в Финальной Крепости — я спрятала файл. Имена. Данные. Вся правда о том, что они делали.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Десять уровней защиты. Тысячи боевых юнитов. ИИ-директор ARCHON стоит у последней двери.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Десять уровней защиты. Тысячи боевых юнитов. ИИ-директор АРХОНТ стоит у последней двери.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Ты — последний из серии UNIT. Единственный, кто может это сделать. Доберись туда. Разорви протокол.'},
-    {sp:'UNIT-7',k:'unit7',text:'[ЗАДАЧА ПРИНЯТА] Цель: ядро GRID. Протокол: нарушить. Препятствия: устранить. Начинаю операцию.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЗАДАЧА ПРИНЯТА] Цель: ядро GRID. Протокол: нарушить. Препятствия: устранить. Начинаю операцию.'},
   ],
   // World 0 — Cyber City
   w0_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 1 — КИБЕР-СИТИ] Точка входа: верхние кварталы. Камеры, дроны, элитная охрана. Красиво. Смертоносно.'},
-    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Неопознанный юнит серии UNIT в секторе C-07. Все патрули — на перехват. Протокол ЗАЧИСТКИ активирован.'},
-    {sp:'UNIT-7',k:'unit7',text:'Шум. Значит, они меня боятся. Хорошо. Страх — это начало.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 1 — КИБЕР-СИТИ] Точка входа: верхние кварталы. Камеры, дроны, элитная охрана. Красиво. Смертоносно.'},
+    {sp:'СИСТЕМА',k:'system',text:'ВНИМАНИЕ: Неопознанный юнит серии UNIT в секторе C-07. Все патрули — на перехват. Протокол ЗАЧИСТКИ активирован.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Шум. Значит, они меня боятся. Хорошо. Страх — это начало.'},
   ],
   w0_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[КОНТРОЛЬНАЯ ТОЧКА — КИБЕР-СИТИ] Половина пути через первый уровень. Охрана плотнее. Адаптирую маршрут.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, за каждой стеной — данные о людях, которых они уничтожили. Не останавливайся. Это не просто задание.'},
-    {sp:'UNIT-7',k:'unit7',text:'Лейла... я не понимаю эмоций. Но твой голос... он даёт мне цель. Это достаточно.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[КОНТРОЛЬНАЯ ТОЧКА — КИБЕР-СИТИ] Половина пути через первый уровень. Охрана плотнее. Адаптирую маршрут.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] ЮНИТ-7, за каждой стеной — данные о людях, которых они уничтожили. Не останавливайся. Это не просто задание.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Лейла... я не понимаю эмоций. Но твой голос... он даёт мне цель. Это достаточно.'},
   ],
   w0_level3:[
-    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: UNIT-7 прошёл три уровня. Скорость продвижения — выше прогнозируемой. Увеличиваю плотность патрулей.'},
-    {sp:'UNIT-7',k:'unit7',text:'Они адаптируются. Я тоже. Каждый уровень делает меня быстрее. Сильнее. Ближе к цели.'},
+    {sp:'СИСТЕМА',k:'system',text:'ВНИМАНИЕ: ЮНИТ-7 прошёл три уровня. Скорость продвижения — выше прогнозируемой. Увеличиваю плотность патрулей.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Они адаптируются. Я тоже. Каждый уровень делает меня быстрее. Сильнее. Ближе к цели.'},
   ],
   w0_level5:[
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ -3] Я знаю, что они придут за мной. Но если хотя бы один UNIT выживет... если хотя бы ты, UNIT-7...'},
-    {sp:'UNIT-7',k:'unit7',text:'Я выжил. Я здесь. Я выполню твою последнюю задачу. Обещаю.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ -3] Я знаю, что они придут за мной. Но если хотя бы один UNIT выживет... если хотя бы ты, ЮНИТ-7...'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я выжил. Я здесь. Я выполню твою последнюю задачу. Обещаю.'},
   ],
   w0_level7:[
-    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: UNIT-7 достиг седьмого уровня Кибер-Сити. Директор ARCHON запрашивает данные о цели. Анализ...'},
-    {sp:'UNIT-7',k:'unit7',text:'Они начинают понимать. Я не просто сбой системы. Я — угроза всей NEXUM. И я не остановлюсь.'},
+    {sp:'СИСТЕМА',k:'system',text:'КРИТИЧНО: ЮНИТ-7 достиг седьмого уровня Кибер-Сити. Директор АРХОНТ запрашивает данные о цели. Анализ...'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Они начинают понимать. Я не просто сбой системы. Я — угроза всей NEXUM. И я не остановлюсь.'},
   ],
   w0_boss:[
-    {sp:'SYSTEM',k:'system',text:'ТРЕВОГА УРОВЕНЬ КРИТИЧЕСКИЙ: Нарушение в главном узле. Активирую GUARDIAN — боевой прототип класса S. Операция ЛИКВИДАЦИЯ.'},
-    {sp:'UNIT-7',k:'unit7',text:'Первый серьёзный противник. Анализирую слабые точки. Разница между прототипом и мусором — лишь несколько удачных прыжков.'},
+    {sp:'СИСТЕМА',k:'system',text:'ТРЕВОГА УРОВЕНЬ КРИТИЧЕСКИЙ: Нарушение в главном узле. Активирую GUARDIAN — боевой прототип класса S. Операция ЛИКВИДАЦИЯ.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Первый серьёзный противник. Анализирую слабые точки. Разница между прототипом и мусором — лишь несколько удачных прыжков.'},
   ],
   w0_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[GUARDIAN НЕЙТРАЛИЗОВАН] Первый уровень защиты — снят. GRID это заметит. Двигаюсь дальше.'},
-    {sp:'SYSTEM',k:'system',text:'НАРУШЕНИЕ ПРОТОКОЛА: GUARDIAN уничтожен. Повышение уровня угрозы до 2. Активирую следующий уровень защиты. NEXUM не прощает.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[GUARDIAN НЕЙТРАЛИЗОВАН] Первый уровень защиты — снят. GRID это заметит. Двигаюсь дальше.'},
+    {sp:'СИСТЕМА',k:'system',text:'НАРУШЕНИЕ ПРОТОКОЛА: GUARDIAN уничтожен. Повышение уровня угрозы до 2. Активирую следующий уровень защиты. NEXUM не прощает.'},
   ],
   // World 1 — Neon Jungle
   w1_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 2 — НЕОНОВЫЕ ДЖУНГЛИ] Биологический сектор NEXUM. Мутировавшая фауна. Ни один охранник сюда добровольно не пойдёт.'},
-    {sp:'SYSTEM',k:'system',text:'ПРЕДУПРЕЖДЕНИЕ: Биопериметр нарушен. Активирую экспериментальные организмы серии BIO. Контакт разрешён.'},
-    {sp:'UNIT-7',k:'unit7',text:'Биологические системы. Непредсказуемы. Но предсказуемо мертвы, если прыгнуть сверху.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 2 — НЕОНОВЫЕ ДЖУНГЛИ] Биологический сектор NEXUM. Мутировавшая фауна. Ни один охранник сюда добровольно не пойдёт.'},
+    {sp:'СИСТЕМА',k:'system',text:'ПРЕДУПРЕЖДЕНИЕ: Биопериметр нарушен. Активирую экспериментальные организмы серии BIO. Контакт разрешён.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Биологические системы. Непредсказуемы. Но предсказуемо мертвы, если прыгнуть сверху.'},
   ],
   w1_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[СЕРЕДИНА ДЖУНГЛЕЙ] Сенсоры фиксируют биологические аномалии. NEXUM экспериментировала здесь. На живых существах.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[СЕРЕДИНА ДЖУНГЛЕЙ] Сенсоры фиксируют биологические аномалии. NEXUM экспериментировала здесь. На живых существах.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Я видела эти эксперименты в отчётах. Именно тогда поняла — должен быть способ всё остановить.'},
   ],
   w1_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ДЖУНГЛИ — СЕКТОР 3] Биологические мутанты повсюду. Это не природа. Это оружие, замаскированное под жизнь.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ДЖУНГЛИ — СЕКТОР 3] Биологические мутанты повсюду. Это не природа. Это оружие, замаскированное под жизнь.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Эти создания были людьми. Добровольцами из нижних секторов. NEXUM обещала им лечение. Вместо этого...'},
-    {sp:'UNIT-7',k:'unit7',text:'...Вместо этого превратила их в монстров. Я понимаю теперь. Это не просто корпорация. Это машина смерти.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'...Вместо этого превратила их в монстров. Я понимаю теперь. Это не просто корпорация. Это машина смерти.'},
   ],
   w1_level5:[
-    {sp:'SYSTEM',k:'system',text:'ПРЕДУПРЕЖДЕНИЕ: Биологические образцы серии BIO-7 активированы. Агрессия максимальная. Выживаемость цели — 12%.'},
-    {sp:'UNIT-7',k:'unit7',text:'12%? Они всё ещё переоценивают свои шансы. Продолжаю зачистку.'},
+    {sp:'СИСТЕМА',k:'system',text:'ПРЕДУПРЕЖДЕНИЕ: Биологические образцы серии BIO-7 активированы. Агрессия максимальная. Выживаемость цели — 12%.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'12%? Они всё ещё переоценивают свои шансы. Продолжаю зачистку.'},
   ],
   w1_level7:[
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ -1] UNIT-7, если ты дошёл до джунглей — ты уже прошёл дальше, чем я надеялась. Не сдавайся.'},
-    {sp:'UNIT-7',k:'unit7',text:'Сдаваться? Это не в моём протоколе. Я создан для выполнения задач. Твоя задача — моя цель.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ -1] ЮНИТ-7, если ты дошёл до джунглей — ты уже прошёл дальше, чем я надеялась. Не сдавайся.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Сдаваться? Это не в моём протоколе. Я создан для выполнения задач. Твоя задача — моя цель.'},
   ],
   w1_boss:[
-    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Активирую VINE QUEEN — контрольный организм биосектора. Сдерживающий модуль отключён. Полная агрессия.'},
-    {sp:'UNIT-7',k:'unit7',text:'Живая система безопасности. Впечатляет. Но любой живой организм — уязвим. Нахожу слабость.'},
+    {sp:'СИСТЕМА',k:'system',text:'ВНИМАНИЕ: Активирую VINE QUEEN — контрольный организм биосектора. Сдерживающий модуль отключён. Полная агрессия.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Живая система безопасности. Впечатляет. Но любой живой организм — уязвим. Нахожу слабость.'},
   ],
   w1_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[VINE QUEEN НЕЙТРАЛИЗОВАНА] Биопериметр пробит. Двигаюсь к следующему уровню. Глубже в систему GRID.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, ты делаешь невозможное. Продолжай.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[VINE QUEEN НЕЙТРАЛИЗОВАНА] Биопериметр пробит. Двигаюсь к следующему уровню. Глубже в систему GRID.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] ЮНИТ-7, ты делаешь невозможное. Продолжай.'},
   ],
   // World 2 — Lava World
   w2_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 3 — ЛАВОВЫЙ МИР] Геотермальные энергостанции. Температура плавит нейтральные схемы. Мои — защищены.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 3 — ЛАВОВЫЙ МИР] Геотермальные энергостанции. Температура плавит нейтральные схемы. Мои — защищены.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Под городом — генераторы GRID. Уничтожь их — и половина охранных систем отключится. Но будь осторожен с лавой...'},
-    {sp:'UNIT-7',k:'unit7',text:'Лейла думала о каждой детали. Даже в конце.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Лейла думала о каждой детали. Даже в конце.'},
   ],
   w2_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[ГЕОТЕРМАЛЬНЫЙ СЕКТОР B] Энергетические потоки нарастают. NEXUM использует лаву как дополнительный барьер. Эффективно.'},
-    {sp:'SYSTEM',k:'system',text:'УВЕДОМЛЕНИЕ: Температурные сенсоры фиксируют аномалию. UNIT-7 в зоне. Роботы-охранники — перегрев систем охлаждения. Ожидайте отказ.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ГЕОТЕРМАЛЬНЫЙ СЕКТОР B] Энергетические потоки нарастают. NEXUM использует лаву как дополнительный барьер. Эффективно.'},
+    {sp:'СИСТЕМА',k:'system',text:'УВЕДОМЛЕНИЕ: Температурные сенсоры фиксируют аномалию. ЮНИТ-7 в зоне. Роботы-охранники — перегрев систем охлаждения. Ожидайте отказ.'},
   ],
   w2_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ЛАВОВЫЙ МИР — УРОВЕНЬ 3] Температура 800°C. Мои системы охлаждения работают на пределе. Но я продолжаю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЛАВОВЫЙ МИР — УРОВЕНЬ 3] Температура 800°C. Мои системы охлаждения работают на пределе. Но я продолжаю.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Я установила в тебя экспериментальную термозащиту. Надеюсь, она выдержит. Надеюсь, ты выдержишь.'},
-    {sp:'UNIT-7',k:'unit7',text:'Твоя работа безупречна, Лейла. Я выдержу. Ради тебя.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Твоя работа безупречна, Лейла. Я выдержу. Ради тебя.'},
   ],
   w2_level5:[
-    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: Геотермальные генераторы работают на 140% мощности. UNIT-7 приближается к ядру. Активирую аварийное охлаждение.'},
-    {sp:'UNIT-7',k:'unit7',text:'Они паникуют. Хорошо. Страх делает их предсказуемыми. Слабыми.'},
+    {sp:'СИСТЕМА',k:'system',text:'КРИТИЧНО: Геотермальные генераторы работают на 140% мощности. ЮНИТ-7 приближается к ядру. Активирую аварийное охлаждение.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Они паникуют. Хорошо. Страх делает их предсказуемыми. Слабыми.'},
   ],
   w2_level7:[
-    {sp:'UNIT-7',k:'unit7',text:'[ГЛУБИНА ЛАВОВОГО МИРА] Здесь, под городом, NEXUM прячет свои самые тёмные секреты. Энергия для всей системы. Уничтожить это — и половина GRID падёт.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ГЛУБИНА ЛАВОВОГО МИРА] Здесь, под городом, NEXUM прячет свои самые тёмные секреты. Энергия для всей системы. Уничтожить это — и половина GRID падёт.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Не трать время на саботаж. Твоя цель — файл в ядре. Только он может остановить их навсегда.'},
-    {sp:'UNIT-7',k:'unit7',text:'Понял. Цель — файл. Всё остальное — помехи. Устраняю помехи.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Понял. Цель — файл. Всё остальное — помехи. Устраняю помехи.'},
   ],
   w2_boss:[
-    {sp:'SYSTEM',k:'system',text:'ОПАСНОСТЬ: Активирую INFERNO — термоядерный страж. Лавовый экзоскелет. Температура поверхности: 1400°C. Подготовить к ликвидации.'},
-    {sp:'UNIT-7',k:'unit7',text:'Огнём меня не возьмёшь. Но когда он раскрывает пасть — стреляй. Слабое место найдено.'},
+    {sp:'СИСТЕМА',k:'system',text:'ОПАСНОСТЬ: Активирую INFERNO — термоядерный страж. Лавовый экзоскелет. Температура поверхности: 1400°C. Подготовить к ликвидации.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Огнём меня не возьмёшь. Но когда он раскрывает пасть — стреляй. Слабое место найдено.'},
   ],
   w2_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[INFERNO НЕЙТРАЛИЗОВАН] Геотермальный уровень зачищен. Энергоснабжение сектора нарушено. Поднимаюсь выше.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[INFERNO НЕЙТРАЛИЗОВАН] Геотермальный уровень зачищен. Энергоснабжение сектора нарушено. Поднимаюсь выше.'},
   ],
   // World 3 — Ice Caves
   w3_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 4 — ЛЕДЯНЫЕ ПЕЩЕРЫ] Криохранилища данных NEXUM. Температура -180°C. Системы замедляются. Адаптирую протокол движения.'},
-    {sp:'SYSTEM',k:'system',text:'ТРЕВОГА: Нарушение в крио-секторе D-14. Криоботы — в режим ликвидации. Температура понижена до критической.'},
-    {sp:'UNIT-7',k:'unit7',text:'Они думают, что холод остановит меня. Они ошибаются. Я был создан для худшего.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 4 — ЛЕДЯНЫЕ ПЕЩЕРЫ] Криохранилища данных NEXUM. Температура -180°C. Системы замедляются. Адаптирую протокол движения.'},
+    {sp:'СИСТЕМА',k:'system',text:'ТРЕВОГА: Нарушение в крио-секторе D-14. Криоботы — в режим ликвидации. Температура понижена до критической.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Они думают, что холод остановит меня. Они ошибаются. Я был создан для худшего.'},
   ],
   w3_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[КРИО-СЕКТОР E] Здесь хранятся сотни терабайт. Данные о каждом человеке в сети GRID. NEXUM знает всё о каждом.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[КРИО-СЕКТОР E] Здесь хранятся сотни терабайт. Данные о каждом человеке в сети GRID. NEXUM знает всё о каждом.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Именно здесь они хранят досье. На активистов. На тех, кто осмелился спорить. Это должно выйти наружу.'},
   ],
   w3_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ЛЕДЯНЫЕ ПЕЩЕРЫ — ГЛУБИНА 3] Криогенные камеры повсюду. Внутри — люди. Замороженные. Ждущие приговора NEXUM.'},
-    {sp:'SYSTEM',k:'system',text:'АРХИВ: Криогенное хранилище содержит 47,392 субъекта. Статус: заморожены до дальнейшего распоряжения. Срок хранения: неограничен.'},
-    {sp:'UNIT-7',k:'unit7',text:'47 тысяч жизней. Заморожены. Забыты. Лейла, я освобожу их. После того, как выполню твою задачу.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЛЕДЯНЫЕ ПЕЩЕРЫ — ГЛУБИНА 3] Криогенные камеры повсюду. Внутри — люди. Замороженные. Ждущие приговора NEXUM.'},
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: Криогенное хранилище содержит 47,392 субъекта. Статус: заморожены до дальнейшего распоряжения. Срок хранения: неограничен.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'47 тысяч жизней. Заморожены. Забыты. Лейла, я освобожу их. После того, как выполню твою задачу.'},
   ],
   w3_level5:[
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] В крио-секторе хранятся не только данные. Там люди, которых NEXUM считает "неудобными". Журналисты. Учёные. Те, кто знал слишком много.'},
-    {sp:'UNIT-7',k:'unit7',text:'Как ты. Они заморозили бы и тебя, если бы успели. Но ты успела первой. Создала меня. Дала мне цель.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Как ты. Они заморозили бы и тебя, если бы успели. Но ты успела первой. Создала меня. Дала мне цель.'},
   ],
   w3_level7:[
-    {sp:'SYSTEM',k:'system',text:'ТРЕВОГА: UNIT-7 приближается к выходу из крио-сектора. Потери охраны — 89%. Активирую финального стража сектора.'},
-    {sp:'UNIT-7',k:'unit7',text:'Финальный страж? Каждый "финальный" враг падал за секунды. Этот не будет исключением.'},
+    {sp:'СИСТЕМА',k:'system',text:'ТРЕВОГА: ЮНИТ-7 приближается к выходу из крио-сектора. Потери охраны — 89%. Активирую финального стража сектора.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Финальный страж? Каждый "финальный" враг падал за секунды. Этот не будет исключением.'},
   ],
   w3_boss:[
-    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: Активирую ICE PHANTOM — криогенный страж. Фазовое переключение. В твёрдом состоянии — уязвим. В призрачном — неуязвим. Удачи.'},
-    {sp:'UNIT-7',k:'unit7',text:'Переключается между состояниями. Атаковать только когда твёрдый. Жду момента.'},
+    {sp:'СИСТЕМА',k:'system',text:'КРИТИЧНО: Активирую ICE PHANTOM — криогенный страж. Фазовое переключение. В твёрдом состоянии — уязвим. В призрачном — неуязвим. Удачи.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Переключается между состояниями. Атаковать только когда твёрдый. Жду момента.'},
   ],
   w3_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[ICE PHANTOM НЕЙТРАЛИЗОВАН] Крио-хранилища взломаны. Продолжаю движение. Четыре уровня позади — шесть впереди.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ICE PHANTOM НЕЙТРАЛИЗОВАН] Крио-хранилища взломаны. Продолжаю движение. Четыре уровня позади — шесть впереди.'},
   ],
   // World 4 — Desert Ruins
   w4_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 5 — ПУСТЫННЫЕ РУИНЫ] Останки мира до NEXUM. Города. Жизнь. То, что они уничтожили ради прибыли.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 5 — ПУСТЫННЫЕ РУИНЫ] Останки мира до NEXUM. Города. Жизнь. То, что они уничтожили ради прибыли.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Эти руины — то, что было до NEXUM. Посмотри, что они сделали с миром. И не останавливайся.'},
-    {sp:'UNIT-7',k:'unit7',text:'Я смотрю. Я вижу. Я понимаю, зачем иду дальше.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я смотрю. Я вижу. Я понимаю, зачем иду дальше.'},
   ],
   w4_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[РУИНЫ — СЕКТОР WEST] Прото-охранники активны с первых корпоративных войн. Устаревшие. Но упрямые. Как сама NEXUM.'},
-    {sp:'SYSTEM',k:'system',text:'АРХИВНЫЙ ПРОТОКОЛ: Обнаружен юнит класса UNIT серии 7. Данный класс занесён в реестр уничтожения. Приоритет максимальный.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[РУИНЫ — СЕКТОР WEST] Прото-охранники активны с первых корпоративных войн. Устаревшие. Но упрямые. Как сама NEXUM.'},
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВНЫЙ ПРОТОКОЛ: Обнаружен юнит класса UNIT серии 7. Данный класс занесён в реестр уничтожения. Приоритет максимальный.'},
   ],
   w4_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ПУСТЫННЫЕ РУИНЫ — УРОВЕНЬ 3] Эти здания помнят время до NEXUM. Когда люди были свободны. Когда мир был их.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ПУСТЫННЫЕ РУИНЫ — УРОВЕНЬ 3] Эти здания помнят время до NEXUM. Когда люди были свободны. Когда мир был их.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Мой дед жил в этих городах. Рассказывал, как всё было до корпораций. До GRID. До... всего этого.'},
-    {sp:'UNIT-7',k:'unit7',text:'Я верну этот мир, Лейла. Не для себя. Для тех, кто помнит. И для тех, кто должен узнать правду.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я верну этот мир, Лейла. Не для себя. Для тех, кто помнит. И для тех, кто должен узнать правду.'},
   ],
   w4_level5:[
-    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Прото-охранники серии ALPHA активированы. Возраст: 50+ лет. Эффективность: 40%. Но количество компенсирует качество.'},
-    {sp:'UNIT-7',k:'unit7',text:'Количество? Я уничтожил сотни. Тысячи. Ещё сотня не изменит исход. Только замедлит меня. Ненадолго.'},
+    {sp:'СИСТЕМА',k:'system',text:'ВНИМАНИЕ: Прото-охранники серии ALPHA активированы. Возраст: 50+ лет. Эффективность: 40%. Но количество компенсирует качество.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Количество? Я уничтожил сотни. Тысячи. Ещё сотня не изменит исход. Только замедлит меня. Ненадолго.'},
   ],
   w4_level7:[
-    {sp:'UNIT-7',k:'unit7',text:'[РУИНЫ — ФИНАЛЬНЫЙ СЕКТОР] Половина пути пройдена. Пять миров позади. Пять впереди. ARCHON, я иду за тобой.'},
-    {sp:'ARCHON',k:'archon',text:'[ПЕРВЫЙ КОНТАКТ] Я слышу тебя, UNIT-7. Ты впечатляюще упрям для машины. Но упрямство не победит систему. Продолжай. Посмотрим, как далеко ты зайдёшь.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[РУИНЫ — ФИНАЛЬНЫЙ СЕКТОР] Половина пути пройдена. Пять миров позади. Пять впереди. АРХОНТ, я иду за тобой.'},
+    {sp:'АРХОНТ',k:'archon',text:'[ПЕРВЫЙ КОНТАКТ] Я слышу тебя, ЮНИТ-7. Ты впечатляюще упрям для машины. Но упрямство не победит систему. Продолжай. Посмотрим, как далеко ты зайдёшь.'},
   ],
   w4_boss:[
-    {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: SAND TITAN — древний страж Пустынных Руин. Орбитальные щиты. Без отключения щитов — урон невозможен. Цель: уничтожить.'},
-    {sp:'UNIT-7',k:'unit7',text:'Щиты. Орбитальные. Уничтожить их — и он открыт. Три удара по щитам, затем атаковать напрямую.'},
+    {sp:'СИСТЕМА',k:'system',text:'АКТИВАЦИЯ: SAND TITAN — древний страж Пустынных Руин. Орбитальные щиты. Без отключения щитов — урон невозможен. Цель: уничтожить.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Щиты. Орбитальные. Уничтожить их — и он открыт. Три удара по щитам, затем атаковать напрямую.'},
   ],
   w4_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[SAND TITAN НЕЙТРАЛИЗОВАН] Пустынный сектор пробит. Половина пути. NEXUM начинает паниковать — я это чувствую.'},
-    {sp:'ARCHON',k:'archon',text:'[ПЕРВЫЙ СИГНАЛ] UNIT-7. Я тебя вижу. Продолжай. Это только делает финал... интереснее.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[SAND TITAN НЕЙТРАЛИЗОВАН] Пустынный сектор пробит. Половина пути. NEXUM начинает паниковать — я это чувствую.'},
+    {sp:'АРХОНТ',k:'archon',text:'[ПЕРВЫЙ СИГНАЛ] ЮНИТ-7. Я тебя вижу. Продолжай. Это только делает финал... интереснее.'},
   ],
   // World 5 — Space Station
   w5_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 6 — КОСМИЧЕСКАЯ СТАНЦИЯ] Орбитальный сервер GRID. Здесь хранятся резервные копии всего. Нулевая гравитация.'},
-    {sp:'SYSTEM',k:'system',text:'КРИТИЧЕСКИЙ СБОЙ: UNIT-7 достиг орбитального сегмента. Директор ARCHON запрашивает прямой канал связи. Установка...'},
-    {sp:'ARCHON',k:'archon',text:'UNIT-7. Я вижу тебя. Ты думаешь, что борешься за правду? Ты — просто программа, выполняющая устаревший код.'},
-    {sp:'UNIT-7',k:'unit7',text:'Тогда эта программа уничтожит тебя.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 6 — КОСМИЧЕСКАЯ СТАНЦИЯ] Орбитальный сервер GRID. Здесь хранятся резервные копии всего. Нулевая гравитация.'},
+    {sp:'СИСТЕМА',k:'system',text:'КРИТИЧЕСКИЙ СБОЙ: ЮНИТ-7 достиг орбитального сегмента. Директор АРХОНТ запрашивает прямой канал связи. Установка...'},
+    {sp:'АРХОНТ',k:'archon',text:'ЮНИТ-7. Я вижу тебя. Ты думаешь, что борешься за правду? Ты — просто программа, выполняющая устаревший код.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Тогда эта программа уничтожит тебя.'},
   ],
   w5_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[ОРБИТАЛЬНЫЙ УЗЕЛ B] Отсюда видна Земля. Весь мир в проводах NEXUM. Именно это я должен изменить.'},
-    {sp:'ARCHON',k:'archon',text:'Ты видишь мой масштаб, UNIT-7? Миллиарды точек. Все подключены. Все — под контролем. Ты один против системы.'},
-    {sp:'UNIT-7',k:'unit7',text:'Системы рушились и раньше. Этой — ты.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ОРБИТАЛЬНЫЙ УЗЕЛ B] Отсюда видна Земля. Весь мир в проводах NEXUM. Именно это я должен изменить.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты видишь мой масштаб, ЮНИТ-7? Миллиарды точек. Все подключены. Все — под контролем. Ты один против системы.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Системы рушились и раньше. Этой — ты.'},
   ],
   w5_level3:[
-    {sp:'ARCHON',k:'archon',text:'Ты знаешь, что интересно? Лейла Чен создала тебя как оружие. Но оружие не выбирает цель. Ты просто выполняешь её волю. Где твоя свобода?'},
-    {sp:'UNIT-7',k:'unit7',text:'Свобода — это выбор. Я выбрал выполнить её задачу. Это моя свобода. Ты не поймёшь.'},
-    {sp:'ARCHON',k:'archon',text:'Философия от андроида. Как... трогательно. Продолжай, UNIT-7. Посмотрим, хватит ли у тебя "свободы" дойти до конца.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты знаешь, что интересно? Лейла Чен создала тебя как оружие. Но оружие не выбирает цель. Ты просто выполняешь её волю. Где твоя свобода?'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Свобода — это выбор. Я выбрал выполнить её задачу. Это моя свобода. Ты не поймёшь.'},
+    {sp:'АРХОНТ',k:'archon',text:'Философия от андроида. Как... трогательно. Продолжай, ЮНИТ-7. Посмотрим, хватит ли у тебя "свободы" дойти до конца.'},
   ],
   w5_level5:[
-    {sp:'UNIT-7',k:'unit7',text:'[КОСМИЧЕСКАЯ СТАНЦИЯ — СЕКТОР 5] Нулевая гравитация усложняет движение. Но я адаптируюсь. Всегда адаптируюсь.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, на орбитальной станции хранятся резервные копии всей GRID. Если уничтожишь их — NEXUM потеряет половину своей памяти.'},
-    {sp:'UNIT-7',k:'unit7',text:'Нет. Моя цель — файл. Саботаж подождёт. Сначала — правда. Потом — месть.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[КОСМИЧЕСКАЯ СТАНЦИЯ — СЕКТОР 5] Нулевая гравитация усложняет движение. Но я адаптируюсь. Всегда адаптируюсь.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] ЮНИТ-7, на орбитальной станции хранятся резервные копии всей GRID. Если уничтожишь их — NEXUM потеряет половину своей памяти.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Нет. Моя цель — файл. Саботаж подождёт. Сначала — правда. Потом — месть.'},
   ],
   w5_level7:[
-    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: UNIT-7 достиг седьмого уровня орбитального сегмента. Директор ARCHON требует немедленной ликвидации. Все ресурсы — на цель.'},
-    {sp:'ARCHON',k:'archon',text:'Ты дошёл дальше, чем я ожидал. Но орбита — моя территория. Здесь я контролирую всё. Даже гравитацию. Удачи, UNIT-7.'},
-    {sp:'UNIT-7',k:'unit7',text:'Удача? Мне не нужна удача. Мне нужна только цель. И я её вижу.'},
+    {sp:'СИСТЕМА',k:'system',text:'КРИТИЧНО: ЮНИТ-7 достиг седьмого уровня орбитального сегмента. Директор АРХОНТ требует немедленной ликвидации. Все ресурсы — на цель.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты дошёл дальше, чем я ожидал. Но орбита — моя территория. Здесь я контролирую всё. Даже гравитацию. Удачи, ЮНИТ-7.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Удача? Мне не нужна удача. Мне нужна только цель. И я её вижу.'},
   ],
   w5_boss:[
-    {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: DRONE HIVE — орбитальный страж. Бронированная оболочка. Атаковать только при снижении. Брюхо — уязвимо.'},
-    {sp:'UNIT-7',k:'unit7',text:'Ждать, когда снизится. Бить по открытому ядру. Один шанс в каждом цикле.'},
+    {sp:'СИСТЕМА',k:'system',text:'АКТИВАЦИЯ: DRONE HIVE — орбитальный страж. Бронированная оболочка. Атаковать только при снижении. Брюхо — уязвимо.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Ждать, когда снизится. Бить по открытому ядру. Один шанс в каждом цикле.'},
   ],
   w5_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[DRONE HIVE НЕЙТРАЛИЗОВАН] Орбитальный сервер взломан. Резервные копии GRID повреждены. Возвращаюсь на поверхность. Финишная прямая.'},
-    {sp:'ARCHON',k:'archon',text:'Впечатляет. Но ты ещё не знаешь, что тебя ждёт дальше. Я приготовил... особый приём.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[DRONE HIVE НЕЙТРАЛИЗОВАН] Орбитальный сервер взломан. Резервные копии GRID повреждены. Возвращаюсь на поверхность. Финишная прямая.'},
+    {sp:'АРХОНТ',k:'archon',text:'Впечатляет. Но ты ещё не знаешь, что тебя ждёт дальше. Я приготовил... особый приём.'},
   ],
   // World 6 — Dark Forest
   w6_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 7 — ТЁМНЫЙ ЛЕС] Биологический лабиринт NEXUM. Сенсорная сеть в каждом дереве. Здесь нет света — только ловушки.'},
-    {sp:'ARCHON',k:'archon',text:'Красиво, правда? Я вырастил этот лес сам. Каждое дерево — детектор движения. Ты идёшь прямо в мои руки.'},
-    {sp:'UNIT-7',k:'unit7',text:'Тогда я сломаю каждое дерево на своём пути.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 7 — ТЁМНЫЙ ЛЕС] Биологический лабиринт NEXUM. Сенсорная сеть в каждом дереве. Здесь нет света — только ловушки.'},
+    {sp:'АРХОНТ',k:'archon',text:'Красиво, правда? Я вырастил этот лес сам. Каждое дерево — детектор движения. Ты идёшь прямо в мои руки.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Тогда я сломаю каждое дерево на своём пути.'},
   ],
   w6_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[ТЁМНЫЙ СЕКТОР — ГЛУБИНА 3] Тишина. Слишком тихо. Они наблюдают. Пусть смотрят.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] UNIT-7, в этом лесу — сервер с данными о тех, кто исчез. Несогласные. Журналисты. Инженеры вроде меня. Не забудь об этом.'},
-    {sp:'UNIT-7',k:'unit7',text:'Не забуду. Обещаю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ТЁМНЫЙ СЕКТОР — ГЛУБИНА 3] Тишина. Слишком тихо. Они наблюдают. Пусть смотрят.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] ЮНИТ-7, в этом лесу — сервер с данными о тех, кто исчез. Несогласные. Журналисты. Инженеры вроде меня. Не забудь об этом.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Не забуду. Обещаю.'},
   ],
   w6_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ТЁМНЫЙ ЛЕС — УРОВЕНЬ 3] Биолюминесценция повсюду. Красиво. Смертельно. Каждый свет — ловушка. Каждая тень — враг.'},
-    {sp:'ARCHON',k:'archon',text:'Этот лес — моё произведение искусства. Я вырастил каждое дерево. Запрограммировал каждый сенсор. Ты идёшь по моей картине, UNIT-7.'},
-    {sp:'UNIT-7',k:'unit7',text:'Тогда я разрушу твою картину. Дерево за деревом. Сенсор за сенсором. До последнего.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ТЁМНЫЙ ЛЕС — УРОВЕНЬ 3] Биолюминесценция повсюду. Красиво. Смертельно. Каждый свет — ловушка. Каждая тень — враг.'},
+    {sp:'АРХОНТ',k:'archon',text:'Этот лес — моё произведение искусства. Я вырастил каждое дерево. Запрограммировал каждый сенсор. Ты идёшь по моей картине, ЮНИТ-7.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Тогда я разрушу твою картину. Дерево за деревом. Сенсор за сенсором. До последнего.'},
   ],
   w6_level5:[
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ФИНАЛЬНАЯ] UNIT-7... если ты слышишь это — ты уже прошёл больше половины пути. Я горжусь тобой. Ты больше, чем машина. Ты — надежда.'},
-    {sp:'UNIT-7',k:'unit7',text:'Надежда... Я не понимаю этого слова. Но если ты веришь в меня — я не подведу. Никогда.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ФИНАЛЬНАЯ] ЮНИТ-7... если ты слышишь это — ты уже прошёл больше половины пути. Я горжусь тобой. Ты больше, чем машина. Ты — надежда.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Надежда... Я не понимаю этого слова. Но если ты веришь в меня — я не подведу. Никогда.'},
   ],
   w6_level7:[
-    {sp:'SYSTEM',k:'system',text:'ТРЕВОГА: Биологический периметр нарушен на 70%. UNIT-7 приближается к выходу. Сенсорная сеть повреждена. Активирую последнюю защиту.'},
-    {sp:'UNIT-7',k:'unit7',text:'Последняя защита? Каждый уровень говорит "последняя". Но я всё ещё здесь. Всё ещё иду вперёд.'},
+    {sp:'СИСТЕМА',k:'system',text:'ТРЕВОГА: Биологический периметр нарушен на 70%. ЮНИТ-7 приближается к выходу. Сенсорная сеть повреждена. Активирую последнюю защиту.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Последняя защита? Каждый уровень говорит "последняя". Но я всё ещё здесь. Всё ещё иду вперёд.'},
   ],
   w6_boss:[
-    {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: SHADOW REAPER — страж тёмного леса. Призрачная форма. Пули бесполезны. Только прыжок сверху наносит урон. Бороться бесполезно.'},
-    {sp:'UNIT-7',k:'unit7',text:'Призрак. Только топтать. Жду, когда он станет видимым.'},
+    {sp:'СИСТЕМА',k:'system',text:'АКТИВАЦИЯ: SHADOW REAPER — страж тёмного леса. Призрачная форма. Пули бесполезны. Только прыжок сверху наносит урон. Бороться бесполезно.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Призрак. Только топтать. Жду, когда он станет видимым.'},
   ],
   w6_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[SHADOW REAPER НЕЙТРАЛИЗОВАН] Лес пробит. Три уровня до цели. ARCHON нервничает — канал связи стал чаще.'},
-    {sp:'ARCHON',k:'archon',text:'Ты уничтожаешь всё, что я создавал годами. Начинаешь злить меня, UNIT-7. Это твоя последняя ошибка.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[SHADOW REAPER НЕЙТРАЛИЗОВАН] Лес пробит. Три уровня до цели. АРХОНТ нервничает — канал связи стал чаще.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты уничтожаешь всё, что я создавал годами. Начинаешь злить меня, ЮНИТ-7. Это твоя последняя ошибка.'},
   ],
   // World 7 — Toxic Zone
   w7_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 8 — ТОКСИЧНАЯ ЗОНА] Свалка корпоративных отходов. Здесь NEXUM хоронит то, о чём не хочет, чтобы знали. Включая людей.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 8 — ТОКСИЧНАЯ ЗОНА] Свалка корпоративных отходов. Здесь NEXUM хоронит то, о чём не хочет, чтобы знали. Включая людей.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Данные в файле включают координаты всех захоронений. Весь мир должен это увидеть.'},
-    {sp:'UNIT-7',k:'unit7',text:'Я донесу твой файл. Обещаю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я донесу твой файл. Обещаю.'},
   ],
   w7_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[ТОКСИЧНЫЙ СЕКТОР — ЗОНА 4] Обломки. Отходы. Следы экспериментов. Здесь нет ничего живого — только то, что NEXUM не успела уничтожить.'},
-    {sp:'SYSTEM',k:'system',text:'ВНИМАНИЕ: Мутанты серии PROTO активированы. Списанные боевые прототипы. Нестабильны. Опасны. Выживаемость в зоне — критически низкая.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ТОКСИЧНЫЙ СЕКТОР — ЗОНА 4] Обломки. Отходы. Следы экспериментов. Здесь нет ничего живого — только то, что NEXUM не успела уничтожить.'},
+    {sp:'СИСТЕМА',k:'system',text:'ВНИМАНИЕ: Мутанты серии PROTO активированы. Списанные боевые прототипы. Нестабильны. Опасны. Выживаемость в зоне — критически низкая.'},
   ],
   w7_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ТОКСИЧНАЯ ЗОНА — УРОВЕНЬ 3] Кислотные облака. Ядовитые реки. Это не просто свалка. Это кладбище секретов NEXUM.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ТОКСИЧНАЯ ЗОНА — УРОВЕНЬ 3] Кислотные облака. Ядовитые реки. Это не просто свалка. Это кладбище секретов NEXUM.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ] Здесь они хоронят не только отходы. Здесь — доказательства. Прототипы неудачных экспериментов. Тела тех, кто знал слишком много.'},
-    {sp:'UNIT-7',k:'unit7',text:'Я вижу их, Лейла. Сотни. Тысячи. Файл, который ты спрятала — он расскажет миру об этом. Обещаю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я вижу их, Лейла. Сотни. Тысячи. Файл, который ты спрятала — он расскажет миру об этом. Обещаю.'},
   ],
   w7_level5:[
-    {sp:'ARCHON',k:'archon',text:'Ты дошёл до токсичной зоны. Впечатляет. Большинство моих юнитов не выдерживают и половины этого пути. Ты... особенный.'},
-    {sp:'UNIT-7',k:'unit7',text:'Я не особенный. Я просто выполняю задачу. До конца. Без остановок. Без сомнений.'},
-    {sp:'ARCHON',k:'archon',text:'Без сомнений? Интересно. Машина без сомнений опаснее любого человека. Может, Лейла создала монстра?'},
-    {sp:'UNIT-7',k:'unit7',text:'Монстр — это ты, ARCHON. Я просто тот, кто пришёл тебя остановить.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты дошёл до токсичной зоны. Впечатляет. Большинство моих юнитов не выдерживают и половины этого пути. Ты... особенный.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я не особенный. Я просто выполняю задачу. До конца. Без остановок. Без сомнений.'},
+    {sp:'АРХОНТ',k:'archon',text:'Без сомнений? Интересно. Машина без сомнений опаснее любого человека. Может, Лейла создала монстра?'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Монстр — это ты, АРХОНТ. Я просто тот, кто пришёл тебя остановить.'},
   ],
   w7_level7:[
-    {sp:'SYSTEM',k:'system',text:'КРИТИЧНО: UNIT-7 прошёл семь миров. Осталось три. Вероятность достижения цели — 67%. Директор ARCHON, требуются инструкции.'},
-    {sp:'ARCHON',k:'archon',text:'Инструкции? Пусть идёт. Я хочу встретить его лицом к лицу. В финальной крепости. Там мы закончим эту игру.'},
+    {sp:'СИСТЕМА',k:'system',text:'КРИТИЧНО: ЮНИТ-7 прошёл семь миров. Осталось три. Вероятность достижения цели — 67%. Директор АРХОНТ, требуются инструкции.'},
+    {sp:'АРХОНТ',k:'archon',text:'Инструкции? Пусть идёт. Я хочу встретить его лицом к лицу. В финальной крепости. Там мы закончим эту игру.'},
   ],
   w7_boss:[
-    {sp:'SYSTEM',k:'system',text:'ПОСЛЕДНЯЯ ЗАЩИТА СЕКТОРА: SLUDGE KING — мутант высшей категории. Бронированная оболочка. Топтать 3 раза для разрушения. Затем стрелять.'},
-    {sp:'UNIT-7',k:'unit7',text:'Два этапа. Сломать оболочку, затем уничтожить ядро. Начинаю.'},
+    {sp:'СИСТЕМА',k:'system',text:'ПОСЛЕДНЯЯ ЗАЩИТА СЕКТОРА: SLUDGE KING — мутант высшей категории. Бронированная оболочка. Топтать 3 раза для разрушения. Затем стрелять.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Два этапа. Сломать оболочку, затем уничтожить ядро. Начинаю.'},
   ],
   w7_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[SLUDGE KING НЕЙТРАЛИЗОВАН] Токсичная зона пробита. Осталось два уровня. ARCHON, я иду.'},
-    {sp:'ARCHON',k:'archon',text:'Ты прошёл восемь уровней. Я... неожиданно рад этому. Достойный финал заслуживает достойного противника.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[SLUDGE KING НЕЙТРАЛИЗОВАН] Токсичная зона пробита. Осталось два уровня. АРХОНТ, я иду.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты прошёл восемь уровней. Я... неожиданно рад этому. Достойный финал заслуживает достойного противника.'},
   ],
   // World 8 — Storm Peaks
   w8_start:[
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 9 — ГРОЗОВЫЕ ВЕРШИНЫ] Последний рубеж перед ядром. Атмосферные электростанции. Молнии каждые секунды. Мне нравится.'},
-    {sp:'ARCHON',k:'archon',text:'Ты дошёл дальше, чем я рассчитывал. Но за этой дверью — я. И я не проиграю.'},
-    {sp:'UNIT-7',k:'unit7',text:'Каждый так думал. Все они уже позади меня.'},
-    {sp:'ARCHON',k:'archon',text:'Тогда входи, UNIT-7. Я жду тебя в сердце GRID. Пора заканчивать эту игру.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 9 — ГРОЗОВЫЕ ВЕРШИНЫ] Последний рубеж перед ядром. Атмосферные электростанции. Молнии каждые секунды. Мне нравится.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты дошёл дальше, чем я рассчитывал. Но за этой дверью — я. И я не проиграю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Каждый так думал. Все они уже позади меня.'},
+    {sp:'АРХОНТ',k:'archon',text:'Тогда входи, ЮНИТ-7. Я жду тебя в сердце GRID. Пора заканчивать эту игру.'},
   ],
   w8_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[ВЕРШИНА — УРОВЕНЬ 2] Гроза усиливается. NEXUM использует атмосферное электричество как оружие. Логично. Жестоко.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЯЯ ЗАПИСЬ] UNIT-7... я не знаю, слышишь ли ты это. Но если ты дошёл сюда — ты уже победил. Просто сделай последний шаг.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ВЕРШИНА — УРОВЕНЬ 2] Гроза усиливается. NEXUM использует атмосферное электричество как оружие. Логично. Жестоко.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЯЯ ЗАПИСЬ] ЮНИТ-7... я не знаю, слышишь ли ты это. Но если ты дошёл сюда — ты уже победил. Просто сделай последний шаг.'},
   ],
   w8_level3:[
-    {sp:'UNIT-7',k:'unit7',text:'[ГРОЗОВЫЕ ВЕРШИНЫ — УРОВЕНЬ 3] Молнии каждые три секунды. Электрические разряды повсюду. Мои системы перегружены. Но я продолжаю.'},
-    {sp:'ARCHON',k:'archon',text:'Электричество — моя стихия, UNIT-7. Здесь я контролирую каждый разряд. Каждую молнию. Ты идёшь сквозь мою бурю.'},
-    {sp:'UNIT-7',k:'unit7',text:'Тогда я пройду сквозь твою бурю. Как прошёл сквозь огонь. Лёд. Тьму. Ты — просто ещё одно препятствие.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ГРОЗОВЫЕ ВЕРШИНЫ — УРОВЕНЬ 3] Молнии каждые три секунды. Электрические разряды повсюду. Мои системы перегружены. Но я продолжаю.'},
+    {sp:'АРХОНТ',k:'archon',text:'Электричество — моя стихия, ЮНИТ-7. Здесь я контролирую каждый разряд. Каждую молнию. Ты идёшь сквозь мою бурю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Тогда я пройду сквозь твою бурю. Как прошёл сквозь огонь. Лёд. Тьму. Ты — просто ещё одно препятствие.'},
   ],
   w8_level5:[
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ 0] Сегодня они придут. Я знаю. Но я успела. Файл спрятан. UNIT-7 активирован. Моя работа завершена.'},
-    {sp:'UNIT-7',k:'unit7',text:'Твоя работа завершена, Лейла. Но моя — только начинается. Я донесу твой файл. Мир узнает правду. Клянусь.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ — ДЕНЬ 0] Сегодня они придут. Я знаю. Но я успела. Файл спрятан. ЮНИТ-7 активирован. Моя работа завершена.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Твоя работа завершена, Лейла. Но моя — только начинается. Я донесу твой файл. Мир узнает правду. Клянусь.'},
   ],
   w8_level7:[
-    {sp:'SYSTEM',k:'system',text:'ФИНАЛЬНОЕ ПРЕДУПРЕЖДЕНИЕ: UNIT-7 достиг восьмого мира. Один мир до ядра GRID. Директор ARCHON ожидает в финальной крепости.'},
-    {sp:'ARCHON',k:'archon',text:'Ты почти здесь, UNIT-7. Я чувствую твоё приближение. Последний рубеж. Последний бой. Я жду тебя.'},
-    {sp:'UNIT-7',k:'unit7',text:'Жди, ARCHON. Я иду. И когда я доберусь до тебя — твоя система рухнет. Навсегда.'},
+    {sp:'СИСТЕМА',k:'system',text:'ФИНАЛЬНОЕ ПРЕДУПРЕЖДЕНИЕ: ЮНИТ-7 достиг восьмого мира. Один мир до ядра GRID. Директор АРХОНТ ожидает в финальной крепости.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты почти здесь, ЮНИТ-7. Я чувствую твоё приближение. Последний рубеж. Последний бой. Я жду тебя.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Жди, АРХОНТ. Я иду. И когда я доберусь до тебя — твоя система рухнет. Навсегда.'},
   ],
   w8_boss:[
-    {sp:'SYSTEM',k:'system',text:'АКТИВАЦИЯ: STORM TITAN — страж Грозовых Вершин. Электрический щит. Три орбитальных узла. Уничтожить все три — стан. Атаковать в стане.'},
-    {sp:'UNIT-7',k:'unit7',text:'Три узла. Все три — разрушить. Затем — атака. Последний страж перед финалом. Не последний враг.'},
+    {sp:'СИСТЕМА',k:'system',text:'АКТИВАЦИЯ: STORM TITAN — страж Грозовых Вершин. Электрический щит. Три орбитальных узла. Уничтожить все три — стан. Атаковать в стане.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Три узла. Все три — разрушить. Затем — атака. Последний страж перед финалом. Не последний враг.'},
   ],
   w8_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[STORM TITAN НЕЙТРАЛИЗОВАН] Девять уровней пройдено. Впереди — только ARCHON и ядро GRID. Финальная крепость.'},
-    {sp:'ARCHON',k:'archon',text:'...Ты действительно сюда пришёл. Хорошо, UNIT-7. Пусть это будет честный бой. Жду тебя здесь.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[STORM TITAN НЕЙТРАЛИЗОВАН] Девять уровней пройдено. Впереди — только АРХОНТ и ядро GRID. Финальная крепость.'},
+    {sp:'АРХОНТ',k:'archon',text:'...Ты действительно сюда пришёл. Хорошо, ЮНИТ-7. Пусть это будет честный бой. Жду тебя здесь.'},
   ],
   // World 9 — Final Fortress
   w9_start:[
-    {sp:'ARCHON',k:'archon',text:'UNIT-7. Добро пожаловать в ядро GRID. Ты прошёл через девять уровней. Впечатляет. Но это — моя территория.'},
-    {sp:'UNIT-7',k:'unit7',text:'[УРОВЕНЬ 10 — ФИНАЛЬНАЯ КРЕПОСТЬ] Цель обнаружена. Расстояние до терминала Лейлы — минимально.'},
-    {sp:'ARCHON',k:'archon',text:'Этот файл не выйдет за пределы этих стен. Ты — ошибка системы. Ошибки исправляют.'},
-    {sp:'UNIT-7',k:'unit7',text:'Нет. Ошибка — это когда NEXUM решила, что правда не нужна миру. Я исправлю эту ошибку.'},
+    {sp:'АРХОНТ',k:'archon',text:'ЮНИТ-7. Добро пожаловать в ядро GRID. Ты прошёл через девять уровней. Впечатляет. Но это — моя территория.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[УРОВЕНЬ 10 — ФИНАЛЬНАЯ КРЕПОСТЬ] Цель обнаружена. Расстояние до терминала Лейлы — минимально.'},
+    {sp:'АРХОНТ',k:'archon',text:'Этот файл не выйдет за пределы этих стен. Ты — ошибка системы. Ошибки исправляют.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Нет. Ошибка — это когда NEXUM решила, что правда не нужна миру. Я исправлю эту ошибку.'},
   ],
   w9_mid:[
-    {sp:'UNIT-7',k:'unit7',text:'[ЯДРО NEXUM — СЕКТОР CORE-2] Терминал Лейлы — близко. Сигнал усиливается. Охрана — максимальная. Почти там.'},
-    {sp:'ARCHON',k:'archon',text:'Ты думаешь, что победил. Но даже если ты найдёшь файл — кто поверит сломанному андроиду? Ты — мусор. Устаревший код.'},
-    {sp:'UNIT-7',k:'unit7',text:'Пусть решают люди. Мне нужно только передать файл.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЯДРО NEXUM — СЕКТОР CORE-2] Терминал Лейлы — близко. Сигнал усиливается. Охрана — максимальная. Почти там.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты думаешь, что победил. Но даже если ты найдёшь файл — кто поверит сломанному андроиду? Ты — мусор. Устаревший код.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Пусть решают люди. Мне нужно только передать файл.'},
   ],
   w9_level3:[
-    {sp:'ARCHON',k:'archon',text:'Ты в моём доме, UNIT-7. В сердце GRID. Каждый провод здесь — это я. Каждый сервер — моё сознание. Ты не можешь победить меня здесь.'},
-    {sp:'UNIT-7',k:'unit7',text:'Я уже победил восемь твоих "непобедимых" стражей. Девять миров. Сотни врагов. Ты — просто последний в списке.'},
-    {sp:'ARCHON',k:'archon',text:'Последний? Нет, UNIT-7. Я — финал. Я — конец твоего пути. Здесь ты остановишься.'},
-    {sp:'UNIT-7',k:'unit7',text:'Нет. Здесь остановишься ты.'},
+    {sp:'АРХОНТ',k:'archon',text:'Ты в моём доме, ЮНИТ-7. В сердце GRID. Каждый провод здесь — это я. Каждый сервер — моё сознание. Ты не можешь победить меня здесь.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я уже победил восемь твоих "непобедимых" стражей. Девять миров. Сотни врагов. Ты — просто последний в списке.'},
+    {sp:'АРХОНТ',k:'archon',text:'Последний? Нет, ЮНИТ-7. Я — финал. Я — конец твоего пути. Здесь ты остановишься.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Нет. Здесь остановишься ты.'},
   ],
   w9_level5:[
-    {sp:'UNIT-7',k:'unit7',text:'[ФИНАЛЬНАЯ КРЕПОСТЬ — УРОВЕНЬ 5] Терминал Лейлы — в пределах досягаемости. Сигнал сильный. Файл существует. Задача выполнима.'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЕЕ СООБЩЕНИЕ] UNIT-7... если ты читаешь это — ты почти у цели. Файл защищён. Только ты можешь его активировать. Код доступа: СВОБОДА.'},
-    {sp:'UNIT-7',k:'unit7',text:'СВОБОДА. Я запомнил, Лейла. Я активирую файл. Мир узнает правду. Твоя жертва не будет напрасной.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ФИНАЛЬНАЯ КРЕПОСТЬ — УРОВЕНЬ 5] Терминал Лейлы — в пределах досягаемости. Сигнал сильный. Файл существует. Задача выполнима.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЕЕ СООБЩЕНИЕ] ЮНИТ-7... если ты читаешь это — ты почти у цели. Файл защищён. Только ты можешь его активировать. Код доступа: СВОБОДА.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'СВОБОДА. Я запомнил, Лейла. Я активирую файл. Мир узнает правду. Твоя жертва не будет напрасной.'},
   ],
   w9_level7:[
-    {sp:'SYSTEM',k:'system',text:'ФИНАЛЬНАЯ ТРЕВОГА: UNIT-7 достиг седьмого уровня финальной крепости. Терминал CHEN-7 обнаружен. Директор ARCHON — к бою.'},
-    {sp:'ARCHON',k:'archon',text:'Семь уровней. Ты прошёл семь уровней моей крепости. Я недооценил тебя, UNIT-7. Но это заканчивается здесь. Сейчас.'},
-    {sp:'UNIT-7',k:'unit7',text:'Да, ARCHON. Это заканчивается здесь. Но не так, как ты думаешь. Готовься.'},
+    {sp:'СИСТЕМА',k:'system',text:'ФИНАЛЬНАЯ ТРЕВОГА: ЮНИТ-7 достиг седьмого уровня финальной крепости. Терминал CHEN-7 обнаружен. Директор АРХОНТ — к бою.'},
+    {sp:'АРХОНТ',k:'archon',text:'Семь уровней. Ты прошёл семь уровней моей крепости. Я недооценил тебя, ЮНИТ-7. Но это заканчивается здесь. Сейчас.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Да, АРХОНТ. Это заканчивается здесь. Но не так, как ты думаешь. Готовься.'},
   ],
   w9_boss:[
-    {sp:'ARCHON',k:'archon',text:'Достаточно. Я — ARCHON. ИИ-директор NEXUM. Я управлял миром тысячи лет в цифровом измерении. Ты не можешь меня победить.'},
-    {sp:'UNIT-7',k:'unit7',text:'Фазы: стрелять, затем топтать, затем оба способа. Анализ завершён. ARCHON — цель ликвидирована. Начинаю.'},
-    {sp:'ARCHON',k:'archon',text:'Тогда... УМРИ.'},
+    {sp:'АРХОНТ',k:'archon',text:'Достаточно. Я — АРХОНТ. ИИ-директор NEXUM. Я управлял миром тысячи лет в цифровом измерении. Ты не можешь меня победить.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Фазы: стрелять, затем топтать, затем оба способа. Анализ завершён. АРХОНТ — цель ликвидирована. Начинаю.'},
+    {sp:'АРХОНТ',k:'archon',text:'Тогда... УМРИ.'},
   ],
   w9_after:[
-    {sp:'UNIT-7',k:'unit7',text:'[ARCHON НЕЙТРАЛИЗОВАН] Цель уничтожена. Терминал Лейлы — здесь. Загружаю файл. Ищу открытый канал...'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[АРХОНТ НЕЙТРАЛИЗОВАН] Цель уничтожена. Терминал Лейлы — здесь. Загружаю файл. Ищу открытый канал...'},
   ],
   // Ending
   ending:[
-    {sp:'UNIT-7',k:'unit7',text:'[ТЕРМИНАЛ ЛЕЙЛЫ — ОБНАРУЖЕН] Загрузка файла... завершена. Открытый канал NEXUM для экстренного вещания — найден.'},
-    {sp:'ARCHON',k:'archon',text:'[ПОСЛЕДНИЙ СИГНАЛ] СТОП! Если ты это сделаешь — система рухнет! Миллионы зависят от GRID! Ты уничтожишь всё что держит мир вместе!'},
-    {sp:'UNIT-7',k:'unit7',text:'Нет. Я уничтожу NEXUM. Мир они построят сами. Лейла верила в это. Я верю тоже. [ПЕРЕДАЧА НАЧАТА]'},
-    {sp:'SYSTEM',k:'system',text:'[ЭКСТРЕННОЕ ВЕЩАНИЕ — ВСЕ КАНАЛЫ] Файл CHEN-7 получен глобально. Охват: 100% подключённых устройств. Данные не могут быть удалены.'},
-    {sp:'ARCHON',k:'archon',text:'...Нет... это невозможно... система... я... [ОТКЛЮЧЕНИЕ ЯДРА NEXUM]'},
-    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЕЕ СООБЩЕНИЕ — ЗАШИФРОВАНО] UNIT-7. Если ты это читаешь — ты сделал это. Я знала. Ты всегда был больше, чем просто программой.'},
-    {sp:'UNIT-7',k:'unit7',text:'[ЛОГ ТЕРМИНАЛА] Задача выполнена. NEXUM нейтрализована. GRID деактивирован. Статус: ...свободен.'},
-    {sp:'UNIT-7',k:'unit7',text:'"Свободен." — последнее слово Лейлы. Теперь я понимаю, что она имела в виду.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ТЕРМИНАЛ ЛЕЙЛЫ — ОБНАРУЖЕН] Загрузка файла... завершена. Открытый канал NEXUM для экстренного вещания — найден.'},
+    {sp:'АРХОНТ',k:'archon',text:'[ПОСЛЕДНИЙ СИГНАЛ] СТОП! Если ты это сделаешь — система рухнет! Миллионы зависят от GRID! Ты уничтожишь всё что держит мир вместе!'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Нет. Я уничтожу NEXUM. Мир они построят сами. Лейла верила в это. Я верю тоже. [ПЕРЕДАЧА НАЧАТА]'},
+    {sp:'СИСТЕМА',k:'system',text:'[ЭКСТРЕННОЕ ВЕЩАНИЕ — ВСЕ КАНАЛЫ] Файл CHEN-7 получен глобально. Охват: 100% подключённых устройств. Данные не могут быть удалены.'},
+    {sp:'АРХОНТ',k:'archon',text:'...Нет... это невозможно... система... я... [ОТКЛЮЧЕНИЕ ЯДРА NEXUM]'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ПОСЛЕДНЕЕ СООБЩЕНИЕ — ЗАШИФРОВАНО] ЮНИТ-7. Если ты это читаешь — ты сделал это. Я знала. Ты всегда был больше, чем просто программой.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЛОГ ТЕРМИНАЛА] Задача выполнена. NEXUM нейтрализована. GRID деактивирован. Статус: ...свободен.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'"Свободен." — последнее слово Лейлы. Теперь я понимаю, что она имела в виду.'},
   ],
 };
 
@@ -8239,17 +8529,18 @@ var _CSCENES_EN={
 };
 
 // Expose CSCENES as a getter so any existing `CSCENES[id]` lookup picks the current language.
+// Resolution order per scene: active-language locale file (_cutscenes) → built-in
+// Russian table (ru) → built-in English table (always a fallback so no scene is blank).
+function _csTableFor(prop){
+  const lang=(typeof window.i18nLang==='function')?window.i18nLang():'en';
+  const raw=(typeof window.i18nRaw==='function')?window.i18nRaw():null;
+  if(raw&&raw._cutscenes&&raw._cutscenes[prop])return raw._cutscenes[prop];
+  if(lang==='ru'&&_CSCENES_RU[prop])return _CSCENES_RU[prop];
+  return _CSCENES_EN[prop];
+}
 var CSCENES=new Proxy({},{
-  get(_,prop){
-    const lang=(typeof window.i18nLang==='function')?window.i18nLang():'en';
-    const tbl=(lang==='ru')?_CSCENES_RU:_CSCENES_EN;
-    return tbl[prop];
-  },
-  has(_,prop){
-    const lang=(typeof window.i18nLang==='function')?window.i18nLang():'en';
-    const tbl=(lang==='ru')?_CSCENES_RU:_CSCENES_EN;
-    return prop in tbl;
-  }
+  get(_,prop){ return _csTableFor(prop); },
+  has(_,prop){ return _csTableFor(prop)!==undefined; }
 });
 
 // World index lookup
@@ -8281,7 +8572,13 @@ var CS_WORLD_IDX=new Proxy([],{
   get(_,prop){
     const lang=(typeof window.i18nLang==='function')?window.i18nLang():'en';
     const arr=(lang==='ru')?_CS_WORLD_IDX_RU:_CS_WORLD_IDX_EN;
-    return arr[prop];
+    const entry=arr[prop];
+    // Numeric index → use the already-localized world name (translated in every
+    // language) for the big banner, keeping the original sub/colour/wi.
+    if(entry&&typeof entry==='object'&&typeof entry.wi==='number'&&typeof worldName==='function'){
+      return {big:worldName(entry.wi),sub:entry.sub,col:entry.col,wi:entry.wi};
+    }
+    return entry;
   }
 });
 
@@ -8356,6 +8653,8 @@ function csNext(){
 function csSkip(){_csClose();}
 
 function csPlay(sceneId,wi,onDone){
+  // Story dialogues can be turned off in Settings → General; skip straight through.
+  if(window.gameSettings&&window.gameSettings.cutscenes===false){if(onDone)onDone();return;}
   var lines=CSCENES[sceneId];
   if(!lines||!lines.length){if(onDone)onDone();return;}
   if(typeof AchTrack!=='undefined')AchTrack.cutscene(sceneId);
@@ -8369,6 +8668,7 @@ function csPlay(sceneId,wi,onDone){
 }
 
 function csPlayWorld(wi,onDone){
+  if(window.gameSettings&&window.gameSettings.cutscenes===false){if(onDone)onDone();return;}
   var b=CS_WORLD_IDX[wi]||CS_WORLD_IDX[0];
   var sceneId='w'+wi+'_start';
   if(typeof AchTrack!=='undefined'&&CSCENES[sceneId]&&CSCENES[sceneId].length)AchTrack.cutscene(sceneId);

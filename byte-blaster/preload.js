@@ -75,4 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Quit the app (Exit button).
   quit: () => ipcRenderer.invoke('app:quit'),
+
+  // Relaunch the app (apply a startup-only setting like V-Sync immediately).
+  relaunch: () => ipcRenderer.invoke('app:relaunch'),
 });
