@@ -26,7 +26,7 @@
   "tierBase": "ALAP",
   "heightBonus": "+{0} MAGASSÁGI BÓNUSZ",
   "bossArena": "⚠ FŐNÖK ARÉNA ⚠",
-  "hpBonus": "+1 HP!",
+  "hpBonus": "+1 ÉLET!",
   "repaired": "MEGJAVÍTVA!",
   "newBest": "ÚJ REKORD!",
   "completeMore": "✗ TELJESÍTS MÉG {0} PÁLYÁT",
@@ -248,5 +248,859 @@
   "mapBest": "LEGJOBB",
   "mapLocked": "ZÁROLVA",
   "mapCompleted": "BEFEJEZVE",
-  "mapStart": "ENTER / SZÓKÖZ AZ INDÍTÁSHOZ"
+  "mapStart": "ENTER / SZÓKÖZ AZ INDÍTÁSHOZ",
+  "achievement_world_0": "Kiberújonc",
+  "achievement_world_0_desc": "Teljesítsd az első 10 pályát (Kerváros)",
+  "achievement_world_1": "Dzsungelfelfedező",
+  "achievement_world_1_desc": "Teljesítsd a 11-20. pályákat (Neondzsungel)",
+  "achievement_world_2": "Lávatúlélő",
+  "achievement_world_2_desc": "Teljesítsd a 21-30. pályákat (Lávavilág)",
+  "achievement_world_3": "Jéghegymászó",
+  "achievement_world_3_desc": "Teljesítsd a 31-40. pályákat (Jégbarlangok)",
+  "achievement_world_4": "Sivatagi Vándor",
+  "achievement_world_4_desc": "Teljesítsd a 41-50. pályákat (Sivatagi romok)",
+  "achievement_world_5": "Űrkadét",
+  "achievement_world_5_desc": "Teljesítsd az 51-60. pályákat (Űrállomás)",
+  "achievement_world_6": "Erdő Őrzője",
+  "achievement_world_6_desc": "Teljesítsd a 61-70. pályákat (Sötét erdő)",
+  "achievement_world_7": "Toxikus Harcos",
+  "achievement_world_7_desc": "Teljesítsd a 71-80. pályákat (Toxikus zóna)",
+  "achievement_world_8": "Viharmester",
+  "achievement_world_8_desc": "Teljesítsd a 81-90. pályákat (Viharcsúcsok)",
+  "achievement_world_9": "Erőd Meghódítója",
+  "achievement_world_9_desc": "Teljesítsd a 91-100. pályákat (Végső erőd)",
+  "achievement_boss_0": "Főnökölő I",
+  "achievement_boss_0_desc": "Győzd le az első főnököt",
+  "achievement_boss_5": "Főnökölő II",
+  "achievement_boss_5_desc": "Győzz le 5 főnököt",
+  "achievement_boss_10": "Főnökölő III",
+  "achievement_boss_10_desc": "Győzd le mind a 10 főnököt",
+  "achievement_perfect_run": "Tökéletes Menet",
+  "achievement_perfect_run_desc": "Teljesíts egy pályát TÖKÉLETES értékeléssel",
+  "achievement_perfectionist": "Perfekcionista",
+  "achievement_perfectionist_desc": "Érj el TÖKÉLETES értékelést 10 pályán",
+  "achievement_speedrunner": "Speedrunner",
+  "achievement_speedrunner_desc": "Teljesíts egy pályát feleannyi idő alatt",
+  "achievement_sharpshooter": "Mesterlövész",
+  "achievement_sharpshooter_desc": "Ölj meg 100 ellenséget blászterrel",
+  "achievement_stomper": "Taposó",
+  "achievement_stomper_desc": "Ölj meg 50 ellenséget taposással",
+  "achievement_coin_1000": "Érmegyűjtő",
+  "achievement_coin_1000_desc": "Gyűjts össze 1000 érmét",
+  "achievement_coin_5000": "Kincsvadász",
+  "achievement_coin_5000_desc": "Gyűjts össze 5000 érmét",
+  "achievement_coin_10000": "Milliomos",
+  "achievement_coin_10000_desc": "Gyűjts össze 10000 érmét",
+  "achievement_no_death_10": "Túlélő",
+  "achievement_no_death_10_desc": "Teljesíts 10 pályát életvesztés nélkül",
+  "achievement_no_death_world": "Halhatatlan",
+  "achievement_no_death_world_desc": "Teljesíts egy világot életvesztés nélkül",
+  "achievement_hardcore_unlock": "Hardcore Hős",
+  "achievement_hardcore_unlock_desc": "Oldd fel a Hardcore módot",
+  "achievement_hardcore_50": "Hardcore Mester",
+  "achievement_hardcore_50_desc": "Teljesíts 50 pályát Hardcore módban",
+  "achievement_hardcore_100": "Hardcore Legenda",
+  "achievement_hardcore_100_desc": "Teljesítsd mind a 100 pályát Hardcore módban",
+  "achievement_cheat_found": "Kódfejtő",
+  "achievement_cheat_found_desc": "Találj egy titkos csaló kódot",
+  "achievement_2player": "Retró Játékos",
+  "achievement_2player_desc": "Játssz kétjátékos módban",
+  "achievement_all_music": "Zenerajongó",
+  "achievement_all_music_desc": "Hallgasd meg mind a 10 világ zenéjét",
+  "achievement_all_cutscenes": "Lore Mester",
+  "achievement_all_cutscenes_desc": "Nézd meg az összes átvezetőt",
+  "achievement_star_power": "Csillagerő",
+  "achievement_star_power_desc": "Aktiváld a csillagerőt",
+  "achievement_all_levels_unlocked": "Felfedező",
+  "achievement_all_levels_unlocked_desc": "Oldd fel az összes pályát Kaland módban",
+  "achievement_100_percent": "Befejező",
+  "achievement_100_percent_desc": "Érj el 100%-ot Normál módban",
+  "achievement_100_percent_hardcore": "Igazi Mester",
+  "achievement_100_percent_hardcore_desc": "Érj el 100%-ot Hardcore módban",
+  "achievement_infinite_10": "Végtelen Kezdő",
+  "achievement_infinite_10_desc": "Érd el a 10. szintet Végtelen módban",
+  "achievement_infinite_50": "Végtelen Mester",
+  "achievement_infinite_50_desc": "Érd el az 50. szintet Végtelen módban",
+  "achievement_infinite_100": "Végtelen Legenda",
+  "achievement_infinite_100_desc": "Érd el a 100. szintet Végtelen módban",
+  "achievement_score_100k": "Pontszerző",
+  "achievement_score_100k_desc": "Szerezz 100 000 pontot",
+  "achievement_score_500k": "Pontmester",
+  "achievement_score_500k_desc": "Szerezz 500 000 pontot",
+  "achievement_score_1m": "Pontlegenda",
+  "achievement_score_1m_desc": "Szerezz 1 000 000 pontot",
+  "_cutscenes": {
+    "intro": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "[NEXUM CORP — TITKOS NAPLÓ // 2147.03.14] Biztonsági rés. A CHEN-7 labor kompromittálva. A CLEANSE protokoll aktív."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "UNIT-7... ha ezt olvasod, akkor nem sikerült megszöknöm. Tudtam, hogy így fog végződni."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "Azért építettem meg a sorozatodat, hogy megvédd az embereket. A NEXUM ehelyett arra használta a munkámat, hogy elnyomja őket. Ezt nem hagyhattam."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "A GRID magjában — a Végső Erődben — elrejtettem egy fájlt. Neveket. Feljegyzéseket. Minden igazságot arról, amit tettek."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "Tíz védelmi réteg. Több ezer harci egység. Az utolsó ajtót ARCHON, az MI-Igazgató őrzi."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "Te vagy az utolsó a UNIT-sorozatból. Az egyetlen, aki ezt befejezheti. Juss el oda. Törd meg a protokollt."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[FELADAT ELFOGADVA] Cél: a GRID magja. Protokoll: behatolás. Akadályok: megsemmisítés. Művelet megkezdése."
+      }
+    ],
+    "w0_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[1. SZINT — KIBERVÁROS] Belépési pont: felső kerületek. Kamerák, drónok, elit őrök. Gyönyörű. Halálos."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "RIADÓ: Azonosítatlan UNIT-osztályú jel a C-07 szektorban. Minden járőr — elfogásra. CLEANSE protokoll aktiválva."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Zaj. Tehát félnek tőlem. Jó. A félelem egy kezdet."
+      }
+    ],
+    "w0_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[ELLENŐRZŐPONT — KIBERVÁROS] Az első szint felénél járok. A biztonság szigorodik. Útvonal módosítása."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] UNIT-7, minden fal mögött adatok vannak az emberekről, akiket eltöröltek. Ne állj meg. Ez nem csak egy küldetés."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Leila... nem értem az érzelmeket. De a hangod... célt ad nekem. Ez elég."
+      }
+    ],
+    "w0_level3": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "FIGYELEM: A UNIT-7 három szinten jutott át. A haladási sebesség — a vártnál nagyobb. Járőrsűrűség növelése."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Alkalmazkodnak. Én is. Minden szint gyorsabbá tesz. Erősebbé. Közelebb a célhoz."
+      }
+    ],
+    "w0_level5": [
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ — -3. NAP] Tudom, hogy értem jönnek. De ha akár egyetlen UNIT is túléli... ha te túléled, UNIT-7..."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Túléltem. Itt vagyok. Befejezem az utolsó feladatodat. Megígérem."
+      }
+    ],
+    "w0_level7": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "KRITIKUS: A UNIT-7 elérte a Kiberváros hetedik szintjét. ARCHON Igazgató céladatokat kér. Elemzés folyamatban..."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Kezdik megérteni. Nem csak egy rendszerhiba vagyok. Fenyegetés vagyok az egész NEXUM számára. És nem állok meg."
+      }
+    ],
+    "w0_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "KRITIKUS RIADÓ: Behatolás az elsődleges csomóponton. GUARDIAN bevetése — S-osztályú harci prototípus. LIKVIDÁLÁS művelet."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Az első komoly ellenfél. Gyenge pontok keresése. A prototípus és a roncs közti különbség néhány jól időzített ugrás."
+      }
+    ],
+    "w0_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[GUARDIAN SEMLEGESÍTVE] Az első védelmi réteg ledőlt. A GRID észre fogja venni. Tovább."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "PROTOKOLL-SÉRTÉS: A GUARDIAN megsemmisült. Fenyegetési szint 2-re emelve. Következő védelmi réteg aktiválása. A NEXUM nem bocsát meg."
+      }
+    ],
+    "w1_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[2. SZINT — NEON DZSUNGEL] NEXUM bio-szektor. Mutált élővilág. Egyetlen őr sem jelentkezik önként erre a helyre."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "FIGYELEM: A bio-perem áttörve. Kísérleti BIO-sorozatú organizmusok aktiválása. Kontaktus engedélyezve."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Biológiai rendszerek. Kiszámíthatatlanok. De kiszámíthatóan halottak, ha felülről zuhansz rájuk."
+      }
+    ],
+    "w1_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[DZSUNGEL FELEZŐPONT] Az érzékelők biológiai anomáliákat észlelnek. A NEXUM itt kísérletezett. Élő alanyokon."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] Láttam ezeket a kísérleteket a jelentésekben. Akkor tudtam meg, hogy léteznie kell egy módnak, hogy mindezt megállítsam."
+      }
+    ],
+    "w1_level3": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[DZSUNGEL — 3. SZEKTOR] Biológiai mutánsok mindenütt. Ez nem a természet. Ez egy életnek álcázott fegyver."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] Ezek a lények emberek voltak. Önkéntesek az alsó szektorokból. A NEXUM gyógyítást ígért nekik. Ehelyett..."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "...Ehelyett szörnyeteggé változtatták őket. Most már értem. Ez nem csak egy vállalat. Ez egy halálgép."
+      }
+    ],
+    "w1_level5": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "FIGYELEM: A BIO-7 sorozatú biológiai minták aktiválva. Maximális agresszió. A célpont túlélése — 12%."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "12%? Még mindig túlbecsülik az esélyeiket. Tisztogatás folytatása."
+      }
+    ],
+    "w1_level7": [
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ — -1. NAP] UNIT-7, ha eljutottál a dzsungelig — messzebbre jutottál, mint reméltem. Ne add fel."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Feladni? Az nincs benne a protokollomban. Feladatok teljesítésére építettek. A te feladatod az én célom."
+      }
+    ],
+    "w1_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "FIGYELEM: VINE QUEEN aktiválása — a bio-szektort irányító organizmus. Az elszigetelő modul leállt. Teljes agresszió."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Egy élő biztonsági rendszer. Lenyűgöző. De minden élő organizmusnak van gyenge pontja. Keresem."
+      }
+    ],
+    "w1_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[VINE QUEEN SEMLEGESÍTVE] A bio-perem áttörve. Tovább. Mélyebbre a GRID-be."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] UNIT-7, a lehetetlent viszed véghez. Csak így tovább."
+      }
+    ],
+    "w2_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[3. SZINT — LÁVAVILÁG] Geotermikus erőművek. A hő megolvasztja a semleges áramköröket. Az enyéim árnyékoltak."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] A város alatt — a GRID generátorai. Iktasd ki őket, és a biztonsági hálózat fele összeomlik. De vigyázz a lávával..."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Leila minden részletre gondolt. Még a végén is."
+      }
+    ],
+    "w2_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[GEOTERMIKUS SZEKTOR B] Az energiaáramlás emelkedik. A NEXUM a lávát másodlagos akadályként használja. Hatékony."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "ÉRTESÍTÉS: A hőérzékelők anomáliát észlelnek. A UNIT-7 a zónában. Az őrrobotok — hűtési túlterhelés. Számíts meghibásodásokra."
+      }
+    ],
+    "w2_level3": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[LÁVAVILÁG — 3. SZINT] Hőmérséklet 800°C. A hűtőrendszereim maximumon. De folytatom."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] Kísérleti hővédelmet építettem beléd. Remélem, kibírja. Remélem, kibírod."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "A munkád hibátlan, Leila. Kibírom. Érted."
+      }
+    ],
+    "w2_level5": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "KRITIKUS: A geotermikus generátorok 140%-os kapacitáson. A UNIT-7 közelít a maghoz. Vészhűtés aktiválása."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Pánikolnak. Jó. A félelem kiszámíthatóvá teszi őket. Gyengévé."
+      }
+    ],
+    "w2_level7": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[LÁVAVILÁG MÉLYE] Itt, a város alatt rejti a NEXUM a legsötétebb titkait. Energia az egész rendszernek. Ezt elpusztítani — és a GRID fele elesik."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] Ne pazarold az időt szabotázsra. A célod a mag fájlja. Csak az állíthatja meg őket örökre."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Értem. Cél — a fájl. Minden más — akadály. Akadályok megsemmisítése."
+      }
+    ],
+    "w2_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "VESZÉLY: INFERNO aktiválása — termonukleáris őrszem. Lávapáncél. Felületi hőmérséklet: 1400°C. Felkészülés a likvidálásra."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "A tűz nem érhet hozzám. De amikor kinyitja a száját — lőj. Gyenge pont megtalálva."
+      }
+    ],
+    "w2_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[INFERNO SEMLEGESÍTVE] A geotermikus réteg megtisztítva. A szektor energiaellátása megszakítva. Felfelé."
+      }
+    ],
+    "w3_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[4. SZINT — JÉGBARLANGOK] NEXUM krio-adatraktárak. Hőmérséklet -180°C. A rendszerek lelassulnak. Mozgásprotokoll alkalmazása."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "RIADÓ: Behatolás a D-14 krio-szektorban. Krio-botok — likvidálási üzemmód. Hőmérséklet kritikusra csökkentve."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Azt hiszik, a hideg megállít. Tévednek. Rosszabbra építettek."
+      }
+    ],
+    "w3_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[KRIO-SZEKTOR E] Több száz terabájt van itt. Adatok a GRID minden emberéről. A NEXUM mindent tud mindenkiről."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] Itt tartják a dossziékat. Aktivistákról. Bárkiről, aki mert ellenállni. A világnak látnia kell ezt."
+      }
+    ],
+    "w3_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "KRITIKUS: ICE PHANTOM aktiválása — krio-őrszem. Fázisváltás. Sebezhető szilárd állapotban. Érinthetetlen szellemként. Sok szerencsét."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Állapotok között vált. Csak akkor üss, amikor szilárd. Várom az ablakot."
+      }
+    ],
+    "w3_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[ICE PHANTOM SEMLEGESÍTVE] A krio-raktárak feltörve. Tovább. Négy szint le — hat van hátra."
+      }
+    ],
+    "w4_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[5. SZINT — SIVATAGI ROMOK] A NEXUM előtti világ maradványai. Városok. Élet. Amit a haszonért eltöröltek."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] Ezek a romok azt mutatják, ami a NEXUM előtt létezett. Nézd meg, mit tettek a világgal. És ne állj meg."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Látom. Értem, miért megyek tovább."
+      }
+    ],
+    "w4_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[ROMOK — NYUGATI SZEKTOR] Proto-őrök, amelyek az első vállalati háborúk óta aktívak. Elavultak. De makacsok. Akárcsak maga a NEXUM."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "ARCHÍVUM PROTOKOLL: UNIT-osztály 7. sorozat észlelve. Ez az osztály megsemmisítésre regisztrált. Prioritás maximális."
+      }
+    ],
+    "w4_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "AKTIVÁLÁS: SAND TITAN — a Sivatagi Romok ősi őrszeme. Keringő pajzsok. Nincs pajzs, nincs sebzés. Cél: megsemmisítés."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Pajzsok. Keringők. Iktasd ki őket, és nyitott lesz. Három találat a pajzsokra, aztán közvetlen támadás."
+      }
+    ],
+    "w4_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[SAND TITAN SEMLEGESÍTVE] A sivatagi szektor áttörve. A felénél. A NEXUM kezd pánikba esni — érzem."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "[ELSŐ JEL] UNIT-7. Látlak. Csak így tovább. Ettől a fináléja csak... érdekesebb lesz."
+      }
+    ],
+    "w5_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[6. SZINT — ŰRÁLLOMÁS] A GRID keringő szervere. Itt tárolják mindennek a biztonsági mentését. Súlytalanság."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "KRITIKUS HIBA: A UNIT-7 elérte a keringő szegmenst. ARCHON Igazgató közvetlen csatornát kér. Kapcsolódás..."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "UNIT-7. Látlak. Azt hiszed, az igazságért harcolsz? Csak egy program vagy, ami elavult kódot futtat."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Akkor ez a program el fog pusztítani téged."
+      }
+    ],
+    "w5_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[KERINGŐ CSOMÓPONT B] Innen látszik a Föld. Az egész világ a NEXUM-hoz kötve. Pontosan ezt jöttem megváltoztatni."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Látod a méreteimet, UNIT-7? Milliárdnyi csomópont. Mind összekötve. Mind irányítva. Te egyetlen egység vagy a rendszer ellen."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Rendszerek már korábban is elbuktak. Ez — neked fog."
+      }
+    ],
+    "w5_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "AKTIVÁLÁS: DRONE HIVE — keringő őrszem. Páncélozott burok. Csak ereszkedés közben támadj. Olyankor a hasa fedetlen."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Várj, amíg leereszkedik. Üsd a fedetlen magot. Egy esély ciklusonként."
+      }
+    ],
+    "w5_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[DRONE HIVE SEMLEGESÍTVE] A keringő szerver áttörve. A GRID biztonsági mentései sérültek. Visszatérés a felszínre. Utolsó szakasz."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Lenyűgöző. De még nem tudod, mi vár rád. Készítettem valami... különlegeset."
+      }
+    ],
+    "w6_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[7. SZINT — SÖTÉT ERDŐ] NEXUM bio-labirintus. Érzékelőháló minden fában. Itt nincs fény — csak csapdák."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Gyönyörű, nemde? Magam növesztettem ezt az erdőt. Minden fa egy mozgásérzékelő. Egyenesen a kezeim közé sétálsz."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Akkor minden fát kidöntök az utamban."
+      }
+    ],
+    "w6_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[SÖTÉT SZEKTOR — 3. MÉLYSÉG] Csend. Túl csendes. Figyelnek. Hadd figyeljenek."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] UNIT-7, ebben az erdőben van egy szerver azokról, akik eltűntek. Másként gondolkodók. Újságírók. Mérnökök, mint én. Ne feledd."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Nem fogom. Megígérem."
+      }
+    ],
+    "w6_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "AKTIVÁLÁS: SHADOW REAPER — a Sötét Erdő őrszeme. Fantomalak. A golyók hasztalanok. Csak a felülről jövő taposás sebez. Értelmetlen ellenállni."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Egy szellem. Csak taposás. Várom, hogy anyagiasuljon."
+      }
+    ],
+    "w6_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[SHADOW REAPER SEMLEGESÍTVE] Az erdő áttörve. Három szint a célig. ARCHON nyugtalan — a csatorna egyre gyakrabban jelez."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Mindent elpusztítasz, amit évek alatt felépítettem. Kezdesz feldühíteni, UNIT-7. Ez az utolsó hibád."
+      }
+    ],
+    "w7_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[8. SZINT — MÉRGEZŐ ZÓNA] Vállalati hulladéklerakó. A NEXUM ide temeti, amit titokban akar tartani. Beleértve az embereket is."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[NAPLÓ] A fájlban lévő adatok tartalmazzák minden temetkezési hely koordinátáit. Az egész világnak látnia kell ezt."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Eljuttatom a fájlodat. Megígérem."
+      }
+    ],
+    "w7_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[MÉRGEZŐ SZEKTOR — 4. ZÓNA] Roncsok. Hulladék. Kísérletek nyomai. Itt semmi sem él — csak amit a NEXUM nem fejezett be eltörölni."
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "FIGYELEM: PROTO-sorozatú mutánsok aktiválva. Kivont harci prototípusok. Instabilak. Halálosak. A zóna túlélése — kritikusan alacsony."
+      }
+    ],
+    "w7_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "VÉGSŐ SZEKTOR VÉDELEM: SLUDGE KING — csúcsszintű mutáns. Páncélozott burok. Taposd meg 3×-szor a feltöréshez. Aztán lőj."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Két szakasz. Törd fel a burkot, aztán pusztítsd el a magot. Kezdés."
+      }
+    ],
+    "w7_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[SLUDGE KING SEMLEGESÍTVE] A mérgező zóna áttörve. Két szint van hátra. ARCHON, jövök."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Átjutottál nyolc szinten. Én... váratlanul elégedett vagyok. Egy méltó fináléhoz méltó ellenfél kell."
+      }
+    ],
+    "w8_start": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[9. SZINT — VIHARCSÚCSOK] Az utolsó határvonal a mag előtt. Légköri erőművek. Villámlás minden másodpercben. Tetszik."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Messzebbre jutottál, mint kiszámítottam. De az ajtó mögött én vagyok. És én nem veszítek."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Mindegyikük ezt hitte. Mind mögöttem vannak most."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Akkor lépj be, UNIT-7. A GRID szívében várlak. Ideje véget vetni ennek a játéknak."
+      }
+    ],
+    "w8_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[CSÚCS — 2. SZINT] A vihar erősödik. A NEXUM a légköri elektromosságot fegyverként használja. Logikus. Brutális."
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[VÉGSŐ NAPLÓ] UNIT-7... nem tudom, hallod-e ezt. De ha eddig eljutottál — már győztél. Csak tedd meg az utolsó lépést."
+      }
+    ],
+    "w8_boss": [
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "AKTIVÁLÁS: STORM TITAN — a Viharcsúcsok őrszeme. Elektromos pajzs. Három keringő csomópont. Pusztítsd el mind a hármat a kábításhoz. Kábult állapotban támadj."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Három csomópont. Mind a három — le. Aztán támadás. Az utolsó őrszem a finálé előtt. Nem az utolsó ellenség."
+      }
+    ],
+    "w8_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[STORM TITAN SEMLEGESÍTVE] Kilenc szint megtisztítva. Előttem — már csak ARCHON és a GRID magja. A Végső Erőd."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "...Tényleg eljöttél. Rendben, UNIT-7. Legyen tisztességes küzdelem. Várlak."
+      }
+    ],
+    "w9_start": [
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "UNIT-7. Üdv a GRID magjában. Kilenc rétegen keltél át. Lenyűgöző. De ez az én területem."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[10. SZINT — VÉGSŐ ERŐD] Cél azonosítva. Távolság Leila termináljáig — minimális."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Az a fájl csak az áramköreimen át hagyja el ezeket a falakat. Te egy rendszerhiba vagy. A hibákat kijavítják."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Nem. A hiba az volt, amikor a NEXUM eldöntötte, hogy a világnak nincs szüksége az igazságra. Én ezt javítom ki."
+      }
+    ],
+    "w9_mid": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[NEXUM MAG — CORE-2 SZEKTOR] Leila terminálja közel. A jel erősödik. A biztonság maximális. Mindjárt ott."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Azt hiszed, győztél. De még ha meg is találod a fájlt — ki hinne egy törött androidnak? Roncs vagy. Elavult kód."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Hadd döntsenek az emberek. Csak el kell juttatnom a fájlt."
+      }
+    ],
+    "w9_boss": [
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Elég. Én vagyok ARCHON. A NEXUM MI-Igazgatója. Ezer évig irányítottam a világot a digitális síkon át. Nem győzhetsz le."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Fázisok: lőj, aztán taposs, aztán mindkettő. Elemzés kész. ARCHON — célpont likvidálva. Kezdés."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "Akkor... HALJ MEG."
+      }
+    ],
+    "w9_after": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[ARCHON SEMLEGESÍTVE] Célpont megsemmisítve. Leila terminálja — itt. Fájl betöltése. Nyitott csatorna keresése..."
+      }
+    ],
+    "ending": [
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[LEILA TERMINÁLJA — MEGTALÁLVA] Fájlfeltöltés befejezve. A NEXUM vészsugárzási csatornájának megnyitása — megtalálva."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "[UTOLSÓ JEL] ÁLLJ! Ha ezt megteszed, a rendszer összeomlik! Milliók függenek a GRID-től! Elpusztítasz mindent, ami összetartja a világot!"
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "Nem. A NEXUM-ot pusztítom el. Az emberek maguk építik újra a világot. Leila ebben hitt. Én is. [ADÁS MEGKEZDVE]"
+      },
+      {
+        "sp": "RENDSZER",
+        "k": "system",
+        "text": "[VÉSZSUGÁRZÁS — MINDEN CSATORNA] A CHEN-7 fájl globálisan fogadva. Elérés: a csatlakoztatott eszközök 100%-a. Az adat nem törölhető."
+      },
+      {
+        "sp": "ARCHON",
+        "k": "archon",
+        "text": "...Nem... lehetetlen... rendszer... én... [NEXUM MAG LEÁLLÁS]"
+      },
+      {
+        "sp": "LEILA CHEN",
+        "k": "leila",
+        "text": "[UTOLSÓ ÜZENET — TITKOSÍTVA] UNIT-7. Ha ezt olvasod — sikerült. Tudtam, hogy menni fog. Mindig is több voltál, mint egy program."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "[TERMINÁL NAPLÓ] Feladat teljesítve. NEXUM semlegesítve. GRID kikapcsolva. Állapot: ...szabad."
+      },
+      {
+        "sp": "UNIT-7",
+        "k": "unit7",
+        "text": "\"Szabad.\" — Leila utolsó szava. Most már értem, mit jelentett."
+      }
+    ]
+  },
+  "fpsCustom": "Egyéni...",
+  "showDialogues": "Történet párbeszédek",
+  "showDialoguesNote": "* Kapcsold ki az összes történetjelenet kihagyásához",
+  "gfxCustom": "⚙ Egyéni",
+  "gfxPresetNote": "* Az előbeállítás csak az alábbi csúszkákat tölti ki — bármelyiket állítsd be magad.",
+  "gfxRenderScale": "Renderelési felbontás:",
+  "gfxGlow": "Ragyogás / Bloom:",
+  "gfxParticleAmt": "Részecskemennyiség:",
+  "gfxBgDetail": "Háttér részletessége:",
+  "gfxTrails": "Csíkok:",
+  "gfxBoss": "Boss-effektek:",
+  "gfxDecor": "Díszítések:",
+  "vsync": "V-Sync",
+  "vsyncNote": "* Be = sima, frissítési rátához kötve. Ki = korlátlan FPS (képszakadás lehet). Újraindítás szükséges.",
+  "vsyncRestart": "A V-Sync módosítása újraindítást igényel. Újraindítás most?"
 }
