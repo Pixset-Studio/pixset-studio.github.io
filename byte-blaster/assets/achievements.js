@@ -179,8 +179,10 @@
 
   function showAchievementNotification(achievement) {
     const lang = curLang();
-    const name = lang === 'ru' ? achievement.nameRu : achievement.name;
-    const desc = lang === 'ru' ? achievement.descRu : achievement.desc;
+    // Prefer a locale-file translation (key = achievement id, +'_desc' for the
+    // description); fall back to the built-in EN/RU strings when a locale lacks them.
+    const name = tt(achievement.id, lang === 'ru' ? achievement.nameRu : achievement.name);
+    const desc = tt(achievement.id + '_desc', lang === 'ru' ? achievement.descRu : achievement.desc);
     const unlockText = tt('achievementUnlocked', 'ACHIEVEMENT UNLOCKED!');
 
     const notification = document.createElement('div');
@@ -312,8 +314,8 @@
 
     for (const achievement of ACHIEVEMENTS) {
       const unlocked = isUnlocked(achievement.id);
-      const name = lang === 'ru' ? achievement.nameRu : achievement.name;
-      const desc = lang === 'ru' ? achievement.descRu : achievement.desc;
+      const name = tt(achievement.id, lang === 'ru' ? achievement.nameRu : achievement.name);
+      const desc = tt(achievement.id + '_desc', lang === 'ru' ? achievement.descRu : achievement.desc);
 
       const item = document.createElement('div');
       item.style.cssText = `

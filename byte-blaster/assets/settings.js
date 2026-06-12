@@ -14,9 +14,14 @@
     gameScale: 0,            // 0 = auto-fit to window (preserve aspect ratio)
     showFPS: false,
     fpsLimit: 0,
-    graphicsQuality: 'auto',
+    vsync: true,             // V-Sync (applied at startup; off = uncapped FPS)
+    graphicsQuality: 'auto', // preset name, 'auto' (detect on first run) or 'custom'
+    // Individually tunable graphics parameters (multipliers). A preset just
+    // pre-fills these; the player can then change any of them (→ 'custom').
+    gfx: { glow:1.0, particleMul:1.0, bgDetail:1.0, trails:1.0, bossFx:1.0, decorMul:1.0, renderScale:2.0 },
     windowMode: 'windowed',
     language: 'auto',        // 'auto' = detect from system on first run
+    cutscenes: true,         // story dialogue cutscenes on/off
     // Audio settings
     masterVolume: 100,
     musicVolume: 100,
@@ -69,6 +74,8 @@
           const merged = { ...defaultSettings, ...settings };
           // Merge controls separately to ensure all keys exist
           merged.controls = { ...defaultSettings.controls, ...(settings.controls || {}) };
+          // Merge gfx the same way so any missing parameter keeps a sane default.
+          merged.gfx = { ...defaultSettings.gfx, ...(settings.gfx || {}) };
           // Volume floor: by default volume is never below 1 (avoids stale 0 = muted on load).
           ['masterVolume', 'musicVolume', 'sfxVolume'].forEach(k => {
             const v = parseInt(merged[k], 10);
@@ -136,15 +143,19 @@
     return 'verylow';
   }
 
-  // Применяем настройки графики
-  function applyGraphicsQuality(q) {
-    window._gfxQuality = q;
-    const map = {verylow:30, low:60, medium:100, high:160, veryhigh:220, ultra:300};
-    window.GFX_MAX_PARTICLES = map[q] || 100;
-    // Push the tier into the game's GFX object so render code reacts immediately.
-    if (typeof window.applyGfxTier === 'function') window.applyGfxTier(q);
-    console.log('✔ Graphics quality:', q, '| max particles:', window.GFX_MAX_PARTICLES);
+  // Apply the per-parameter graphics settings (gameSettings.gfx) to the engine.
+  function applyGfxSettings() {
+    const g = (window.gameSettings && window.gameSettings.gfx) ||
+              (window.GFX_TIERS && window.GFX_TIERS.high) || {};
+    // Particle cap derives from the particle-amount multiplier (high≈160).
+    const pm = (g.particleMul != null) ? g.particleMul : 1;
+    window.GFX_MAX_PARTICLES = Math.max(20, Math.round(160 * pm));
+    if (typeof window.applyGfxValues === 'function') window.applyGfxValues(g);
+    else if (typeof window.applyGfxTier === 'function') window.applyGfxTier(window.gameSettings.graphicsQuality || 'high');
+    console.log('✔ Graphics applied:', g, '| max particles:', window.GFX_MAX_PARTICLES);
   }
+  // Legacy alias (kept so any external caller still works).
+  function applyGraphicsQuality() { applyGfxSettings(); }
 
   // Apply resolution (changes WINDOW size only)
   function applyResolution(resolution) {
@@ -184,8 +195,11 @@
       return;
     }
 
-    const baseW = canvas.width  || 800;
-    const baseH = canvas.height || 420;
+    // Logical (coordinate) resolution is fixed at 800×420. The canvas backing
+    // store may be larger (HiDPI) — never read canvas.width here or the fit math
+    // would feed the scaled-up backing size back in and compound on each resize.
+    const baseW = 800;
+    const baseH = 420;
 
     function fit() {
       // Reserve a bit of vertical space for the HUD bar (#ui) above the canvas.
@@ -209,10 +223,15 @@
       canvas.style.maxWidth = '';
       canvas.style.maxHeight = '';
       canvas.style.objectFit = '';
-      canvas.style.imageRendering = (s === Math.floor(s)) ? 'pixelated' : 'auto';
+      // The game now renders its backing store at native (HiDPI) resolution, so
+      // let the browser sample it smoothly rather than nearest-neighbour — this
+      // keeps text crisp instead of blocky/blurry at fractional display scales.
+      canvas.style.imageRendering = 'auto';
       // HUD spans the same width as the canvas so the layout looks unified.
       if (ui) { ui.style.width = dispW + 'px'; ui.style.boxSizing = 'border-box'; }
       window._gameScale = s;
+      // Resize the backing store to match the displayed size × DPR for crisp output.
+      if (typeof window.applyRenderResolution === 'function') window.applyRenderResolution();
     }
 
     fit();
@@ -323,9 +342,14 @@
   // Apply settings on load
   function applySettings() {
     const settings = window.gameSettings;
-    // Автодетект при первом запуске
-    if (settings.graphicsQuality === 'auto') {
-      settings.graphicsQuality = detectGraphicsQuality();
+    // First run / 'auto': detect a sensible tier and seed the per-parameter gfx
+    // values from that tier's template. After that the player owns the values.
+    if (settings.graphicsQuality === 'auto' || !settings.gfx) {
+      const tiers = window.GFX_TIERS || {};
+      let q = settings.graphicsQuality;
+      if (q === 'auto' || q === 'custom' || !tiers[q]) q = detectGraphicsQuality();
+      if (settings.graphicsQuality === 'auto') settings.graphicsQuality = q;
+      if (!settings.gfx) settings.gfx = Object.assign({}, tiers[q] || tiers.high || {});
       saveSettings(settings);
     }
     // Language: auto-detect from system on first run, then apply.
@@ -336,7 +360,7 @@
       saveSettings(settings);
     }
     if (typeof window.setLanguage === 'function') window.setLanguage(settings.language);
-    applyGraphicsQuality(settings.graphicsQuality || 'medium');
+    applyGfxSettings();
     applyWindowMode(settings.windowMode || 'windowed');
     applyResolution(settings.resolution);
     setTimeout(() => applyGameScale(settings.gameScale), 200);
@@ -373,7 +397,6 @@
           <button class="setTab" data-tab="graphics" data-i18n="tabGraphics" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GRAPHICS</button>
           <button class="setTab" data-tab="audio" data-i18n="tabAudio" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">AUDIO</button>
           <button class="setTab" data-tab="controls" data-i18n="tabControls" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">CONTROLS</button>
-          <button class="setTab" data-tab="gameplay" data-i18n="tabGameplay" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GAMEPLAY</button>
           <button class="setTab" data-tab="general" data-i18n="tabGeneral" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GENERAL</button>
         </div>
 
@@ -430,7 +453,7 @@
 
         <!-- GRAPHICS TAB -->
         <div class="setPanel" data-panel="graphics" style="display:none;">
-          <div style="margin-bottom: 20px;">
+          <div style="margin-bottom: 14px;">
             <label data-i18n="gfxQuality" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Graphics Quality:</label>
             <select id="graphicsSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="verylow" data-i18n="gfxVeryLow">🔴 Very Low</option>
@@ -439,8 +462,65 @@
               <option value="high" data-i18n="gfxHigh">🟢 High</option>
               <option value="veryhigh" data-i18n="gfxVeryHigh">🔵 Very High</option>
               <option value="ultra" data-i18n="gfxUltra">⚡ Ultra</option>
+              <option value="custom" data-i18n="gfxCustom">⚙ Custom</option>
             </select>
-            <div style="margin-top:5px;color:#888;font-size:8px;" data-i18n="gfxNote">* Auto-detected on first launch</div>
+            <div style="margin-top:5px;color:#888;font-size:8px;" data-i18n="gfxPresetNote">* A preset only fills the sliders below — tune any of them yourself.</div>
+          </div>
+
+          <!-- Individually tunable graphics parameters -->
+          <div style="margin-bottom: 12px;">
+            <label data-i18n="gfxRenderScale" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Render Resolution:</label>
+            <input type="range" id="gfxRenderScaleSlider" min="100" max="300" value="200" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxRenderScaleVal">200</span>%</div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label data-i18n="gfxGlow" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Glow / Bloom:</label>
+            <input type="range" id="gfxGlowSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxGlowVal">100</span>%</div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label data-i18n="gfxParticleAmt" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Particle Amount:</label>
+            <input type="range" id="gfxParticleMulSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxParticleMulVal">100</span>%</div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label data-i18n="gfxBgDetail" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Background Detail:</label>
+            <input type="range" id="gfxBgDetailSlider" min="20" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxBgDetailVal">100</span>%</div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label data-i18n="gfxTrails" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Trails:</label>
+            <input type="range" id="gfxTrailsSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxTrailsVal">100</span>%</div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label data-i18n="gfxBoss" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Boss Effects:</label>
+            <input type="range" id="gfxBossFxSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxBossFxVal">100</span>%</div>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <label data-i18n="gfxDecor" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Decorations:</label>
+            <input type="range" id="gfxDecorMulSlider" min="20" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxDecorMulVal">100</span>%</div>
+          </div>
+
+          <!-- Effect toggles (moved here from the old Gameplay tab) -->
+          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
+            <input type="checkbox" id="particlesCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="particles">Particles</span>
+          </label>
+          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
+            <input type="checkbox" id="combatTextCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="combatText">Floating Combat Text</span>
+          </label>
+          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
+            <input type="checkbox" id="screenShakeCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="screenShake">Screen Shake</span>
+          </label>
+          <div style="margin-bottom: 18px;">
+            <label data-i18n="shakeIntensity" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Shake Intensity:</label>
+            <input type="range" id="shakeIntensitySlider" min="0" max="150" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="shakeIntensityVal">100</span>%</div>
           </div>
 
           <div style="margin-bottom: 20px;">
@@ -451,7 +531,12 @@
               <option value="60">60 FPS</option>
               <option value="120">120 FPS</option>
               <option value="144">144 FPS</option>
+              <option value="custom" data-i18n="fpsCustom">Custom...</option>
             </select>
+            <div id="fpsCustomDiv" style="display:none; margin-top:10px; align-items:center; gap:8px;">
+              <input type="number" id="fpsCustomInput" min="10" max="1000" placeholder="60" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
+              <span style="color:#4af; font-size:9px;">FPS</span>
+            </div>
             <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="fpsNote">* Limits maximum frame rate</div>
           </div>
 
@@ -460,6 +545,14 @@
               <input type="checkbox" id="fpsCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="showFps">Show FPS Counter</span>
             </label>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+              <input type="checkbox" id="vsyncCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="vsync">V-Sync</span>
+            </label>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="vsyncNote">* On = smooth, capped at refresh. Off = uncapped FPS (may tear). Restart required.</div>
           </div>
         </div>
 
@@ -541,35 +634,6 @@
           <button id="resetControlsBtn" data-i18n="ctrlReset" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">RESET TO DEFAULT</button>
         </div>
 
-        <!-- GAMEPLAY TAB -->
-        <div class="setPanel" data-panel="gameplay" style="display:none;">
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
-            <input type="checkbox" id="screenShakeCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
-            <span data-i18n="screenShake">Screen Shake</span>
-          </label>
-
-          <div style="margin-bottom: 20px;">
-            <label data-i18n="shakeIntensity" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Shake Intensity:</label>
-            <input type="range" id="shakeIntensitySlider" min="0" max="150" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="shakeIntensityVal">100</span>%</div>
-          </div>
-
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
-            <input type="checkbox" id="particlesCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
-            <span data-i18n="particles">Particles</span>
-          </label>
-
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
-            <input type="checkbox" id="combatTextCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
-            <span data-i18n="combatText">Floating Combat Text</span>
-          </label>
-
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
-            <input type="checkbox" id="autoSaveCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
-            <span data-i18n="autoSave">Auto-Save Progress</span>
-          </label>
-        </div>
-
         <!-- GENERAL TAB -->
         <div class="setPanel" data-panel="general" style="display:none;">
           <div style="margin-bottom: 20px;">
@@ -578,6 +642,17 @@
               <!-- options are populated dynamically from the localisation/ folder -->
             </select>
           </div>
+          <div style="margin-bottom: 20px;">
+            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+              <input type="checkbox" id="cutscenesCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="showDialogues">Story Dialogues</span>
+            </label>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="showDialoguesNote">* Turn off to skip all story cutscenes</div>
+          </div>
+          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
+            <input type="checkbox" id="autoSaveCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="autoSave">Auto-Save Progress</span>
+          </label>
         </div>
 
         </div><!-- /scrollable area -->
@@ -620,12 +695,66 @@
     resSelect.value = window.gameSettings.resolution;
     scaleSelect.value = window.gameSettings.gameScale.toString();
     fpsCheck.checked = window.gameSettings.showFPS;
-    fpsLimitSelect.value = (window.gameSettings.fpsLimit || 0).toString();
+    const vsyncCheck = document.getElementById('vsyncCheckbox');
+    if (vsyncCheck) vsyncCheck.checked = window.gameSettings.vsync !== false;
+    // FPS limit: if the saved value isn't one of the presets, treat it as Custom.
+    const fpsCustomDiv = document.getElementById('fpsCustomDiv');
+    const fpsCustomInput = document.getElementById('fpsCustomInput');
+    const fpsVal = (window.gameSettings.fpsLimit || 0);
+    const fpsPresets = ['0', '30', '60', '120', '144'];
+    if (fpsPresets.includes(String(fpsVal))) {
+      fpsLimitSelect.value = String(fpsVal);
+      if (fpsCustomDiv) fpsCustomDiv.style.display = 'none';
+    } else {
+      fpsLimitSelect.value = 'custom';
+      if (fpsCustomInput) fpsCustomInput.value = fpsVal;
+      if (fpsCustomDiv) fpsCustomDiv.style.display = 'flex';
+    }
+    if (fpsLimitSelect) fpsLimitSelect.onchange = function () {
+      if (fpsCustomDiv) fpsCustomDiv.style.display = (this.value === 'custom') ? 'flex' : 'none';
+    };
     const graphicsSelect = document.getElementById('graphicsSelect');
     const windowModeSelect = document.getElementById('windowModeSelect');
+
+    // ── Per-parameter graphics sliders ──────────────────────────────────────
+    // Each row maps a gfx key to its slider; UI value is a percentage that maps
+    // to the multiplier (value/100). renderScale uses 100–300% → 1.0–3.0×.
+    const GFX_ROWS = [
+      { key:'renderScale', slider:'gfxRenderScaleSlider', val:'gfxRenderScaleVal' },
+      { key:'glow',        slider:'gfxGlowSlider',        val:'gfxGlowVal' },
+      { key:'particleMul', slider:'gfxParticleMulSlider', val:'gfxParticleMulVal' },
+      { key:'bgDetail',    slider:'gfxBgDetailSlider',    val:'gfxBgDetailVal' },
+      { key:'trails',      slider:'gfxTrailsSlider',      val:'gfxTrailsVal' },
+      { key:'bossFx',      slider:'gfxBossFxSlider',      val:'gfxBossFxVal' },
+      { key:'decorMul',    slider:'gfxDecorMulSlider',    val:'gfxDecorMulVal' },
+    ];
+    const gfxNow = Object.assign({}, (window.GFX_TIERS && window.GFX_TIERS.high) || {}, window.gameSettings.gfx || {});
+    function gfxFillSlidersFrom(obj) {
+      GFX_ROWS.forEach(r => {
+        const sl = document.getElementById(r.slider), vl = document.getElementById(r.val);
+        if (!sl) return;
+        const pct = Math.round(((obj[r.key] != null ? obj[r.key] : 1)) * 100);
+        sl.value = pct; if (vl) vl.textContent = pct;
+      });
+    }
+    gfxFillSlidersFrom(gfxNow);
+    GFX_ROWS.forEach(r => {
+      const sl = document.getElementById(r.slider), vl = document.getElementById(r.val);
+      if (!sl) return;
+      sl.oninput = function () {
+        if (vl) vl.textContent = this.value;
+        // Hand-tuning any slider switches the preset selector to "Custom".
+        if (graphicsSelect) graphicsSelect.value = 'custom';
+      };
+    });
     if (graphicsSelect) {
       const gq = window.gameSettings.graphicsQuality;
-      graphicsSelect.value = (gq === 'auto' || !gq) ? detectGraphicsQuality() : gq;
+      graphicsSelect.value = (gq && (gq === 'custom' || (window.GFX_TIERS && window.GFX_TIERS[gq]))) ? gq : 'custom';
+      // Selecting a preset just pre-fills the sliders (templates).
+      graphicsSelect.onchange = function () {
+        const tiers = window.GFX_TIERS || {};
+        if (this.value !== 'custom' && tiers[this.value]) gfxFillSlidersFrom(tiers[this.value]);
+      };
     }
     if (windowModeSelect) windowModeSelect.value = window.gameSettings.windowMode || 'windowed';
 
@@ -658,11 +787,13 @@
     const autoSaveCheck = document.getElementById('autoSaveCheckbox');
     const combatTextCheck = document.getElementById('combatTextCheckbox');
     const showHintsCheck = document.getElementById('showHintsCheckbox');
+    const cutscenesCheck = document.getElementById('cutscenesCheckbox');
     if (screenShakeCheck) screenShakeCheck.checked = window.gameSettings.screenShake !== false;
     if (particlesCheck) particlesCheck.checked = window.gameSettings.particles !== false;
     if (autoSaveCheck) autoSaveCheck.checked = window.gameSettings.autoSave !== false;
     if (combatTextCheck) combatTextCheck.checked = window.gameSettings.combatText !== false;
     if (showHintsCheck) showHintsCheck.checked = window.gameSettings.showHints !== false;
+    if (cutscenesCheck) cutscenesCheck.checked = window.gameSettings.cutscenes !== false;
 
     // Shake intensity slider
     const shakeIntensitySlider = document.getElementById('shakeIntensitySlider');
@@ -822,10 +953,36 @@
       
       window.gameSettings.gameScale = parseFloat(scaleSelect.value);
       window.gameSettings.showFPS = fpsCheck.checked;
-      window.gameSettings.fpsLimit = parseInt(fpsLimitSelect.value) || 0;
+      // FPS limit: a preset, or a clamped custom value (10–1000) when "Custom" chosen.
+      if (fpsLimitSelect.value === 'custom') {
+        let cf = parseInt(fpsCustomInput && fpsCustomInput.value, 10);
+        if (isNaN(cf) || cf <= 0) cf = 0;
+        else cf = Math.max(10, Math.min(cf, 1000));
+        window.gameSettings.fpsLimit = cf;
+      } else {
+        window.gameSettings.fpsLimit = parseInt(fpsLimitSelect.value, 10) || 0;
+      }
       
       const gfxSel = document.getElementById('graphicsSelect');
       if (gfxSel) { window.gameSettings.graphicsQuality = gfxSel.value; }
+      // Read the per-parameter graphics sliders into gameSettings.gfx.
+      (function () {
+        const rows = [
+          ['renderScale','gfxRenderScaleSlider'], ['glow','gfxGlowSlider'],
+          ['particleMul','gfxParticleMulSlider'], ['bgDetail','gfxBgDetailSlider'],
+          ['trails','gfxTrailsSlider'], ['bossFx','gfxBossFxSlider'], ['decorMul','gfxDecorMulSlider'],
+        ];
+        const g = Object.assign({}, window.gameSettings.gfx || {});
+        rows.forEach(function (r) {
+          const sl = document.getElementById(r[1]);
+          if (sl) g[r[0]] = (parseInt(sl.value, 10) || 0) / 100;
+        });
+        window.gameSettings.gfx = g;
+      })();
+      // V-Sync (startup-only switch). Remember if it changed so we can offer a restart.
+      const prevVsync = window.gameSettings.vsync !== false;
+      if (vsyncCheck) window.gameSettings.vsync = vsyncCheck.checked;
+      const vsyncChanged = (window.gameSettings.vsync !== false) !== prevVsync;
       const wmSel = document.getElementById('windowModeSelect');
       if (wmSel) { window.gameSettings.windowMode = wmSel.value; }
       const langSel = document.getElementById('languageSelect');
@@ -842,6 +999,7 @@
       if (autoSaveCheck) window.gameSettings.autoSave = autoSaveCheck.checked;
       if (combatTextCheck) window.gameSettings.combatText = combatTextCheck.checked;
       if (showHintsCheck) window.gameSettings.showHints = showHintsCheck.checked;
+      if (cutscenesCheck) window.gameSettings.cutscenes = cutscenesCheck.checked;
       if (shakeIntensitySlider) window.gameSettings.shakeIntensity = parseInt(shakeIntensitySlider.value);
 
       // Control bindings
@@ -856,9 +1014,17 @@
       if (typeof window.applyGameplaySettings === 'function') window.applyGameplaySettings();
 
       overlay.style.display = 'none';
-      
+
       // Play sound if available
       if (window.SFX && window.SFX.menu) window.SFX.menu();
+
+      // V-Sync only takes effect at startup (command-line switch). Offer a restart.
+      if (vsyncChanged && window.electronAPI && typeof window.electronAPI.relaunch === 'function') {
+        const msg = (typeof window.t === 'function' && window.t('vsyncRestart') !== 'vsyncRestart')
+          ? window.t('vsyncRestart')
+          : 'V-Sync change needs a restart. Restart now?';
+        if (window.confirm(msg)) window.electronAPI.relaunch();
+      }
     };
 
     // Cancel button

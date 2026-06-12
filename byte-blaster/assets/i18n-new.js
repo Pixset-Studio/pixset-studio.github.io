@@ -128,6 +128,11 @@
   };
 
   window.i18nLang = function () { return LANG; };
+  // Raw access to the active language's full string table — used for structured
+  // data (cutscene dialogue) that can't go through the per-key t() helper.
+  // Returns the English table as a fallback so callers always get something.
+  window.i18nRaw = function () { return CURRENT || LOCALES.en || {}; };
+  window.i18nRawEn = function () { return LOCALES.en || {}; };
 
   // English (reference) name per language code. Shown in parentheses after the
   // native name in the picker — e.g. "Русский (Russian)" — so a language is
