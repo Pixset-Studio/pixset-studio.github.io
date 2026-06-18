@@ -169,6 +169,10 @@
     document.querySelectorAll('[data-i18n-html]').forEach(el => {
       el.innerHTML = window.t(el.getAttribute('data-i18n-html'));
     });
+    // Localised input placeholders (data-i18n-ph="key")
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+      el.setAttribute('placeholder', window.t(el.getAttribute('data-i18n-ph')));
+    });
   }
   window.applyI18nDOM = applyDOM;
 
