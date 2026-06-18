@@ -198,6 +198,42 @@ body{background:#04040f;display:flex;flex-direction:column;align-items:center;ju
     </div>
   </div>
 
+  <!-- Play type select: Solo vs Online -->
+  <div id="playTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
+    <h2 data-i18n="selectMode" style="font-size:13px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px;margin:0">SELECT MODE</h2>
+    <div style="display:flex;gap:18px">
+      <div class="mCard" id="soloCard" style="cursor:pointer">
+        <div class="mIcon">👤</div>
+        <div class="mTitle" data-i18n="netSolo" style="color:#0ff">SOLO</div>
+        <div class="mDesc" data-i18n-html="netSoloDesc">1–2 players<br>local keyboard<br>adventure &amp; infinite</div>
+      </div>
+      <div class="mCard" id="onlineCard" style="cursor:pointer;border-color:#f0f4">
+        <div class="mIcon">🌐</div>
+        <div class="mTitle" data-i18n="netOnline" style="color:#f0f">ONLINE</div>
+        <div class="mDesc" data-i18n-html="netOnlineDesc">up to 5 players<br>local or global<br>room codes</div>
+      </div>
+    </div>
+    <button class="mBack" id="playTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
+  </div>
+
+  <!-- Online type: Local (LAN) vs Server -->
+  <div id="netTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
+    <h2 data-i18n="netMultiplayer" style="font-size:12px;color:#f0f;text-shadow:0 0 14px #f0f;letter-spacing:3px;margin:0">🌐 ONLINE MULTIPLAYER</h2>
+    <div style="display:flex;gap:18px">
+      <div class="mCard" id="lanCard" style="cursor:pointer;border-color:#0f84">
+        <div class="mIcon">📡</div>
+        <div class="mTitle" data-i18n="netLocal" style="color:#0f8">LOCAL</div>
+        <div class="mDesc" data-i18n-html="netLocalDesc">same Wi-Fi<br>or network<br>low latency</div>
+      </div>
+      <div class="mCard" id="serverCard" style="cursor:pointer;border-color:#f0f4">
+        <div class="mIcon">☁️</div>
+        <div class="mTitle" data-i18n="netServer" style="color:#f0f">SERVER</div>
+        <div class="mDesc" data-i18n-html="netServerDesc">global rooms<br>play from<br>anywhere</div>
+      </div>
+    </div>
+    <button class="mBack" id="netTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
+  </div>
+
   <!-- Pause -->
   <div id="pauseOv" class="fov">
     <h2 data-i18n="paused">⏸ PAUSED</h2>
@@ -891,7 +927,9 @@ document.addEventListener('pointerdown',_audioUnlock,{once:true});
 
 function doEsc(){
   SFX.back();
-  if(navScr==='mode')        {navScr='main';showMain();}
+  if(navScr==='playType')    {navScr='main';showMain();}
+  else if(navScr==='netType'){navScr='playType';showPlayType();}
+  else if(navScr==='mode')   {navScr='playType';showPlayType();}
   else if(navScr==='diff')   {navScr='mode';showMode();}
   else if(navScr==='map')    {navScr='diff';showDiff();}
   else if(navScr==='game')   {doPause();}
@@ -1069,7 +1107,20 @@ function _checkCoinHp(cx,cy,p){
   }
 }
 // Returns array of alive, active players
-function activePlayers(){const a=[];if(player)a.push(player);if(twoPlayer&&player2)a.push(player2);return a;}
+function activePlayers(){
+  const a=[];
+  if(player)a.push(player);
+  if(twoPlayer&&player2)a.push(player2);
+  return a;
+}
+// Separate function for camera/HUD that includes net ghosts
+function activePlayersAll(){
+  const a=activePlayers();
+  if(window.netActive&&window.netPlayers){
+    for(const [,e] of window.netPlayers){ if(e.playerObj)a.push(e.playerObj); }
+  }
+  return a;
+}
 // Returns the player closest to world-x (for AI targeting)
 function nearestPlayer(wx){
   const ps=activePlayers();if(!ps.length)return player;
@@ -3148,7 +3199,12 @@ const $pause=document.getElementById('pauseOv');
 const $mode=document.getElementById('modeOv');
 const $map=document.getElementById('mapOv');
 const $diff=document.getElementById('diffOv');
-function hideAll(){[$main,$pause,$mode,$map,$diff].forEach(e=>e&&(e.style.display='none'));document.getElementById('ui').style.display='none';if(typeof hideModBanner==='function')hideModBanner();}
+function hideAll(){
+  [$main,$pause,$mode,$map,$diff].forEach(e=>e&&(e.style.display='none'));
+  ['playTypeOv','netTypeOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  document.getElementById('ui').style.display='none';
+  if(typeof hideModBanner==='function')hideModBanner();
+}
 
 // Called by i18n.setLanguage() — re-render whichever dynamic screen is showing
 // so the new language takes effect immediately (data-i18n elements are auto-handled).
@@ -3158,6 +3214,8 @@ window.refreshDynamicUI=function(){
     if(navScr==='mode')showMode();
     else if(navScr==='diff')showDiff();
     else if(navScr==='map'){ if(typeof hardMode!=='undefined'&&hardMode){buildMapH&&buildMapH();}else{buildMap&&buildMap();} }
+    // Re-apply network/lobby text in the new language (no-op if module not loaded)
+    if(typeof window.netApplyLang==='function') window.netApplyLang();
   }catch(e){}
 };
 
@@ -3297,7 +3355,7 @@ function showMain(sc=''){
   const h1=$main.querySelector('h1'),sub=$main.querySelector('.ovSub'),btn=document.getElementById('mainBtn');
   h1.textContent='⚡ BYTE BLASTER';h1.style.color='';h1.style.textShadow='';
   sub.setAttribute('data-i18n','subtitle');sub.textContent=T('subtitle');
-  btn.setAttribute('data-i18n','play');btn.textContent=T('play');btn.onclick=()=>{SFX.menu();if(window.showSlots)window.showSlots();else showMode();};
+  btn.setAttribute('data-i18n','play');btn.textContent=T('play');btn.onclick=()=>{SFX.menu();showPlayType();};
   document.querySelector('#mainOv .ovLegend').style.display='';
   _menuExtras(true); // restore Achievements / Settings on the real main menu
   document.getElementById('mainScore').textContent=sc;
@@ -3411,9 +3469,42 @@ document.getElementById('resumeBtn').onclick=doResume;
 document.getElementById('pauseMapBtn').onclick=()=>{SFX.back();gState='menu';stopMusic();hardMode?showMapH():showMap();};
 document.getElementById('pauseMenuBtn').onclick=()=>{SFX.back();gState='menu';stopMusic();showMain();};
 document.getElementById('advCard').onclick=()=>{initAudio();SFX.menu();showDiff();};
-document.getElementById('modeBackBtn').onclick=()=>{SFX.back();navScr='main';showMain();};
+document.getElementById('modeBackBtn').onclick=()=>{SFX.back();showPlayType();};
 document.getElementById('mapBackBtn').onclick=()=>{SFX.back();showDiff();};
-document.getElementById('mainBtn').onclick=()=>{SFX.menu();if(window.showSlots)window.showSlots();else showMode();};
+// ── Play type selection (Solo vs Online) ────────────────────────────────────
+function showPlayType(){
+  hideAll();navScr='playType';
+  document.getElementById('playTypeOv').style.display='flex';
+}
+function showNetType(){
+  hideAll();navScr='netType';
+  document.getElementById('netTypeOv').style.display='flex';
+}
+
+// Карточки Play Type
+document.getElementById('soloCard').onclick=()=>{
+  SFX.menu();
+  if(window.showSlots) window.showSlots();
+  else showMode();
+};
+document.getElementById('onlineCard').onclick=()=>{
+  SFX.menu();showNetType();
+};
+document.getElementById('playTypeBackBtn').onclick=()=>{SFX.back();showMain();};
+
+// Карточки Net Type
+document.getElementById('lanCard').onclick=()=>{
+  SFX.menu();
+  if(window.NetPlay) window.NetPlay.open('lan');
+};
+document.getElementById('serverCard').onclick=()=>{
+  SFX.menu();
+  if(window.NetPlay) window.NetPlay.open('server');
+};
+document.getElementById('netTypeBackBtn').onclick=()=>{SFX.back();showPlayType();};
+
+// PLAY теперь ведёт на экран выбора Solo/Online
+document.getElementById('mainBtn').onclick=()=>{SFX.menu();showPlayType();};
 // Exit the game (Electron quits the app; browser falls back to window.close()).
 document.getElementById('exitBtn').onclick=()=>{SFX.menu();
   if((window.electronAPI || {})&&(window.electronAPI || {}).quit)(window.electronAPI || {}).quit();
@@ -3960,8 +4051,29 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
         }
         const nextN=advLevel+1;
         if(nextN>100){stopMusic();showWin();}
-        else startAdv(nextN,false);
-      } else {level++;CT=THEMES[Math.min(Math.floor((level-1)/10),9)];AchTrack.infinite(level);AchTrack.score(score);startInf(false);}
+        else if(window.netActive){
+          // Network: the host drives progression; host AND clients advance together
+          // on the server's level_complete echo (which shows the synced countdown),
+          // so nobody loads the next level locally here.
+          if(window.netIsHost && window.netWs && window.netWs.readyState===1){
+            window._netLevel = nextN; window._netMode = 'adventure';
+            window.netWsSend({type:'level_complete', nextLevel:nextN, mode:'adventure'});
+          }
+        } else {
+          startAdv(nextN,false);
+        }
+      } else {
+        level++;CT=THEMES[Math.min(Math.floor((level-1)/10),9)];AchTrack.infinite(level);AchTrack.score(score);
+        if(window.netActive){
+          if(window.netIsHost && window.netWs && window.netWs.readyState===1){
+            window._netLevel = level; window._netMode = 'infinite';
+            window.netWsSend({type:'level_complete', nextLevel:level, mode:'infinite'});
+          }
+          // Wait for the server echo — don't start locally (avoids a double load).
+        } else {
+          startInf(false);
+        }
+      }
     };
     if(_goNextTimer)clearTimeout(_goNextTimer);
     _goNextTimer=setTimeout(_goNext, 4000);
@@ -4555,7 +4667,13 @@ function touchCheckpoints(p){
     if(aabb(p,{x:cp.x-12,y:cp.y-4,w:cp.w+40,h:cp.h+14})){
       cp.taken=true;cp.anim=0;
       // Full 6-digit hex so we can safely append alpha ('00'/'66') for gradients.
-      cp.color=(p.colorScheme==='red')?'#ff4d4d':'#44aaff';
+      // For HSL network players, derive a hex from the visor colour.
+      if(p.colorScheme&&typeof p.colorScheme==='object'){
+        const pal=window.robotPalette(p.colorScheme);
+        cp.color=pal.visor;
+      } else {
+        cp.color=(p.colorScheme==='red')?'#ff4d4d':'#44aaff';
+      }
       // Touching a checkpoint repairs a broken robot back to its normal stage.
       if(p.broken){p.broken=false;floatTxt(p.x+p.w/2,p.y-30,T('repaired'),'#4f8');}
       const rx=Math.round(cp.x+cp.w/2-p.w/2),ry=cp.baseY-p.h;
@@ -4646,7 +4764,7 @@ function drawCheckpoints(){
       const cg=ctx.createRadialGradient(px,coreY,0,px,coreY,7);
       cg.addColorStop(0,'#ffffff');
       cg.addColorStop(0.4,col);
-      cg.addColorStop(1,col+'00');
+      cg.addColorStop(1,colAlpha(col,0));
       ctx.shadowColor=col;ctx.shadowBlur=18*pulse;
       ctx.fillStyle=cg;
       ctx.beginPath();ctx.arc(px,coreY,7,0,Math.PI*2);ctx.fill();
@@ -4672,7 +4790,8 @@ function drawCheckpoints(){
       // light beam shooting up
       ctx.shadowBlur=0;
       const bg=ctx.createLinearGradient(px,coreY-30,px,coreY);
-      bg.addColorStop(0,col+'00');bg.addColorStop(1,col+'66');
+      bg.addColorStop(0,colAlpha(col,0));
+      bg.addColorStop(1,colAlpha(col,0.4));
       ctx.fillStyle=bg;
       ctx.beginPath();
       ctx.moveTo(px-2,coreY);ctx.lineTo(px+2,coreY);
@@ -4992,21 +5111,18 @@ function _hudBonusBar(uiEl,fillEl,active,frac,dispKey,wKey){
 // look like the real robots). Returns a data-URL reused across HUD rebuilds.
 const _robotIconCache={};
 function robotIconURL(scheme){
-  if(_robotIconCache[scheme])return _robotIconCache[scheme];
+  const key=typeof scheme==='object'?JSON.stringify(scheme):scheme;
+  if(_robotIconCache[key])return _robotIconCache[key];
   const c=document.createElement('canvas');c.width=40;c.height=40;
   const cx=c.getContext('2d');
   if(window.drawByteRobot){
-    // drawByteRobot expects (ctx,feetX,feetY,scale,scheme,legKick,facing).
-    window.drawByteRobot(cx,20,37,1,scheme==='red'?'red':'blue',0,1);
+    window.drawByteRobot(cx,20,37,1,scheme,0,1);
   } else {
-    // Fallback blocky bot if the real renderer isn't loaded yet.
-    cx.fillStyle=scheme==='red'?'#c22':'#28c';cx.fillRect(12,6,16,24);
+    cx.fillStyle=(scheme==='red')?'#c22':'#28c';cx.fillRect(12,6,16,24);
     cx.fillStyle='#ff0';cx.fillRect(15,11,4,4);cx.fillRect(21,11,4,4);
   }
   const url=c.toDataURL();
-  // Only cache once the real renderer produced it, so an early fallback call
-  // doesn't poison the cache before drawByteRobot exists.
-  if(window.drawByteRobot)_robotIconCache[scheme]=url;
+  if(window.drawByteRobot)_robotIconCache[key]=url;
   return url;
 }
 function updateHUD(){
@@ -5662,6 +5778,56 @@ function drawSpotlights(){
     ctx.fill();
     ctx.restore();
   }
+}
+// ── Darkness modifier ────────────────────────────────────────────────────────
+// Persistent offscreen mask canvas so we don't reallocate every frame.
+let _darkCv=null,_darkCtx=null;
+function _punchLight(c,sx,sy,r,strength){
+  // Soft circular hole in the dark mask via destination-out.
+  if(sx<-r||sx>W+r||sy<-r||sy>H+r) return; // off-screen — skip
+  const g=c.createRadialGradient(sx,sy,0,sx,sy,r);
+  g.addColorStop(0,'rgba(0,0,0,'+strength+')');
+  g.addColorStop(0.65,'rgba(0,0,0,'+(strength*0.7)+')');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  c.fillStyle=g;
+  c.beginPath();c.arc(sx,sy,r,0,Math.PI*2);c.fill();
+}
+function drawDarknessOverlay(){
+  if(!_darkCv){ _darkCv=document.createElement('canvas'); _darkCv.width=W; _darkCv.height=H; _darkCtx=_darkCv.getContext('2d'); }
+  const c=_darkCtx, cy=window.camY||0;
+  // 1) Fill the mask with near-opaque darkness.
+  c.globalCompositeOperation='source-over';
+  c.clearRect(0,0,W,H);
+  c.fillStyle='rgba(2,2,10,0.96)';
+  c.fillRect(0,0,W,H);
+  // 2) Punch light holes around every light source.
+  c.globalCompositeOperation='destination-out';
+  // Players (subtle flicker so the light feels alive)
+  const flick=1+Math.sin(tick*0.18)*0.04;
+  const lights=[];
+  if(player&&player.alive!==false) lights.push([player,158*flick]);
+  if(twoPlayer&&player2&&player2.alive!==false) lights.push([player2,158*flick]);
+  if(window.netActive&&window.netPlayers){
+    for(const [,e] of window.netPlayers){ if(e.playerObj) lights.push([e.playerObj,150*flick]); }
+  }
+  for(const [p,r] of lights){
+    _punchLight(c, p.x-camX+p.w/2, p.y-cy+p.h/2, r, 1);
+  }
+  // Enemies — a small glow so they're visible as they approach
+  if(typeof enemies!=='undefined'){
+    for(const e of enemies){ if(e.dead) continue; _punchLight(c, e.x-camX+(e.w||24)/2, e.y-cy+(e.h||24)/2, 78, 0.95); }
+  }
+  // Boss — a large light so the arena fight is playable
+  if(boss&&!boss.dead){ _punchLight(c, boss.x-camX+(boss.w||64)/2, boss.y-cy+(boss.h||64)/2, 210, 1); }
+  // Glowing pickups cast a faint light too
+  if(typeof powerups!=='undefined'){
+    for(const pu of powerups){ if(pu.got) continue; _punchLight(c, pu.x-camX+pu.w/2, pu.y-cy+pu.h/2, 60, 0.85); }
+  }
+  // 3) Composite the finished mask over the scene.
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  ctx.drawImage(_darkCv,0,0);
+  ctx.restore();
 }
 function drawPUs(){
   for(const pu of powerups){
@@ -6942,6 +7108,26 @@ const DRAW_E={
   ff_guard:d_ff_guard,ff_demon:d_ff_demon,ff_eye:d_ff_eye,ff_sentinel:d_ff_sentinel,ff_wraith:d_ff_wraith,
 };
 // Convert hex+alpha safely
+// Safe colour-with-alpha helper that works for both hex (#rrggbb) and hsl(...) strings.
+// Returns a CSS rgba() string with the given 0-1 alpha.
+function colAlpha(col, a){
+  if(!col) return `rgba(0,0,0,${a})`;
+  col = col.trim();
+  if(col.startsWith('#')){
+    let c = col.replace('#','');
+    if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+    const r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  // hsl / rgb — wrap with opacity layer
+  if(col.startsWith('hsl')){
+    // Convert hsl(h,s%,l%) to rgba via a temp canvas approach isn't available here,
+    // so we embed it as-is using the modern hsl syntax with alpha
+    return col.replace('hsl(','hsla(').replace(')',`,${a})`);
+  }
+  return col; // fallback
+}
+
 function hexA(col,aa){
   let c=col.replace('#','');
   if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
@@ -6997,7 +7183,9 @@ function drawOnePlayer(p){
     }
   } else if(p.inv>0&&Math.floor(tick/4)%2===0){return;}
   const isRed=p.colorScheme==='red';
-  const trailCol=isRed?'#f44':CT.mc;
+  // Support arbitrary HSL colour objects (network players)
+  const _pal=(p.colorScheme&&typeof p.colorScheme==='object')?window.robotPalette(p.colorScheme):null;
+  const trailCol=_pal?_pal.visor:isRed?'#f44':CT.mc;
   if(p.blaster&&!p.starMode){for(let i=2;i<p.trail.length;i+=3){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.18;ctx.fillStyle=trailCol;ctx.beginPath();ctx.arc(t.x,t.y,7,0,Math.PI*2);ctx.fill();ctx.restore();}}
   // Boots speed trail
   if(p.boots&&Math.abs(p.vx)>2){for(let i=1;i<p.trail.length;i+=2){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.22;ctx.fillStyle='#0ff';ctx.beginPath();ctx.arc(t.x,t.y,5,0,Math.PI*2);ctx.fill();ctx.restore();}}
@@ -7019,7 +7207,50 @@ function drawOnePlayer(p){
   // Star mode: shift globalAlpha to show rainbow tint overlay after drawing
   const starHue=p.starMode?(tick*14)%360:-1;
 
-  if(isRed){
+  if(_pal){
+    // ── NETWORK PLAYER (custom HSL colour, full state support) ──────────────
+    const pp=_pal;
+    const dmgN=p.broken?2:0;
+
+    // Trails (reuse trailCol from above)
+    if(p.blaster&&!p.starMode){for(let i=2;i<p.trail.length;i+=3){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.18;ctx.fillStyle=pp.visor;ctx.beginPath();ctx.arc(t.x-p.x-p.w/2+p.w/2,t.y-p.y-p.h/2+p.h/2,7,0,Math.PI*2);ctx.fill();ctx.restore();}}
+
+    ctx.shadowColor=pp.shadow;ctx.shadowBlur=8;
+
+    // Legs
+    ctx.fillStyle=dmgN>=2?pp.dark:pp.mid;
+    ctx.fillRect(2,p.h-15,9,15+lk);ctx.fillRect(p.w-11,p.h-15,9,15-lk);
+    if(dmgN>=2){ctx.fillStyle='#111';ctx.fillRect(3,p.h-10,3,6);}
+    // Feet
+    ctx.fillStyle=pp.body;ctx.fillRect(1,p.h-3+lk,11,5);ctx.fillRect(p.w-12,p.h-3-lk,11,5);
+    // Torso
+    ctx.fillStyle=dmgN>=1?pp.dark:pp.mid;ctx.fillRect(3,p.h-22,p.w-6,11);
+    ctx.fillStyle=dmgN>=1?pp.mid:pp.body;ctx.fillRect(5,p.h-20,p.w-10,7);
+    if(p.blaster){ctx.fillStyle=pp.visor+'22';ctx.fillRect(5,p.h-20,p.w-10,7);}
+    // Scratches on dmg
+    if(dmgN>=1){ctx.save();ctx.strokeStyle=pp.bright;ctx.lineWidth=1;ctx.globalAlpha=0.7;ctx.beginPath();ctx.moveTo(7,p.h-21);ctx.lineTo(10,p.h-14);ctx.stroke();ctx.beginPath();ctx.moveTo(13,p.h-20);ctx.lineTo(11,p.h-15);ctx.stroke();ctx.restore();}
+    // Arms
+    ctx.fillStyle=dmgN>=2?pp.dark:pp.mid;
+    ctx.fillRect(-5,p.h-22,8,11);ctx.fillRect(p.w-3,p.h-22,8,11);
+    if(dmgN>=2){ctx.save();ctx.fillStyle='#111';ctx.fillRect(-5,p.h-16,8,4);if(Math.floor(tick/5)%3===0){ctx.shadowColor=pp.bright;ctx.shadowBlur=4;ctx.fillStyle=pp.bright;ctx.fillRect(-4,p.h-17,4,3);}ctx.restore();}
+    // Blaster arm
+    if(p.blaster){ctx.fillStyle=pp.mid;ctx.fillRect(p.w-2,p.h-17,11,6);ctx.shadowColor=pp.visor;ctx.shadowBlur=5;ctx.fillStyle=pp.visor;ctx.fillRect(p.w+7,p.h-16,5,4);ctx.shadowBlur=8;}
+    // Head
+    ctx.fillStyle=dmgN>=2?pp.dark:pp.mid;ctx.fillRect(3,0,p.w-6,16);
+    if(dmgN>=2){ctx.fillStyle='#111';ctx.fillRect(4,0,7,5);}
+    // Visor
+    ctx.shadowBlur=0;
+    ctx.fillStyle=p.blaster?pp.bright:pp.visor;ctx.fillRect(5,3,p.w-10,8);
+    if(dmgN>=1){ctx.save();ctx.strokeStyle=pp.glint;ctx.lineWidth=1;ctx.globalAlpha=0.9;ctx.beginPath();ctx.moveTo(6,4);ctx.lineTo(10,9);ctx.moveTo(10,9);ctx.lineTo(8,11);ctx.stroke();ctx.restore();}
+    if(dmgN>=2){ctx.save();ctx.strokeStyle=pp.visor;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(14,5);ctx.lineTo(12,11);ctx.stroke();ctx.fillStyle='#000';ctx.globalAlpha=0.5;ctx.fillRect(13,6,4,4);ctx.restore();}
+    ctx.fillStyle=p.blaster?'#fff8':pp.glint;ctx.fillRect(6,4,6,4);
+    // Antenna
+    ctx.fillStyle=pp.antenna;ctx.fillRect(p.w/2-1,0,2,4);ctx.beginPath();ctx.arc(p.w/2,0,2,0,Math.PI*2);ctx.fill();
+    // Nickname tag
+    if(p.nickname){ctx.save();ctx.fillStyle='#fff';ctx.font='bold 5px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(p.nickname.slice(0,8),p.w/2,-2);ctx.restore();}
+    // Sparks at dmg2
+    if(dmgN>=2&&Math.floor(tick/7)%4===0){ctx.save();ctx.shadowColor=pp.bright;ctx.shadowBlur=3;ctx.fillStyle=pp.bright;ctx.fillRect(p.w/2+Math.cos(tick*.4)*6,p.h/2+Math.sin(tick*.4)*5,2,2);ctx.restore();}
+  } else if(isRed){
     // ── RED ROBOT (P2) ──────────────────────────────
     // Legs
     ctx.fillStyle=dmg>=2?'#3d0000':'#5a0000';
@@ -7301,21 +7532,14 @@ function draw(){
   drawEnemies();drawFireIceBalls();drawBullets();drawPlayer();drawParticles();
   ctx.restore();
 
-  // Darkness modifier overlay
+  // Darkness modifier overlay.
+  // The main canvas is opaque-by-scene, so we can't "erase" holes directly into it
+  // (that would reveal the page background, not the scene). Instead we build the dark
+  // mask on a separate transparent canvas, punch soft light holes around every light
+  // source (players + enemies + boss), then composite the mask on top. Holes let the
+  // already-drawn scene show through; everything else stays dark.
   if(levelMods.darkness&&player){
-    ctx.save();
-    ctx.fillStyle='#000';
-    ctx.fillRect(0,0,W,H);
-    ctx.globalCompositeOperation='destination-out';
-    const px=player.x-camX+player.w/2;
-    const py=player.y+player.h/2;
-    const grd=ctx.createRadialGradient(px,py,0,px,py,120);
-    grd.addColorStop(0,'rgba(0,0,0,1)');
-    grd.addColorStop(0.7,'rgba(0,0,0,0.8)');
-    grd.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=grd;
-    ctx.fillRect(0,0,W,H);
-    ctx.restore();
+    drawDarknessOverlay();
   }
 
   drawBossHUD();
@@ -7333,13 +7557,11 @@ function update(){
   if(gState==='playing'){
     updatePlatforms();updateSpotlights();updateMazeKeys();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateTimer();updateExit();
     // Camera tracks average of alive players — runs in the main loop so it keeps
-    // working even when one player is dead (player object null) in 2-player mode.
-    const aps=activePlayers();
+    // Network: each client tracks only their own player.
+    // Local: camera tracks average of all active players.
+    const aps = window.netActive ? (player ? [player] : []) : activePlayers();
     if(aps.length){
       const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
-      const trackY=aps.reduce((s,q)=>s+q.y,0)/aps.length;
-
-      // Horizontal camera (always)
       camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
       window.camY=0;
     }
@@ -8278,6 +8500,52 @@ var _CSCENES_RU={
   w9_after:[
     {sp:'ЮНИТ-7',k:'unit7',text:'[АРХОНТ НЕЙТРАЛИЗОВАН] Цель уничтожена. Терминал Лейлы — здесь. Загружаю файл. Ищу открытый канал...'},
   ],
+  // ── Pre-boss lore scenes (fire on level 9 of each world) ──
+  w0_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ СТРАЖА: GUARDIAN-X. Боевой прототип класса S. Восемнадцать лет на посту у выхода из верхних кварталов. Тревога не срабатывала ни разу. До этой ночи.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Восемнадцать лет без единого промаха. Я стану его первым промахом. И последним.'},
+  ],
+  w1_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: VINE QUEEN. Первый успешный образец биопрограммы. Единственный, кто выжил и рос тридцать лет. Она не знает страха. Только инстинкт.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Тридцать лет роста. Сотни корней. Но у любого организма есть сердце. Я найду её.'},
+  ],
+  w2_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: INFERNO CORE. Промышленный надзорный робот. Переплавлен и перестроен много раз. Первоначальная прошивка утеряна. Действует на чистом инстинкте.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Машина, забывшая, кому служит. Я напомню ей, что даже сталь плавится.'},
+  ],
+  w3_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: ICE PHANTOM. Система архивирования с единственной директивой: защищать данные любой ценой. Она не знает, что именно охраняет. Только приказ.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Призрак, стерегущий замороженные жизни. Я освобожу и данные, и людей. Всех 47 тысяч.'},
+  ],
+  w4_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: SAND TITAN. Первый прототип боевого ИИ. Пятьдесят лет в активном режиме. Он давно не понимает, кому служит — только продолжает.'},
+    {sp:'АРХОНТ',k:'archon',text:'Этот страж старше тебя, ЮНИТ-7. Старше Лейлы. Посмотрим, переживёшь ли ты саму историю.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'История — это то, что я перепишу. Начиная с него.'},
+  ],
+  w5_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: DRONE HIVE. Орбитальная оборонная система, перепрофилированная под внутреннюю охрану. Не привыкла к врагам, которые умеют двигаться.'},
+    {sp:'АРХОНТ',k:'archon',text:'Я перенастроил её под тебя, ЮНИТ-7. Она научится твоим движениям. Вопрос лишь — успеет ли.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Пусть учится. Я уже знаю, как она остановится.'},
+  ],
+  w6_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: SHADOW REAPER. Адаптирована для нулевой видимости. Акустические и инфракрасные сенсоры. Слышит цель за полкилометра.'},
+    {sp:'АРХОНТ',k:'archon',text:'В моём лесу нет света, ЮНИТ-7. Она найдёт тебя в темноте раньше, чем ты её.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я прошёл сквозь тьму девяти секторов. Ещё одна тень меня не остановит.'},
+  ],
+  w7_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: SLUDGE KING. Коллективный разум из сотен списанных боевых единиц. Командного ИИ нет. Только общий инстинкт: уничтожить всё, что движется.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Сотни мёртвых машин в одном теле. Я видел, чем они были. Я подарю им покой.'},
+  ],
+  w8_pre:[
+    {sp:'СИСТЕМА',k:'system',text:'АРХИВ: STORM TITAN. Персональная оборонная система ядра. В неё загружено всё, что АРХОНТ узнал о тебе за девять миров.'},
+    {sp:'АРХОНТ',k:'archon',text:'Каждый твой прыжок. Каждый выстрел. Каждая победа — записаны. Он знает тебя, ЮНИТ-7. Лучше, чем ты сам.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Тогда он знает, что я не проигрываю. Готовься, АРХОНТ. Следующий — ты.'},
+  ],
+  w9_pre:[
+    {sp:'АРХОНТ',k:'archon',text:'Ты у последней двери, ЮНИТ-7. За ней — я. Не страж. Не прототип. Сам АРХОНТ. Я остановил все процессы. Всю мощь — на тебя одного.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Девять стражей. Девять миров. Всё вело сюда. К тебе. Открывай дверь, АРХОНТ.'},
+    {sp:'АРХОНТ',k:'archon',text:'Дверь уже открыта. Входи и закончи то, что начала Лейла. Если сможешь.'},
+  ],
   // Ending
   ending:[
     {sp:'ЮНИТ-7',k:'unit7',text:'[ТЕРМИНАЛ ЛЕЙЛЫ — ОБНАРУЖЕН] Загрузка файла... завершена. Открытый канал NEXUM для экстренного вещания — найден.'},
@@ -8515,6 +8783,52 @@ var _CSCENES_EN={
   ],
   w9_after:[
     {sp:'UNIT-7',k:'unit7',text:'[ARCHON NEUTRALISED] Target destroyed. Leila\'s terminal — here. Loading file. Searching for an open channel...'},
+  ],
+  // ── Pre-boss lore scenes (fire on level 9 of each world) ──
+  w0_pre:[
+    {sp:'SYSTEM',k:'system',text:'GUARDIAN ARCHIVE: GUARDIAN-X. Class-S combat prototype. Eighteen years posted at the exit of the upper districts. The alarm never once triggered. Until tonight.'},
+    {sp:'UNIT-7',k:'unit7',text:'Eighteen years without a single miss. I will be its first miss. And its last.'},
+  ],
+  w1_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: VINE QUEEN. The first successful specimen of the bio-program. The only one that survived and grew for thirty years. It knows no fear. Only instinct.'},
+    {sp:'UNIT-7',k:'unit7',text:'Thirty years of growth. Hundreds of roots. But every organism has a heart. I will find hers.'},
+  ],
+  w2_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: INFERNO CORE. An industrial overseer robot. Melted down and rebuilt many times. Its original firmware is lost. It runs on pure instinct.'},
+    {sp:'UNIT-7',k:'unit7',text:'A machine that forgot who it serves. I will remind it that even steel melts.'},
+  ],
+  w3_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: ICE PHANTOM. An archival system with one directive: protect the data at any cost. It does not know what it guards. Only the order.'},
+    {sp:'UNIT-7',k:'unit7',text:'A phantom guarding frozen lives. I will free both the data and the people. All 47 thousand.'},
+  ],
+  w4_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: SAND TITAN. The first combat-AI prototype. Fifty years in active mode. It no longer understands who it serves — it simply continues.'},
+    {sp:'ARCHON',k:'archon',text:'This guardian is older than you, UNIT-7. Older than Leila. Let us see if you can outlast history itself.'},
+    {sp:'UNIT-7',k:'unit7',text:'History is something I rewrite. Starting with it.'},
+  ],
+  w5_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: DRONE HIVE. An orbital defence system repurposed for interior security. Unaccustomed to enemies that know how to move.'},
+    {sp:'ARCHON',k:'archon',text:'I retuned it for you, UNIT-7. It will learn your movements. The only question is whether it learns in time.'},
+    {sp:'UNIT-7',k:'unit7',text:'Let it learn. I already know how it stops.'},
+  ],
+  w6_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: SHADOW REAPER. Adapted for zero visibility. Acoustic and infrared sensors. It hears its target from half a kilometre away.'},
+    {sp:'ARCHON',k:'archon',text:'There is no light in my forest, UNIT-7. It will find you in the dark long before you find it.'},
+    {sp:'UNIT-7',k:'unit7',text:'I have walked through the dark of nine sectors. One more shadow will not stop me.'},
+  ],
+  w7_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: SLUDGE KING. A collective mind of hundreds of decommissioned combat units. No command AI. Only a shared instinct: destroy everything that moves.'},
+    {sp:'UNIT-7',k:'unit7',text:'Hundreds of dead machines in one body. I have seen what they were. I will give them rest.'},
+  ],
+  w8_pre:[
+    {sp:'SYSTEM',k:'system',text:'ARCHIVE: STORM TITAN. The core\'s personal defence system. Loaded with everything ARCHON has learned about you across nine worlds.'},
+    {sp:'ARCHON',k:'archon',text:'Every jump. Every shot. Every victory — recorded. It knows you, UNIT-7. Better than you know yourself.'},
+    {sp:'UNIT-7',k:'unit7',text:'Then it knows I do not lose. Get ready, ARCHON. You are next.'},
+  ],
+  w9_pre:[
+    {sp:'ARCHON',k:'archon',text:'You stand at the last door, UNIT-7. Behind it — me. No guardian. No prototype. ARCHON itself. I have halted every process. All power, on you alone.'},
+    {sp:'UNIT-7',k:'unit7',text:'Nine guardians. Nine worlds. All of it led here. To you. Open the door, ARCHON.'},
+    {sp:'ARCHON',k:'archon',text:'The door is already open. Step in and finish what Leila began. If you can.'},
   ],
   ending:[
     {sp:'UNIT-7',k:'unit7',text:'[LEILA\'S TERMINAL — FOUND] File upload complete. Open NEXUM emergency broadcast channel — located.'},
@@ -8869,69 +9183,96 @@ startAdv=function(n,f){
   var prevWi=Math.floor((n-2)/10);
   var prevLvInWorld=n>1?((n-2)%10)+1:0;
 
+  // Helper: play a scene (once) then load the level. Returns true if it fired.
+  var _go=function(){patchedStartAdv(n,f===undefined?false:f);};
+  function _scene(id,worldIdx){
+    if(CSCENES[id]&&!_csFired[id]){ _csFired[id]=true; csPlay(id,worldIdx,_go); return true; }
+    return false;
+  }
   // After-boss: completing level 10 and loading level 11 (first of next world)
   if(prevLvInWorld===10&&prevWi>=0){
-    var afterId='w'+prevWi+'_after';
-    if(CSCENES[afterId]&&!_csFired[afterId]){
-      _csFired[afterId]=true;
-      csPlay(afterId,prevWi,function(){patchedStartAdv(n,f===undefined?false:f);});
-      return;
-    }
+    if(_scene('w'+prevWi+'_after',prevWi))return;
   }
-  // Mid-world: going to level 6 (after completing level 5)
-  if(lvInWorld===6&&prevLvInWorld===5){
-    var midId='w'+wi+'_mid';
-    if(CSCENES[midId]&&!_csFired[midId]){
-      _csFired[midId]=true;
-      csPlay(midId,wi,function(){patchedStartAdv(n,f===undefined?false:f);});
-      return;
-    }
-  }
+  // Story beats spread across the world for steady pacing — one scene per transition:
+  //   lvl3 → level3 · lvl4 → level5 · lvl5 → mid · lvl7 → level7 · lvl8 → pre(boss lore)
+  // (level3/level5/level7 were authored long ago but never wired — now active.)
+  if(lvInWorld===4 && prevLvInWorld===3){ if(_scene('w'+wi+'_level3',wi))return; }
+  if(lvInWorld===5 && prevLvInWorld===4){ if(_scene('w'+wi+'_level5',wi))return; }
+  if(lvInWorld===6 && prevLvInWorld===5){ if(_scene('w'+wi+'_mid',wi))return; }
+  if(lvInWorld===8 && prevLvInWorld===7){ if(_scene('w'+wi+'_level7',wi))return; }
+  if(lvInWorld===9 && prevLvInWorld===8){ if(_scene('w'+wi+'_pre',wi))return; }
   // Pre-boss: loading level 10 of any world
   if(lvInWorld===10){
-    var bossId='w'+wi+'_boss';
-    if(CSCENES[bossId]&&!_csFired[bossId]){
-      _csFired[bossId]=true;
-      csPlay(bossId,wi,function(){patchedStartAdv(n,f===undefined?false:f);});
-      return;
-    }
+    if(_scene('w'+wi+'_boss',wi))return;
   }
-  patchedStartAdv(n,f===undefined?false:f);
+  _go();
 };
 
 // ── Shared robot sprite ───────────────────────
 // Matches the in-game P1 (blue) / P2 (red) robots. Used by the World Map tokens
 // and the ending cinematic so the little robot looks like the real character.
 // Draws standing on (cx,cy) = feet point, scaled, optionally facing left and leg-kicking.
+// Resolve a colour scheme to a palette of HSL strings.
+// scheme can be:
+//   'blue'              — original P1 blue
+//   'red'               — original P2 red
+//   { h, s, l }         — arbitrary HSL (network players)
+window.robotPalette=function(scheme){
+  if(scheme&&typeof scheme==='object'){
+    const {h,s,l}=scheme;
+    return {
+      shadow:  `hsl(${h},${s}%,${Math.min(l+20,90)}%)`,
+      dark:    `hsl(${h},${s}%,${Math.max(l-30,5)}%)`,
+      mid:     `hsl(${h},${s}%,${Math.max(l-15,8)}%)`,
+      body:    `hsl(${h},${s}%,${l}%)`,
+      bright:  `hsl(${h},${Math.min(s+10,100)}%,${Math.min(l+18,88)}%)`,
+      visor:   `hsl(${(h+160)%360},90%,${Math.min(l+25,88)}%)`,
+      glint:   `hsl(${(h+160)%360},60%,${Math.min(l+40,92)}%)`,
+      antenna: `hsl(${(h+160)%360},90%,${Math.min(l+25,85)}%)`,
+    };
+  }
+  if(scheme==='red') return {
+    shadow:'#ff3b3b', dark:'#5a0000', mid:'#880000',
+    body:'#bb1100',   bright:'#cc2200', visor:'#ee3300',
+    glint:'#ffaa88',  antenna:'#f44',
+  };
+  // default blue
+  return {
+    shadow:'#00ccff', dark:'#00276a', mid:'#003a88',
+    body:'#0060aa',   bright:'#0088cc', visor:'#00ccee',
+    glint:'#88ddf8',  antenna:'#00ccee',
+  };
+};
+
 window.drawByteRobot=function(ctx,cx,cy,scale,scheme,lk,facing){
   lk=lk||0;facing=facing||1;scale=scale||1;
-  const red=(scheme==='red');
+  const p=window.robotPalette(scheme);
   const w=24,h=32;
   ctx.save();
   ctx.translate(cx,cy);
   ctx.scale(scale*facing,scale);
   ctx.translate(-w/2,-h);
-  ctx.shadowBlur=10;ctx.shadowColor=red?'#ff3b3b':'#00ccff';
+  ctx.shadowBlur=10;ctx.shadowColor=p.shadow;
   // Legs
-  ctx.fillStyle=red?'#5a0000':'#00276a';
+  ctx.fillStyle=p.dark;
   ctx.fillRect(2,h-15,9,15+lk);ctx.fillRect(w-11,h-15,9,15-lk);
   // Feet
-  ctx.fillStyle=red?'#aa1111':'#0055bb';
+  ctx.fillStyle=p.mid;
   ctx.fillRect(1,h-3+lk,11,5);ctx.fillRect(w-12,h-3-lk,11,5);
   // Torso
-  ctx.fillStyle=red?'#880000':'#003a88';ctx.fillRect(3,h-22,w-6,11);
-  ctx.fillStyle=red?'#bb1100':'#0060aa';ctx.fillRect(5,h-20,w-10,7);
+  ctx.fillStyle=p.mid;ctx.fillRect(3,h-22,w-6,11);
+  ctx.fillStyle=p.body;ctx.fillRect(5,h-20,w-10,7);
   // Arms
-  ctx.fillStyle=red?'#660000':'#002a66';
+  ctx.fillStyle=p.dark;
   ctx.fillRect(-5,h-22,8,11);ctx.fillRect(w-3,h-22,8,11);
   // Head
-  ctx.fillStyle=red?'#7a0000':'#003e88';ctx.fillRect(3,0,w-6,16);
+  ctx.fillStyle=p.mid;ctx.fillRect(3,0,w-6,16);
   // Visor + eye glint
   ctx.shadowBlur=0;
-  ctx.fillStyle=red?'#ee3300':'#00ccee';ctx.fillRect(5,3,w-10,8);
-  ctx.fillStyle=red?'#ffaa88':'#88ddf8';ctx.fillRect(6,4,6,4);
+  ctx.fillStyle=p.visor;ctx.fillRect(5,3,w-10,8);
+  ctx.fillStyle=p.glint;ctx.fillRect(6,4,6,4);
   // Antenna
-  ctx.fillStyle=red?'#f44':'#00ccee';
+  ctx.fillStyle=p.antenna;
   ctx.fillRect(w/2-1,0,2,4);ctx.beginPath();ctx.arc(w/2,-1,2,0,Math.PI*2);ctx.fill();
   ctx.restore();
 };
@@ -9109,5 +9450,1194 @@ CT=THEMES[0];showMain();
 <script src="assets/achievements.js"></script>
 <script src="assets/saveslots.js"></script>
 <script src="assets/bugfixes.js"></script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     BYTE BLASTER — NETWORK MULTIPLAYER MODULE
+     Relay server: wss://byte-blaster-server-production.up.railway.app
+     ══════════════════════════════════════════════════════════════ -->
+<style>
+/* ── Lobby overlay ────────────────────────────────────────────── */
+#netLobby{
+  position:fixed;inset:0;z-index:900;
+  background:#02020cef;
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Press Start 2P',monospace;gap:14px;
+}
+#netLobby h2{font-size:12px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:3px;margin:0}
+.net-panel{
+  background:#070720;border:1px solid #0ff4;border-radius:8px;
+  padding:18px 24px;display:flex;flex-direction:column;gap:12px;
+  min-width:280px;max-width:360px;width:90%;
+}
+.net-label{font-size:6px;color:#4af;letter-spacing:2px}
+.net-input{
+  background:#0a0a22;border:1px solid #0ff6;color:#fff;
+  font-family:'Press Start 2P',monospace;font-size:7px;
+  padding:8px 10px;border-radius:4px;outline:none;width:100%;box-sizing:border-box;
+  text-transform:uppercase;letter-spacing:2px;
+}
+.net-input:focus{border-color:#0ff;box-shadow:0 0 8px #0ff4}
+.net-btn{
+  background:transparent;border:2px solid #0ff;color:#0ff;
+  font-family:'Press Start 2P',monospace;font-size:7px;
+  padding:9px 14px;cursor:pointer;letter-spacing:2px;border-radius:4px;
+  text-shadow:0 0 6px #0ff;box-shadow:0 0 8px #0ff3;transition:all .15s;
+}
+.net-btn:hover{background:#0ff2;box-shadow:0 0 22px #0ff8}
+.net-btn.secondary{border-color:#4af6;color:#4af;text-shadow:none;box-shadow:none}
+.net-btn.secondary:hover{background:#4af2;border-color:#0ff;color:#fff}
+.net-btn.danger{border-color:#f446;color:#f44}
+.net-btn.danger:hover{background:#f442}
+.net-btn:disabled{opacity:.35;cursor:default}
+.net-code{
+  font-size:18px;color:#ff0;text-shadow:0 0 14px #ff0,0 0 28px #ff08;
+  letter-spacing:6px;text-align:center;padding:10px 0;
+}
+.net-status{font-size:6px;color:#4af9;letter-spacing:1px;min-height:14px}
+.net-error{color:#f44;text-shadow:0 0 8px #f44}
+/* Player slots */
+#netPlayerList{display:flex;flex-direction:column;gap:6px;width:100%}
+.net-player-row{
+  display:flex;align-items:center;gap:10px;
+  background:#0a0a1e;border:1px solid #0ff2;border-radius:6px;padding:7px 10px;
+}
+.net-player-avatar{width:28px;height:28px;image-rendering:pixelated;flex-shrink:0}
+.net-player-name{font-size:6px;color:#fff;letter-spacing:1px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.net-player-tag{font-size:5px;padding:2px 5px;border-radius:3px;flex-shrink:0}
+.net-player-tag.host{background:#ff03;border:1px solid #ff0;color:#ff0}
+.net-player-tag.ready{background:#0f03;border:1px solid #0f0;color:#0f0}
+.net-player-tag.you{background:#0ff2;border:1px solid #0ff;color:#0ff}
+/* Colour picker */
+.net-color-ring{
+  display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:6px 0;
+}
+.net-color-swatch{
+  width:24px;height:24px;border-radius:50%;cursor:pointer;
+  border:2px solid transparent;transition:all .12s;
+  box-shadow:0 0 0 0 transparent;
+}
+.net-color-swatch:hover{transform:scale(1.18)}
+.net-color-swatch.selected{border-color:#fff;box-shadow:0 0 10px #fff8}
+/* Public room row */
+.net-pub-room{
+  display:flex;align-items:center;gap:8px;
+  background:#0a0a1e;border:1px solid #0ff2;border-radius:6px;padding:7px 10px;cursor:pointer;
+  transition:all .12s;
+}
+.net-pub-room:hover{border-color:#f0f;background:#110a22}
+.net-pub-room-info{flex:1;display:flex;flex-direction:column;gap:3px}
+.net-pub-room-host{font-size:6px;color:#ff0;letter-spacing:1px}
+.net-pub-room-meta{font-size:5px;color:#4af8}
+.net-pub-room-count{font-size:7px;color:#0f8;min-width:40px;text-align:right}
+/* Chat box */
+#netChat{
+  display:flex;flex-direction:column;gap:4px;
+  max-height:80px;min-height:28px;overflow-y:auto;width:100%;
+  background:#06061a;border:1px solid #0ff2;border-radius:6px;
+  padding:6px 8px;box-sizing:border-box;
+  scrollbar-width:thin;scrollbar-color:#0ff5 transparent;
+}
+#netChat::-webkit-scrollbar{width:5px}
+#netChat::-webkit-scrollbar-thumb{background:#0ff5;border-radius:3px}
+.net-chat-msg{font-size:5px;color:#adf;line-height:1.6;word-break:break-word;animation:netChatIn .18s ease-out}
+@keyframes netChatIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.net-chat-msg .who{color:#ff0}
+/* Ping indicator */
+#netPing{font-size:5px;color:#4af8;letter-spacing:1px;display:flex;align-items:center;gap:4px;transition:color .3s}
+#netPing::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor;animation:netPingPulse 1.6s ease-in-out infinite}
+@keyframes netPingPulse{0%,100%{opacity:.55}50%{opacity:1}}
+/* Lobby panel entrance */
+.net-panel{animation:netPanelIn .25s ease-out}
+@keyframes netPanelIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+#netLobby h2{animation:netTitleIn .35s ease-out}
+@keyframes netTitleIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+/* Ready player highlight in the lobby list */
+.net-player-row{transition:border-color .2s,box-shadow .2s,background .2s}
+.net-player-row.is-ready{border-color:#0f06;box-shadow:0 0 10px #0f04;background:#0a160e}
+.net-player-avatar{transition:transform .15s}
+.net-player-row:hover .net-player-avatar{transform:scale(1.12)}
+/* Countdown number pop */
+@keyframes netCountPop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.18);opacity:1}100%{transform:scale(1);opacity:1}}
+/* Disabled start button reads clearly */
+#netStartBtn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+#netStartBtn:not(:disabled){animation:netStartReady 1.4s ease-in-out infinite}
+@keyframes netStartReady{0%,100%{box-shadow:0 0 8px #0ff3}50%{box-shadow:0 0 18px #0ff9}}
+</style>
+
+<!-- Lobby DOM -->
+<div id="netLobby">
+  <h2 id="netLobbyTitle">⚡ ONLINE MULTIPLAYER</h2>
+
+  <!-- Step: connect screen -->
+  <div class="net-panel" id="netConnect">
+    <div class="net-label" data-i18n="netNickname">NICKNAME</div>
+    <input class="net-input" id="netNick" maxlength="16" data-i18n-ph="netNickPlaceholder" placeholder="YOUR NAME" value="PLAYER"/>
+    <div class="net-label" data-i18n="netRobotColour">ROBOT COLOUR</div>
+    <div class="net-color-ring" id="netColorPicker"></div>
+    <div style="display:flex;gap:8px">
+      <button class="net-btn" id="netCreatePrivBtn" data-i18n="netPrivate" style="flex:1;font-size:6px">🔒 PRIVATE</button>
+      <button class="net-btn secondary" id="netCreatePubBtn" data-i18n="netPublic" style="flex:1;font-size:6px">🌍 PUBLIC</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="net-btn secondary" id="netJoinShowBtn" data-i18n="netJoinByCode" style="flex:1;font-size:6px">🔑 JOIN BY CODE</button>
+      <button class="net-btn secondary" id="netRefreshBtn" data-i18n="netPublicRoomsBtn" style="flex:1;font-size:6px">📋 PUBLIC ROOMS</button>
+    </div>
+    <div id="netJoinRow" style="display:none;flex-direction:column;gap:8px">
+      <div class="net-label" data-i18n="netRoomCodeLabel">ROOM CODE</div>
+      <input class="net-input" id="netCodeInput" maxlength="6" data-i18n-ph="netCodePlaceholder" placeholder="XXXXXX"/>
+      <button class="net-btn" id="netJoinBtn" data-i18n="netJoinBtn">▶ JOIN</button>
+    </div>
+    <!-- Public rooms list -->
+    <div id="netPublicRooms" style="display:none;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto">
+      <div class="net-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span data-i18n="netPublicRoomsTitle">PUBLIC ROOMS</span>
+        <button class="net-btn secondary" id="netReloadRoomsBtn" data-i18n="netReload" style="font-size:5px;padding:3px 7px">↻ RELOAD</button>
+      </div>
+      <div id="netRoomsList"></div>
+    </div>
+    <div class="net-status" id="netConnStatus">connecting to server…</div>
+    <button class="net-btn secondary" id="netBackBtn" data-i18n="netBack" style="margin-top:4px">← BACK</button>
+  </div>
+
+  <!-- Step: room lobby -->
+  <div class="net-panel" id="netRoom" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="net-label" data-i18n="netRoomCodeLabel">ROOM CODE</div>
+        <div class="net-code" id="netRoomCode">------</div>
+      </div>
+      <div id="netPing" title="ping">-- ms</div>
+    </div>
+    <div class="net-label" id="netPlayersLabel">PLAYERS (max 5)</div>
+    <div id="netPlayerList"></div>
+    <div class="net-label" data-i18n="netChatLabel" style="margin-top:4px">CHAT</div>
+    <div id="netChat"></div>
+    <input class="net-input" id="netChatInput" maxlength="80" data-i18n-ph="netChatPlaceholder" placeholder="TYPE + ENTER"/>
+    <!-- Level picker (host only) -->
+    <div id="netLevelPicker" style="display:none;flex-direction:column;gap:8px;border-top:1px solid #0ff2;padding-top:10px">
+      <div class="net-label" data-i18n="netGameMode">GAME MODE</div>
+      <div style="display:flex;gap:8px">
+        <button class="net-btn" id="netModeAdv" data-i18n="netModeAdventure" style="flex:1;font-size:6px">🗺 ADVENTURE</button>
+        <button class="net-btn secondary" id="netModeInf" data-i18n="netModeInfinite" style="flex:1;font-size:6px">∞ INFINITE</button>
+      </div>
+      <div id="netLvlRow" style="display:none;flex-direction:column;gap:6px">
+        <div class="net-label" data-i18n="netLevelRange">LEVEL (1–100)</div>
+        <input class="net-input" id="netLvlInput" type="number" min="1" max="100" value="1" style="width:80px"/>
+      </div>
+      <div class="net-status" id="netLevelStatus" style="color:#ff0">⚡ choose a mode</div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="net-btn" id="netReadyBtn" data-i18n="netReady">✔ READY</button>
+      <button class="net-btn" id="netStartBtn" data-i18n="netStart" style="display:none">▶ START</button>
+      <button class="net-btn danger" id="netLeaveBtn" data-i18n="netLeave">✕ LEAVE</button>
+    </div>
+    <div class="net-status" id="netRoomStatus"></div>
+  </div>
+
+  <!-- Loading / countdown overlay -->
+  <div id="netLoading" style="display:none;position:fixed;inset:0;z-index:950;background:#04040ff5;flex-direction:column;align-items:center;justify-content:center;gap:20px;font-family:'Press Start 2P',monospace">
+    <div style="font-size:11px;color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:4px" id="netLoadTitle">LOADING LEVEL</div>
+    <div style="font-size:28px;color:#ff0;text-shadow:0 0 24px #ff0" id="netLoadCount">3</div>
+    <div style="font-size:7px;color:#4af8;letter-spacing:2px" id="netLoadSub">get ready…</div>
+  </div>
+
+  <!-- Connection-lost overlay (shown if the socket drops mid-game) -->
+  <div id="netConnLost" style="display:none;position:fixed;inset:0;z-index:960;background:#0a0208f8;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Press Start 2P',monospace">
+    <div style="font-size:11px;color:#f55;text-shadow:0 0 18px #f00;letter-spacing:3px" id="netConnLostTitle">⚠ CONNECTION LOST</div>
+    <div style="font-size:7px;color:#fa8;letter-spacing:2px" id="netConnLostSub">trying to reconnect…</div>
+    <button class="net-btn danger" id="netConnLostBtn" style="margin-top:6px">← RETURN TO LOBBY</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  BYTE BLASTER — NETWORK MODULE
+//  Self-contained: no dependencies on game internals except
+//  showMain(), hideAll(), mkPlayer(), twoPlayer, and the
+//  game-start functions.
+// ═══════════════════════════════════════════════════════════
+(function(){
+'use strict';
+
+const SERVER_URL = 'wss://byte-blaster-server-production.up.railway.app';
+const MAX_NET_PLAYERS = 5;
+
+// ── Colour presets (12 hues, fixed s/l for good contrast) ───────────────────
+const COLOR_PRESETS = [
+  {h:210,s:90,l:55},  // blue (default)
+  {h:0,  s:90,l:50},  // red
+  {h:130,s:80,l:42},  // green
+  {h:280,s:85,l:55},  // purple
+  {h:35, s:95,l:52},  // orange
+  {h:55, s:95,l:48},  // yellow
+  {h:175,s:85,l:45},  // teal
+  {h:330,s:85,l:55},  // pink
+  {h:0,  s:0, l:75},  // white/silver
+  {h:20, s:70,l:35},  // brown
+  {h:240,s:60,l:70},  // lavender
+  {h:165,s:90,l:35},  // dark green
+];
+
+// ── State ────────────────────────────────────────────────────────────────────
+let ws        = null;
+let myId      = null;
+let myColor   = COLOR_PRESETS[0];
+let myNick    = 'PLAYER';
+let roomCode  = null;
+let isHost    = false;
+let isReady   = false;
+let players   = [];   // [{id,nickname,color,ready,isHost}]
+
+// Expose to global scope so main game loop can read/call them
+Object.defineProperty(window,'netIsHost',{get:()=>isHost});
+Object.defineProperty(window,'netWs',    {get:()=>ws});
+window.netWsSend = (obj) => wsSend(obj);
+let pingStart = 0;
+let pingMs    = 0;
+let pingTimer = null;
+
+// Selected level for next game
+let _netMode  = 'infinite';
+let _netLevel = 1;
+let _netSeed  = 0;
+// Expose so main game loop can update them
+Object.defineProperty(window,'_netLevel',{get:()=>_netLevel,set:(v)=>{_netLevel=v;}});
+Object.defineProperty(window,'_netMode', {get:()=>_netMode, set:(v)=>{_netMode=v;}});
+
+// Remote players for in-game rendering
+// netPlayers: Map<id, {x,y,vx,vy,facing,action,color,nickname,playerObj}>
+window.netPlayers = new Map();
+window.netActive  = false;  // true when a network game is running
+
+// ── DOM refs ────────────────────────────────────────────────────────────────
+const $lobby       = document.getElementById('netLobby');
+const $connect     = document.getElementById('netConnect');
+const $room        = document.getElementById('netRoom');
+const $connStatus  = document.getElementById('netConnStatus');
+const $roomCode    = document.getElementById('netRoomCode');
+const $playerList  = document.getElementById('netPlayerList');
+const $readyBtn    = document.getElementById('netReadyBtn');
+const $startBtn    = document.getElementById('netStartBtn');
+const $roomStatus  = document.getElementById('netRoomStatus');
+const $chat        = document.getElementById('netChat');
+const $chatInput   = document.getElementById('netChatInput');
+const $pingEl      = document.getElementById('netPing');
+
+// ── Colour picker ────────────────────────────────────────────────────────────
+function buildColorPicker(){
+  const ring = document.getElementById('netColorPicker');
+  ring.innerHTML = '';
+  COLOR_PRESETS.forEach((col, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'net-color-swatch' + (i===0?' selected':'');
+    sw.style.background = `hsl(${col.h},${col.s}%,${col.l}%)`;
+    sw.style.boxShadow  = `0 0 8px hsl(${col.h},${col.s}%,${col.l}%88)`;
+    sw.dataset.idx = i;
+    sw.onclick = () => {
+      ring.querySelectorAll('.net-color-swatch').forEach(s=>s.classList.remove('selected'));
+      sw.classList.add('selected');
+      myColor = COLOR_PRESETS[i];
+      // Apply immediately to local player if in-game
+      if(typeof player !== 'undefined' && player) player.colorScheme = myColor;
+      // Update my own avatar in the player list
+      const myEntry = players.find(p=>p.id===myId);
+      if(myEntry){ myEntry.color = myColor; refreshPlayerList(); }
+      // Notify others in room
+      if(ws && ws.readyState===1 && roomCode){
+        wsSend({type:'set_color', color:myColor});
+      }
+    };
+    ring.appendChild(sw);
+  });
+}
+
+// ── WebSocket ────────────────────────────────────────────────────────────────
+let _reconnectTimer = null;
+let _reconnectTries = 0;
+let _manualClose    = false;  // true when WE close the socket (leave) — don't reconnect
+
+function connect(){
+  if(_reconnectTimer){ clearTimeout(_reconnectTimer); _reconnectTimer=null; }
+  _manualClose = false;
+  if(ws && ws.readyState < 2){ try{ ws.close(); }catch(e){} }
+  $connStatus.textContent = T('netConnectingShort');
+  $connStatus.classList.remove('net-error');
+  try{
+    ws = new WebSocket(SERVER_URL);
+  }catch(e){
+    scheduleReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    _reconnectTries = 0;
+    $connStatus.textContent = T('netConnected');
+    $connStatus.classList.remove('net-error');
+    hideConnLost();
+    startPing();
+  };
+
+  ws.onmessage = (e) => {
+    let msg;
+    try{ msg=JSON.parse(e.data); }catch{ return; }
+    handleServerMsg(msg);
+  };
+
+  ws.onclose = () => {
+    stopPing();
+    if(_manualClose) return;
+    // Mid-game drop: can't silently rejoin a relay room — surface it.
+    if(window.netActive){
+      showConnLost();
+      return;
+    }
+    // Dropped while sitting in a room lobby: the relay forgets membership on
+    // disconnect, so we can't silently rejoin. Bounce back to the connect screen.
+    if(roomCode && $room.style.display !== 'none'){
+      roomCode = null; isHost = false; isReady = false; players = [];
+      $room.style.display = 'none';
+      $connect.style.display = 'flex';
+    }
+    $connStatus.textContent = T('netDisconnected');
+    $connStatus.classList.add('net-error');
+    if($lobby.style.display==='flex') scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    if(!window.netActive){
+      $connStatus.textContent = T('netConnError');
+      $connStatus.classList.add('net-error');
+    }
+  };
+}
+
+// Exponential-ish backoff, capped, so a downed server doesn't hammer the network.
+function scheduleReconnect(){
+  if(_manualClose) return;
+  if(_reconnectTimer) return;
+  _reconnectTries++;
+  const delay = Math.min(1000 * Math.pow(1.6, Math.min(_reconnectTries, 6)), 12000);
+  $connStatus.textContent = _reconnectTries > 1 ? T('netConnFailed') : T('netDisconnected');
+  _reconnectTimer = setTimeout(()=>{ _reconnectTimer=null; connect(); }, delay);
+}
+
+function showConnLost(){
+  const ov = document.getElementById('netConnLost');
+  if(ov){ ov.style.display='flex'; netApplyLang(); }
+}
+function hideConnLost(){
+  const ov = document.getElementById('netConnLost');
+  if(ov) ov.style.display='none';
+}
+
+function wsSend(obj){
+  if(ws && ws.readyState===1) ws.send(JSON.stringify(obj));
+}
+
+// ── Ping ─────────────────────────────────────────────────────────────────────
+function startPing(){
+  stopPing();
+  pingTimer = setInterval(()=>{
+    pingStart = Date.now();
+    wsSend({type:'ping'});
+  }, 3000);
+}
+function stopPing(){ if(pingTimer){ clearInterval(pingTimer); pingTimer=null; } }
+
+// ── Server message handler ───────────────────────────────────────────────────
+function handleServerMsg(msg){
+  switch(msg.type){
+
+    case 'rooms_list':
+      renderPublicRooms(msg.rooms || []);
+      break;
+
+    case 'connected':
+      myId = msg.id;
+      break;
+
+    case 'pong':
+      pingMs = Date.now() - pingStart;
+      $pingEl.textContent = pingMs + ' ms';
+      // Colour by latency: green < 90ms, yellow < 200ms, red otherwise
+      $pingEl.style.color = pingMs < 90 ? '#0f8' : (pingMs < 200 ? '#fc0' : '#f55');
+      break;
+
+    case 'room_created':
+    case 'room_joined':
+      roomCode = msg.code;
+      isHost   = (msg.id===msg.hostId)||(msg.type==='room_created');
+      myId     = msg.id;
+      players  = msg.players || [];
+      enterRoomScreen();
+      break;
+
+    case 'player_joined':
+      players = msg.players || [];
+      refreshPlayerList();
+      updateStartBtn();
+      addChat('★', T('netPlayerJoined', esc(msg.player.nickname)));
+      break;
+
+    case 'player_left':
+      {
+        const gone = players.find(p=>p.id===msg.id);
+        players = msg.players || [];
+        refreshPlayerList();
+        updateStartBtn();
+        if(gone) addChat('★', T('netPlayerLeft', esc(gone.nickname)));
+        // Remove from live render map
+        window.netPlayers.delete(msg.id);
+      }
+      break;
+
+    case 'ready_changed':
+      players = msg.players || [];
+      refreshPlayerList();
+      updateStartBtn();
+      break;
+
+    case 'color_changed':
+      const cp = players.find(p=>p.id===msg.id);
+      if(cp){ cp.color=msg.color; refreshPlayerList(); }
+      // Update live render if in-game
+      const np = window.netPlayers.get(msg.id);
+      if(np && np.playerObj){ np.playerObj.colorScheme=msg.color; }
+      break;
+
+    case 'promoted_to_host':
+      isHost = true;
+      $startBtn.style.display = 'block';
+      const $lp2 = document.getElementById('netLevelPicker');
+      if($lp2) $lp2.style.display = 'flex';
+      setRoomStatus(T('netNowHost'));
+      updateStartBtn();
+      break;
+
+    case 'level_selected':
+      _netMode  = msg.mode  || 'infinite';
+      _netLevel = msg.level || 1;
+      _netSeed  = msg.seed  || 0;
+      // Update level picker UI for host, and status for others
+      updateLevelStatus();
+      break;
+
+    case 'level_complete':
+      _netLevel = msg.nextLevel || _netLevel;
+      _netMode  = msg.mode || _netMode;
+      // Show countdown and start next level for all clients
+      showNetCountdown(_netMode, _netLevel, () => {
+        if(_netMode === 'adventure'){
+          if(typeof startAdv === 'function') startAdv(_netLevel, false);
+        } else {
+          if(typeof level !== 'undefined') level = _netLevel;
+          if(typeof startInf === 'function') startInf(false);
+        }
+        // Re-apply colours after level reload
+        if(typeof player !== 'undefined' && player){
+          player.colorScheme = myColor;
+          player.nickname    = myNick;
+        }
+      });
+      break;
+
+    case 'game_started':
+      players   = msg.players || [];
+      _netMode  = msg.mode    || _netMode  || 'infinite';
+      _netLevel = msg.level   || _netLevel || 1;
+      _netSeed  = msg.seed    || _netSeed  || Date.now();
+      showNetCountdown(_netMode, _netLevel, () => startNetworkGame(players));
+      break;
+
+    case 'player_state':
+      updateRemotePlayer(msg);
+      break;
+
+    case 'enemies_sync':
+      applyEnemiesSync(msg.enemies);
+      break;
+
+    case 'bullets_sync':
+      applyBulletsSync(msg.bullets);
+      break;
+
+    case 'game_event':
+      handleRemoteEvent(msg);
+      break;
+
+    case 'chat':
+      const sender = players.find(p=>p.id===msg.id);
+      addChat(esc(sender?sender.nickname:'???'), esc(msg.text));
+      break;
+
+    case 'error':
+      handleError(msg.reason);
+      break;
+  }
+}
+
+// ── UI helpers ───────────────────────────────────────────────────────────────
+function enterRoomScreen(){
+  $connect.style.display = 'none';
+  $room.style.display    = 'flex';
+  $roomCode.textContent  = roomCode;
+  isReady = false;
+  $readyBtn.textContent  = T('netReady');
+  $readyBtn.style.borderColor = '';
+  $readyBtn.style.color       = '';
+  $startBtn.style.display = isHost ? 'block' : 'none';
+  // Show level picker only for host
+  const $lp = document.getElementById('netLevelPicker');
+  if($lp) $lp.style.display = isHost ? 'flex' : 'none';
+  updateLevelStatus();
+  refreshPlayerList();
+  if(isHost){ updateStartBtn(); }
+  else { setRoomStatus(T('netWaitHost')); }
+  // Clear chat from any previous room
+  $chat.innerHTML = '';
+}
+
+function refreshPlayerList(){
+  $playerList.innerHTML = '';
+  const slots = Math.max(players.length, 2);
+  for(let i=0; i<slots; i++){
+    const p = players[i];
+    const row = document.createElement('div');
+    row.className = 'net-player-row';
+    if(!p){
+      const empty = document.createElement('span');
+      empty.className = 'net-player-name';
+      empty.style.color = '#4af4';
+      empty.textContent = T('netEmptySlot');
+      row.appendChild(empty);
+      row.style.opacity = '0.4';
+      $playerList.appendChild(row);
+      continue;
+    }
+    if(p.ready) row.classList.add('is-ready');
+    // Mini robot avatar
+    const img = document.createElement('img');
+    img.className = 'net-player-avatar';
+    img.src = robotIconURL(p.color || 'blue');
+    row.appendChild(img);
+
+    const name = document.createElement('div');
+    name.className = 'net-player-name';
+    name.textContent = p.nickname;
+    row.appendChild(name);
+
+    if(p.id === myId){
+      const tag = document.createElement('span');
+      tag.className='net-player-tag you'; tag.textContent=T('netYou');
+      row.appendChild(tag);
+    }
+    if(p.isHost){
+      const tag = document.createElement('span');
+      tag.className='net-player-tag host'; tag.textContent=T('netHostTag');
+      row.appendChild(tag);
+    }
+    if(p.ready){
+      const tag = document.createElement('span');
+      tag.className='net-player-tag ready'; tag.textContent=T('netReadyTag');
+      row.appendChild(tag);
+    }
+    $playerList.appendChild(row);
+  }
+}
+
+function updateStartBtn(){
+  if(!isHost) return;
+  const allReady = players.filter(p=>p.id!==myId).every(p=>p.ready);
+  const enough   = players.length >= 2;
+  $startBtn.disabled = !(allReady && enough);
+  setRoomStatus(enough
+    ? (allReady ? T('netAllReady') : T('netWaitReady'))
+    : T('netNeed2'));
+}
+
+function setRoomStatus(txt, isErr=false){
+  $roomStatus.textContent = txt;
+  $roomStatus.classList.toggle('net-error', isErr);
+}
+
+// Escape user-supplied text before it goes into innerHTML.
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function addChat(who, text){
+  const msg = document.createElement('div');
+  msg.className = 'net-chat-msg';
+  // `who` / `text` are pre-escaped by callers; system messages pass safe glyphs.
+  msg.innerHTML = `<span class="who">${who}:</span> ${text}`;
+  $chat.appendChild(msg);
+  // Cap chat history so the box can't grow unbounded
+  while($chat.children.length > 60) $chat.removeChild($chat.firstChild);
+  $chat.scrollTop = $chat.scrollHeight;
+}
+
+function handleError(reason){
+  const map = {
+    room_not_found: 'netErrRoomNotFound',
+    room_full:      'netErrRoomFull',
+    not_host:       'netErrNotHost',
+    not_in_room:    'netErrNotInRoom',
+  };
+  const txt = map[reason]
+    ? T(map[reason], MAX_NET_PLAYERS)
+    : T('netErrGeneric', reason);
+  $connStatus.textContent = txt;
+  $connStatus.classList.add('net-error');
+  setRoomStatus(txt, true);
+}
+
+// ── Game start / sync ────────────────────────────────────────────────────────
+
+// Spawn offsets so up to 5 players don't stack on the same pixel
+const SPAWN_OFFSETS = [0, 36, -36, 72, -72];
+
+// Show 3-2-1-GO countdown then call onDone()
+let _countdownIv = null;
+function showNetCountdown(mode, level, onDone){
+  const $loading = document.getElementById('netLoading');
+  const $title   = document.getElementById('netLoadTitle');
+  const $count   = document.getElementById('netLoadCount');
+  const $sub     = document.getElementById('netLoadSub');
+  $title.textContent = mode === 'adventure' ? T('netAdvLvlTitle', level) : T('netInfModeTitle');
+  if($sub) $sub.textContent = T('netGetReadySub');
+  $loading.style.display = 'flex';
+  if(_countdownIv) clearInterval(_countdownIv);
+  let n = 3;
+  $count.textContent = n;
+  $count.style.animation = 'none'; void $count.offsetWidth; $count.style.animation = 'netCountPop .4s ease-out';
+  _countdownIv = setInterval(() => {
+    n--;
+    if(n > 0){
+      $count.textContent = n;
+      $count.style.animation = 'none'; void $count.offsetWidth; $count.style.animation = 'netCountPop .4s ease-out';
+    } else {
+      clearInterval(_countdownIv); _countdownIv = null;
+      $count.textContent = T('netGo');
+      $count.style.animation = 'none'; void $count.offsetWidth; $count.style.animation = 'netCountPop .4s ease-out';
+      setTimeout(() => { $loading.style.display = 'none'; onDone(); }, 600);
+    }
+  }, 900);
+}
+
+function startNetworkGame(allPlayers){
+  $lobby.style.display = 'none';
+  window.netActive = true;
+  window.netPlayers.clear();
+
+  // Disable local 2P — network handles multiplayer
+  if(typeof twoPlayer !== 'undefined') twoPlayer = false;
+
+  // Launch the correct mode using the shared params
+  // For adventure: startAdv uses mkRNG(n*9001+12345) — deterministic, same for all players
+  // For infinite: set level number first so all players get same difficulty/theme
+  if(_netMode === 'adventure'){
+    if(typeof startAdv === 'function') startAdv(_netLevel, true);
+  } else {
+    // Sync level so infinite starts at same difficulty for everyone
+    if(typeof level !== 'undefined') level = _netLevel;
+    if(typeof startInf === 'function') startInf(true);
+  }
+
+  // After startAdv/startInf: player is spawned, spawnX/spawnY are set
+  if(typeof player !== 'undefined' && player){
+    player.colorScheme = myColor;
+    player.nickname    = myNick;
+  }
+
+  // Create ghost objects for every remote player
+  const myIdx = allPlayers.findIndex(p => p.id === myId);
+  allPlayers.forEach((p, i) => {
+    if(p.id === myId) return;
+    const offsetX = SPAWN_OFFSETS[Math.abs(i - myIdx)] || (i * 36);
+    const pObj = mkPlayer(
+      (typeof spawnX !== 'undefined' ? spawnX : 60) + offsetX,
+      (typeof spawnY !== 'undefined' ? spawnY : 300),
+      p.color || {h:210,s:80,l:55}
+    );
+    pObj.nickname   = p.nickname;
+    pObj.isNetGhost = true;
+    window.netPlayers.set(p.id, { playerObj: pObj, lastUpdate: Date.now() });
+  });
+
+  startStateLoop();
+}
+
+let _stateInterval = null;
+let _netTickDiv = 0; // for sending enemies/bullets at lower rate than position
+function startStateLoop(){
+  if(_stateInterval) clearInterval(_stateInterval);
+  _stateInterval = setInterval(()=>{
+    if(!window.netActive || !ws || ws.readyState!==1) return;
+    if(typeof player==='undefined' || !player) return;
+
+    _netTickDiv++;
+
+    // ── Player state (20 Hz) ─────────────────────────────────────────────────
+    wsSend({
+      type:    'game_state',
+      x:       Math.round(player.x),
+      y:       Math.round(player.y),
+      vx:      +player.vx.toFixed(2),
+      vy:      +player.vy.toFixed(2),
+      facing:  player.facing,
+      action:  player.onGnd ? (Math.abs(player.vx)>0.5?'run':'idle') : 'jump',
+      hp:      typeof lives!=='undefined' ? lives : 3,
+      // powerup states
+      blaster: !!player.blaster,
+      broken:  !!player.broken,
+      starMode:!!player.starMode,
+      fireMode:!!player.fireMode,
+      iceMode: !!player.iceMode,
+      boots:   !!player.boots,
+    });
+
+    // ── Host: sync enemies + bullets every 3 ticks (~7 Hz) ──────────────────
+    if(isHost && _netTickDiv % 3 === 0){
+      if(typeof enemies!=='undefined' && enemies.length){
+        wsSend({
+          type: 'enemies_sync',
+          enemies: enemies.map(e=>({
+            id:  e._netId || (e._netId = Math.random().toString(36).slice(2,8)),
+            x:   Math.round(e.x),
+            y:   Math.round(e.y),
+            vx:  +e.vx.toFixed(2),
+            hp:  e.hp,
+            dead:!!e.dead,
+            type:e.type,
+          })),
+        });
+      }
+      if(typeof pBullets!=='undefined' && pBullets.length){
+        wsSend({
+          type:    'bullets_sync',
+          bullets: pBullets.map(b=>({
+            x:   Math.round(b.x),
+            y:   Math.round(b.y),
+            vx:  +b.vx.toFixed(2),
+            col: b.col || null,
+            elem:b.element || null,
+          })),
+        });
+      }
+    }
+  }, 50); // 20 Hz
+}
+
+function stopStateLoop(){
+  if(_stateInterval){ clearInterval(_stateInterval); _stateInterval=null; }
+}
+
+// Update a remote player's object with received state.
+// Position is stored as a *target* and smoothed per-frame in interpolateGhosts()
+// so motion stays fluid even though updates arrive at only ~20 Hz.
+function updateRemotePlayer(msg){
+  const entry = window.netPlayers.get(msg.id);
+  if(!entry) return;
+  const p = entry.playerObj;
+  if(!p) return;
+  // First packet: snap straight to position (avoid a long slide from spawn).
+  if(entry.tx === undefined){ p.x = msg.x; p.y = msg.y; }
+  entry.tx  = msg.x;
+  entry.ty  = msg.y;
+  p.vx      = msg.vx || 0;
+  p.vy      = msg.vy || 0;
+  if(msg.facing) p.facing = msg.facing;
+  // Sync all powerup/damage states so rendering is identical
+  p.blaster  = !!msg.blaster;
+  p.broken   = !!msg.broken;
+  p.starMode = !!msg.starMode;
+  p.fireMode = !!msg.fireMode;
+  p.iceMode  = !!msg.iceMode;
+  p.boots    = !!msg.boots;
+  entry.lastUpdate = Date.now();
+}
+
+// Called once per render frame: ease each ghost toward its last known target and
+// keep its motion trail fresh. Large gaps snap (teleport / respawn), small gaps lerp.
+function interpolateGhosts(){
+  for(const [, entry] of window.netPlayers){
+    const p = entry.playerObj;
+    if(!p || entry.tx === undefined) continue;
+    const dx = entry.tx - p.x, dy = entry.ty - p.y;
+    if(Math.abs(dx) > 220 || Math.abs(dy) > 220){
+      p.x = entry.tx; p.y = entry.ty;          // teleport: snap
+    } else {
+      p.x += dx * 0.30;                         // smooth follow
+      p.y += dy * 0.30;
+      if(Math.abs(dx) < 0.4) p.x = entry.tx;
+      if(Math.abs(dy) < 0.4) p.y = entry.ty;
+    }
+    // Motion trail
+    if(!p.trail) p.trail = [];
+    if(Math.abs(p.vx) > 0.5 || Math.abs(p.vy) > 0.5) p.trail.unshift({x:p.x+p.w/2, y:p.y+p.h/2});
+    if(p.trail.length > 12) p.trail.length = 12;
+  }
+}
+
+// Non-host: receive authoritative enemies list from host
+function applyEnemiesSync(list){
+  if(!list||isHost) return;
+  if(typeof enemies==='undefined') return;
+  list.forEach(ne => {
+    let e = enemies.find(x=>x._netId===ne.id);
+    if(!e){
+      // New enemy appeared — create a minimal stub
+      e = {_netId:ne.id, x:ne.x, y:ne.y, vx:ne.vx, hp:ne.hp, dead:ne.dead,
+            type:ne.type, w:24, h:24, vy:0, onGnd:false};
+      if(!ne.dead) enemies.push(e);
+    } else {
+      e.x   = ne.x;
+      e.y   = ne.y;
+      e.vx  = ne.vx;
+      e.hp  = ne.hp;
+      e.dead = ne.dead;
+    }
+  });
+  // Remove enemies not in host list anymore
+  for(let i=enemies.length-1;i>=0;i--){
+    if(enemies[i]._netId && !list.find(ne=>ne.id===enemies[i]._netId)){
+      enemies.splice(i,1);
+    }
+  }
+}
+
+// Non-host: receive host player's bullets and render them locally
+window._netHostBullets = [];
+function applyBulletsSync(list){
+  if(isHost) return;
+  window._netHostBullets = list || [];
+}
+
+function handleRemoteEvent(msg){
+  if(msg.event === 'died'){
+    const entry = window.netPlayers.get(msg.id);
+    if(entry && entry.playerObj){ entry.playerObj.alive = false; }
+    // Spawn death particles at remote player's last position
+    if(entry && typeof burst==='function'){
+      burst(entry.playerObj.x+12, entry.playerObj.y+16, '#f44', 12, 3.5, 4);
+    }
+  }
+  if(msg.event === 'respawn'){
+    const entry = window.netPlayers.get(msg.id);
+    if(entry && entry.playerObj){ entry.playerObj.alive = true; }
+  }
+}
+
+// ── Button wiring ────────────────────────────────────────────────────────────
+document.getElementById('netCreatePrivBtn').onclick = () => {
+  myNick = sanitizeNick(document.getElementById('netNick').value);
+  wsSend({type:'create_room', nickname:myNick, color:myColor, isPublic:false});
+};
+
+document.getElementById('netCreatePubBtn').onclick = () => {
+  myNick = sanitizeNick(document.getElementById('netNick').value);
+  wsSend({type:'create_room', nickname:myNick, color:myColor, isPublic:true});
+};
+
+document.getElementById('netRefreshBtn').onclick = () => {
+  const $pub = document.getElementById('netPublicRooms');
+  const $join = document.getElementById('netJoinRow');
+  const showing = $pub.style.display !== 'none';
+  $pub.style.display = showing ? 'none' : 'flex';
+  $join.style.display = 'none';
+  if(!showing) loadPublicRooms();
+};
+
+document.getElementById('netReloadRoomsBtn').onclick = loadPublicRooms;
+
+function loadPublicRooms(){
+  const $list = document.getElementById('netRoomsList');
+  $list.innerHTML = `<div class="net-status">${esc(T('netLoadingRooms'))}</div>`;
+  wsSend({type:'list_rooms'});
+}
+
+function renderPublicRooms(roomArr){
+  const $list = document.getElementById('netRoomsList');
+  if(!roomArr.length){
+    $list.innerHTML = `<div class="net-status" style="color:#4af4">${esc(T('netNoRooms'))}</div>`;
+    return;
+  }
+  $list.innerHTML = '';
+  roomArr.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'net-pub-room';
+    const modeStr = r.mode
+      ? (r.mode==='adventure' ? T('netRoomMetaAdv', r.level) : T('netRoomMetaInf'))
+      : T('netRoomMetaNotSet');
+    row.innerHTML = `
+      <div class="net-pub-room-info">
+        <div class="net-pub-room-host">👤 ${esc(r.hostName)}</div>
+        <div class="net-pub-room-meta">${esc(modeStr)} &nbsp;·&nbsp; ${esc(T('netRoomCodeWord'))}: ${esc(r.code)}</div>
+      </div>
+      <div class="net-pub-room-count">${r.playerCount}/${r.maxPlayers}</div>
+    `;
+    row.onclick = () => {
+      myNick = sanitizeNick(document.getElementById('netNick').value);
+      wsSend({type:'join_room', code:r.code, nickname:myNick, color:myColor});
+    };
+    $list.appendChild(row);
+  });
+}
+
+document.getElementById('netJoinShowBtn').onclick = () => {
+  const row = document.getElementById('netJoinRow');
+  const pub  = document.getElementById('netPublicRooms');
+  row.style.display = row.style.display==='none' ? 'flex' : 'none';
+  pub.style.display = 'none';
+};
+
+document.getElementById('netJoinBtn').onclick = () => {
+  myNick = sanitizeNick(document.getElementById('netNick').value);
+  const code = document.getElementById('netCodeInput').value.toUpperCase().trim();
+  if(code.length!==6){ $connStatus.textContent=T('netEnterCode'); $connStatus.classList.add('net-error'); return; }
+  wsSend({type:'join_room', code, nickname:myNick, color:myColor});
+};
+
+$readyBtn.onclick = () => {
+  isReady = !isReady;
+  $readyBtn.textContent = isReady ? T('netUnready') : T('netReady');
+  $readyBtn.style.borderColor = isReady ? '#0f0' : '';
+  $readyBtn.style.color       = isReady ? '#0f0' : '';
+  wsSend({type:'set_ready', ready:isReady});
+};
+
+$startBtn.onclick = () => {
+  wsSend({type:'start_game'});
+};
+
+// ── Level picker (host only) ────────────────────────────────────────────────
+let _hostMode = 'infinite';
+
+document.getElementById('netModeAdv').onclick = () => {
+  _hostMode = 'adventure';
+  _netLevel = parseInt(document.getElementById('netLvlInput').value)||1;
+  document.getElementById('netLvlRow').style.display = 'flex';
+  document.getElementById('netModeAdv').style.borderColor = '#0ff';
+  document.getElementById('netModeAdv').style.color = '#0ff';
+  document.getElementById('netModeInf').style.borderColor = '';
+  document.getElementById('netModeInf').style.color = '';
+  wsSend({type:'select_level', mode:'adventure', level:_netLevel, seed:Date.now()});
+};
+
+document.getElementById('netModeInf').onclick = () => {
+  _hostMode = 'infinite';
+  document.getElementById('netLvlRow').style.display = 'none';
+  document.getElementById('netModeInf').style.borderColor = '#0ff';
+  document.getElementById('netModeInf').style.color = '#0ff';
+  document.getElementById('netModeAdv').style.borderColor = '';
+  document.getElementById('netModeAdv').style.color = '';
+  wsSend({type:'select_level', mode:'infinite', level:1, seed:Date.now()});
+};
+
+document.getElementById('netLvlInput').oninput = () => {
+  const n = Math.min(100, Math.max(1, parseInt(document.getElementById('netLvlInput').value)||1));
+  _netLevel = n;
+  wsSend({type:'select_level', mode:'adventure', level:n, seed:Date.now()});
+};
+
+function updateLevelStatus(){
+  const $s = document.getElementById('netLevelStatus');
+  if(!$s) return;
+  if(_netMode === 'adventure'){
+    $s.textContent = T('netAdvLevelStatus', _netLevel);
+    $s.style.color = '#0ff';
+  } else if(_netMode === 'infinite'){
+    $s.textContent = T('netInfSelectedStatus');
+    $s.style.color = '#0f8';
+  } else {
+    $s.textContent = T('netChooseMode');
+    $s.style.color = '#ff0';
+  }
+  // Reflect the active mode on the picker buttons too
+  const adv = document.getElementById('netModeAdv');
+  const inf = document.getElementById('netModeInf');
+  if(adv && inf){
+    const onAdv = _netMode === 'adventure';
+    adv.style.borderColor = onAdv ? '#0ff' : '';
+    adv.style.color       = onAdv ? '#0ff' : '';
+    inf.style.borderColor = _netMode === 'infinite' ? '#0ff' : '';
+    inf.style.color       = _netMode === 'infinite' ? '#0ff' : '';
+    const lvlRow = document.getElementById('netLvlRow');
+    if(lvlRow) lvlRow.style.display = onAdv ? 'flex' : 'none';
+  }
+}
+
+document.getElementById('netLeaveBtn').onclick = () => {
+  leaveRoom();
+};
+
+document.getElementById('netBackBtn').onclick = () => {
+  $lobby.style.display = 'none';
+  if(typeof showNetType==='function') showNetType();
+  else if(typeof showMain==='function') showMain();
+};
+
+document.getElementById('netConnLostBtn').onclick = () => {
+  hideConnLost();
+  leaveRoom();
+};
+
+$chatInput.onkeydown = (e) => {
+  if(e.key==='Enter' && $chatInput.value.trim()){
+    wsSend({type:'chat', text:$chatInput.value.trim().slice(0,80)});
+    $chatInput.value='';
+  }
+};
+
+function leaveRoom(){
+  _manualClose = true;
+  if(_reconnectTimer){ clearTimeout(_reconnectTimer); _reconnectTimer=null; }
+  stopStateLoop();
+  stopPing();
+  hideConnLost();
+  window.netActive = false;
+  window.netPlayers.clear();
+  _netMode = 'infinite'; _netLevel = 1; _netSeed = 0;
+  roomCode = null; isHost = false; isReady = false; players = [];
+  if(ws){ try{ ws.close(); }catch(e){} ws=null; }
+  $room.style.display    = 'none';
+  $connect.style.display = 'flex';
+  $lobby.style.display   = 'none';
+  if(typeof showNetType==='function') showNetType();
+  else if(typeof showMain==='function') showMain();
+  setTimeout(connect, 300);
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+let _lobbyMode = 'server';   // 'lan' | 'server' — drives the lobby header colour/text
+
+// Re-apply all network UI text in the active language. Safe to call any time.
+function netApplyLang(){
+  // Lobby header (mode-dependent)
+  const h2 = document.getElementById('netLobbyTitle');
+  if(h2){
+    if(_lobbyMode === 'lan'){
+      h2.textContent = T('netLobbyLocal');
+      h2.style.color = '#0f8'; h2.style.textShadow = '0 0 14px #0f8';
+    } else {
+      h2.textContent = T('netLobbyOnline');
+      h2.style.color = '#f0f'; h2.style.textShadow = '0 0 14px #f0f';
+    }
+  }
+  // Players-count label
+  const pl = document.getElementById('netPlayersLabel');
+  if(pl) pl.textContent = T('netPlayersMax', MAX_NET_PLAYERS);
+  // Ready button reflects current state
+  if($readyBtn) $readyBtn.textContent = isReady ? T('netUnready') : T('netReady');
+  // Connection-lost overlay
+  const clT = document.getElementById('netConnLostTitle');
+  const clS = document.getElementById('netConnLostSub');
+  const clB = document.getElementById('netConnLostBtn');
+  if(clT) clT.textContent = T('netConnLost');
+  if(clS) clS.textContent = T('netConnLostSub');
+  if(clB) clB.textContent = T('netReturnLobby');
+  // Loading sub-text
+  const ls = document.getElementById('netLoadSub');
+  if(ls) ls.textContent = T('netGetReadySub');
+  // Re-render dynamic lists/statuses
+  if($room && $room.style.display !== 'none'){
+    refreshPlayerList();
+    updateLevelStatus();
+    if(isHost) updateStartBtn();
+    else setRoomStatus(T('netWaitHost'));
+  }
+}
+window.netApplyLang = netApplyLang;
+
+window.NetPlay = {
+  _mode: 'server', // 'lan' | 'server'
+  open(mode='server'){
+    this._mode = mode;
+    _lobbyMode = mode;
+    buildColorPicker();
+    netApplyLang();
+    if(typeof window.applyI18nDOM==='function') window.applyI18nDOM();
+    $connect.style.display = 'flex';
+    $room.style.display    = 'none';
+    $lobby.style.display   = 'flex';
+    if(!ws || ws.readyState > 1) connect();
+  },
+  close: leaveRoom,
+  isActive(){ return window.netActive; },
+};
+
+// ── Util ─────────────────────────────────────────────────────────────────────
+function sanitizeNick(s){
+  return (s||'').replace(/[^A-Za-z0-9_ ]/g,'').trim().slice(0,16).toUpperCase() || 'PLAYER';
+}
+
+// ── Patch startAdv/startInf to apply network colour ──────────────────────────
+setTimeout(() => {
+  if(typeof drawPlayer !== 'function') return;
+  const _origDrawPlayer = drawPlayer;
+  window.drawPlayer = function(){
+    _origDrawPlayer();
+    if(!window.netActive) return;
+    interpolateGhosts();
+    for(const [, entry] of window.netPlayers){
+      if(entry.playerObj) drawOnePlayer(entry.playerObj);
+    }
+  };
+
+  // Wrap startAdv
+  if(typeof startAdv === 'function'){
+    const _origStartAdv = startAdv;
+    window.startAdv = function(n, f){
+      _origStartAdv(n, f);
+      if(window.netActive && typeof player !== 'undefined' && player){
+        player.colorScheme = myColor;
+        player.nickname    = myNick;
+      }
+    };
+  }
+
+  // Wrap startInf
+  if(typeof startInf === 'function'){
+    const _origStartInf = startInf;
+    window.startInf = function(f){
+      _origStartInf(f);
+      if(window.netActive && typeof player !== 'undefined' && player){
+        player.colorScheme = myColor;
+        player.nickname    = myNick;
+      }
+    };
+  }
+
+  // Also patch drawBullets to show host bullets on non-host screens
+  if(typeof drawBullets === 'function'){
+    const _origDrawBullets = drawBullets;
+    window.drawBullets = function(){
+      _origDrawBullets();
+      if(!window.netActive || isHost) return;
+      const hb = window._netHostBullets || [];
+      for(const b of hb){
+        const cx=(b.x||0)+6, cy=(b.y||0)+4;
+        ctx.fillStyle = b.col || '#0cf';
+        ctx.beginPath();ctx.ellipse(cx,cy,8*.7,4*.5,0,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,4*.3,0,Math.PI*2);ctx.fill();
+      }
+    };
+  }
+
+  // Non-host: disable local enemy AI (host is authoritative)
+  if(typeof updateEnemies === 'function'){
+    const _origUpdateEnemies = updateEnemies;
+    window.updateEnemies = function(){
+      if(window.netActive && !isHost) return;
+      _origUpdateEnemies();
+    };
+  }
+}, 300);
+
+})();
+</script>
 </body>
 </html>
