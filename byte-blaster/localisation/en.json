@@ -354,6 +354,7 @@
   "netOnlineDesc": "up to 5 players<br>local or global<br>room codes",
   "netMultiplayer": "ONLINE MULTIPLAYER",
   "netLocal": "LOCAL",
+  "netLocalWebHint": "📡 In the browser, LOCAL plays via the online server (true LAN needs the desktop app).",
   "netLocalDesc": "same Wi-Fi<br>or network<br>low latency",
   "netServer": "SERVER",
   "netServerDesc": "global rooms<br>play from<br>anywhere",
