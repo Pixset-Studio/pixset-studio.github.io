@@ -2312,6 +2312,7 @@ function _bossPlayerContact(){
     const wt=b.weaknessType;
     if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
        (wt==='twoStage'&&!b.shellBroken)||(wt==='archon'&&b.phase===2)||(wt==='archon'&&b.phase===3)){
+      b._netHitElem=null;                  // a stomp carries no elemental status
       damageBoss(1);                       // redirected to the host on guests
       p.vy=JV*.55;p.jl=Math.max(p.jl,1);
     } else {
@@ -2325,7 +2326,18 @@ function updateBoss(){
   // Network: host is authoritative for the boss AI (movement / shooting / hp);
   // guests render boss_sync snapshots. Player↔boss CONTACT is still detected on
   // guests via _bossPlayerContact() so a guest also loses fire/ice/blaster on touch.
-  if(window.netActive && !window.netIsHost){ _bossPlayerContact(); return; }
+  if(window.netActive && !window.netIsHost){
+    // Keep orb/node orbits spinning locally — the host-only AI below would otherwise
+    // never advance them on a guest, freezing the parts in place (both visually and
+    // for hit-testing). Mirrors the host's per-frame angle steps.
+    if(boss){
+      if(Array.isArray(boss.orbs))for(const o of boss.orbs)o.angle+=0.03;
+      if(Array.isArray(boss.nodes))for(const n of boss.nodes){n.angle+=0.025;if(n.flashT>0)n.flashT--;}
+    }
+    _bossPlayerContact();   // stomp / body contact (reports to host)
+    _bossBulletContact();   // shots (reports to host)
+    return;
+  }
   if(!boss||!boss.alive)return;
   const b=boss,p=nearestPlayer(b.x+b.w/2);
   b.anim++;
@@ -2523,33 +2535,52 @@ function updateBoss(){
   }
 
   // ── Bullet hit boss ───────────────────────────
+  _bossBulletContact();
+}
+
+// Player-bullet ↔ boss collision. Split out of updateBoss() so it can ALSO run on
+// a network guest: updateBoss() is host-only (guests early-return), which used to
+// mean a guest's shots passed straight through the boss. damageBoss() is redirected
+// to the host on guests (see network.js), and orb/node/gate state is host-synced,
+// so running the same hit logic on a guest just forwards the hit correctly.
+function _bossBulletContact(){
+  const b=boss; if(!b||!b.alive)return;
+  const _netGuest = window.netActive && !window.netIsHost;
   for(let i=pBullets.length-1;i>=0;i--){
     const bl=pBullets[i];
     const wt=b.weaknessType;
     // Check if bullet hits boss body
     if(!aabb(bl,b)){
-      // Check orbs / nodes too
+      // Check orbs / nodes too. On a guest the part is host-authoritative: report
+      // the hit by index and let the host kill it (boss_sync mirrors it straight
+      // back). We still splice the local bullet for responsive feedback.
       if(wt==='shields'){
-        for(const o of b.orbs){
+        for(let oi=0;oi<b.orbs.length;oi++){
+          const o=b.orbs[oi];
           if(!o.alive)continue;
           const ox=b.x+b.w/2+Math.cos(o.angle)*o.dist-8;
           const oy=b.y+b.h/2+Math.sin(o.angle)*o.dist*.5-8;
           if(aabb(bl,{x:ox,y:oy,w:16,h:16})){
             o.alive=false;pBullets.splice(i,1);
             SFX.enemyDie();burst(ox+8,oy+8,CT.mc,10,3,5);
-            floatTxt(ox,oy,T('orbDestroyed'),CT.mc);break;
+            floatTxt(ox,oy,T('orbDestroyed'),CT.mc);
+            if(_netGuest&&window.netReportBossPart)window.netReportBossPart('orb',oi);
+            break;
           }
         }
       }
       if(wt==='nodes'){
-        for(const nd of b.nodes){
+        for(let ni=0;ni<b.nodes.length;ni++){
+          const nd=b.nodes[ni];
           if(!nd.alive)continue;
           const nx=b.x+b.w/2+Math.cos(nd.angle)*nd.dist-8;
           const ny=b.y+b.h/2+Math.sin(nd.angle)*nd.dist*.45-8;
           if(aabb(bl,{x:nx,y:ny,w:16,h:16})){
             nd.alive=false;pBullets.splice(i,1);nd.flashT=20;
             SFX.enemyDie();burst(nx+8,ny+8,'#88f',10,3,5);
-            floatTxt(nx,ny,T('nodeHit'),'#88f');break;
+            floatTxt(nx,ny,T('nodeHit'),'#88f');
+            if(_netGuest&&window.netReportBossPart)window.netReportBossPart('node',ni);
+            break;
           }
         }
       }
@@ -2570,6 +2601,9 @@ function updateBoss(){
     else canHit=true;
 
     if(canHit){
+      // Tag the element so the guest→host damage redirect forwards fire/ice; the
+      // host applies the burn/slow on its authoritative boss (see network.js).
+      b._netHitElem=(bl.type==='fire'||bl.type==='ice')?bl.type:null;
       damageBoss(1);
       burst(bl.x,bl.y,CT.mc,6,2.5,4);
       // Элементальные пули поджигают/замедляют босса (damageBoss мог убить босса —
@@ -5716,7 +5750,10 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
     const pivotY=Math.max(24,n.y-150-rng()*40);
     const len=70+rng()*55,r=11+rng()*4,amp=0.5+rng()*0.45;
     if(pivotY+len>n.y-6)continue;          // keep the orb above the floor
-    hazards.push({type:'pendulum',x:pivotX-r,y:pivotY,w:r*2,h:r*2,r,pivotX,pivotY,len,amp,spd:0.026+rng()*0.014,phase:rng()*Math.PI*2});
+    // Pre-seed the orb position (rest pose, ang=0) so the very first draw() has
+    // finite bx/by even if updateHazards() hasn't run yet (e.g. the level opens in
+    // gState='paused' during a boss intro / cutscene, which skips hazard updates).
+    hazards.push({type:'pendulum',x:pivotX-r,y:pivotY+len-r,w:r*2,h:r*2,r,pivotX,pivotY,len,amp,spd:0.026+rng()*0.014,phase:rng()*Math.PI*2,ang:0,bx:pivotX,by:pivotY+len});
     placedPen++;
   }
 
@@ -5864,6 +5901,9 @@ function drawHazardExtra(hz){
       break;
     }
     case 'pendulum':{
+      // Never feed non-finite values to the canvas (createRadialGradient throws on
+      // NaN/Infinity, which would kill the whole rAF loop and freeze the game).
+      if(!isFinite(hz.bx)||!isFinite(hz.by)||!isFinite(hz.r))break;
       ctx.strokeStyle='#556';ctx.lineWidth=3;
       ctx.beginPath();ctx.moveTo(hz.pivotX,hz.pivotY);ctx.lineTo(hz.bx,hz.by);ctx.stroke();
       ctx.fillStyle='#888';ctx.beginPath();ctx.arc(hz.pivotX,hz.pivotY,4,0,Math.PI*2);ctx.fill();
@@ -7853,7 +7893,12 @@ function loop(){
   // main.js) so draw() runs at the display rate (~60 Hz) instead of unbounded.
   // We may run 0..N update() steps per rendered frame.
   _advanceLogic(250);
-  draw();updateHUD();raf=requestAnimationFrame(loop);
+  // Guard render: a single bad frame (e.g. a non-finite canvas value) must never
+  // tear down the rAF chain — that would freeze the game outright, and on a network
+  // host it freezes the entire room. Log and keep the loop alive.
+  try{ draw();updateHUD(); }
+  catch(e){ try{console.error('[loop] draw error:',e);}catch(_){} }
+  raf=requestAnimationFrame(loop);
 }
 // Fixed-timestep state for loop() above.
 let _lastLoopT=performance.now(),_logicAcc=0;

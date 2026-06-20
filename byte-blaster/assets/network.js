@@ -799,6 +799,11 @@ function _stateTick(){
             shieldsDown: !!boss.shieldsDown,
             solid: !!boss.solid,
             windowOpen: !!boss.windowOpen,
+            // Extra gate state guests need to decide if their shots can hurt the
+            // boss (see _bossBulletContact()'s canHit logic in game.js).
+            descending: !!boss.descending,
+            shellBroken: !!boss.shellBroken,
+            stunTimer: boss.stunTimer|0,
           } : null,
         });
       }
@@ -962,6 +967,9 @@ function applyBossSync(b){
   boss.shieldsDown = !!b.shieldsDown;
   boss.solid  = !!b.solid;
   boss.windowOpen = !!b.windowOpen;
+  boss.descending = !!b.descending;
+  boss.shellBroken = !!b.shellBroken;
+  boss.stunTimer = b.stunTimer|0;
   if(b.orbs && Array.isArray(boss.orbs)){
     for(let i=0;i<boss.orbs.length&&i<b.orbs.length;i++) boss.orbs[i].alive = !!b.orbs[i];
   }
@@ -1048,6 +1056,18 @@ function handleRemoteEvent(msg){
       if(boss && boss.alive && d.elem==='ice'){  boss._slowed=true;boss._slowT=180; }
     }
   }
+  // A guest destroyed a boss part (orb/node) — apply it on the authoritative boss.
+  // The result rides back to everyone in the next boss_sync.
+  if(isHost && msg.event === 'hit_boss_part' && msg.data){
+    const d = msg.data;
+    if(typeof boss!=='undefined' && boss && boss.alive){
+      const arr = d.kind==='orb' ? boss.orbs : (d.kind==='node' ? boss.nodes : null);
+      if(Array.isArray(arr) && arr[d.idx] && arr[d.idx].alive){
+        arr[d.idx].alive = false;
+        if(d.kind==='node') arr[d.idx].flashT = 20;
+      }
+    }
+  }
 }
 
 // Guest helper: report a hit on enemy index `idx` to the host.
@@ -1058,6 +1078,12 @@ window.netReportEnemyHit = function(idx, dmg, stomp, elem){
 window.netReportBossHit = function(dmg, elem){
   if(!window.netActive || isHost) return;
   wsSend({type:'game_event', event:'hit_boss', data:{dmg:dmg||1, elem:elem||null}});
+};
+// Guest helper: report destruction of a boss part (orb / node) by index. The host
+// owns the part state and syncs it back via boss_sync.
+window.netReportBossPart = function(kind, idx){
+  if(!window.netActive || isHost) return;
+  wsSend({type:'game_event', event:'hit_boss_part', data:{kind:kind, idx:idx|0}});
 };
 
 // ── Button wiring ────────────────────────────────────────────────────────────
