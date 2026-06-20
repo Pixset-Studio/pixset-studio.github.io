@@ -1178,5 +1178,13 @@
   "netErrGeneric": "Lỗi: {0}",
   "netConnLost": "⚠ MẤT KẾT NỐI",
   "netConnLostSub": "đang thử kết nối lại…",
-  "netReturnLobby": "← VỀ SẢNH CHỜ"
+  "netReturnLobby": "← VỀ SẢNH CHỜ",
+  "netLanHostLabel": "HOST ADDRESS (LAN)",
+  "netLanHostPlaceholder": "192.168.x.x / localhost",
+  "netLanYourIp": "Your IP: {0}",
+  "netLanNoIp": "No LAN IP found",
+  "netErrNotAllReady": "All players must press READY first",
+  "netWaitingTitle": "✓ LEVEL CLEARED",
+  "netWaitingPlayers": "Waiting for players {0}/{1}",
+  "netWaitingSub": "the level continues once everyone reaches the flag"
 }

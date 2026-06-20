@@ -1178,5 +1178,13 @@
   "netErrGeneric": "Kļūda: {0}",
   "netConnLost": "⚠ SAVIENOJUMS ZUDIS",
   "netConnLostSub": "mēģina atkārtoti savienoties…",
-  "netReturnLobby": "← ATGRIEZTIES VESTIBILĀ"
+  "netReturnLobby": "← ATGRIEZTIES VESTIBILĀ",
+  "netLanHostLabel": "HOST ADDRESS (LAN)",
+  "netLanHostPlaceholder": "192.168.x.x / localhost",
+  "netLanYourIp": "Your IP: {0}",
+  "netLanNoIp": "No LAN IP found",
+  "netErrNotAllReady": "All players must press READY first",
+  "netWaitingTitle": "✓ LEVEL CLEARED",
+  "netWaitingPlayers": "Waiting for players {0}/{1}",
+  "netWaitingSub": "the level continues once everyone reaches the flag"
 }

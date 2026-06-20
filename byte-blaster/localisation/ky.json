@@ -1178,5 +1178,13 @@
   "netErrGeneric": "Ката: {0}",
   "netConnLost": "⚠ БАЙЛАНЫШ ҮЗҮЛДҮ",
   "netConnLostSub": "кайра туташууга аракет кылып жатабыз…",
-  "netReturnLobby": "← ЛОББИГЕ КАЙТУУ"
+  "netReturnLobby": "← ЛОББИГЕ КАЙТУУ",
+  "netLanHostLabel": "HOST ADDRESS (LAN)",
+  "netLanHostPlaceholder": "192.168.x.x / localhost",
+  "netLanYourIp": "Your IP: {0}",
+  "netLanNoIp": "No LAN IP found",
+  "netErrNotAllReady": "All players must press READY first",
+  "netWaitingTitle": "✓ LEVEL CLEARED",
+  "netWaitingPlayers": "Waiting for players {0}/{1}",
+  "netWaitingSub": "the level continues once everyone reaches the flag"
 }

@@ -1178,5 +1178,13 @@
   "netErrGeneric": "오류: {0}",
   "netConnLost": "⚠ 연결이 끊겼습니다",
   "netConnLostSub": "재연결을 시도하는 중…",
-  "netReturnLobby": "← 로비로 돌아가기"
+  "netReturnLobby": "← 로비로 돌아가기",
+  "netLanHostLabel": "HOST ADDRESS (LAN)",
+  "netLanHostPlaceholder": "192.168.x.x / localhost",
+  "netLanYourIp": "Your IP: {0}",
+  "netLanNoIp": "No LAN IP found",
+  "netErrNotAllReady": "All players must press READY first",
+  "netWaitingTitle": "✓ LEVEL CLEARED",
+  "netWaitingPlayers": "Waiting for players {0}/{1}",
+  "netWaitingSub": "the level continues once everyone reaches the flag"
 }

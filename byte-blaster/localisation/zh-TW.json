@@ -1178,5 +1178,13 @@
   "netErrGeneric": "錯誤：{0}",
   "netConnLost": "⚠ 連線已中斷",
   "netConnLostSub": "正在嘗試重新連線…",
-  "netReturnLobby": "← 返回大廳"
+  "netReturnLobby": "← 返回大廳",
+  "netLanHostLabel": "HOST ADDRESS (LAN)",
+  "netLanHostPlaceholder": "192.168.x.x / localhost",
+  "netLanYourIp": "Your IP: {0}",
+  "netLanNoIp": "No LAN IP found",
+  "netErrNotAllReady": "All players must press READY first",
+  "netWaitingTitle": "✓ LEVEL CLEARED",
+  "netWaitingPlayers": "Waiting for players {0}/{1}",
+  "netWaitingSub": "the level continues once everyone reaches the flag"
 }
