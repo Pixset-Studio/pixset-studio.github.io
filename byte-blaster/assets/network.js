@@ -46,9 +46,17 @@ let _createMax   = MAX_NET_PLAYERS; // create-room: chosen player limit (2–5)
 // localhost. A LAN peer joining another machine's room types that machine's IP
 // into the 'HOST ADDRESS' field; we persist it and connect there instead.
 const LAN_PORT = 3000;
+// Only the desktop (Electron) build runs the embedded LAN relay. The web build
+// has no localhost relay it could reach, so its «LOCAL» source transparently
+// uses the cloud relay instead — same-machine/LAN friends still play together by
+// room code, just routed through the internet. (electronAPI is exposed by preload.)
+const IS_DESKTOP = !!(window.electronAPI && typeof window.electronAPI.getLanInfo === 'function');
 let _lanHost = 'localhost';
 try { const _lh = localStorage.getItem('bb_net_lanhost'); if(_lh) _lanHost = _lh; } catch(e){}
-function lanUrl(){ const h=(_lanHost||'localhost').trim()||'localhost'; return 'ws://'+h+':'+LAN_PORT; }
+function lanUrl(){
+  if(!IS_DESKTOP) return SERVER_URL;   // web: no localhost relay — fall back to cloud
+  const h=(_lanHost||'localhost').trim()||'localhost'; return 'ws://'+h+':'+LAN_PORT;
+}
 let _connectedUrl = null;     // URL the live socket is using (so we know when to reconnect)
 let _lobbyMode = 'server';    // 'lan' | 'server' — source toggle + lobby header style
 function activeUrl(){ return _lobbyMode === 'lan' ? lanUrl() : SERVER_URL; }
@@ -924,12 +932,22 @@ function applyBossSync(b){
   if(!b){
     // Host says boss is gone/dead — play a local death flourish then clear it
     if(boss){
+      const bx=boss.x, bw=boss.w; // remember position before we null the boss
       if(typeof burst==='function'){
         burst(boss.x+boss.w/2, boss.y+boss.h/2, (typeof CT!=='undefined'&&CT.clr)||'#fff', 40, 6, 7);
         burst(boss.x+boss.w/2, boss.y+boss.h/2, '#fff', 20, 4, 5);
       }
       if(typeof camShake!=='undefined') camShake = 20;
       boss.alive=false; boss=null;
+      // Boss levels park the exit flag off-world (flagX=worldW+99999) until the
+      // boss dies; the host reveals it inside killBoss(), which guests never run.
+      // Reveal it here too — otherwise the guest can never reach the flag and the
+      // whole room hangs forever waiting on them. (flagX/worldW/flagDone are
+      // game.js globals shared across the page's classic scripts.)
+      if(typeof flagX!=='undefined' && typeof worldW!=='undefined' && flagX>worldW){
+        flagX = bx + bw/2 - 15;
+        flagDone = false;
+      }
     }
     return;
   }
@@ -1099,9 +1117,18 @@ function applySrcUI(){
 // LAN-only: show the host-address input (so a peer can target the host's IP) and
 // list this machine's own LAN IPs (so the host can read them out to friends).
 function refreshLanHostUI(){
+  // Web: «LOCAL» routes through the cloud relay, so the LAN host-address input is
+  // meaningless — hide it and show a one-line hint that local play uses the
+  // online server in the browser. (Both create + find views carry a hint span.)
+  const showHint = (!IS_DESKTOP && _lobbyMode === 'lan');
+  document.querySelectorAll('.net-local-web-hint').forEach(el => {
+    el.style.display = showHint ? 'block' : 'none';
+    if(showHint) el.textContent = T('netLocalWebHint');
+  });
+
   const row = document.getElementById('netLanHostRow');
   if(!row) return;
-  const show = (_lobbyMode === 'lan' && _uiView === 'find');
+  const show = (IS_DESKTOP && _lobbyMode === 'lan' && _uiView === 'find');
   row.style.display = show ? 'flex' : 'none';
   if(!show) return;
   const inp = document.getElementById('netLanHost');
@@ -1315,6 +1342,9 @@ function leaveRoom(){
   window.netPlayers.clear();
   updateGamePing(); // hide the in-game ping readout
   _netMode = 'infinite'; _netLevel = 1; _netSeed = 0;
+  // Tell the relay to drop us NOW so the room is deleted immediately instead of
+  // lingering under the disconnect grace timer (which showed it as a ghost room).
+  if(ws && ws.readyState===1 && roomCode){ try{ wsSend({type:'leave_room'}); }catch(e){} }
   roomCode = null; isHost = false; isReady = false; players = [];
   if(ws){ try{ ws.close(); }catch(e){} ws=null; }
   $room.style.display    = 'none';

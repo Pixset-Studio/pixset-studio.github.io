@@ -581,9 +581,13 @@ function showBossIntro(b){
     setTimeout(()=>{if(boss&&boss.alive)startBossMusic();},200);
     setTimeout(()=>{ov.style.display='none';},3200);
   }
-  // Boss pre-fight lines are in CSCENES w{wi}_boss — play them if not yet shown
+  // Boss pre-fight lines are in CSCENES w{wi}_boss — play them if not yet shown.
+  // In a network game we must NOT pause for the cutscene: each client triggers
+  // the arena locally at its own moment, so a blocking gState='paused' freezes
+  // the fight out of sync (and the host's frozen boss is what guests see). Show
+  // only the non-blocking card; the simulation keeps running for everyone.
   const preId='w'+wi+'_boss';
-  if(typeof CSCENES!=='undefined'&&CSCENES[preId]&&!_csFired[preId]){
+  if(!window.netActive&&typeof CSCENES!=='undefined'&&CSCENES[preId]&&!_csFired[preId]){
     _csFired[preId]=true;
     gState='paused';
     csPlay(preId,wi,function(){gState='playing';_showCard();});
@@ -1030,14 +1034,22 @@ function hitBlock(b){
   let puType;
   if(b.guaranteedBlast){puType='blast';}
   else{
-    const r=Math.random();
+    // In a network game every client generates the same level from the shared
+    // seed, but the powerup TYPE used to be a per-client Math.random() — so the
+    // host could pop a blaster from a block while a guest got a star from the
+    // SAME block (and then couldn't shoot). Derive the type deterministically
+    // from the block position + net seed so all clients agree. Solo keeps random.
+    const rng = (window.netActive && window._netSeed)
+      ? mkRNG((window._netSeed>>>0) ^ (Math.round(b.x)*73856093) ^ (Math.round(b.origY||b.y)*19349663))
+      : Math.random;
+    const r=rng();
     if(r<0.20)puType='blast';
     else if(r<0.37)puType='star';
     else if(r<0.54)puType='boots';
     else if(r<0.70&&!fullHP)puType='life';
     else if(r<0.85)puType='fire';
     else puType='ice';
-    if(puType==='life'&&fullHP)puType=Math.random()<.5?'fire':'ice';
+    if(puType==='life'&&fullHP)puType=rng()<.5?'fire':'ice';
   }
   const bc=puType==='life'?'#ff2266':puType==='boots'?'#0ff':puType==='star'?'#ff0':puType==='fire'?'#ff4400':puType==='ice'?'#00ffff':'#ffd700';
   powerups.push({x:b.x+b.w/2-12,y:b.y-26,w:24,h:24,vy:-2.5,type:puType,anim:0,got:false});
