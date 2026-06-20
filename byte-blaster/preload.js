@@ -78,4 +78,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Relaunch the app (apply a startup-only setting like V-Sync immediately).
   relaunch: () => ipcRenderer.invoke('app:relaunch'),
+
+  // LAN relay info for the in-game LOCAL lobby: whether the embedded relay is
+  // running and this machine's LAN IPs (so the host can share them).
+  getLanInfo: () => ipcRenderer.invoke('net:lanInfo'),
 });
