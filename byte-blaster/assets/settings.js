@@ -7,6 +7,57 @@
 
   console.log('⚙️ Loading settings system...');
 
+  // ── Non-blocking confirm ──────────────────────────────────────────
+  // window.confirm() blocks the whole JS thread until the user clicks — and a
+  // blocking dialog on a network HOST freezes the enemy AI for the entire room
+  // (the bug this whole change set fixes). This overlay is a drop-in async
+  // replacement: it never blocks the event loop, so the game loop / network
+  // snapshots keep running underneath it. `onYes` fires only if the user accepts.
+  function nonBlockingConfirm(message, onYes, onNo) {
+    const tt = (k, fb) => {
+      const v = (typeof window.t === 'function') ? window.t(k) : k;
+      return (v && v !== k) ? v : fb;
+    };
+    // Re-use one overlay node if called repeatedly.
+    let ov = document.getElementById('nbConfirmOv');
+    if (ov) ov.remove();
+    ov = document.createElement('div');
+    ov.id = 'nbConfirmOv';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;'+
+      'align-items:center;justify-content:center;background:rgba(0,0,0,.72);'+
+      'backdrop-filter:blur(2px);font-family:inherit;';
+    const box = document.createElement('div');
+    box.style.cssText = 'max-width:420px;width:86%;background:#0d1117;'+
+      'border:2px solid #2dd4bf;border-radius:12px;padding:24px 22px;'+
+      'box-shadow:0 0 24px rgba(45,212,191,.35);color:#e6edf3;text-align:center;';
+    const p = document.createElement('p');
+    p.textContent = message;
+    p.style.cssText = 'margin:0 0 20px;font-size:16px;line-height:1.5;';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:12px;justify-content:center;';
+    const mkBtn = (label, primary) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'flex:1;max-width:160px;padding:10px 14px;border-radius:8px;'+
+        'font-size:15px;cursor:pointer;border:2px solid '+(primary?'#2dd4bf':'#444c56')+';'+
+        'background:'+(primary?'#0f766e':'transparent')+';color:#e6edf3;transition:all .12s;';
+      b.onmouseenter = () => { b.style.transform='scale(1.05)'; b.style.boxShadow='0 0 12px currentColor'; };
+      b.onmouseleave = () => { b.style.transform='scale(1)';   b.style.boxShadow='none'; };
+      return b;
+    };
+    const yes = mkBtn(tt('restartNow', 'Restart now'), true);
+    const no  = mkBtn(tt('later', 'Later'), false);
+    const close = () => { ov.remove(); };
+    yes.onclick = () => { close(); if (window.SFX && window.SFX.menu) window.SFX.menu(); if (typeof onYes === 'function') onYes(); };
+    no.onclick  = () => { close(); if (window.SFX && window.SFX.menu) window.SFX.menu(); if (typeof onNo  === 'function') onNo();  };
+    ov.onclick  = (e) => { if (e.target === ov) no.onclick(); };
+    row.appendChild(yes); row.appendChild(no);
+    box.appendChild(p); box.appendChild(row);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+  }
+  window.nonBlockingConfirm = nonBlockingConfirm;
+
   // Default settings
   const defaultSettings = {
     resolution: '1600x900',
@@ -1023,7 +1074,7 @@
         const msg = (typeof window.t === 'function' && window.t('vsyncRestart') !== 'vsyncRestart')
           ? window.t('vsyncRestart')
           : 'V-Sync change needs a restart. Restart now?';
-        if (window.confirm(msg)) window.electronAPI.relaunch();
+        nonBlockingConfirm(msg, function(){ window.electronAPI.relaunch(); });
       }
     };
 

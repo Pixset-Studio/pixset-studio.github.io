@@ -329,6 +329,7 @@
           <!-- CLEARED count + current zone now live under the logo (top-left). -->
           <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / 100</div>
           <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / 300</div>
+          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / 300</div>
           <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
           <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
         </div>
@@ -884,6 +885,13 @@
     const starsCount = window.totalStars ? window.totalStars(MAP_STATE.hard) : 0;
     document.getElementById('mapStarsCount').textContent = starsCount;
 
+    // Update crystal (data-shard) count — total collected across all 100 levels.
+    const shardsEl = document.getElementById('mapShardsCount');
+    if (shardsEl) {
+      const shardsCount = window.totalShards ? window.totalShards(MAP_STATE.hard) : 0;
+      shardsEl.textContent = shardsCount;
+    }
+
     // Total campaign score (sum of every level's best score).
     const totalScoreEl = document.getElementById('mapTotalScore');
     if (totalScoreEl) {
@@ -912,8 +920,12 @@
     const scoreEl = document.getElementById('mapLevelScore');
     if (scoreEl) {
       const best = window.levelScore ? window.levelScore(current.num, MAP_STATE.hard) : 0;
-      if (current.completed && best > 0) {
-        scoreEl.textContent = `★ ${tt('mapBest','BEST')}: ${best.toLocaleString()}`;
+      const shards = window.levelShards ? window.levelShards(current.num, MAP_STATE.hard) : 0;
+      const parts = [];
+      if (current.completed && best > 0) parts.push(`★ ${tt('mapBest','BEST')}: ${best.toLocaleString()}`);
+      if (current.unlocked) parts.push(`<span style="color:#0ff">◆ ${shards}/3</span>`);
+      if (parts.length) {
+        scoreEl.innerHTML = parts.join('  ');
         scoreEl.style.display = 'block';
       } else {
         scoreEl.style.display = 'none';
