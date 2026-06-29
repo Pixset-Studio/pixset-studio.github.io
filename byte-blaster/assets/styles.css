@@ -9,6 +9,10 @@
 body{background:#04040f;display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-height:100vh;width:100vw;margin:0;font-family:'Press Start 2P',monospace;overflow:hidden;user-select:none}
 #stars{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+/* Wraps the whole in-game UI (HUD + canvas + hint). On desktop it sits in the
+   normal centered flow; on mobile, settings.js positions it fixed and applies a
+   single transform:scale() so the entire PC layout shrinks to fit the phone. */
+#stage{display:flex;flex-direction:column;align-items:center;justify-content:center}
 .star{position:absolute;background:#fff;border-radius:50%;animation:tw var(--d) ease-in-out infinite;opacity:0}
 @keyframes tw{0%,100%{opacity:0}50%{opacity:var(--o)}}
 @keyframes bossShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}

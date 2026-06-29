@@ -200,7 +200,12 @@
   let mapCanvas, mapCtx;
   let mapOverlay;
   // Live canvas dimensions (follow the window/resolution) and node-size factor.
-  let mapW = 1400, mapH = 900, nodeScale = 1;
+  // mapW/mapH are LOGICAL (CSS) pixels — all drawing uses them. mapDpr is the
+  // device-pixel-ratio: the canvas backing store is mapW*mapDpr so the map is
+  // rendered crisp on high-DPI phones (otherwise it was drawn at the low CSS
+  // resolution and stretched, which made it blurry with oversized labels —
+  // looking nothing like the sharp PC version).
+  let mapW = 1400, mapH = 900, nodeScale = 1, mapDpr = 1;
 
   const clampN = (v, a, b) => (v < a ? a : (v > b ? b : v));
   const nodeBaseR = level => (level.type === 'boss' ? 22 : 16);
@@ -215,10 +220,34 @@
     const dataH = (BASE_MAXY - BASE_MINY) || 1;
 
     // HUD-safe margins: clear the top-left info stack and the bottom panel/hints.
-    const PAD_L = 80, PAD_R = 80, PAD_T = 150, PAD_B = 160;
+    // Measured from the ACTUAL on-screen chrome (which fitHud() scales to the
+    // screen) so level nodes never slip under a panel on small phones. Falls back
+    // to fixed insets before the overlay/panels exist. Capped at ~40% per side so
+    // the playable field can never collapse to nothing.
+    let PAD_L = 22, PAD_R = 22, PAD_T = 150, PAD_B = 160;
+    if (mapOverlay) {
+      const rectOf = sel => {
+        const el = mapOverlay.querySelector(sel);
+        if (!el || el.style.display === 'none') return null;
+        const r = el.getBoundingClientRect();
+        return (r.width && r.height) ? r : null;
+      };
+      // Top band: below the tallest of the title/stats panel and ACHIEVEMENTS.
+      let topB = 0;
+      [rectOf('#mapHudTL'), rectOf('#mapAchBtn')].forEach(r => { if (r) topB = Math.max(topB, r.bottom); });
+      if (topB > 0) PAD_T = clampN(topB + 16, 90, mapH * 0.4);
+      // Bottom band: above the zone tag / BACK button / keyboard hint AND the
+      // always-visible level-info panel ("LEVEL N"), so no node hides under them.
+      let botTop = mapH;
+      ['#mapZoneTag', '#mapBackTouch', '#mapKbdHint', '#mapLevelPanel'].forEach(sel => {
+        const r = rectOf(sel); if (r) botTop = Math.min(botTop, r.top);
+      });
+      const measuredB = botTop < mapH ? (mapH - botTop) : 0;
+      PAD_B = clampN(Math.max(measuredB + 16, 150), 110, mapH * 0.46);
+    }
     const safeX = PAD_L, safeY = PAD_T;
     const safeW = Math.max(220, mapW - PAD_L - PAD_R);
-    const safeH = Math.max(220, mapH - PAD_T - PAD_B);
+    const safeH = Math.max(200, mapH - PAD_T - PAD_B);
 
     // Game Scale widens/narrows the field; resolution already set the safe box.
     const gs = (window.gameSettings && window.gameSettings.gameScale) || 0;
@@ -230,7 +259,11 @@
     // a smaller field (lower resolution / Game Scale) yields smaller nodes, a
     // larger field yields bigger ones — overlap is impossible either way.
     const cell = Math.sqrt((fieldW * fieldH) / LEVELS.length);
-    const rTarget = clampN(cell * 0.32, 7, 26);
+    // Bigger nodes that fill more of the screen: the old cap (26) left the PC
+    // map looking tiny with lots of empty space. A higher multiplier + cap make
+    // the level nodes chunky like the phone build while relaxation (below) still
+    // guarantees all 100 fit without overlap.
+    const rTarget = clampN(cell * 0.40, 9, 34);
     nodeScale = rTarget / 16; // 16 = base normal-node radius
     const maxR = 22 * nodeScale;
 
@@ -244,11 +277,8 @@
       l.x = offX + (l.bx - BASE_MINX) * scale;
       l.y = offY + (l.by - BASE_MINY) * scale;
     }
-    for (let w = 0; w < worldRender.length; w++) {
-      worldRender[w].cx = offX + (BASE_WORLD[w].cx - BASE_MINX) * scale;
-      worldRender[w].cy = offY + (BASE_WORLD[w].cy - BASE_MINY) * scale;
-      worldRender[w].spread = BASE_WORLD[w].spread * scale;
-    }
+    // worldRender centres are derived from the FINAL node positions further down
+    // (after relaxation) — see the centroid pass below.
 
     // Relaxation: push apart any pair closer than their combined radii + gap,
     // re-clamping into the field each pass so nodes never leave the screen.
@@ -278,6 +308,28 @@
     }
     for (const l of LEVELS) { l.x = Math.round(l.x); l.y = Math.round(l.y); }
 
+    // Re-derive each world's on-screen centre + spread from where its 10 nodes
+    // ACTUALLY ended up after relaxation. Relaxation can shove nodes well away
+    // from the pre-relaxation cluster centre — most visibly on very wide/short
+    // phone screens, where the node field spreads across the full width while
+    // the old centres stayed bunched, so the world labels/zone glows (anchored
+    // to those centres) drifted into a clump in the middle (the phone-vs-PC bug).
+    // A centroid of the final node positions keeps labels locked on their cluster
+    // on every aspect ratio.
+    for (let w = 0; w < worldRender.length; w++) {
+      let sx = 0, sy = 0, n = 0;
+      for (const l of LEVELS) { if (l.worldId === w) { sx += l.x; sy += l.y; n++; } }
+      if (!n) continue;
+      const cx = sx / n, cy = sy / n;
+      let maxD = 0;
+      for (const l of LEVELS) {
+        if (l.worldId === w) { const d = Math.hypot(l.x - cx, l.y - cy); if (d > maxD) maxD = d; }
+      }
+      worldRender[w].cx = cx;
+      worldRender[w].cy = cy;
+      worldRender[w].spread = Math.max(40, maxD); // cluster radius drives glow + label offset
+    }
+
     // Keep the idle robot on its current node after a relayout/resize.
     const cur = LEVELS.find(l => l.id === MAP_STATE.currentLevelId);
     if (cur && !MAP_STATE.walk) { MAP_STATE.playerX = cur.x; MAP_STATE.playerY = cur.y; }
@@ -290,7 +342,7 @@
     mapCanvas.height = mapH;
     mapCanvas.style.cssText = `
       display: block;
-      image-rendering: pixelated;
+      image-rendering: auto;
       cursor: pointer;
     `;
     mapCtx = mapCanvas.getContext('2d');
@@ -319,31 +371,28 @@
       display: inline-block;
     `;
 
-    // HUD overlay
+    // HUD overlay. Each corner panel is independently anchored so fitHud() can
+    // scale it toward its own corner on small screens (no overlap on phones).
     const hud = document.createElement('div');
     hud.innerHTML = `
-      <div style="position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 10;">
-        <div style="background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
-          <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
-          <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
-          <!-- CLEARED count + current zone now live under the logo (top-left). -->
-          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / 100</div>
-          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / 300</div>
-          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / 300</div>
-          <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
-          <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
-        </div>
-        <button id="mapAchBtn" data-i18n="achievements" style="pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">🏆 ACHIEVEMENTS</button>
+      <div id="mapHudTL" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: top left; pointer-events: none; z-index: 10; background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
+        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
+        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / 100</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / 300</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / 300</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
+        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
       </div>
-      <div style="position: absolute; bottom: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none;">
-        <div id="mapZoneTag" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
-        <div style="background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #383838; line-height: 1.8; text-align: right;">
-          ↑↓←→ / WASD — MOVE<br>
-          ENTER / SPACE — START<br>
-          ESC — BACK TO MENU
-        </div>
+      <button id="mapAchBtn" data-i18n="achievements" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">🏆 ACHIEVEMENTS</button>
+      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer;">← BACK</button>
+      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
+      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
+        ↑↓←→ / WASD — MOVE<br>
+        ENTER / SPACE — START<br>
+        ESC — BACK TO MENU
       </div>
-      <div id="mapLevelPanel" style="position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.92); border: 2px solid #0ff; padding: 11px 28px; text-align: center; min-width: 310px; display: none;">
+      <div id="mapLevelPanel" style="position: fixed; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); transform-origin: bottom center; background: rgba(0,0,0,0.92); border: 2px solid #0ff; padding: 11px 28px; text-align: center; min-width: 310px; display: none; z-index: 11;">
         <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: 12px; font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
         <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
         <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
@@ -367,6 +416,18 @@
       achBtn.onmouseenter = () => { achBtn.style.boxShadow = '0 0 14px #0ff'; achBtn.style.transform = 'scale(1.04)'; };
       achBtn.onmouseleave = () => { achBtn.style.boxShadow = 'none'; achBtn.style.transform = 'scale(1)'; };
     }
+    // Touch-only BACK button (no ESC key on phones) — returns to the previous
+    // screen (the difficulty select). It must route through the game's doEsc()
+    // so navScr is updated and that screen is actually shown; calling only
+    // hideWorldMap() left navScr stuck on 'map' and showed a blank screen.
+    const backTouch = mapOverlay.querySelector('#mapBackTouch');
+    if (backTouch) {
+      backTouch.onclick = () => {
+        hideWorldMap();
+        if (typeof window.doEsc === 'function') window.doEsc(); // plays SFX + navigates map→diff
+        else if (window.SFX && window.SFX.back) window.SFX.back();
+      };
+    }
     // Translate the freshly-built HUD (the achievements label uses data-i18n).
     if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
 
@@ -376,14 +437,101 @@
   }
 
   function resizeMapCanvas() {
-    // Fill the window: the canvas resolution follows the screen, so the field
-    // size (and node spacing) scales with the resolution setting.
+    // Fill the window in LOGICAL (CSS) pixels — the layout math below works in
+    // this space, identical on PC and phone, so the map looks the same on both.
     mapW = Math.max(640, window.innerWidth);
     mapH = Math.max(480, window.innerHeight);
-    mapCanvas.width = mapW;
-    mapCanvas.height = mapH;
+    // High-DPI: render the backing store at device resolution and scale the
+    // context back to CSS pixels. This is THE fix for the phone map looking
+    // blurry/zoomed (oversized labels) vs the crisp PC map — on a 2.5–3× phone
+    // the canvas was previously drawn at ~960px and stretched across the screen.
+    mapDpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+    mapCanvas.width = Math.round(mapW * mapDpr);
+    mapCanvas.height = Math.round(mapH * mapDpr);
     mapCanvas.style.width = mapW + 'px';
     mapCanvas.style.height = mapH + 'px';
+    // Setting canvas.width resets the transform, so (re)apply the DPR scale here.
+    mapCtx.setTransform(mapDpr, 0, 0, mapDpr, 0, 0);
+    // fitHud() scales the corner panels, then re-lays the level nodes using the
+    // panels' measured sizes (so nothing overlaps). It owns layoutLevels() now.
+    fitHud();
+  }
+
+  // Scale the corner HUD panels down on small screens so they never overlap or
+  // spill off-screen. Each panel scales toward its own corner (transform-origin
+  // set in the markup). The keyboard-hint panel is hidden on touch devices.
+  function fitHud() {
+    if (!mapOverlay) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
+                    (window.gameSettings && window.gameSettings.touchControls === 'on');
+    const kbd = mapOverlay.querySelector('#mapKbdHint');
+    if (kbd) kbd.style.display = isTouch ? 'none' : '';
+    // The touch BACK button replaces the (hidden) keyboard hint on touch devices.
+    const backTouch = mapOverlay.querySelector('#mapBackTouch');
+    if (backTouch) backTouch.style.display = isTouch ? '' : 'none';
+
+    // On phones the ACHIEVEMENTS + BACK buttons were shrunk together with the
+    // info panels down to ~3px (invisible/untappable). Give them a bigger base
+    // size on touch so that — even after scaling — they stay readable and meet
+    // a comfortable touch-target size. Reset to the desktop size otherwise.
+    const achEl0 = mapOverlay.querySelector('#mapAchBtn');
+    if (achEl0)    { achEl0.style.fontSize  = isTouch ? '13px' : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
+    if (backTouch) { backTouch.style.fontSize = isTouch ? '13px' : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
+
+    // One master scale `k` (≤1) shared by every panel so the chrome stays
+    // proportional AND leaves the node field enough room. Constraints folded in:
+    //  • each corner panel ≤44% width / 40% height
+    //  • top-left stats + top-right ACHIEVEMENTS fit side by side (no cover-up)
+    //  • the centred level panel ≤90% width
+    //  • VERTICAL STACK: stats (top) + level panel (bottom) must leave the node
+    //    field ≥~42% of the height — the key fix for short landscape phones where
+    //    the tall stats panel + level panel otherwise eat the whole screen and
+    //    push nodes underneath them.
+    const panels = ['#mapHudTL', '#mapAchBtn', '#mapZoneTag', '#mapKbdHint', '#mapBackTouch']
+      .map(s => mapOverlay.querySelector(s))
+      .filter(el => el && el.style.display !== 'none');
+    const lvl = mapOverlay.querySelector('#mapLevelPanel');
+    if (lvl) lvl.style.transform = 'translateX(-50%)';   // measure natural (no scale)
+
+    let k = 1;
+    panels.forEach(el => {
+      el.style.transform = '';            // measure at natural size
+      const w = el.offsetWidth, h = el.offsetHeight;
+      if (!w || !h) return;
+      k = Math.min(k, (vw * 0.44) / w, (vh * 0.40) / h);
+    });
+    const tlEl = mapOverlay.querySelector('#mapHudTL');
+    const achEl = mapOverlay.querySelector('#mapAchBtn');
+    if (tlEl && achEl) {
+      const need = tlEl.offsetWidth + achEl.offsetWidth;        // natural widths
+      if (need > 0) k = Math.min(k, (vw * 0.94) / need);
+    }
+    const lvlW = lvl ? lvl.offsetWidth : 0, lvlH = lvl ? lvl.offsetHeight : 0;
+    if (lvlW > 0) k = Math.min(k, (vw * 0.90) / lvlW);
+    // Vertical stack constraint (the landscape fix). On touch we reserve a bit
+    // less height for the node field so the chrome can stay a readable size.
+    const stackH = (tlEl ? tlEl.offsetHeight : 0) + lvlH;
+    const minBand = clampN(vh * (isTouch ? 0.34 : 0.42), isTouch ? 150 : 210, 340);
+    if (stackH > 0) k = Math.min(k, (vh - minBand - 98) / stackH);
+
+    // Floor: keep the chrome readable. Higher on touch so the info panels never
+    // collapse to an illegible smear like they did before.
+    k = Math.max(isTouch ? 0.5 : 0.34, k);
+    panels.forEach(el => { el.style.transform = k < 1 ? 'scale(' + k + ')' : ''; });
+    if (lvl) lvl.style.transform = 'translateX(-50%)' + (k < 1 ? ' scale(' + k + ')' : '');
+    // The two control buttons (ACHIEVEMENTS, BACK) get their own gentler floor so
+    // they always stay big enough to read and tap, independent of how much the
+    // info panels had to shrink. They sit in their own corners, so enlarging them
+    // can't cover the stats panel.
+    const kBtn = Math.min(1, Math.max(k, isTouch ? 0.85 : 0.34));
+    [achEl0, backTouch].forEach(el => {
+      if (el && el.style.display !== 'none') el.style.transform = kBtn < 1 ? 'scale(' + kBtn + ')' : '';
+    });
+
+    // Panels are now sized for this screen — re-lay the level nodes so they keep
+    // clear of the (possibly scaled) chrome. Done here so every fitHud() caller,
+    // including the post-open settle timers, gets a correct field.
     layoutLevels();
   }
 
@@ -522,24 +670,35 @@
       const R = Math.max(60, pos.spread);
       const label = wName(world);
 
-      const fs = Math.max(13, Math.round(14 * nodeScale));
+      // Slightly smaller labels on dense/zoomed-out maps so plates don't collide.
+      const fs = clampN(Math.round(11 * nodeScale), 12, 20);
       ctx.font = `bold ${fs}px "Share Tech Mono", monospace`;
       const tw = ctx.measureText(label).width;
-      const halfW = tw / 2 + 8, halfH = fs / 2 + 5;
+      const halfW = tw / 2 + 7, halfH = fs / 2 + 4;
 
-      // Candidate anchor points around the cluster (above, below, sides).
-      const off = R * 1.25 + fs;
-      const cands = [
-        { x: pos.cx, y: pos.cy - off }, { x: pos.cx, y: pos.cy + off },
-        { x: pos.cx, y: pos.cy - off * 1.4 }, { x: pos.cx, y: pos.cy + off * 1.4 },
+      // Many candidate anchors around the cluster (cardinals + diagonals at two
+      // distances). Pick the one that overlaps already-placed labels the LEAST
+      // (area of intersection), not just the first non-overlapping one — so when
+      // everything is cramped we still spread out instead of stacking.
+      const off = R * 1.15 + fs;
+      const ring = (m) => [
+        { x: pos.cx,           y: pos.cy - off * m }, { x: pos.cx,           y: pos.cy + off * m },
+        { x: pos.cx - off * m, y: pos.cy           }, { x: pos.cx + off * m, y: pos.cy           },
+        { x: pos.cx - off * m, y: pos.cy - off * m }, { x: pos.cx + off * m, y: pos.cy - off * m },
+        { x: pos.cx - off * m, y: pos.cy + off * m }, { x: pos.cx + off * m, y: pos.cy + off * m },
       ];
-      let best = cands[0];
+      const cands = [...ring(1), ...ring(1.55)];
+      let best = null, bestPen = Infinity;
       for (const c of cands) {
         c.x = clampN(c.x, halfW + 4, mapW - halfW - 4);
-        c.y = clampN(c.y, halfH + 60, mapH - halfH - 60);
-        const overlaps = placed.some(p => Math.abs(p.x - c.x) < (p.hw + halfW) && Math.abs(p.y - c.y) < (p.hh + halfH));
-        if (!overlaps) { best = c; break; }
-        best = c;
+        c.y = clampN(c.y, halfH + 56, mapH - halfH - 56);
+        let pen = 0;
+        for (const p of placed) {
+          const ox = (p.hw + halfW) - Math.abs(p.x - c.x);
+          const oy = (p.hh + halfH) - Math.abs(p.y - c.y);
+          if (ox > 0 && oy > 0) pen += ox * oy;     // overlap area
+        }
+        if (pen < bestPen) { bestPen = pen; best = c; if (pen === 0) break; }
       }
       placed.push({ x: best.x, y: best.y, hw: halfW, hh: halfH });
 
@@ -1057,6 +1216,10 @@
     // Re-translate the HUD on every open so a language change made elsewhere
     // (e.g. in settings) is reflected when the map is reopened.
     if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
+    // Re-fit after translation (localised labels change panel sizes) and again a
+    // beat later once fonts/layout settle in a mobile WebView.
+    fitHud();
+    [60, 250, 600].forEach(t => setTimeout(fitHud, t));
     // Cancel any previous map loop before starting a fresh one, so re-opening
     // the map can never leave two update() RAF chains running at once.
     if (animationFrame) { cancelAnimationFrame(animationFrame); animationFrame = null; }
@@ -1168,8 +1331,10 @@
 
     clickHandler = (e) => {
       const rect = mapCanvas.getBoundingClientRect();
-      const scaleX = mapCanvas.width / rect.width;
-      const scaleY = mapCanvas.height / rect.height;
+      // Map the click into LOGICAL (CSS-pixel) space — the same space node x/y
+      // live in. Uses mapW/mapH, not the (DPR-scaled) backing store size.
+      const scaleX = mapW / rect.width;
+      const scaleY = mapH / rect.height;
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
 

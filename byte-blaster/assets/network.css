@@ -3,7 +3,16 @@
   position:fixed;inset:0;z-index:900;
   background:#02020cef;
   display:none;flex-direction:column;align-items:center;justify-content:center;
-  font-family:'Press Start 2P',monospace;gap:14px;
+  font-family:'Press Start 2P',monospace;
+  /* The inner box is transform-scaled by JS to always fit the screen, so we clip
+     (never scroll) — a scrollbar here would move the already-fitted content. */
+  overflow:hidden;box-sizing:border-box;
+}
+/* Inner box holds the title + panels and is scaled by JS (window._netFitLobby)
+   to fit the screen, so the whole lobby shrinks proportionally on a phone. */
+#netLobbyInner{
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+  transform-origin:center center;
 }
 #netLobby h2{font-size:12px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:3px;margin:0}
 .net-panel{

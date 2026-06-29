@@ -2,13 +2,41 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>BYTE BLASTER</title>
+
+<!-- App / tab icons (favicon + mobile home-screen). Files live in icons/. -->
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="icons/site.webmanifest">
+
+<!-- Mobile / PWA chrome -->
+<meta name="theme-color" content="#04040f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Byte Blaster">
+
 <link rel="stylesheet" href="assets/styles.css">
 <link rel="stylesheet" href="assets/ui-fix.css">
+<link rel="stylesheet" href="assets/touch.css">
+<script src="assets/version.js"></script>
 </head>
 <body>
+<!-- Boot/loading screen: covers everything until scripts, fonts and locales are
+     ready, so the player never sees a half-built menu. Removed by the script at
+     the bottom of <body>. Inline-styled so it shows before any CSS/JS parses. -->
+<div id="bootScreen" style="position:fixed;inset:0;z-index:99999;background:#04040f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Press Start 2P',monospace;transition:opacity .45s ease">
+  <div style="font-size:22px;color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff;letter-spacing:5px;text-align:center">⚡ BYTE BLASTER</div>
+  <div style="width:200px;height:8px;background:#0a0a22;border:1px solid #0ff5;border-radius:4px;overflow:hidden">
+    <div id="bootBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0af,#0ff);box-shadow:0 0 12px #0ff;transition:width .3s ease"></div>
+  </div>
+  <div id="bootMsg" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4af;letter-spacing:2px">LOADING…</div>
+</div>
 <div id="stars"></div>
+<div id="stage">
 <div id="ui">
   <div class="uib"><div class="uil" data-i18n="score">SCORE</div><div class="uiv" id="scoreEl">0</div></div>
   <div class="uib" id="totalUi" style="display:none"><div class="uil" data-i18n="total">TOTAL</div><div class="uiv" id="totalEl">0</div></div>
@@ -48,6 +76,7 @@
       <span data-i18n="legend2">Z / X / CTRL — SHOOT (needs blaster power-up) &nbsp;|&nbsp; ESC — PAUSE</span><br>
       <span data-i18n="legend3">🟡 HIT GOLD BLOCKS FROM BELOW &nbsp;|&nbsp; STOMP ENEMIES FROM ABOVE</span>
     </div>
+    <div id="verTag" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:#4af7;letter-spacing:2px;margin-top:6px"></div>
   </div>
 
   <!-- Play type select: Solo vs Online -->
@@ -148,6 +177,8 @@
   </div>
 </div>
 
+  <div id="hint" data-i18n="hintBar">ARROWS/WASD — MOVE &nbsp;|&nbsp; SPACE — JUMP &nbsp;|&nbsp; Z/X — SHOOT (blaster) &nbsp;|&nbsp; ESC — PAUSE</div>
+
 <!-- Boss intro overlay -->
 <div id="bossIntroOv" style="display:none;position:fixed;inset:0;background:#000c;z-index:30;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none">
   <div id="bossIntroName" style="font-family:'Press Start 2P',monospace;font-size:22px;color:#f44;text-shadow:0 0 30px #f44,0 0 60px #f44;letter-spacing:4px;animation:bossShake .1s infinite"></div>
@@ -175,8 +206,7 @@
   <div id="csBarsBot"></div>
 </div>
 
-<div id="hint" data-i18n="hintBar">ARROWS/WASD — MOVE &nbsp;|&nbsp; SPACE — JUMP &nbsp;|&nbsp; Z/X — SHOOT (blaster) &nbsp;|&nbsp; ESC — PAUSE</div>
-
+<script src="assets/audiofiles.js"></script>
 <script src="assets/game.js"></script>
 <script src="assets/i18n-new.js"></script>
 <script src="assets/settings.js"></script>
@@ -321,6 +351,63 @@
   <!-- In-game ping readout (top-right). Shown only during a network game. -->
   <div id="netGamePing" style="display:none;position:fixed;top:8px;right:10px;z-index:920;font-family:'Press Start 2P',monospace;font-size:8px;color:#0f8;text-shadow:0 0 6px #000,0 0 3px #000;pointer-events:none;letter-spacing:1px">📶 -- ms</div>
 
+</div><!-- /#stage -->
+
 <script src="assets/network.js"></script>
+
+<!-- Touch / mobile virtual gamepad (phones & tablets, web + Android build) -->
+<script src="assets/touch.js"></script>
+
+<!-- Stamp the build version into the main-menu corner tag. -->
+<script>
+(function () {
+  var el = document.getElementById('verTag');
+  if (el) el.textContent = 'v' + (window.BB_VERSION || '1.0.0');
+})();
+</script>
+
+<!-- Boot/loading screen controller: hide only once everything the player needs is
+     ready — all scripts/resources (window 'load'), web fonts, and the locale data.
+     A hard cap guarantees we never hang on a stuck resource. -->
+<script>
+(function () {
+  var boot = document.getElementById('bootScreen');
+  if (!boot) return;
+  var bar = document.getElementById('bootBar');
+  var msg = document.getElementById('bootMsg');
+  var done = 0, total = 3, hidden = false;
+
+  function step(label) {
+    done++;
+    if (bar) bar.style.width = Math.min(100, Math.round(done / total * 100)) + '%';
+    if (msg && label) msg.textContent = label;
+    if (done >= total) finish();
+  }
+  function finish() {
+    if (hidden) return;
+    hidden = true;
+    if (bar) bar.style.width = '100%';
+    if (msg) msg.textContent = 'READY';
+    boot.style.opacity = '0';
+    setTimeout(function () { if (boot && boot.parentNode) boot.parentNode.removeChild(boot); }, 500);
+  }
+
+  // 1) All page resources loaded.
+  if (document.readyState === 'complete') step();
+  else window.addEventListener('load', function () { step(); }, { once: true });
+
+  // 2) Web fonts ready (resolves on success OR failure, so it never hangs).
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { step(); }).catch(function () { step(); });
+  } else { step(); }
+
+  // 3) Localisation data loaded.
+  if (window.i18nReady) step();
+  else window.addEventListener('bb-i18n-ready', function () { step(); }, { once: true });
+
+  // Safety net: never leave the player stuck behind the loader.
+  setTimeout(finish, 12000);
+})();
+</script>
 </body>
 </html>

@@ -352,8 +352,7 @@ let musicPlaying=false,mTimer=null,audioOn=true;
 window.applyAudioVolumes=function(){
   if(!AC||!MG||!SG||!MUG)return;
   try{
-    // Volume sliders are 0..100. Default minimum is 1 (never absolute zero) but the
-    // player can freely lower it from the settings — gain scales directly with the value.
+    // Volume sliders are 0..100 (0 = fully muted). Gain scales directly with the value.
     const master=(window.gameSettings&&typeof window.gameSettings.masterVolume==='number')?window.gameSettings.masterVolume:100;
     const music=(window.gameSettings&&typeof window.gameSettings.musicVolume==='number')?window.gameSettings.musicVolume:100;
     const sfx=(window.gameSettings&&typeof window.gameSettings.sfxVolume==='number')?window.gameSettings.sfxVolume:100;
@@ -392,6 +391,11 @@ function initAudio(){
     MFILT=AC.createBiquadFilter();MFILT.type='lowpass';MFILT.frequency.value=5400;MFILT.Q.value=.4;
     MTONE.connect(MFILT);MFILT.connect(MUG);
     applyAudioVolumes();
+    // Start decoding the baked .mp3 samples (music + SFX). Once ready the game
+    // plays those instead of synthesising every note live — smooth on phones.
+    if(window.AudioFiles&&typeof window.AudioFiles.init==='function'){
+      try{window.AudioFiles.init(AC,SG,MUG);}catch(e){}
+    }
   }catch(e){}
 }
 
@@ -433,8 +437,10 @@ function noise(dur,vol=.15,dst=null){
   }catch(e){}
 }
 
-// ── SFX library
-const SFX={
+// ── SFX library (procedural fallback). When the baked .mp3 samples are loaded
+// (window.AudioFiles), the wrapper SFX below plays those instead — cheaper and
+// glitch-free on phones. Names here MUST match the SFX file names.
+const SFX_PROC={
   jump(){sweep(280,540,'square',.12,.18);noise(.04,.05);},
   dblJump(){sweep(440,800,'square',.1,.16);setTimeout(()=>sweep(600,1000,'square',.08,.12),55);},
   land(){/* quiet landing */},
@@ -465,6 +471,16 @@ const SFX={
   droneBuzz(){tone(180,'sawtooth',.08,.08);},
   walk(){noise(.03,.06);}, // light footstep
 };
+// Public SFX: prefer the baked .mp3 sample, fall back to the procedural voice.
+// Built as a wrapper over SFX_PROC so every existing SFX.xxx() call site is
+// unchanged. Empty procedural entries (land/timerTick/timeLow) just no-op.
+const SFX={};
+for(const _k of Object.keys(SFX_PROC)){
+  SFX[_k]=function(){
+    if(window.AudioFiles&&window.AudioFiles.sfxReady&&window.AudioFiles.playSfx(_k))return;
+    SFX_PROC[_k]();
+  };
+}
 
 // ── MUSIC ENGINE ──────────────────────────────────
 // ── Percussion voices (routed through the music-volume bus, MUG, so they follow
@@ -523,7 +539,23 @@ const GMUSIC=[
   // Theme 9 – Final Fortress
   {bpm:190,base:130.81,sc:SC.HARM,wave:'sawtooth', mel:[0,2,3,7,8,7,3,2,0,3,7,8,12,8,7,3],bass:[0,0,8,3,7,3,8,7]},
 ];
-function stopMusic(){musicPlaying=false;if(mTimer){clearTimeout(mTimer);mTimer=null;}}
+function stopMusic(){musicPlaying=false;if(mTimer){clearTimeout(mTimer);mTimer=null;}if(window.AudioFiles)window.AudioFiles.stopMusic();}
+// Remembers how to (re)start the current track, so when the .mp3 samples finish
+// decoding mid-session we can seamlessly switch from the procedural fallback to
+// the baked loop (see window.onAudioFilesReady below).
+let _curMusicStart=null;
+// Try to play track `name` from the baked .mp3 samples. Returns false (→ caller
+// uses the procedural engine) if the samples aren't loaded yet.
+function _tryMusicFile(name){
+  if(!AC||!audioOn)return false;
+  if(!(window.AudioFiles&&window.AudioFiles.musicReady))return false;
+  if(mTimer){clearTimeout(mTimer);mTimer=null;}      // stop the procedural loop
+  if(window.AudioFiles.playMusic(name)){musicPlaying=true;return true;}
+  return false;
+}
+// Called by AudioFiles once decoding completes: upgrade the currently-playing
+// procedural track to its .mp3 loop.
+window.onAudioFilesReady=function(){ if(musicPlaying&&_curMusicStart)_curMusicStart(); };
 function _mTick(pat,step){
   if(!musicPlaying||!AC||!audioOn)return;
   const{bpm,base,sc,wave,mel,bass}=pat,spb=60000/bpm/4,sec=spb/1000;
@@ -550,23 +582,23 @@ function _mTick(pat,step){
   mTimer=setTimeout(()=>_mTick(pat,step+1),spb);
 }
 function startMusic(pat){if(!AC||!audioOn)return;stopMusic();musicPlaying=true;_mTick(pat,0);}
-function startMenuMusic(){startMusic(MMUSIC);}
-function startGameMusic(){startMusic(GMUSIC[Math.min(CT.id,9)]);if(typeof AchTrack!=='undefined')AchTrack.music(Math.min(CT.id,9));}
+function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic(MMUSIC);}
+function startGameMusic(){const wi=Math.min(CT.id,9);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(wi);if(_tryMusicFile('world'+wi))return;startMusic(GMUSIC[wi]);}
 // Boss music — intense, fast, minor key
 const BMUSIC={bpm:195,base:110,sc:SC.MIN,wave:'sawtooth',
   mel:[0,3,5,7,3,0,5,7, 0,3,5,10,7,5,3,0],
   bass:[0,0,5,3,7,0,5,7]};
-function startBossMusic(){startMusic(BMUSIC);}
+function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic(BMUSIC);}
 // Star power music — fast, major, joyful
 const STAR_MUSIC={bpm:240,base:329.63,sc:SC.PENT,wave:'square',
   mel:[0,2,4,7,9,12,9,7, 4,7,9,12,14,12,9,4],
   bass:[0,4,7,4,0,4,7,4]};
-function startStarMusic(){startMusic(STAR_MUSIC);}
+function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic(STAR_MUSIC);}
 // Victory music — triumphant, major, uplifting (plays during the ending cinematic)
 const VMUSIC={bpm:120,base:261.63,sc:SC.PENT,wave:'triangle',
   mel:[0,2,4,7,9,7,4,2, 7,9,12,9,7,4,2,0, 4,7,9,12,14,12,9,7, 12,14,16,14,12,9,7,4],
   bass:[0,0,4,4,7,7,4,0]};
-function startVictoryMusic(){startMusic(VMUSIC);}
+function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic(VMUSIC);}
 
 function showBossIntro(b){
   const ov=document.getElementById('bossIntroOv');
@@ -3253,6 +3285,22 @@ function showMode(){
   // Show the player's best infinite-mode score (a saved record) on the card.
   if(typeof bestRecords!=='undefined'&&bestRecords.infinite>0)
     infDesc.innerHTML+='<br><span style="color:#0ff">'+T('bestScore',bestRecords.infinite)+'</span>';
+  // On phones/tablets there is no second keyboard, so 2-player local makes no
+  // sense — hide the 1/2 toggle and force single player. (Re-evaluated each open
+  // because the "Touch controls: On" setting can change at runtime.)
+  const touchLike=('ontouchstart' in window)||navigator.maxTouchPoints>0||
+                  (window.gameSettings&&window.gameSettings.touchControls==='on');
+  const pToggle=document.getElementById('playerToggle');
+  const p2h=document.getElementById('p2hint');
+  if(touchLike){
+    twoPlayer=false; window.bbTwoPlayer=false;
+    const b1=document.getElementById('btn1p'),b2=document.getElementById('btn2p');
+    if(b1)b1.classList.add('active'); if(b2)b2.classList.remove('active');
+    if(pToggle)pToggle.style.display='none';
+    if(p2h)p2h.style.display='none';
+  } else if(pToggle){
+    pToggle.style.display='flex';
+  }
   $mode.style.display='flex';
 }
 function showDiff(){
@@ -3377,10 +3425,16 @@ document.getElementById('netTypeBackBtn').onclick=()=>{SFX.back();showPlayType()
 
 // PLAY теперь ведёт на экран выбора Solo/Online
 document.getElementById('mainBtn').onclick=()=>{SFX.menu();showPlayType();};
-// Exit the game (Electron quits the app; browser falls back to window.close()).
+// Exit the game. Electron quits the app; Capacitor (Android .apk) calls the App
+// plugin's exitApp(); the browser falls back to window.close().
 document.getElementById('exitBtn').onclick=()=>{SFX.menu();
-  if(window.electronAPI&&window.electronAPI.quit)window.electronAPI.quit();
-  else{try{window.close();}catch(e){}}
+  if(window.electronAPI&&window.electronAPI.quit){window.electronAPI.quit();return;}
+  const Cap=window.Capacitor;
+  if(Cap&&Cap.Plugins&&Cap.Plugins.App&&Cap.Plugins.App.exitApp){Cap.Plugins.App.exitApp();return;}
+  // Direct native bridge call — works on Android even without the JS plugin proxy.
+  if(Cap&&typeof Cap.nativeCallback==='function'){try{Cap.nativeCallback('App','exitApp',{});return;}catch(e){}}
+  if(navigator.app&&navigator.app.exitApp){navigator.app.exitApp();return;}
+  try{window.close();}catch(e){}
 };
 
 function setPlayers(n){
@@ -3452,6 +3506,12 @@ function startAdv(n,freshLives=false){
     player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
     player.cpX=spawnX;player.cpY=spawnY;
     camX=Math.max(0,Math.min(spawnX-W*.38,worldW-W));
+    // Keep crystals collected before the checkpoint (see _doRunLevel for the live path).
+    if(cpSave.shards){
+      for(let i=0;i<dataShards.length&&i<cpSave.shards.length;i++)dataShards[i].got=cpSave.shards[i];
+      dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
+      shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
+    }
   }
   timeLeft=lvlTime(n);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
@@ -4616,7 +4676,15 @@ function touchCheckpoints(p){
       spawnX=rx;spawnY=ry;
       // Adventure levels are deterministically seeded, so a death-retry rebuilds
       // this exact checkpoint — remember it to resume here instead of level start.
-      if(advMode)cpSave={lvl:advLevel,color:cp.color};
+      // Also snapshot the crystals (data-shards) collected so far, so dying after
+      // the checkpoint keeps them instead of resetting the level's crystal count.
+      if(advMode){
+        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.map(s=>!!s.got),shardsGot:dataShardsGot};
+        // Persist the crystals reached up to this checkpoint right away (keeps the
+        // best, so they're saved even if the player dies before finishing).
+        if(typeof recordLevelShards==='function')recordLevelShards(advLevel,dataShardsGot,hardMode);
+        if(window.WorldMap&&window.WorldMap.refresh)window.WorldMap.refresh(hardMode);
+      }
       // Strong, obvious activation feedback.
       SFX.powerup();if(SFX.coin)SFX.coin();camShake=10;
       burst(cp.x+cp.w/2,cp.y+8,cp.color,26,4.5,6);
@@ -5170,6 +5238,7 @@ function updateHUD(){
 //  DRAW
 // ════════════════════════════════════════════════
 let _skyGrad=null,_skyGradTheme=-1;
+let _hgGrad=null,_hgTheme=-1; // cached horizon glow (depends only on theme + fixed H)
 function drawBG(){
   // Rich sky gradient — cached per theme (only depends on CT colors)
   if(_skyGradTheme!==CT.id){
@@ -5186,15 +5255,40 @@ function drawBG(){
 
   // Soft theme-coloured horizon glow over the lower scene so the area around the
   // ground (and the gaps between ground plates) reads as a lit background rather
-  // than a dark void.
-  const _hg=ctx.createLinearGradient(0,H*0.62,0,H);
-  _hg.addColorStop(0,'transparent');
-  _hg.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
-  ctx.save();ctx.globalAlpha=0.5;ctx.fillStyle=_hg;ctx.fillRect(0,H*0.62,W,H*0.38);
+  // than a dark void. Cached per theme (H is fixed) instead of rebuilt every frame.
+  if(_hgTheme!==CT.id){
+    _hgGrad=ctx.createLinearGradient(0,H*0.62,0,H);
+    _hgGrad.addColorStop(0,'transparent');
+    _hgGrad.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
+    _hgTheme=CT.id;
+  }
+  ctx.save();ctx.globalAlpha=0.5;ctx.fillStyle=_hgGrad;ctx.fillRect(0,H*0.62,W,H*0.38);
   ctx.globalAlpha=0.06;ctx.fillStyle=CT.grid||CT.mc||'#48f';ctx.fillRect(0,H*0.78,W,H*0.22);
   ctx.restore();
 
   const id=CT.id;
+
+  // Background-detail + glow budget for this tier. bd scales every decorative
+  // element count (stars, embers, fireflies, window lights…); gl gates shadowBlur.
+  const bd=(typeof GFX==='object'&&GFX&&typeof GFX.bgDetail==='number')?GFX.bgDetail:1;
+  const gl=(typeof GFX==='object'&&GFX&&typeof GFX.glow==='number')?GFX.glow:1;
+
+  // VERYLOW / "microwave" path: the per-theme parallax skylines, window-light
+  // grids and dense particle fields are the heaviest per-frame work in the whole
+  // game. On the lowest tier (or when the adaptive limiter has driven bgDetail
+  // right down) skip all of it and draw just a cheap sparse star field over the
+  // cached sky+horizon. Gameplay readability is unaffected.
+  if(bd<0.4){
+    const n=Math.max(12,Math.round(36*bd/0.3));
+    ctx.save();ctx.fillStyle='#fff';
+    for(let i=0;i<n;i++){
+      const sx=(i*137.5+11)%W, sy=(i*97.3+7)%(H*0.6);
+      ctx.globalAlpha=0.18+(i%5)*0.06;
+      ctx.fillRect(sx,sy,i%9===0?1.6:0.9,i%9===0?1.6:0.9);
+    }
+    ctx.restore();
+    return;
+  }
 
   // ── Per-theme atmospheric elements ────────────
   ctx.save();
@@ -5213,13 +5307,13 @@ function drawBG(){
     ctx.fillStyle=cyanLine;ctx.fillRect(0,H*.7,W,H*.08);
 
     // 3. Stars — three sizes, deterministic
-    for(let i=0;i<80;i++){
+    for(let i=0,sn=Math.round(80*bd);i<sn;i++){
       const sx=(i*137.5+11)%W, sy=(i*97.3+7)%(H*.52);
       const tw=Math.sin(tick*.04+i*0.9)*.45+.55;
       const sz=i%20===0?2.2:i%7===0?1.4:0.8;
       ctx.globalAlpha=tw*(i%20===0?.9:.5);
       ctx.fillStyle=i%20===0?'#aaddff':'#ffffff';
-      ctx.shadowColor='#aaddff';ctx.shadowBlur=i%20===0?6:0;
+      ctx.shadowColor='#aaddff';ctx.shadowBlur=(gl>0&&i%20===0)?6:0;
       ctx.beginPath();ctx.arc(sx,sy,sz,0,Math.PI*2);ctx.fill();
       ctx.shadowBlur=0;
     }
@@ -5254,10 +5348,13 @@ function drawBG(){
         const bx=ox+bi*bStep, bw=bStep*.85, bh=heights[bi];
         const by=H*.72-bh;
         ctx.fillRect(bx, by, bw, bh);
-        // Window lights on silhouette
+        // Window lights on silhouette. Row/column spacing widens as bgDetail
+        // drops, so lower tiers draw far fewer windows (this nested loop is the
+        // single heaviest per-frame block in the background).
         ctx.fillStyle='#0ff2';
-        for(let wr=by+6;wr<by+bh-6;wr+=12){
-          for(let wc=bx+4;wc<bx+bw-4;wc+=10){
+        const _wStep=Math.round(12/bd), _cStep=Math.round(10/bd);
+        for(let wr=by+6;wr<by+bh-6;wr+=_wStep){
+          for(let wc=bx+4;wc<bx+bw-4;wc+=_cStep){
             const seed=(bi*19+wr*.1+wc*.3);
             const lit=Math.floor(tick*.015+seed)%7>2;
             if(lit){ctx.fillStyle=(seed%3===0)?'#4af4':'#ff83';}
@@ -5324,17 +5421,17 @@ function drawBG(){
     }
   } else if(id===1){ // Neon Jungle — mist + fireflies
     ctx.globalAlpha=.08;ctx.fillStyle='#0a2a08';for(let r=0;r<3;r++){const ry=H*.4+r*40;ctx.fillRect(0,ry,W,50);}
-    for(let i=0;i<18;i++){const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.65),on=Math.floor(tick*.07+i*1.4)%5>2;if(on){ctx.globalAlpha=.55;ctx.shadowColor='#aaff44';ctx.shadowBlur=4;ctx.fillStyle='#ccff88';ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}}
+    for(let i=0,fn=Math.round(18*bd);i<fn;i++){const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.65),on=Math.floor(tick*.07+i*1.4)%5>2;if(on){ctx.globalAlpha=.55;ctx.shadowColor='#aaff44';ctx.shadowBlur=gl>0?4:0;ctx.fillStyle='#ccff88';ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}}
   } else if(id===2){ // Lava World — glowing sky + embers
     ctx.globalAlpha=.14;const hg=ctx.createLinearGradient(0,H*.3,0,H);hg.addColorStop(0,'#ff2200');hg.addColorStop(1,'#220800');ctx.fillStyle=hg;ctx.fillRect(0,H*.3,W,H*.7);
-    for(let i=0;i<22;i++){const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%H*.7+H)%H;ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();}
+    for(let i=0,en=Math.round(22*bd);i<en;i++){const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%H*.7+H)%H;ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();}
   } else if(id===3){ // Ice Caves — aurora streaks
     for(let a=0;a<4;a++){const aw=(a+1)*60,phase=tick*.008+a*.8;ctx.globalAlpha=.07+Math.sin(phase)*.04;const ag=ctx.createLinearGradient(aw*2+Math.sin(phase)*30,0,aw*2+Math.sin(phase)*30+60,H*.5);ag.addColorStop(0,'transparent');ag.addColorStop(.5,a%2===0?'#88ffee':'#8888ff');ag.addColorStop(1,'transparent');ctx.fillStyle=ag;ctx.fillRect(aw*2+Math.sin(phase)*30,0,60,H*.5);}
   } else if(id===4){ // Desert — shimmering heat haze + sun
     ctx.globalAlpha=.9;ctx.shadowColor='#ffdd44';ctx.shadowBlur=20;ctx.fillStyle='#ffee88';ctx.beginPath();ctx.arc(W*.8,H*.12,22,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
     ctx.globalAlpha=.05;for(let hzRow=0;hzRow<6;hzRow++){const hy=H*.5+hzRow*16+Math.sin(tick*.03+hzRow)*4;ctx.fillStyle='#ffcc44';ctx.fillRect(0,hy,W,8);}
   } else if(id===5){ // Space — stars + nebula
-    ctx.fillStyle='#fff';for(let i=0;i<90;i++){const sx=(i*137+19)%W,sy=(i*89+3)%(H*.85),tw=Math.sin(tick*.025+i*1.4)*.5+.5;ctx.globalAlpha=tw*.7;const sr=i%15===0?2:i%5===0?1.2:.7;ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle='#fff';for(let i=0,sn=Math.round(90*bd);i<sn;i++){const sx=(i*137+19)%W,sy=(i*89+3)%(H*.85),tw=Math.sin(tick*.025+i*1.4)*.5+.5;ctx.globalAlpha=tw*.7;const sr=i%15===0?2:i%5===0?1.2:.7;ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);ctx.fill();}
     ctx.globalAlpha=.06;ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(W*.35,H*.25,120,0,Math.PI*2);ctx.fill();ctx.fillStyle='#0044ff';ctx.beginPath();ctx.arc(W*.7,H*.4,80,0,Math.PI*2);ctx.fill();
   } else if(id===6){ // Dark Forest — fog tendrils + moon
     ctx.globalAlpha=.85;ctx.shadowColor='#aaaacc';ctx.shadowBlur=10;ctx.fillStyle='#ccccee';ctx.beginPath();ctx.arc(W*.15,H*.1,16,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
@@ -5342,13 +5439,13 @@ function drawBG(){
     for(let i=0;i<8;i++){ctx.globalAlpha=.06+i*.005;ctx.fillStyle='#0a1408';const fy=H*.5+i*12+Math.sin(tick*.02+i)*8;ctx.fillRect(0,fy,W,20);}
   } else if(id===7){ // Toxic — sickly green smog + haze
     ctx.globalAlpha=.10;const hg=ctx.createLinearGradient(0,0,0,H*.6);hg.addColorStop(0,'#aabb00');hg.addColorStop(1,'transparent');ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.6);
-    for(let i=0;i<12;i++){const sx=(i*193+tick*.4)%W,sy=(i*67)%(H*.5);ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;ctx.fillStyle='#88cc00';ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,14,0,0,Math.PI*2);ctx.fill();}
+    for(let i=0,sn=Math.round(12*bd);i<sn;i++){const sx=(i*193+tick*.4)%W,sy=(i*67)%(H*.5);ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;ctx.fillStyle='#88cc00';ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,14,0,0,Math.PI*2);ctx.fill();}
   } else if(id===8){ // Storm Peaks — lightning flashes + storm light
     const lf=tick%140;if(lf<4){ctx.globalAlpha=(4-lf)*.07;ctx.fillStyle='#8888ff';ctx.fillRect(0,0,W,H);}
-    for(let i=0;i<30;i++){const sx=(i*113+5)%W,sy=(i*79+3)%(H*.6),tw=Math.sin(tick*.06+i)*.4+.4;ctx.globalAlpha=tw*.35;ctx.fillStyle='#aabbdd';ctx.fillRect(sx,sy,1.5,1.5);}
+    for(let i=0,sn=Math.round(30*bd);i<sn;i++){const sx=(i*113+5)%W,sy=(i*79+3)%(H*.6),tw=Math.sin(tick*.06+i)*.4+.4;ctx.globalAlpha=tw*.35;ctx.fillStyle='#aabbdd';ctx.fillRect(sx,sy,1.5,1.5);}
   } else if(id===9){ // Final Fortress — red sky + falling ash
     ctx.globalAlpha=.12;const hg=ctx.createLinearGradient(0,0,0,H*.5);hg.addColorStop(0,'#660000');hg.addColorStop(1,'transparent');ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.5);
-    for(let i=0;i<30;i++){const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);ctx.globalAlpha=.3;ctx.fillStyle='#553333';ctx.fillRect(ax,ay,2,3);}
+    for(let i=0,an=Math.round(30*bd);i<an;i++){const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);ctx.globalAlpha=.3;ctx.fillStyle='#553333';ctx.fillRect(ax,ay,2,3);}
   }
 
   ctx.restore();
@@ -9559,6 +9656,15 @@ function _doRunLevel(n,freshLives){
     player.cpX=spawnX;player.cpY=spawnY;
     // Snap the camera to the checkpoint so we don't slide in from level start.
     camX=Math.max(0,Math.min(spawnX-W*.38,worldW-W));
+    // Restore the crystals (data-shards) collected before the checkpoint so a
+    // death-retry keeps them instead of making the player re-grab everything.
+    if(cpSave.shards){
+      for(let i=0;i<dataShards.length&&i<cpSave.shards.length;i++)dataShards[i].got=cpSave.shards[i];
+      dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
+      // If every shard was already in hand at the checkpoint, the all-collected
+      // bonus was earned on the first run — don't let it fire (or block) again.
+      shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
+    }
   }
   initP2();
   timeLeft=lvlTime(n)*(hardMode?0.7:1);timMax=timeLeft;

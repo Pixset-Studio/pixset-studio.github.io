@@ -208,12 +208,19 @@
       applyDOM();
       document.documentElement.lang = LANG;
       if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();
+      // Signal readiness for the boot/loading screen.
+      window.i18nReady = true;
+      try { window.dispatchEvent(new Event('bb-i18n-ready')); } catch (e) {}
     };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', done);
     } else {
       done();
     }
+  }).catch(() => {
+    // Even if locale loading fails, release the boot screen (t() falls back to keys).
+    window.i18nReady = true;
+    try { window.dispatchEvent(new Event('bb-i18n-ready')); } catch (e) {}
   });
 
   console.log('✅ i18n system loaded (folder-based loader)');

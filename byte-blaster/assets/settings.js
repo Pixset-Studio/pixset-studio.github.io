@@ -54,7 +54,7 @@
     row.appendChild(yes); row.appendChild(no);
     box.appendChild(p); box.appendChild(row);
     ov.appendChild(box);
-    document.body.appendChild(ov);
+    (document.getElementById('stage') || document.body).appendChild(ov);
   }
   window.nonBlockingConfirm = nonBlockingConfirm;
 
@@ -65,6 +65,7 @@
     gameScale: 0,            // 0 = auto-fit to window (preserve aspect ratio)
     showFPS: false,
     fpsLimit: 0,
+    adaptiveQuality: 'auto', // auto-lower gfx under sustained low FPS: 'auto' | 'on' | 'off'
     vsync: true,             // V-Sync (applied at startup; off = uncapped FPS)
     graphicsQuality: 'auto', // preset name, 'auto' (detect on first run) or 'custom'
     // Individually tunable graphics parameters (multipliers). A preset just
@@ -84,6 +85,13 @@
     combatText: true,        // floating damage/pickup text
     autoSave: true,
     showHints: true,         // bottom control-hint bar
+    touchControls: 'auto',   // on-screen gamepad: 'auto' | 'on' | 'off'
+    touchStyle: 'arrows',    // movement on phone: 'arrows' (◀ ▶) | 'joystick' (full, up=jump) | 'joystickLR' (left/right only)
+    touchArrowsSplit: false, // ◀ ▶ move/size as a linked pair (false) or separately (true)
+    touchJoyFloat: false,    // joystick: static base (false) or floating — follows the finger, springs back (true)
+    touchLayout: null,       // custom on-screen button positions keyed by unit {x,y} as viewport fractions; null = default
+    touchScale: 1,           // on-screen button size multiplier (0.6–2.0), applied to controls with no per-button override
+    touchScales: null,       // per-button size overrides keyed by unit (dpad/left/right/fire/jump/pause/joy); null = use touchScale
     // Control settings (key codes)
     controls: {
       p1Left: 'KeyA',
@@ -127,10 +135,11 @@
           merged.controls = { ...defaultSettings.controls, ...(settings.controls || {}) };
           // Merge gfx the same way so any missing parameter keeps a sane default.
           merged.gfx = { ...defaultSettings.gfx, ...(settings.gfx || {}) };
-          // Volume floor: by default volume is never below 1 (avoids stale 0 = muted on load).
+          // Clamp volumes to 0..100. 0 is allowed (the player may fully mute a bus);
+          // only a missing/invalid value falls back to 100.
           ['masterVolume', 'musicVolume', 'sfxVolume'].forEach(k => {
             const v = parseInt(merged[k], 10);
-            merged[k] = (isNaN(v) || v < 1) ? (isNaN(v) ? 100 : 1) : Math.min(v, 100);
+            merged[k] = isNaN(v) ? 100 : Math.max(0, Math.min(v, 100));
           });
           return merged;
         }
@@ -154,6 +163,10 @@
   // Current settings
   window.gameSettings = loadSettings();
 
+  // Persist the live settings object (used by modules like touch.js that mutate
+  // gameSettings directly, e.g. saving a custom on-screen button layout).
+  window.saveGameSettings = function () { saveSettings(window.gameSettings); };
+
   // Apply window mode
   function applyWindowMode(mode) {
     if (window.electronAPI && window.electronAPI.setWindowMode) {
@@ -170,8 +183,28 @@
     let score = 0;
     const cores = navigator.hardwareConcurrency || 2;
     if (cores >= 16) score += 3; else if (cores >= 8) score += 2; else if (cores >= 4) score += 1;
+
+    // deviceMemory is GiB (Chrome/Android only; undefined on iOS/Firefox). When
+    // present it's our most honest weak-device signal — a 2 GB phone is pulled
+    // down hard so it lands on the cheap tiers.
     const ram = navigator.deviceMemory || 0;
-    if (ram >= 16) score += 3; else if (ram >= 8) score += 2; else if (ram >= 4) score += 1;
+    if (ram >= 16) score += 3;
+    else if (ram >= 8) score += 2;
+    else if (ram >= 4) score += 1;
+    else if (ram > 0 && ram <= 2) score -= 2;
+
+    // Mobile / touch bias: a phone GPU at a given core count is far weaker than a
+    // desktop one and must fill a high-DPI screen. Without this, an octa-core
+    // budget phone rides its core count up to 'high' and stutters. Pull it down so
+    // weak phones land on low/verylow (the "runs on a microwave" goal).
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const smallVp = Math.min(window.innerWidth || 9999, window.innerHeight || 9999) < 480;
+    if (isTouch || coarse) score -= 2;
+    if (smallVp) score -= 1;
+
+    // Micro-benchmark: real 2D-canvas gradient-fill throughput. Best proxy for the
+    // actual GPU and catches throttled/old devices that report healthy core counts.
     try {
       const bc = document.createElement('canvas');
       bc.width = 128; bc.height = 128;
@@ -184,9 +217,13 @@
           bx.fillStyle = g; bx.fillRect(0,0,128,128);
         }
         const ms = performance.now() - t0;
-        if (ms < 20) score += 3; else if (ms < 50) score += 2; else if (ms < 120) score += 1;
+        if (ms < 20) score += 3;
+        else if (ms < 50) score += 2;
+        else if (ms < 120) score += 1;
+        else if (ms > 260) score -= 2; // genuinely slow canvas → microwave tier
       }
     } catch(e) { score += 1; }
+
     if (score >= 8) return 'ultra';
     if (score >= 6) return 'high';
     if (score >= 4) return 'medium';
@@ -203,6 +240,8 @@
     window.GFX_MAX_PARTICLES = Math.max(20, Math.round(160 * pm));
     if (typeof window.applyGfxValues === 'function') window.applyGfxValues(g);
     else if (typeof window.applyGfxTier === 'function') window.applyGfxTier(window.gameSettings.graphicsQuality || 'high');
+    // Player just set the baseline — restart adaptive quality from the full picture.
+    if (typeof window._aqResetBaseline === 'function') window._aqResetBaseline();
     console.log('✔ Graphics applied:', g, '| max particles:', window.GFX_MAX_PARTICLES);
   }
   // Legacy alias (kept so any external caller still works).
@@ -252,19 +291,17 @@
     const baseW = 800;
     const baseH = 420;
 
-    function fit() {
-      // Reserve a bit of vertical space for the HUD bar (#ui) above the canvas.
+    // Lay out the canvas + HUD for a given available area (the usual desktop fit
+    // math). Returns the displayed canvas width so the caller can size the HUD.
+    function layoutCanvas(availW, availH, useCeiling) {
       const ui = document.getElementById('ui');
-      const uiH = (ui && ui.offsetHeight) ? ui.offsetHeight + 12 : 0;
-      const availW = Math.max(320, window.innerWidth  - 16);
-      const availH = Math.max(240, window.innerHeight - uiH - 16);
       let s = Math.min(availW / baseW, availH / baseH);
-      // Ceiling — so users on huge monitors aren't forced to a 4× upscale they didn't ask for.
-      const ceiling = (typeof scale === 'number' && scale > 0) ? scale : 99;
-      s = Math.min(s, ceiling);
-      // Snap to an integer multiple when possible (sharper pixels), else allow fractional.
-      const intS = Math.floor(s);
-      if (intS >= 1 && (s - intS) < 0.15) s = intS;
+      if (useCeiling) {
+        const ceiling = (typeof scale === 'number' && scale > 0) ? scale : 99;
+        s = Math.min(s, ceiling);
+        const intS = Math.floor(s);
+        if (intS >= 1 && (s - intS) < 0.15) s = intS;   // snap to integer for sharp pixels
+      }
       const dispW = Math.floor(baseW * s);
       const dispH = Math.floor(baseH * s);
       canvas.style.width  = dispW + 'px';
@@ -274,27 +311,98 @@
       canvas.style.maxWidth = '';
       canvas.style.maxHeight = '';
       canvas.style.objectFit = '';
-      // The game now renders its backing store at native (HiDPI) resolution, so
-      // let the browser sample it smoothly rather than nearest-neighbour — this
-      // keeps text crisp instead of blocky/blurry at fractional display scales.
       canvas.style.imageRendering = 'auto';
-      // HUD spans the same width as the canvas so the layout looks unified.
       if (ui) { ui.style.width = dispW + 'px'; ui.style.boxSizing = 'border-box'; }
       window._gameScale = s;
-      // Resize the backing store to match the displayed size × DPR for crisp output.
       if (typeof window.applyRenderResolution === 'function') window.applyRenderResolution();
+      return dispW;
+    }
+
+    function fit() {
+      const ui = document.getElementById('ui');
+      const stage = document.getElementById('stage');
+      // Visual viewport = real visible area (window.innerWidth can be a bloated
+      // layout-viewport width in a WebView and would scale the game too large).
+      const vv = window.visualViewport;
+      let vpW = (vv && vv.width)  ? vv.width  : window.innerWidth;
+      let vpH = (vv && vv.height) ? vv.height : window.innerHeight;
+      if (!vpW || vpW < 100) vpW = document.documentElement.clientWidth  || window.innerWidth  || 800;
+      if (!vpH || vpH < 100) vpH = document.documentElement.clientHeight || window.innerHeight || 420;
+
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      const forceTouch = window.gameSettings && window.gameSettings.touchControls === 'on';
+      const mobile = !!stage && (isTouch || forceTouch || vpW < 760);
+
+      if (mobile) {
+        // MOBILE: render the whole UI at a fixed "desktop reference" size, then
+        // shrink the entire #stage with one transform:scale so the phone shows an
+        // exact, proportional copy of the PC layout — nothing tiny, nothing
+        // overflowing.
+        const DESIGN_W = 1280, DESIGN_H = 720;
+        const uiH = (ui && ui.offsetHeight) ? ui.offsetHeight + 12 : 0;
+        layoutCanvas(DESIGN_W - 16, DESIGN_H - uiH - 16, false);
+        // Measure the stage at its natural (unscaled) size, then scale to fit.
+        stage.style.position = 'fixed';
+        stage.style.left = '0';
+        stage.style.top = '0';
+        stage.style.transformOrigin = 'top left';
+        stage.style.transform = 'none';
+        stage.style.width = '';
+        const sw = stage.offsetWidth  || (DESIGN_W);
+        const sh = stage.offsetHeight || (DESIGN_H);
+        const k = Math.min(vpW / sw, vpH / sh);
+        const tx = Math.max(0, (vpW - sw * k) / 2);
+        const ty = Math.max(0, (vpH - sh * k) / 2);
+        stage.style.width = sw + 'px';
+        stage.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')';
+        return;
+      }
+
+      // DESKTOP: unchanged behaviour — fit the canvas to the real window, HUD
+      // tracks the canvas width, no stage transform.
+      if (stage) {
+        stage.style.position = '';
+        stage.style.transform = 'none';
+        stage.style.left = '';
+        stage.style.top = '';
+        stage.style.width = '';
+      }
+      const uiH = (ui && ui.offsetHeight) ? ui.offsetHeight + 12 : 0;
+      const availW = Math.max(200, vpW - 16);
+      const availH = Math.max(140, vpH - uiH - 16);
+      layoutCanvas(availW, availH, true);
     }
 
     fit();
     if (!window._fitBound) {
       window._fitBound = true;
       let raf = 0;
-      window.addEventListener('resize', () => {
+      const onResize = () => {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(fit);
+      };
+      window.addEventListener('resize', onResize);
+      // Orientation flips on mobile resize the visible area only after a beat,
+      // so re-fit a few times following the event.
+      window.addEventListener('orientationchange', () => {
+        onResize();
+        setTimeout(onResize, 250);
+        setTimeout(onResize, 600);
       });
+      // visualViewport changes (URL bar, keyboard, pinch) don't always fire a
+      // window 'resize' in a WebView — listen directly.
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', onResize);
+        window.visualViewport.addEventListener('scroll', onResize);
+      }
+      // Mobile WebViews report their final size late; settle with a few re-fits.
+      [150, 450, 900, 1600].forEach(t => setTimeout(fit, t));
     }
   }
+  // Allow other modules (e.g. the touch gamepad / game start) to force a re-fit.
+  window.refitGame = function () {
+    if (window.gameSettings) applyGameScale(window.gameSettings.gameScale);
+  };
   
   // FPS Counter and Limiter
   let fpsCounter = null;
@@ -383,12 +491,89 @@
     return false;
   }
 
+  // ── Adaptive quality controller ───────────────────────────────────────────
+  // Optional (gameSettings.adaptiveQuality). When active it watches the real
+  // frame rate and, if it stays below target for a couple of seconds, steps the
+  // cheap-to-retune gfx levers (particles, glow, background/decor density) down a
+  // notch — and steps them back up once the frame rate recovers and holds. This
+  // is the "runs even on a microwave" safety net on top of the one-shot
+  // first-run tier detection. renderScale + trails are deliberately left alone so
+  // the picture never visibly re-resolves underneath the player.
+  const _AQ_MAX = 3;
+  const _AQ_FACTORS = [1.0, 0.7, 0.45, 0.25];
+  let _aqLevel = 0, _aqFrames = 0, _aqWinStart = performance.now();
+  let _aqLowStreak = 0, _aqHighStreak = 0;
+
+  function adaptiveEnabled() {
+    const s = window.gameSettings; if (!s) return false;
+    const m = s.adaptiveQuality;
+    if (m === 'on') return true;
+    if (m === 'off') return false;
+    // 'auto': default on for touch / low-RAM devices, off for desktops.
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const lowRam = (navigator.deviceMemory || 8) <= 4;
+    return isTouch || lowRam;
+  }
+
+  // Rebuild the live GFX from the player's saved values × the current step factor.
+  function applyAdaptiveLevel() {
+    const s = window.gameSettings; if (!s || !s.gfx) return;
+    const f = _AQ_FACTORS[_aqLevel] != null ? _AQ_FACTORS[_aqLevel] : 1;
+    const base = s.gfx;
+    const g = Object.assign({}, base, {
+      particleMul: base.particleMul * f,
+      glow:        base.glow * f,
+      // Keep a floor on bgDetail so a mid-tier device doesn't snap to the empty
+      // "microwave" background the instant it dips — it just thins out.
+      bgDetail:    base.bgDetail * (0.45 + 0.55 * f),
+      bossFx:      base.bossFx * f,
+      decorMul:    base.decorMul * f,
+    });
+    window.GFX_MAX_PARTICLES = Math.max(20, Math.round(160 * g.particleMul));
+    if (typeof window.applyGfxValues === 'function') window.applyGfxValues(g);
+  }
+
+  // Called when the player explicitly (re)applies graphics settings: drop back to
+  // the full picture and let adaptation re-earn any reduction from scratch.
+  function _aqResetBaseline() {
+    _aqLevel = 0; _aqLowStreak = 0; _aqHighStreak = 0;
+    _aqFrames = 0; _aqWinStart = performance.now();
+  }
+  window._aqResetBaseline = _aqResetBaseline;
+
+  function adaptiveSample() {
+    if (!adaptiveEnabled()) {
+      if (_aqLevel !== 0) { _aqLevel = 0; applyAdaptiveLevel(); }
+      return;
+    }
+    _aqFrames++;
+    const now = performance.now();
+    const dt = now - _aqWinStart;
+    if (dt < 1000) return;            // evaluate once per second
+    const measured = (_aqFrames * 1000) / dt;
+    _aqFrames = 0; _aqWinStart = now;
+    // Target tracks any FPS cap the player set; otherwise assume a 60 Hz display.
+    const cap = (window.gameSettings.fpsLimit || 0) > 0 ? window.gameSettings.fpsLimit : 60;
+    const low = cap * 0.75, good = cap * 0.92;
+    if (measured < low)      { _aqLowStreak++;  _aqHighStreak = 0; }
+    else if (measured > good){ _aqHighStreak++; _aqLowStreak = 0; }
+    else                     { _aqLowStreak = 0; _aqHighStreak = 0; }
+    // Drop quickly (2 bad seconds), recover slowly (6 good seconds) → no flapping.
+    if (_aqLowStreak >= 2 && _aqLevel < _AQ_MAX) {
+      _aqLevel++; _aqLowStreak = 0; applyAdaptiveLevel();
+      try { console.log('[adaptive] ↓ level', _aqLevel, '@', Math.round(measured), 'fps'); } catch(e){}
+    } else if (_aqHighStreak >= 6 && _aqLevel > 0) {
+      _aqLevel--; _aqHighStreak = 0; applyAdaptiveLevel();
+      try { console.log('[adaptive] ↑ level', _aqLevel, '@', Math.round(measured), 'fps'); } catch(e){}
+    }
+  }
+
   // Expose FPS hooks for the game's real loop() (see index.html).
   // The old approach wrapped window.loop, but the game calls the local loop()
   // declaration directly, so the wrapper never ran. These hooks are invoked
   // from inside the single real RAF chain — no parallel chains can form.
   window._fpsShouldSkip = shouldSkipFrame;
-  window._fpsTick = updateFPS;
+  window._fpsTick = function () { updateFPS(); adaptiveSample(); };
 
   // Apply settings on load
   function applySettings() {
@@ -399,6 +584,11 @@
       const tiers = window.GFX_TIERS || {};
       let q = settings.graphicsQuality;
       if (q === 'auto' || q === 'custom' || !tiers[q]) q = detectGraphicsQuality();
+      // On touch devices cap the AUTO tier at 'high': 'ultra' (2.5× render scale,
+      // 1.8× particles) is meant for desktop GPUs and just burns battery / drops
+      // frames on phones for no visible gain. The player can still pick it manually.
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      if (isTouch && (q === 'ultra' || q === 'veryhigh')) q = 'high';
       if (settings.graphicsQuality === 'auto') settings.graphicsQuality = q;
       if (!settings.gfx) settings.gfx = Object.assign({}, tiers[q] || tiers.high || {});
       saveSettings(settings);
@@ -500,6 +690,7 @@
               <span data-i18n="showHints">Show Hint Bar</span>
             </label>
           </div>
+
         </div>
 
         <!-- GRAPHICS TAB -->
@@ -574,6 +765,11 @@
             <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="shakeIntensityVal">100</span>%</div>
           </div>
 
+          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
+            <input type="checkbox" id="adaptiveQualityCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="adaptiveQuality">Adaptive Quality (auto-lower on FPS drops)</span>
+          </label>
+
           <div style="margin-bottom: 20px;">
             <label data-i18n="fpsLimit" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">FPS Limit:</label>
             <select id="fpsLimitSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
@@ -611,25 +807,33 @@
         <div class="setPanel" data-panel="audio" style="display:none;">
           <div style="margin-bottom: 20px;">
             <label data-i18n="masterVolume" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Master Volume:</label>
-            <input type="range" id="masterVolumeSlider" min="1" max="100" value="100" style="width: 100%; cursor: pointer;">
+            <input type="range" id="masterVolumeSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
             <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="masterVolumeVal">100</span>%</div>
           </div>
 
           <div style="margin-bottom: 20px;">
             <label data-i18n="musicVolume" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Music Volume:</label>
-            <input type="range" id="musicVolumeSlider" min="1" max="100" value="100" style="width: 100%; cursor: pointer;">
+            <input type="range" id="musicVolumeSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
             <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="musicVolumeVal">100</span>%</div>
           </div>
 
           <div style="margin-bottom: 20px;">
             <label data-i18n="sfxVolume" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">SFX Volume:</label>
-            <input type="range" id="sfxVolumeSlider" min="1" max="100" value="100" style="width: 100%; cursor: pointer;">
+            <input type="range" id="sfxVolumeSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
             <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="sfxVolumeVal">100</span>%</div>
           </div>
         </div>
 
         <!-- CONTROLS TAB -->
         <div class="setPanel" data-panel="controls" style="display:none;">
+          <!-- Sub-tabs: PC keyboard vs Phone/Tablet touch -->
+          <div id="ctrlSubTabs" style="display: flex; gap: 8px; justify-content: center; margin-bottom: 18px;">
+            <button class="ctrlSubTab active" data-ctrlsub="pc" data-i18n="ctrlTabPC" style="padding: 7px 16px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">⌨ PC</button>
+            <button class="ctrlSubTab" data-ctrlsub="touch" data-i18n="ctrlTabTouch" style="padding: 7px 16px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">📱 PHONE / TABLET</button>
+          </div>
+
+          <!-- ===== PC (keyboard) ===== -->
+          <div id="ctrlPcPanel">
           <div style="margin-bottom: 24px;">
             <h3 data-i18n="controlsP1" style="color: #0ff; font-size: 12px; margin-bottom: 12px; text-shadow: 0 0 8px #0ff;">🎮 PLAYER 1 / SINGLE PLAYER</h3>
             <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #aaa; line-height: 2.2;">
@@ -683,6 +887,51 @@
           </div>
 
           <button id="resetControlsBtn" data-i18n="ctrlReset" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">RESET TO DEFAULT</button>
+          </div><!-- /#ctrlPcPanel -->
+
+          <!-- ===== PHONE / TABLET (touch) ===== -->
+          <div id="ctrlTouchPanel" style="display:none;">
+            <div style="margin-bottom: 20px;">
+              <h3 data-i18n="ctrlTouchTitle" style="color: #0ff; font-size: 12px; margin-bottom: 12px; text-shadow: 0 0 8px #0ff;">📱 TOUCH CONTROLS</h3>
+              <label data-i18n="touchControls" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">📱 Touch Controls:</label>
+              <select id="touchControlsSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+                <option value="auto" data-i18n="touchAuto">🤖 Auto (touch devices)</option>
+                <option value="on" data-i18n="touchOn">✔ Always On</option>
+                <option value="off" data-i18n="touchOff">✕ Off</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <label data-i18n="touchStyleLabel" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">🎮 Movement Style:</label>
+              <select id="touchStyleSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+                <option value="arrows" data-i18n="touchStyleArrows">◀ ▶ Arrow Buttons</option>
+                <option value="joystick" data-i18n="touchStyleJoystick">🕹 Joystick (full + jump)</option>
+                <option value="joystickLR" data-i18n="touchStyleJoystickLR">🕹 Joystick (left/right only)</option>
+              </select>
+            </div>
+            <div id="touchJoyModeRow" style="margin-bottom: 20px; display:none;">
+              <label data-i18n="touchJoyModeLabel" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">🕹 Joystick Position:</label>
+              <select id="touchJoyModeSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+                <option value="static" data-i18n="touchJoyStatic">📌 Static (fixed)</option>
+                <option value="floating" data-i18n="touchJoyFloating">🪶 Floating (follows finger)</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <label data-i18n="touchSizeLabel" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">📏 Button Size:</label>
+              <input type="range" id="touchSizeSlider" min="60" max="200" step="5" value="100" style="width: 100%; cursor: pointer;">
+              <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="touchSizeVal">100</span>%</div>
+            </div>
+            <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+              <button id="customizeLayoutBtn" data-i18n="ctrlCustomizeLayout" style="flex: 1; min-width: 150px; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">✥ ARRANGE BUTTONS</button>
+              <button id="resetLayoutBtn" data-i18n="ctrlResetLayout" style="flex: 1; min-width: 150px; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">↺ RESET LAYOUT</button>
+            </div>
+            <div style="padding: 12px; background: rgba(0, 255, 255, 0.05); border: 1px solid #0ff4; border-radius: 4px;">
+              <div style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0ff; line-height: 1.8;">
+                <div data-i18n="touchNote1">💡 On-screen gamepad: ◀ ▶ move, JUMP &amp; FIRE on the right.</div>
+                <div data-i18n="touchNote2">💡 "Auto" shows it only on touch devices; the game stays hidden on desktop.</div>
+                <div data-i18n="touchNote3">💡 Joystick: drag the stick left/right to move, push up to jump.</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- GENERAL TAB -->
@@ -715,6 +964,10 @@
       </div>
     `;
 
+    // Attach to <body>, NOT #stage: on mobile #stage carries a transform:scale()
+    // that fits the game canvas to the screen, and any fixed overlay nested inside
+    // it would be shrunk into that same letterbox. At body level the overlay fills
+    // the real viewport and its own responsive inner box (max-height/scroll) fits.
     document.body.appendChild(overlay);
 
     // Tab switching logic
@@ -730,6 +983,24 @@
         overlay.querySelectorAll('.setPanel').forEach(p => {
           p.style.display = (p.getAttribute('data-panel') === target) ? 'block' : 'none';
         });
+        if (window.SFX && window.SFX.menu) window.SFX.menu();
+      };
+    });
+
+    // Sub-tab switching inside CONTROLS: PC (keyboard) vs Phone/Tablet (touch).
+    overlay.querySelectorAll('.ctrlSubTab').forEach(sub => {
+      sub.onclick = function() {
+        const target = this.getAttribute('data-ctrlsub');
+        overlay.querySelectorAll('.ctrlSubTab').forEach(t => {
+          const isActive = t.getAttribute('data-ctrlsub') === target;
+          t.classList.toggle('active', isActive);
+          t.style.color = isActive ? '#0ff' : '#4af';
+          t.style.borderColor = isActive ? '#0ff' : '#4af';
+        });
+        const pc = document.getElementById('ctrlPcPanel');
+        const tc = document.getElementById('ctrlTouchPanel');
+        if (pc) pc.style.display = (target === 'pc') ? 'block' : 'none';
+        if (tc) tc.style.display = (target === 'touch') ? 'block' : 'none';
         if (window.SFX && window.SFX.menu) window.SFX.menu();
       };
     });
@@ -817,17 +1088,17 @@
     const sfxVolumeSlider = document.getElementById('sfxVolumeSlider');
     const sfxVolumeVal = document.getElementById('sfxVolumeVal');
     if (masterVolumeSlider) {
-      masterVolumeSlider.value = window.gameSettings.masterVolume || 100;
+      masterVolumeSlider.value = window.gameSettings.masterVolume ?? 100;
       masterVolumeVal.textContent = masterVolumeSlider.value;
       masterVolumeSlider.oninput = function() { masterVolumeVal.textContent = this.value; };
     }
     if (musicVolumeSlider) {
-      musicVolumeSlider.value = window.gameSettings.musicVolume || 100;
+      musicVolumeSlider.value = window.gameSettings.musicVolume ?? 100;
       musicVolumeVal.textContent = musicVolumeSlider.value;
       musicVolumeSlider.oninput = function() { musicVolumeVal.textContent = this.value; };
     }
     if (sfxVolumeSlider) {
-      sfxVolumeSlider.value = window.gameSettings.sfxVolume || 100;
+      sfxVolumeSlider.value = window.gameSettings.sfxVolume ?? 100;
       sfxVolumeVal.textContent = sfxVolumeSlider.value;
       sfxVolumeSlider.oninput = function() { sfxVolumeVal.textContent = this.value; };
     }
@@ -845,6 +1116,41 @@
     if (combatTextCheck) combatTextCheck.checked = window.gameSettings.combatText !== false;
     if (showHintsCheck) showHintsCheck.checked = window.gameSettings.showHints !== false;
     if (cutscenesCheck) cutscenesCheck.checked = window.gameSettings.cutscenes !== false;
+    // Adaptive quality: the checkbox shows the EFFECTIVE state (so 'auto' renders
+    // as ticked on weak/touch devices). Toggling it locks an explicit on/off.
+    const adaptiveCheck = document.getElementById('adaptiveQualityCheckbox');
+    if (adaptiveCheck) adaptiveCheck.checked = adaptiveEnabled();
+
+    // Touch controls mode (auto / on / off)
+    const touchControlsSel = document.getElementById('touchControlsSelect');
+    if (touchControlsSel) touchControlsSel.value = window.gameSettings.touchControls || 'auto';
+
+    // Touch movement style (arrows / joystick / joystickLR)
+    const touchStyleSel = document.getElementById('touchStyleSelect');
+    if (touchStyleSel) touchStyleSel.value = window.gameSettings.touchStyle || 'arrows';
+
+    // Joystick position mode (static / floating) — only relevant for a joystick.
+    const touchJoyModeSel = document.getElementById('touchJoyModeSelect');
+    const touchJoyModeRow = document.getElementById('touchJoyModeRow');
+    if (touchJoyModeSel) touchJoyModeSel.value = window.gameSettings.touchJoyFloat ? 'floating' : 'static';
+    const syncJoyModeRow = () => {
+      const isJoy = touchStyleSel && (touchStyleSel.value === 'joystick' || touchStyleSel.value === 'joystickLR');
+      if (touchJoyModeRow) touchJoyModeRow.style.display = isJoy ? '' : 'none';
+    };
+    syncJoyModeRow();
+    if (touchStyleSel) touchStyleSel.addEventListener('change', syncJoyModeRow);
+
+    // Touch button size (60–200%)
+    const touchSizeSlider = document.getElementById('touchSizeSlider');
+    const touchSizeVal = document.getElementById('touchSizeVal');
+    if (touchSizeSlider) {
+      const pct = Math.round(((window.gameSettings.touchScale ?? 1) * 100));
+      touchSizeSlider.value = Math.max(60, Math.min(pct, 200));
+      if (touchSizeVal) touchSizeVal.textContent = touchSizeSlider.value;
+      touchSizeSlider.oninput = function () {
+        if (touchSizeVal) touchSizeVal.textContent = this.value;
+      };
+    }
 
     // Shake intensity slider
     const shakeIntensitySlider = document.getElementById('shakeIntensitySlider');
@@ -918,6 +1224,28 @@
         pendingControls = { ...defaultSettings.controls };
         refreshKeyLabels();
         if (window.SFX && window.SFX.menu) window.SFX.menu();
+      };
+    }
+
+    // On-screen button layout: "Arrange" closes Settings and enters drag mode on
+    // the live gamepad; "Reset" restores the default positions.
+    const customizeLayoutBtn = document.getElementById('customizeLayoutBtn');
+    if (customizeLayoutBtn) {
+      customizeLayoutBtn.onclick = function () {
+        if (window.SFX && window.SFX.menu) window.SFX.menu();
+        overlay.style.display = 'none';
+        if (window.touchControls && typeof window.touchControls.editLayout === 'function') {
+          window.touchControls.editLayout();
+        }
+      };
+    }
+    const resetLayoutBtn = document.getElementById('resetLayoutBtn');
+    if (resetLayoutBtn) {
+      resetLayoutBtn.onclick = function () {
+        if (window.SFX && window.SFX.menu) window.SFX.menu();
+        if (window.touchControls && typeof window.touchControls.resetLayout === 'function') {
+          window.touchControls.resetLayout();
+        }
       };
     }
 
@@ -1046,12 +1374,17 @@
 
       // Gameplay settings
       if (screenShakeCheck) window.gameSettings.screenShake = screenShakeCheck.checked;
+      if (adaptiveCheck) window.gameSettings.adaptiveQuality = adaptiveCheck.checked ? 'on' : 'off';
       if (particlesCheck) window.gameSettings.particles = particlesCheck.checked;
       if (autoSaveCheck) window.gameSettings.autoSave = autoSaveCheck.checked;
       if (combatTextCheck) window.gameSettings.combatText = combatTextCheck.checked;
       if (showHintsCheck) window.gameSettings.showHints = showHintsCheck.checked;
       if (cutscenesCheck) window.gameSettings.cutscenes = cutscenesCheck.checked;
       if (shakeIntensitySlider) window.gameSettings.shakeIntensity = parseInt(shakeIntensitySlider.value);
+      if (touchControlsSel) window.gameSettings.touchControls = touchControlsSel.value;
+      if (touchStyleSel) window.gameSettings.touchStyle = touchStyleSel.value;
+      if (touchJoyModeSel) window.gameSettings.touchJoyFloat = (touchJoyModeSel.value === 'floating');
+      if (touchSizeSlider) window.gameSettings.touchScale = parseInt(touchSizeSlider.value, 10) / 100;
 
       // Control bindings
       if (typeof window._commitControls === 'function') window._commitControls();
@@ -1063,6 +1396,8 @@
       if (typeof window.applyAudioVolumes === 'function') window.applyAudioVolumes();
       // Apply gameplay settings (infinite lives, hint bar, etc.)
       if (typeof window.applyGameplaySettings === 'function') window.applyGameplaySettings();
+      // Refresh on-screen gamepad visibility (auto/on/off may have changed)
+      if (window.touchControls && typeof window.touchControls.refresh === 'function') window.touchControls.refresh();
 
       overlay.style.display = 'none';
 

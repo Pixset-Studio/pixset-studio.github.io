@@ -98,6 +98,58 @@ const $chatInput   = document.getElementById('netChatInput');
 const $pingEl      = document.getElementById('netPing');
 const $gamePing    = document.getElementById('netGamePing');
 
+// Lift all full-screen network overlays out of #stage to <body>. On mobile #stage
+// carries a transform:scale() that fits the game canvas to the screen; any fixed
+// overlay nested inside it gets shrunk into that letterbox (the "online tab does
+// not scale" bug). At body level they cover the real viewport.
+['netLobby','netLoading','netConnLost','netWaiting','netGamePing'].forEach(function(id){
+  const el = document.getElementById(id);
+  if (el && el.parentNode !== document.body) document.body.appendChild(el);
+});
+
+// Wrap the lobby's content (title + panels) in a single inner box, then scale
+// THAT to fit the viewport — so the whole online screen shrinks proportionally
+// on a phone instead of only being scrollable. Mirrors the save-slots picker.
+(function setupLobbyScale(){
+  if(!$lobby) return;
+  let inner = document.getElementById('netLobbyInner');
+  if(!inner){
+    inner = document.createElement('div');
+    inner.id = 'netLobbyInner';
+    while($lobby.firstChild) inner.appendChild($lobby.firstChild);
+    $lobby.appendChild(inner);
+  }
+  function fitLobby(){
+    if(!inner || $lobby.style.display === 'none') return;
+    inner.style.transform = 'none';
+    const vv = window.visualViewport;
+    const vpW = (vv && vv.width)  ? vv.width  : window.innerWidth;
+    const vpH = (vv && vv.height) ? vv.height : window.innerHeight;
+    const w = inner.offsetWidth, h = inner.offsetHeight;
+    if(!w || !h) return;
+    const k = Math.min((vpW * 0.96) / w, (vpH * 0.96) / h, 1);
+    inner.style.transform = 'scale(' + k + ')';
+  }
+  window._netFitLobby = fitLobby;
+  // Re-fit on any content/size change (switching connect<->room, player list,
+  // chat growth, rotation, URL bar show/hide).
+  if(window.ResizeObserver){ try{ new ResizeObserver(fitLobby).observe(inner); }catch(e){} }
+  let raf = 0;
+  const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fitLobby); };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => { onResize(); setTimeout(onResize,250); setTimeout(onResize,600); });
+  if(window.visualViewport){ window.visualViewport.addEventListener('resize', onResize); window.visualViewport.addEventListener('scroll', onResize); }
+})();
+
+// Best-effort: tell the server we're leaving when the page is actually being
+// torn down (tab/app close). The server heartbeat is the real safety net, but
+// this clears the room instantly in the common "closed the app" case. Fires on
+// pagehide (terminal) — NOT visibilitychange, so a brief app-switch never drops
+// the player from an active lobby.
+window.addEventListener('pagehide', function(){
+  try{ if(ws && ws.readyState===1 && roomCode){ wsSend({type:'leave_room'}); } }catch(e){}
+});
+
 // Update the in-game ping readout (top-right corner). Visible only during a
 // network game; colour-coded by latency like the lobby ping.
 function updateGamePing(){
@@ -1449,6 +1501,7 @@ window.NetPlay = {
     $connect.style.display = 'flex';
     $room.style.display    = 'none';
     $lobby.style.display   = 'flex';
+    if(window._netFitLobby){ window._netFitLobby(); [60,200,500].forEach(t=>setTimeout(window._netFitLobby,t)); }
 
     // (Re)connect to the endpoint for the active source, then list rooms in Find.
     if(!ws || ws.readyState > 1 || _connectedUrl !== activeUrl()){
@@ -1537,14 +1590,14 @@ setTimeout(() => {
     };
   }
 
-  // Non-host: disable local boss AI (host is authoritative; state arrives via boss_sync)
-  if(typeof updateBoss === 'function'){
-    const _origUpdateBoss = updateBoss;
-    window.updateBoss = function(){
-      if(window.netActive && !isHost) return;
-      _origUpdateBoss();
-    };
-  }
+  // NOTE: updateBoss() is deliberately NOT wrapped here. game.js's updateBoss has
+  // its own host/guest split: on a guest it skips the authoritative AI but STILL
+  // runs _bossPlayerContact() (stomp) and _bossBulletContact() (shots) so the
+  // guest can damage the boss (reported to the host via the damageBoss redirect
+  // below). A blanket "return on guest" wrapper here used to swallow that guest
+  // branch entirely — which made every non-host player pass through the boss and
+  // be unable to hurt it. The boss AI is already gated inside game.js, so the
+  // host stays authoritative without this wrapper.
 
   // ── Guest damage redirect ───────────────────────────────────────────────────
   // On a guest, hp is owned by the host. When the guest's bullet/stomp hits an

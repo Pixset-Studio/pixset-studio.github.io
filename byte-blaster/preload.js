@@ -58,6 +58,13 @@ contextBridge.exposeInMainWorld('localeAPI', {
   read: (code) => ipcRenderer.invoke('locale:read', code),
 });
 
+// Expose the baked audio (Audio/Music/*.mp3, Audio/SFX/*.mp3) as base64 so the
+// sample player can decode it via the main process — reliable under file://,
+// where fetch() of local files is blocked by Chromium.
+contextBridge.exposeInMainWorld('audioAPI', {
+  read: (rel) => ipcRenderer.invoke('audio:read', rel),
+});
+
 // Expose electron info
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
