@@ -1,0 +1,283 @@
+/* ===============================================
+   UI SIZE FIX - Makes interface properly sized
+   =============================================== */
+
+/* Canvas - let it be sized by JavaScript */
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Main UI container */
+#ui {
+  gap: 24px !important;
+  margin-bottom: 10px !important;
+  padding: 10px 20px !important;
+}
+
+/* UI labels and values */
+.uil {
+  font-size: 14px !important;
+  letter-spacing: 1.5px !important;
+}
+
+.uiv {
+  font-size: 16px !important;
+}
+
+/* Hearts */
+.hearts span {
+  font-size: 18px !important;
+}
+
+/* Timer */
+#timerVal {
+  font-size: 16px !important;
+}
+
+/* Audio button - smaller to fit */
+#audioBtn {
+  font-size: 14px !important;
+  padding: 6px 10px !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Main overlay title */
+#mainOv h1 {
+  font-size: 36px !important;
+  letter-spacing: 8px !important;
+}
+
+/* Subtitle */
+.ovSub {
+  font-size: 12px !important;
+  letter-spacing: 4px !important;
+}
+
+/* Score */
+.ovScore {
+  font-size: 15px !important;
+}
+
+/* Main menu buttons */
+.ovBtn {
+  font-size: 14px !important;
+  padding: 14px 28px !important;
+  letter-spacing: 3px !important;
+}
+
+/* Legend text */
+.ovLegend {
+  font-size: 12px !important;
+  line-height: 2.2 !important;
+}
+
+/* Pause overlay */
+#pauseOv h2 {
+  font-size: 26px !important;
+  letter-spacing: 6px !important;
+}
+
+.pBtn {
+  font-size: 12px !important;
+  padding: 12px 22px !important;
+  min-width: 200px !important;
+}
+
+/* Mode selection */
+#modeOv h2 {
+  font-size: 22px !important;
+  letter-spacing: 6px !important;
+}
+
+.modeBtn {
+  font-size: 11px !important;
+  padding: 10px 18px !important;
+}
+
+/* Mode cards */
+.mIcon {
+  font-size: 36px !important;
+  margin-bottom: 10px !important;
+}
+
+.mTitle {
+  font-size: 14px !important;
+  letter-spacing: 3px !important;
+  margin-bottom: 8px !important;
+}
+
+.mDesc {
+  font-size: 12px !important;
+  line-height: 1.8 !important;
+}
+
+.mStart {
+  font-size: 11px !important;
+  padding: 8px 16px !important;
+}
+
+/* Map header */
+#mapHeader h2 {
+  font-size: 16px !important;
+  letter-spacing: 4px !important;
+}
+
+.mapBack {
+  font-size: 11px !important;
+  padding: 8px 16px !important;
+}
+
+/* Level buttons */
+.lBtn {
+  font-size: 13px !important;
+  min-width: 50px !important;
+  min-height: 50px !important;
+}
+
+/* World titles */
+.wTitle {
+  font-size: 13px !important;
+  letter-spacing: 3px !important;
+}
+
+/* Player toggle buttons */
+.ptBtn {
+  font-size: 13px !important;
+  padding: 10px 20px !important;
+}
+
+/* Gameover overlay */
+#gameoverOv h2 {
+  font-size: 28px !important;
+  letter-spacing: 6px !important;
+}
+
+.goBtn {
+  font-size: 12px !important;
+  padding: 12px 24px !important;
+}
+
+/* Win overlay */
+#winOv h2 {
+  font-size: 32px !important;
+  letter-spacing: 7px !important;
+}
+
+/* Cutscene skip button */
+#csSkipBtn {
+  font-size: 13px !important;
+  padding: 10px 20px !important;
+}
+
+/* Cutscene text */
+.csText {
+  font-size: 14px !important;
+  line-height: 1.8 !important;
+}
+
+/* Boss HUD */
+.bossName {
+  font-size: 15px !important;
+  letter-spacing: 3px !important;
+}
+
+.bossHint {
+  font-size: 12px !important;
+}
+
+/* Blaster UI */
+#blasterUi {
+  gap: 4px !important;
+}
+
+#blasterLabel {
+  font-size: 12px !important;
+}
+
+/* Hints - position at bottom */
+.hint {
+  font-size: 13px !important;
+  padding: 8px 16px !important;
+}
+
+/* Cheat notification */
+.cheatNotif {
+  font-size: 14px !important;
+  padding: 10px 20px !important;
+}
+
+/* ===============================================
+   FULLSCREEN MODE - Extra scaling
+   =============================================== */
+
+:fullscreen #ui,
+:-webkit-full-screen #ui,
+:-moz-full-screen #ui,
+:-ms-fullscreen #ui {
+  gap: 32px !important;
+  padding: 14px 28px !important;
+}
+
+:fullscreen .uil,
+:-webkit-full-screen .uil,
+:-moz-full-screen .uil,
+:-ms-fullscreen .uil {
+  font-size: 18px !important;
+}
+
+:fullscreen .uiv,
+:-webkit-full-screen .uiv,
+:-moz-full-screen .uiv,
+:-ms-fullscreen .uiv {
+  font-size: 20px !important;
+}
+
+:fullscreen .hearts span,
+:-webkit-full-screen .hearts span,
+:-moz-full-screen .hearts span,
+:-ms-fullscreen .hearts span {
+  font-size: 22px !important;
+}
+
+:fullscreen #timerVal,
+:-webkit-full-screen #timerVal,
+:-moz-full-screen #timerVal,
+:-ms-fullscreen #timerVal {
+  font-size: 20px !important;
+}
+
+:fullscreen #audioBtn,
+:-webkit-full-screen #audioBtn,
+:-moz-full-screen #audioBtn,
+:-ms-fullscreen #audioBtn {
+  font-size: 16px !important;
+  padding: 8px 12px !important;
+}
+
+:fullscreen #mainOv h1,
+:-webkit-full-screen #mainOv h1,
+:-moz-full-screen #mainOv h1,
+:-ms-fullscreen #mainOv h1 {
+  font-size: 48px !important;
+}
+
+:fullscreen .ovBtn,
+:-webkit-full-screen .ovBtn,
+:-moz-full-screen .ovBtn,
+:-ms-fullscreen .ovBtn {
+  font-size: 18px !important;
+  padding: 18px 36px !important;
+}
+
+:fullscreen .pBtn,
+:-webkit-full-screen .pBtn,
+:-moz-full-screen .pBtn,
+:-ms-fullscreen .pBtn {
+  font-size: 16px !important;
+  padding: 16px 28px !important;
+}
