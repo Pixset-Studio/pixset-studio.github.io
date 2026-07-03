@@ -137,6 +137,50 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 .progress-outer{background:#141726;border-radius:10px;height:16px;overflow:hidden;margin-top:6px}
 .progress-inner{height:100%;background:linear-gradient(90deg,#3ec6ff,#5adb7c);border-radius:10px;transition:width .4s}
 .note{font-size:12px;color:var(--muted);text-align:center;margin:8px 0;line-height:1.5}
+.modal-overlay{position:fixed;inset:0;background:rgba(6,7,14,.72);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal-box{background:var(--panel);border-radius:16px;width:min(520px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.modal-box .topbar{background:transparent;border:0}
+.road-scroll{overflow-y:auto;padding:4px 14px 14px;display:flex;flex-direction:column-reverse;gap:8px}
+.road-item{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px}
+.road-item.claimed{opacity:.55}
+.road-item.ready{background:rgba(255,216,61,.15);border:1px solid rgba(255,216,61,.5)}
+.road-ic{font-size:22px;width:34px;text-align:center;flex-shrink:0}
+.road-info{flex:1}
+.road-t{font-weight:800;font-size:13px}
+.road-l{font-size:12px;color:var(--muted)}
+.admin-row{display:flex;gap:8px;margin:8px 0}
+.admin-row select,.admin-row input{flex:1;background:#1b1e30;color:var(--text);border:1px solid rgba(255,255,255,.15);
+  border-radius:10px;padding:10px;font-size:14px;font-weight:700}
+#scr-main{position:relative}
+.topbar-main{display:flex;align-items:center;gap:8px;padding:10px 12px 2px}
+.player-badge{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.28);border-radius:14px;padding:5px 12px 5px 5px}
+.player-badge .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(160deg,#ffd83d,#f5a623);
+  display:flex;align-items:center;justify-content:center;font-size:17px;border:2px solid rgba(255,255,255,.55);flex-shrink:0}
+.player-badge .trophy-pill{font-weight:800;font-size:13px;color:#ffd24e;white-space:nowrap}
+.curr-pills{display:flex;gap:6px;flex:1;justify-content:flex-end;flex-wrap:wrap}
+.icon-btn{width:34px;height:34px;border-radius:10px;background:rgba(0,0,0,.3);color:#fff;font-size:17px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.side-rail{position:absolute;left:6px;top:66px;display:flex;flex-direction:column;gap:8px;z-index:5}
+.rail-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;color:#fff;
+  font-size:10px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.rail-btn .ri{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:21px;border:2px solid rgba(255,255,255,.25);box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.rail-btn:active .ri{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.side-rail-right{left:auto;right:6px}
+.play-corner{position:absolute;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;
+  width:96px;height:96px;border-radius:50%;background:linear-gradient(180deg,#ffd83d,#f5a623);color:#3a2a00;
+  font-weight:900;font-size:15px;line-height:1.2;border:4px solid rgba(255,255,255,.5);
+  box-shadow:0 6px 0 #b97d12;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.play-corner:active{transform:translateY(4px);box-shadow:0 2px 0 #b97d12}
+.play-corner .pi{font-size:26px}
+.hero-brawler-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px}
+.hero-brawler-big{width:110px;height:110px;border-radius:26px;display:flex;align-items:center;justify-content:center;
+  font-size:56px;border:3px solid rgba(255,255,255,.4);box-shadow:0 6px 0 rgba(0,0,0,.3);cursor:pointer}
+.hero-brawler-name{font-weight:900;font-size:15px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.hero-brawler-lvl{font-size:12px;font-weight:800;color:var(--muted)}
+.trophy-pill-wrap{display:flex;flex-direction:column;gap:3px}
+.progress-outer.mini{height:5px;width:78px;margin-top:0}
 </style>
 </head>
 <body>
@@ -150,26 +194,50 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 
 <!-- ============ MAIN MENU ============ -->
 <div class="screen active" id="scr-main">
-  <div class="currbar" id="main-curr"></div>
+  <div class="topbar-main">
+    <div class="player-badge" onclick="openRoadModal()" style="cursor:pointer" title="Трофейный путь">
+      <div class="avatar">🙂</div>
+      <div class="trophy-pill-wrap">
+        <div class="trophy-pill">🏆 <span id="main-trophies">0</span></div>
+        <div class="progress-outer mini"><div class="progress-inner" id="main-road-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="curr-pills" id="main-curr"></div>
+    <button class="icon-btn" onclick="UI.show('scr-settings')" title="Настройки">☰</button>
+  </div>
+  <div class="side-rail side-rail-left">
+    <button class="rail-btn" onclick="UI.show('scr-brawlers')"><span class="ri" style="background:#b3382f">🥊</span>Бойцы</button>
+    <button class="rail-btn" onclick="UI.show('scr-shop')"><span class="ri" style="background:#2c8a4b">🛒</span>Магазин</button>
+    <button class="rail-btn" onclick="UI.show('scr-boxes')"><span class="ri" style="background:#b97d12">📦</span>Ящики</button>
+  </div>
+  <div class="side-rail side-rail-right">
+    <button class="rail-btn" onclick="UI.clanStub()"><span class="ri" style="background:#2f6fb3">🛡️</span>Клан</button>
+  </div>
   <div class="hero">
     <button id="btn-fullscreen" title="Полный экран">⛶</button>
-    <div class="logo">Brawl<br>Legends<small>ARENA</small></div>
-    <div class="hero-chars">
-      <div class="hc" style="background:#b3382f">🔥</div>
-      <div class="hc" style="background:#2f6fb3">❄️</div>
-      <div class="hc" style="background:#8a2fb3">🌀</div>
-    </div>
+    <div class="logo" style="font-size:24px">Brawl<br>Legends<small>ARENA</small></div>
+    <div class="hero-brawler-wrap" id="hero-brawler" onclick="UI.show('scr-brawlers')"></div>
   </div>
-  <div class="bottom">
-    <div class="trophy-road" id="trophy-road"></div>
-    <button class="big-btn" onclick="UI.show('scr-battle')">⚔️ В Бой</button>
-    <div class="grid2">
-      <button class="menu-btn" onclick="UI.show('scr-brawlers')"><span class="mi" style="background:#b3382f">🥊</span>Бойцы</button>
-      <button class="menu-btn" onclick="UI.show('scr-shop')"><span class="mi" style="background:#2c8a4b">🛒</span>Магазин</button>
-      <button class="menu-btn" onclick="UI.show('scr-boxes')"><span class="mi" style="background:#b97d12">📦</span>Ящики</button>
-      <button class="menu-btn" onclick="UI.clanStub()"><span class="mi" style="background:#2f6fb3">🛡️</span>Клан</button>
-    </div>
-    <button class="menu-btn" onclick="UI.show('scr-settings')"><span class="mi" style="background:#555d78">⚙️</span>Настройки</button>
+  <button class="play-corner" onclick="UI.show('scr-battle')"><span class="pi">⚔️</span>В БОЙ</button>
+</div>
+
+<!-- ============ NICKNAME MODAL (первый вход) ============ -->
+<div class="modal-overlay" id="modal-nick">
+  <div class="modal-box" style="text-align:center;padding:22px">
+    <h2 style="margin-bottom:4px">Добро пожаловать!</h2>
+    <p class="note">Введи свой никнейм — его увидят в бою</p>
+    <input type="text" id="nick-input" maxlength="14" placeholder="Ник" autocomplete="off"
+      style="width:100%;box-sizing:border-box;background:#1b1e30;color:#fff;border:1px solid rgba(255,255,255,.15);
+      border-radius:10px;padding:12px;font-size:16px;font-weight:800;text-align:center;margin:12px 0">
+    <button class="big-btn" onclick="confirmNick()">Готово</button>
+  </div>
+</div>
+
+<!-- ============ TROPHY ROAD MODAL ============ -->
+<div class="modal-overlay" id="modal-road" onclick="if(event.target===this)closeRoadModal()">
+  <div class="modal-box">
+    <div class="topbar"><div style="width:44px"></div><h2>Трофейный путь</h2><button class="back-btn" onclick="closeRoadModal()">✕</button></div>
+    <div class="road-scroll" id="road-scroll"></div>
   </div>
 </div>
 
@@ -179,12 +247,8 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
   <div class="content">
     <p class="note">Режим игры</p>
     <div class="grid2" id="mode-list"></div>
-    <p class="note" style="margin-top:14px">Сложность ботов</p>
-    <div class="seg" id="diff-seg">
-      <button data-d="0">Лёгкая</button><button data-d="1" class="sel">Средняя</button><button data-d="2">Тяжёлая</button>
-    </div>
-    <p class="note" style="margin-top:10px">Твой боец</p>
-    <div class="grid3" id="battle-brawler-list"></div>
+    <p class="note" style="margin-top:14px">Твой боец</p>
+    <div class="battle-sel-brawler" id="battle-sel-brawler"></div>
     <button class="big-btn" style="margin-top:14px" onclick="startBattle()">Начать бой!</button>
   </div>
 </div>
@@ -224,11 +288,45 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
   <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Настройки</h2><div style="width:44px"></div></div>
   <div class="content">
     <button class="menu-btn" id="sound-toggle" onclick="toggleSound()"><span class="mi" style="background:#2c8a4b">🔊</span>Звук: Вкл</button>
+    <button class="menu-btn" onclick="askNick()"><span class="mi" style="background:#4d7fe0">✏️</span>Изменить ник</button>
+    <button class="menu-btn" onclick="UI.show('scr-admin')"><span class="mi" style="background:#7c4dbf">🛠️</span>Админ-панель</button>
     <button class="menu-btn" onclick="resetProgress()"><span class="mi" style="background:#b3382f">🗑️</span>Сбросить прогресс</button>
     <p class="note" style="margin-top:20px">Brawl Legends v1.0 — офлайн-арена против компьютера (ботов).<br>
     Прогресс сохраняется на устройстве.<br>
     На телефоне: стик слева, атака/супер справа.<br>
     На компьютере: WASD/стрелки — движение, ЛКМ — атака, ПКМ/Space — суперспособность.</p>
+  </div>
+</div>
+
+<!-- ============ ADMIN PANEL ============ -->
+<div class="screen" id="scr-admin">
+  <div class="topbar"><button class="back-btn" onclick="UI.show('scr-settings')">‹</button><h2>Админ-панель</h2><div style="width:44px"></div></div>
+  <div class="content">
+    <div class="currbar" id="admin-curr"></div>
+    <p class="note">Быстрая выдача</p>
+    <div class="grid2">
+      <button class="menu-btn" onclick="adminGive('coins',1000)">🪙 +1000 монет</button>
+      <button class="menu-btn" onclick="adminGive('gems',100)">💠 +100 кристаллов</button>
+      <button class="menu-btn" onclick="adminGive('pp',500)">⚡ +500 очков силы</button>
+      <button class="menu-btn" onclick="adminGive('trophies',100)">🏆 +100 трофеев</button>
+      <button class="menu-btn" onclick="adminGive('boxbig',5)">🎁 +5 больших ящиков</button>
+      <button class="menu-btn" onclick="adminGive('boxmega',3)">💎 +3 мега-ящика</button>
+      <button class="menu-btn" onclick="adminGive('boxomega',2)">🌟 +2 омега-ящика</button>
+    </div>
+    <p class="note" style="margin-top:14px">Своё количество</p>
+    <div class="admin-row">
+      <select id="admin-res">
+        <option value="coins">Монеты</option>
+        <option value="gems">Кристаллы</option>
+        <option value="pp">Очки силы</option>
+        <option value="trophies">Трофеи (выбранному бойцу)</option>
+      </select>
+      <input type="number" id="admin-amount" value="1000" min="0">
+    </div>
+    <button class="big-btn" onclick="adminGiveCustom()">Выдать</button>
+    <p class="note" style="margin-top:14px">Бойцы</p>
+    <button class="menu-btn" onclick="adminUnlockAll()"><span class="mi" style="background:#b3382f">🥊</span>Открыть всех бойцов (макс. уровень)</button>
+    <p class="note" style="margin-top:16px;color:#ff8080">Это чит-меню только для локального тестирования. Прогресс хранится в этом браузере/устройстве.</p>
   </div>
 </div>
 
@@ -445,6 +543,36 @@ const UP_PP  =[20,30,50,80,130,210,340,550,890];
 const UP_COIN=[20,35,75,140,290,480,800,1250,1875];
 const statMul=lvl=>1+0.05*(lvl-1)+(lvl>=10?0.08:0);
 
+/* ---------------- РАНГИ (индивидуальные для каждого бойца) ---------------- */
+const RANKS=[
+ {min:0,   color:'#8fa3bf'},{min:10,  color:'#8fa3bf'},{min:20,  color:'#7fc46b'},
+ {min:35,  color:'#7fc46b'},{min:55,  color:'#4ecb71'},{min:80,  color:'#4ecb71'},
+ {min:110, color:'#3ec6ff'},{min:150, color:'#3ec6ff'},{min:200, color:'#3ec6ff'},
+ {min:260, color:'#c66bff'},{min:330, color:'#c66bff'},{min:410, color:'#c66bff'},
+ {min:500, color:'#ff9a3d'},{min:600, color:'#ff9a3d'},{min:720, color:'#ff9a3d'},
+ {min:850, color:'#ffd24e'},{min:1000,color:'#ffd24e'},{min:1200,color:'#ffd24e'},
+ {min:1500,color:'#ff5a5a'},{min:2000,color:'#ff5a5a'},
+];
+function rankFor(trophies){
+  let idx=1,color=RANKS[0].color;
+  for(let i=0;i<RANKS.length;i++){if(trophies>=RANKS[i].min){idx=i+1;color=RANKS[i].color;}}
+  return {idx,name:'Ранг '+idx,color};
+}
+function brawlerTrophies(id){return (P.brawlerTrophies&&P.brawlerTrophies[id])||0;}
+/* Скрытый ММР: сложность ботов подстраивается под серию побед/поражений,
+   выбор сложности вручную убран. */
+function currentBotDiff(){
+  const m=P.mmr||0;
+  if(m<=-3)return 0;
+  if(m>=3)return 2;
+  return 1;
+}
+
+/* ---------------- ИМЕНА БОТОВ ---------------- */
+const BOT_NAMES=['Ash','Nova','Rex','Vika','Grom','Luna','Zorro','Kira','Max','Dash',
+  'Bruno','Milo','Sky','Ray','Fox','Nix','Tigr','Roni','Vex','Zara',
+  'Kot','Bard','Echo','Yuki','Draco','Wolf','Byte','Nemo','Sona','Blaze'];
+
 /* ---------------- ДАННЫЕ: РЕЖИМЫ ---------------- */
 const MODES=[
  {id:'gemgrab', name:'Захват кристаллов',icon:'💎',desc:'3v3. Собери 10 кристаллов и удержи их 8 секунд.'},
@@ -457,32 +585,49 @@ const MODES=[
 /* ---------------- ПРОФИЛЬ / СОХРАНЕНИЕ ---------------- */
 const DEFAULT_PROFILE=()=>({
   coins:200,gems:20,pp:40,trophies:0,
-  boxes:{box:1,big:0,mega:0},
-  luck:0, winStreakBox:0,
+  brawlerTrophies:{knight:0},
+  boxes:{box:1,big:0,mega:0,omega:0},
+  pityBoxes:0,totalBoxesOpened:0,
+  winStreakBox:0,
   unlocked:{knight:1},
   levels:{knight:1},
   claimedRoad:[],
-  sound:true,
+  sound:true,nick:'',
   dailySeed:0,dailyBought:[],
-  selBrawler:'knight',selMode:'gemgrab',diff:1,
+  selBrawler:'knight',selMode:'gemgrab',
+  mmr:0, // скрытый рейтинг для подбора сложности ботов
 });
 let P;
-function loadP(){ try{ P=Object.assign(DEFAULT_PROFILE(),JSON.parse(localStorage.getItem('bl_save')||'{}')); }catch(e){ P=DEFAULT_PROFILE(); } if(!P.unlocked.knight){P.unlocked.knight=1;P.levels.knight=1;} }
+function loadP(){ try{ P=Object.assign(DEFAULT_PROFILE(),JSON.parse(localStorage.getItem('bl_save')||'{}')); }catch(e){ P=DEFAULT_PROFILE(); } if(!P.unlocked.knight){P.unlocked.knight=1;P.levels.knight=1;} if(!P.brawlerTrophies)P.brawlerTrophies={};
+  const sum=Object.values(P.brawlerTrophies).reduce((a,b)=>a+b,0);
+  if(sum===0&&P.trophies>0)P.brawlerTrophies[P.selBrawler||'knight']=P.trophies; // миграция со старой версии
+  recalcTrophies(); }
 function saveP(){ try{ localStorage.setItem('bl_save',JSON.stringify(P)); }catch(e){} }
+function recalcTrophies(){ P.trophies=Object.values(P.brawlerTrophies||{}).reduce((a,b)=>a+b,0); }
 loadP();AUDIO.on=P.sound;
 
-/* Трофейный путь: награды за кубки */
-const TROPHY_ROAD=[
- {t:20, reward:{coins:80},  label:'80 монет'},
- {t:50, reward:{box:1},     label:'Ящик'},
- {t:100,reward:{brawler:'icemage'},label:'Ледяная Волшебница'},
- {t:170,reward:{gems:15},   label:'15 кристаллов'},
- {t:250,reward:{big:1},     label:'Большой ящик'},
- {t:350,reward:{brawler:'hunter'},label:'Охотник с Бумерангом'},
- {t:500,reward:{mega:1},    label:'Мега-ящик'},
- {t:700,reward:{brawler:'ranger'},label:'Космический Рейнджер'},
- {t:1000,reward:{gems:50},  label:'50 кристаллов'},
-];
+/* Трофейный путь: награды за кубки, каждые 50 до 5000, затем каждые 100 до 10000 */
+function genTrophyRoad(){
+  const steps=[];
+  for(let t=50;t<=5000;t+=50)steps.push(t);
+  for(let t=5100;t<=10000;t+=100)steps.push(t);
+  const brawlerQueue=BRAWLERS.filter(b=>b.id!=='knight').map(b=>b.id);
+  let bi=0;
+  return steps.map((t,i)=>{
+    if(i%6===5&&bi<brawlerQueue.length){
+      const id=brawlerQueue[bi++];
+      return {t,reward:{brawler:id},label:BRAWLER_BY_ID[id].name};
+    }
+    const cyc=i%5;
+    if(cyc===0){const v=Math.round(30+t*0.5);return{t,reward:{coins:v},label:v+' монет'};}
+    if(cyc===1){const v=Math.round(8+t*0.12);return{t,reward:{pp:v},label:v+' очков силы'};}
+    if(cyc===2)return{t,reward:{box:1},label:'Ящик'};
+    if(cyc===3){const v=Math.round(4+t*0.015);return{t,reward:{gems:v},label:v+' кристаллов'};}
+    if(t%1000===0&&t>=1000)return{t,reward:{omega:1},label:'Омега-ящик!'};
+    return{t,reward:{big:1},label:'Большой ящик'};
+  });
+}
+const TROPHY_ROAD=genTrophyRoad();
 function checkTrophyRoad(){
   TROPHY_ROAD.forEach((m,i)=>{
     if(P.trophies>=m.t && !P.claimedRoad.includes(i)){
@@ -495,8 +640,67 @@ function checkTrophyRoad(){
 }
 function applyReward(r){
   if(r.coins)P.coins+=r.coins; if(r.gems)P.gems+=r.gems; if(r.pp)P.pp+=r.pp;
-  if(r.box)P.boxes.box+=r.box; if(r.big)P.boxes.big+=r.big; if(r.mega)P.boxes.mega+=r.mega;
+  if(r.box)P.boxes.box+=r.box; if(r.big)P.boxes.big+=r.big; if(r.mega)P.boxes.mega+=r.mega; if(r.omega)P.boxes.omega+=r.omega;
   if(r.brawler&&!P.unlocked[r.brawler]){P.unlocked[r.brawler]=1;P.levels[r.brawler]=1;}
+}
+/* ---------------- Полный просмотр дороги славы ---------------- */
+function openRoadModal(){
+  const rs=document.getElementById('road-scroll');
+  rs.innerHTML=TROPHY_ROAD.map((m,i)=>{
+    const claimed=P.claimedRoad.includes(i);
+    const reached=P.trophies>=m.t;
+    const cls=claimed?'claimed':(reached?'ready':'');
+    const ic=claimed?'✅':(reached?'🎁':'🔒');
+    return `<div class="road-item ${cls}">
+      <div class="road-ic">${ic}</div>
+      <div class="road-info"><div class="road-t">🏆 ${m.t}</div><div class="road-l">${m.label}</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('modal-road').classList.add('show');
+}
+function closeRoadModal(){document.getElementById('modal-road').classList.remove('show');}
+
+/* ---------------- Никнейм ---------------- */
+function askNick(){
+  document.getElementById('nick-input').value=P.nick||'';
+  document.getElementById('modal-nick').classList.add('show');
+}
+function confirmNick(){
+  const v=document.getElementById('nick-input').value.trim().slice(0,14);
+  if(!v){toast('Введи никнейм!');return;}
+  const isFirst=!P.nick;
+  P.nick=v;saveP();
+  document.getElementById('modal-nick').classList.remove('show');
+  UI.renderMain();
+  toast(isFirst?'Добро пожаловать, '+v+'!':'Ник изменён на '+v);
+}
+
+/* ---------------- Админ-панель (локальный чит для тестов) ---------------- */
+function adminGive(kind,amt){
+  if(kind==='coins')P.coins+=amt;
+  else if(kind==='gems')P.gems+=amt;
+  else if(kind==='pp')P.pp+=amt;
+  else if(kind==='trophies'){
+    const id=P.selBrawler;
+    P.brawlerTrophies[id]=(P.brawlerTrophies[id]||0)+amt;
+    recalcTrophies();
+  }
+  else if(kind==='boxbig')P.boxes.big+=amt;
+  else if(kind==='boxmega')P.boxes.mega+=amt;
+  else if(kind==='boxomega')P.boxes.omega+=amt;
+  saveP();checkTrophyRoad();
+  toast('Выдано: +'+amt);
+  UI.renderAdmin();
+}
+function adminGiveCustom(){
+  const kind=document.getElementById('admin-res').value;
+  const amt=Math.max(0,Math.round(parseFloat(document.getElementById('admin-amount').value)||0));
+  adminGive(kind,amt);
+}
+function adminUnlockAll(){
+  BRAWLERS.forEach(b=>{P.unlocked[b.id]=1;P.levels[b.id]=10;});
+  saveP();toast('Все бойцы открыты на максимальном уровне!');
+  UI.renderAdmin();
 }
 
 /* ---------------- TOAST ---------------- */
@@ -518,6 +722,7 @@ const UI={
     if(id==='scr-boxes')this.renderBoxes();
     if(id==='scr-battle')this.renderBattle();
     if(id==='scr-settings')this.renderSettings();
+    if(id==='scr-admin')this.renderAdmin();
   },
   currHtml(){
     return `<div class="curr"><span class="ic">🏆</span>${P.trophies}</div>
@@ -525,47 +730,59 @@ const UI={
       <div class="curr"><span class="ic">💠</span>${P.gems}</div>
       <div class="curr"><span class="ic">⚡</span>${P.pp}</div>`;
   },
+  miniCurrHtml(){
+    return `<div class="curr"><span class="ic">🪙</span>${P.coins}</div>
+      <div class="curr"><span class="ic">💠</span>${P.gems}</div>
+      <div class="curr"><span class="ic">⚡</span>${P.pp}</div>`;
+  },
   renderMain(){
-    document.getElementById('main-curr').innerHTML=this.currHtml();
+    document.getElementById('main-curr').innerHTML=this.miniCurrHtml();
+    document.getElementById('main-trophies').textContent=P.trophies;
     checkTrophyRoad();
     const next=TROPHY_ROAD.find((m,i)=>!P.claimedRoad.includes(i));
-    const tr=document.getElementById('trophy-road');
+    const bar=document.getElementById('main-road-bar');
     if(next){
       const prev=TROPHY_ROAD.filter((m,i)=>P.claimedRoad.includes(i)).map(m=>m.t).reduce((a,b)=>Math.max(a,b),0);
       const pct=clamp((P.trophies-prev)/(next.t-prev)*100,0,100);
-      tr.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700">
-        <span>🏆 ${P.trophies}</span><span style="color:var(--accent2)">${next.t} → ${next.label}</span></div>
-        <div class="progress-outer"><div class="progress-inner" style="width:${pct}%"></div></div>`;
-    } else tr.innerHTML=`<div style="font-size:13px;font-weight:700;text-align:center">🏆 ${P.trophies} — трофейный путь пройден!</div>`;
+      bar.style.width=pct+'%';
+    } else bar.style.width='100%';
+    const b=BRAWLER_BY_ID[P.selBrawler];
+    const rk=rankFor(brawlerTrophies(b.id));
+    document.getElementById('hero-brawler').innerHTML=
+      `<div class="hero-brawler-big" style="background:${b.color}">${b.icon}</div>
+       <div class="hero-brawler-name">${b.name}</div>
+       <div class="hero-brawler-lvl">Ур. ${P.levels[b.id]||1} · <span style="color:${rk.color}">${rk.name}</span></div>`;
   },
   renderBattle(){
     const ml=document.getElementById('mode-list');
     ml.innerHTML=MODES.map(m=>`<div class="mode-card ${P.selMode===m.id?'sel':''}" onclick="P.selMode='${m.id}';saveP();UI.renderBattle()">
       <div class="ic">${m.icon}</div><div class="nm">${m.name}</div><div class="ds">${m.desc}</div></div>`).join('');
-    document.querySelectorAll('#diff-seg button').forEach(b=>{
-      b.classList.toggle('sel',+b.dataset.d===P.diff);
-      b.onclick=()=>{P.diff=+b.dataset.d;saveP();UI.renderBattle()};
-    });
-    const bl=document.getElementById('battle-brawler-list');
-    bl.innerHTML=BRAWLERS.filter(b=>P.unlocked[b.id]).map(b=>`
-      <div class="card" style="${P.selBrawler===b.id?'outline:3px solid var(--accent)':''}" onclick="P.selBrawler='${b.id}';saveP();UI.renderBattle()">
+    const b=BRAWLER_BY_ID[P.selBrawler];
+    const rk=rankFor(brawlerTrophies(b.id));
+    document.getElementById('battle-sel-brawler').innerHTML=`
+      <div class="card" style="outline:3px solid var(--accent)" onclick="UI.show('scr-brawlers')">
         <div class="portrait" style="background:${b.color}">${b.icon}</div>
-        <div class="nm">${b.name}</div><div class="lvl">Ур. ${P.levels[b.id]||1}</div></div>`).join('');
+        <div class="nm">${b.name}</div><div class="lvl">Ур. ${P.levels[b.id]||1} · <span style="color:${rk.color}">${rk.name}</span></div></div>
+      <p class="note">Сменить бойца — во вкладке «Бойцы»</p>`;
   },
   renderBrawlers(){
     document.getElementById('brawlers-curr').innerHTML=this.currHtml();
     const g=document.getElementById('brawler-grid');
     g.innerHTML=BRAWLERS.map(b=>{
       const un=P.unlocked[b.id];
-      return `<div class="card ${un?'':'locked'}" onclick="UI.brawlerDetail('${b.id}')">
+      const rk=rankFor(brawlerTrophies(b.id));
+      return `<div class="card ${un?'':'locked'} ${P.selBrawler===b.id?'sel-brawler':''}" onclick="UI.brawlerDetail('${b.id}')">
         <div class="portrait" style="background:${b.color}">${un?b.icon:'🔒'}</div>
         <div class="nm">${b.name}</div>
-        <div class="lvl" style="color:${RARITY[b.rarity].color}">${un?('Ур. '+(P.levels[b.id]||1)):RARITY[b.rarity].name}</div></div>`;
+        <div class="lvl" style="color:${un?rk.color:RARITY[b.rarity].color}">${un?('Ур. '+(P.levels[b.id]||1)+' · '+rk.name):RARITY[b.rarity].name}</div>
+        ${un?`<div class="lvl" style="color:#ffd24e">🏆 ${brawlerTrophies(b.id)}</div>`:''}
+        ${P.selBrawler===b.id?`<div class="lvl" style="color:var(--accent2);font-weight:900">В БОЮ</div>`:''}</div>`;
     }).join('');
   },
   brawlerDetail(id){
     const b=BRAWLER_BY_ID[id],un=P.unlocked[id],lvl=P.levels[id]||1,m=statMul(lvl);
     const canUp=un&&lvl<10, ppC=UP_PP[lvl-1],coinC=UP_COIN[lvl-1];
+    const rk=rankFor(brawlerTrophies(id));
     const el=document.getElementById('modal-brawler-content');
     el.innerHTML=`
       <div class="detail-portrait" style="background:${b.color}">${un?b.icon:'🔒'}</div>
@@ -574,14 +791,22 @@ const UI={
       <p class="note">${b.desc}</p>
       ${un?`
       <div class="statrow"><span>Уровень</span><b>${lvl}${lvl>=10?' (МАКС)':''}</b></div>
+      <div class="statrow"><span>🏆 Трофеи бойца</span><b style="color:${rk.color}">${brawlerTrophies(id)} · ${rk.name}</b></div>
       <div class="statrow"><span>❤️ Здоровье</span><b>${Math.round(b.hp*m)}</b></div>
       <div class="statrow"><span>⚔️ Урон атаки</span><b>${Math.round(b.atk.dmg*m)}</b></div>
       <div class="statrow"><span>👟 Скорость</span><b>${b.spd}</b></div>
       ${lvl>=10?`<div class="statrow" style="background:#443a10"><span>⭐ Звёздная сила</span></div><p class="note">${b.star}</p>`:''}
       ${canUp?`<button class="big-btn" style="font-size:15px;padding:12px" onclick="UI.upgrade('${id}')">Улучшить — ⚡${ppC} + 🪙${coinC}</button>`:''}
+      <button class="big-btn" style="font-size:15px;padding:12px;background:linear-gradient(180deg,#5adb7c,#2c8a4b);${P.selBrawler===id?'opacity:.55;pointer-events:none':''}" onclick="UI.selectBrawler('${id}')">${P.selBrawler===id?'✓ Выбран для боя':'Выбрать для боя'}</button>
       `:`<p class="note">Выпадает из ящиков или открывается на трофейном пути.</p>`}
       <button class="menu-btn" style="justify-content:center" onclick="document.getElementById('modal-brawler').classList.remove('active')">Закрыть</button>`;
     document.getElementById('modal-brawler').classList.add('active');
+  },
+  selectBrawler(id){
+    if(!P.unlocked[id])return;
+    P.selBrawler=id;saveP();
+    toast(BRAWLER_BY_ID[id].name+' выбран для боя!');
+    this.brawlerDetail(id);this.renderBrawlers();this.renderMain();
   },
   upgrade(id){
     const lvl=P.levels[id]||1;
@@ -605,6 +830,7 @@ const UI={
       {id:'s0',icon:'📦',t:'Ящик',d:'Монеты, очки силы, шанс бойца',cost:{coins:100},give:{box:1}},
       {id:'s1',icon:'🎁',t:'Большой ящик',d:'= 3 обычных ящика',cost:{gems:30},give:{big:1}},
       {id:'s2',icon:'💎',t:'Мега-ящик',d:'= 10 обычных ящиков',cost:{gems:80},give:{mega:1}},
+      {id:'s2b',icon:'🌟',t:'Омега-ящик',d:'10-15 предметов, гарантирован боец!',cost:{gems:150},give:{omega:1}},
       {id:'s3',icon:'🪙',t:'Монеты ×150',d:'Обмен кристаллов',cost:{gems:20},give:{coins:150}},
       {id:'s4',icon:'⚡',t:'Очки силы ×50',d:'Обмен кристаллов',cost:{gems:18},give:{pp:50}},
     ];
@@ -634,19 +860,23 @@ const UI={
   renderBoxes(){
     document.getElementById('boxes-curr').innerHTML=this.currHtml();
     const defs=[
-      {k:'box', icon:'📦',t:'Ящик',d:'Очки силы 60% · Монеты 25% · Боец 15%'},
-      {k:'big', icon:'🎁',t:'Большой ящик',d:'Три награды сразу'},
-      {k:'mega',icon:'💎',t:'Мега-ящик',d:'Десять наград сразу'},
+      {k:'box',  icon:'📦',t:'Ящик',       d:'1-3 предмета'},
+      {k:'big',  icon:'🎁',t:'Большой ящик', d:'3-5 предметов'},
+      {k:'mega', icon:'💎',t:'Мега-ящик',    d:'5-7 предметов'},
+      {k:'omega',icon:'🌟',t:'Омега-ящик',   d:'10-15 предметов · гарантирован боец!'},
     ];
     document.getElementById('boxes-list').innerHTML=defs.map(d=>`
       <div class="shop-item"><div class="si">${d.icon}</div>
-      <div class="sm"><div class="t">${d.t} — у тебя: ${P.boxes[d.k]}</div><div class="d">${d.d}</div></div>
-      <button class="buy-btn ${P.boxes[d.k]<1?'no':''}" onclick="openBox('${d.k}')">Открыть</button></div>`).join('')+
-      `<p class="note">Шанс легендарного бойца растёт с каждым ящиком без легендарки (счётчик везения: ${P.luck}).<br>Ящики выпадают за победы в боях и на трофейном пути.</p>`;
+      <div class="sm"><div class="t">${d.t} — у тебя: ${P.boxes[d.k]||0}</div><div class="d">${d.d}</div></div>
+      <button class="buy-btn ${(P.boxes[d.k]||0)<1?'no':''}" onclick="openBox('${d.k}')">Открыть</button></div>`).join('')+
+      `<p class="note">Шанс получить бойца растёт с каждым открытым ящиком без бойца и сбрасывается, как только боец выпал.<br>Ящики выпадают за победы в боях и на трофейном пути.</p>`;
   },
   renderSettings(){
     document.getElementById('sound-toggle').innerHTML=
       `<span class="mi" style="background:${P.sound?'#2c8a4b':'#555d78'}">${P.sound?'🔊':'🔇'}</span>Звук: ${P.sound?'Вкл':'Выкл'}`;
+  },
+  renderAdmin(){
+    document.getElementById('admin-curr').innerHTML=this.currHtml();
   },
   clanStub(){toast('Кланы скоро появятся!')},
 };
@@ -655,33 +885,59 @@ function resetProgress(){
   if(confirm('Сбросить весь прогресс?')){localStorage.removeItem('bl_save');loadP();saveP();toast('Прогресс сброшен');UI.show('scr-main');}
 }
 
-/* ---------------- ЯЩИКИ: РОЛЛ НАГРАД ---------------- */
-function rollBoxReward(){
-  const legendChance=0.1+P.luck*0.12; // счётчик везения
-  const r=Math.random()*100;
-  const lockedOf=rar=>BRAWLERS.filter(b=>b.rarity===rar&&!P.unlocked[b.id]);
-  const give=(b)=>{P.unlocked[b.id]=1;P.levels[b.id]=1;return {icon:b.icon,txt:b.name+'!',rar:b.rarity};};
-  if(r<legendChance){
-    const l=lockedOf('legend');P.luck=0;
-    if(l.length)return give(pick(l));
-    return {icon:'🪙',txt:'+500 монет',do:()=>P.coins+=500};
+/* ---------------- ЯЩИКИ: РОЛЛ НАГРАД ----------------
+   Все обычные ящики (box/big/mega) используют одинаковую формулу шанса
+   на предмет - разница только в КОЛИЧЕСТВЕ предметов. Омега-ящик
+   гарантирует хотя бы одного бойца.
+   Шанс на бойца в предмете растёт с числом ящиков, открытых без бойца
+   (pityBoxes), и сбрасывается в 0, как только боец выпал. Среди бойцов
+   более редкие выпадают реже (весовой выбор по редкости). */
+const RARITY_WEIGHT={common:100,rare:45,epic:20,mythic:8,legend:3};
+function pickWeightedBrawler(list){
+  let total=0;const weighted=list.map(b=>{const w=RARITY_WEIGHT[b.rarity]||10;total+=w;return{b,w};});
+  let r=Math.random()*total;
+  for(const it of weighted){if(r<it.w)return it.b;r-=it.w;}
+  return list[list.length-1].b;
+}
+function rollFillerReward(){
+  const roll=Math.random();
+  if(roll<0.55){const c=rndi(20,90);P.coins+=c;return{icon:'🪙',txt:'+'+c+' монет'};}
+  if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:'⚡',txt:'+'+p+' очков силы'};}
+  const g=rndi(2,6);P.gems+=g;return{icon:'💠',txt:'+'+g+' кристаллов'};
+}
+function rollBoxItem(guaranteed){
+  const locked=BRAWLERS.filter(b=>!P.unlocked[b.id]);
+  const chance=guaranteed?1:clamp(0.04+(P.pityBoxes||0)*0.015+(P.totalBoxesOpened||0)*0.0006,0.04,0.65);
+  if(locked.length&&Math.random()<chance){
+    const b=pickWeightedBrawler(locked);
+    P.unlocked[b.id]=1;P.levels[b.id]=1;P.pityBoxes=0;
+    return {icon:b.icon,txt:b.name+'!',rar:b.rarity};
   }
-  P.luck++;
-  if(r<legendChance+1){ const l=lockedOf('mythic'); if(l.length)return give(pick(l)); }
-  if(r<legendChance+5){ const l=lockedOf('epic');   if(l.length)return give(pick(l)); }
-  if(r<legendChance+15){const l=lockedOf('rare').concat(lockedOf('common')); if(l.length)return give(pick(l)); }
-  if(r<legendChance+15+25){ const c=rndi(30,80); P.coins+=c; return {icon:'🪙',txt:'+'+c+' монет'}; }
-  const pp=rndi(12,40); P.pp+=pp; return {icon:'⚡',txt:'+'+pp+' очков силы'};
+  if(guaranteed){ // все бойцы уже открыты - выдаём крупный бонус вместо гарантии
+    const g=rndi(30,60);P.gems+=g;return{icon:'💠',txt:'+'+g+' кристаллов (все бойцы открыты)'};
+  }
+  return rollFillerReward();
+}
+function boxItemCount(kind){
+  if(kind==='box')return rndi(1,3);
+  if(kind==='big')return rndi(3,5);
+  if(kind==='mega')return rndi(5,7);
+  return rndi(10,15); // omega
 }
 let boxOpening=false;
 function openBox(kind){
-  if(P.boxes[kind]<1){toast('Нет таких ящиков!');return;}
-  P.boxes[kind]--;saveP();
-  const count=kind==='mega'?10:kind==='big'?3:1;
+  if((P.boxes[kind]||0)<1){toast('Нет таких ящиков!');return;}
+  P.boxes[kind]--;
+  P.pityBoxes=(P.pityBoxes||0)+1;
+  P.totalBoxesOpened=(P.totalBoxesOpened||0)+1;
+  saveP();
+  const count=boxItemCount(kind);
+  const titleMap={box:'Ящик',big:'Большой ящик',mega:'Мега-ящик',omega:'Омега-ящик'};
+  const iconMap={box:'📦',big:'🎁',mega:'💎',omega:'🌟'};
   UI.show('scr-box-open');
-  document.getElementById('box-open-title').textContent=kind==='mega'?'Мега-ящик':kind==='big'?'Большой ящик':'Ящик';
+  document.getElementById('box-open-title').textContent=titleMap[kind];
   const anim=document.getElementById('box-anim');
-  anim.textContent=kind==='mega'?'💎':kind==='big'?'🎁':'📦';
+  anim.textContent=iconMap[kind];
   anim.style.display='block';anim.classList.add('shake');
   document.getElementById('box-hint').style.display='block';
   document.getElementById('box-rewards').innerHTML='';
@@ -695,15 +951,16 @@ function openBox(kind){
     anim.style.display='none';
     const rw=document.getElementById('box-rewards');
     for(let i=0;i<count;i++){
+      const guaranteed=(kind==='omega'&&i===0);
       setTimeout(()=>{
-        const res=rollBoxReward();if(res.do)res.do();
+        const res=rollBoxItem(guaranteed);
         saveP();
         const div=document.createElement('div');div.className='reward-item';
         if(res.rar)div.style.outline='3px solid '+RARITY[res.rar].color;
         div.innerHTML=`<div class="ri">${res.icon}</div><div class="rt">${res.txt}</div>`;
         rw.appendChild(div);AUDIO.coin();
         if(i===count-1)document.getElementById('box-done-btn').style.display='block';
-      },300+i*350);
+      },250+i*(count>8?150:300));
     }
   };
 }
@@ -793,7 +1050,63 @@ function tileAt(x,y){ // мировые координаты
 function solidAt(x,y){const v=tileAt(x,y);return v===1||v===3;}
 function wallAt(x,y){return tileAt(x,y)===1;}
 
+function shade(hex,amt){
+  try{
+    const c=hex.replace('#','');
+    const n=parseInt(c.length===3?c.split('').map(ch=>ch+ch).join(''):c,16);
+    let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;
+    r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
+    return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  }catch(e){return hex;}
+}
+/* Рисуем "человеческое" лицо бойца (кепка + глаза, смотрящие по направлению)
+   вместо эмодзи-иконки на груди. */
+function drawUnitFace(un){
+  const r=un.r,fx=Math.cos(un.facing),fy=Math.sin(un.facing);
+  const px=-fy,py=fx;
+  // кепка/чуб сверху-сзади
+  ctx.fillStyle=shade(un.hue,-40);
+  ctx.beginPath();
+  ctx.arc(un.x,un.y,r*0.96,Math.PI*1.05,Math.PI*1.95);
+  ctx.fill();
+  // козырёк по направлению взгляда
+  ctx.fillStyle=shade(un.hue,-55);
+  ctx.beginPath();
+  ctx.ellipse(un.x+fx*r*0.5,un.y+fy*r*0.5-r*0.22,r*0.4,r*0.16,un.facing,0,Math.PI*2);
+  ctx.fill();
+  // глаза (белки + зрачки смотрят вперёд)
+  const ex=r*0.32;
+  for(const s of [-1,1]){
+    const gx=un.x+px*ex*s+fx*r*0.16, gy=un.y+py*ex*s+fy*r*0.16-r*0.02;
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(gx,gy,r*0.18,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#141726';ctx.beginPath();ctx.arc(gx+fx*r*0.07,gy+fy*r*0.07,r*0.095,0,Math.PI*2);ctx.fill();
+  }
+  // рот
+  ctx.strokeStyle='rgba(20,23,38,.55)';ctx.lineWidth=Math.max(1.3,r*0.07);
+  ctx.beginPath();
+  ctx.arc(un.x+fx*r*0.12,un.y+fy*r*0.12+r*0.4,r*0.2,0.15*Math.PI,0.85*Math.PI);
+  ctx.stroke();
+}
+
 /* круг vs стены: подвинуть с коллизией */
+function circleStuck(x,y,r){
+  return solidAt(x-r,y-r*0.7)||solidAt(x+r,y-r*0.7)||solidAt(x-r,y+r*0.7)||solidAt(x+r,y+r*0.7)||
+         solidAt(x-r*0.7,y-r)||solidAt(x+r*0.7,y-r)||solidAt(x-r*0.7,y+r)||solidAt(x+r*0.7,y+r);
+}
+/* Если объект (например, после отбрасывания/нокбэка) оказался внутри стены,
+   находим ближайшую свободную точку по кругу и телепортируем туда -
+   иначе он мог бы застрять там навсегда, т.к. moveCircle не пускает
+   ни в одном направлении из "запрещённой" зоны. */
+function unstickFromWalls(o){
+  const r=o.r;
+  if(!circleStuck(o.x,o.y,r))return;
+  for(let rad=6;rad<=Math.max(80,r*4);rad+=6){
+    for(let a=0;a<Math.PI*2;a+=Math.PI/10){
+      const tx=o.x+Math.cos(a)*rad, ty=o.y+Math.sin(a)*rad;
+      if(!circleStuck(tx,ty,r)){o.x=tx;o.y=ty;return;}
+    }
+  }
+}
 function moveCircle(o,dx,dy){
   const r=o.r;
   // по X
@@ -801,6 +1114,7 @@ function moveCircle(o,dx,dy){
   if(!solidAt(nx-r,o.y-r*0.7)&&!solidAt(nx+r,o.y-r*0.7)&&!solidAt(nx-r,o.y+r*0.7)&&!solidAt(nx+r,o.y+r*0.7))o.x=nx;
   let ny=o.y+dy;
   if(!solidAt(o.x-r*0.7,ny-r)&&!solidAt(o.x+r*0.7,ny-r)&&!solidAt(o.x-r*0.7,ny+r)&&!solidAt(o.x+r*0.7,ny+r))o.y=ny;
+  if(dx||dy)unstickFromWalls(o);
 }
 
 /* ---------- Сущности ---------- */
@@ -825,6 +1139,7 @@ class Unit{
     this.ai={state:'objective',target:null,dodgeT:0,dodgeDir:1,repathT:0,wx:x,wy:y,strafe:Math.random()>.5?1:-1,thinkT:rnd(0,0.3)};
     this.hitFlash=0;this.lastShotT=0;this.moveAng=0;this.moving=false;
     this.hue=def.color;
+    this.nick=isPlayer?(P.nick||'Игрок'):pick(BOT_NAMES);
   }
   effSpd(){
     let s=this.spd*this.speedMul;
@@ -844,7 +1159,7 @@ class Unit{
     if(this.dead||this.invulnT>0)return;
     dmg=Math.round(dmg);
     if(this.shield>0){const a=Math.min(this.shield,dmg);this.shield-=a;dmg-=a;}
-    this.hp-=dmg;this.hitFlash=0.12;
+    this.hp-=dmg;this.hitFlash=0.12;this.lastCombatT=G.time;
     addDmgNum(this.x,this.y-24,dmg,'#ffd24e');
     if(src&&src.team!==undefined&&src!==this){
       const owner=src.ownerUnit||src;
@@ -870,7 +1185,7 @@ class Unit{
     this.atkCd-=dt;this.slowT-=dt;this.stunT-=dt;this.invisT-=dt;this.invulnT-=dt;this.hitFlash-=dt;
     if(this.speedT>0){this.speedT-=dt;if(this.speedT<=0)this.speedMul=1;}
     if(this.shieldT>0){this.shieldT-=dt;if(this.shieldT<=0)this.shield=0;}
-    if(this.burnT>0){this.burnT-=dt;this.hp-=this.burnDps*dt;if(this.hp<=0)this.die(this.burnSrc);}
+    if(this.burnT>0){this.burnT-=dt;this.hp-=this.burnDps*dt;this.lastCombatT=G.time;if(this.hp<=0)this.die(this.burnSrc);}
     // перезарядка патронов
     if(this.ammo<this.ammoMax){this.reloadT+=dt;const need=this.def.atk.reload*1.6;
       if(this.reloadT>=need){this.reloadT=0;this.ammo++;}}
@@ -1196,15 +1511,30 @@ function botUpdate(u,dt){
     const d=dist(u.x,u.y,ai.wx,ai.wy);
     if(d>16){mx=(ai.wx-u.x)/d;my=(ai.wy-u.y)/d;}
   }
-  // объезд стен: если впереди стена — повернуть
+  // объезд стен: сканируем несколько направлений, если путь вперёд заблокирован
   if(mx||my){
-    const px=u.x+mx*36,py=u.y+my*36;
-    if(solidAt(px,py)){
-      const a=Math.atan2(my,mx)+ai.strafe*1.2;
-      mx=Math.cos(a);my=Math.sin(a);
+    let ang=Math.atan2(my,mx);
+    const px0=u.x+mx*36,py0=u.y+my*36;
+    if(solidAt(px0,py0)){
+      const dir=ai.strafe>=0?1:-1;
+      let found=false;
+      for(let step=1;step<=8;step++){
+        const a=ang+dir*step*0.33;
+        const tx=u.x+Math.cos(a)*36, ty=u.y+Math.sin(a)*36;
+        if(!solidAt(tx,ty)){ang=a;found=true;break;}
+      }
+      if(!found)ang+=Math.PI; // тупик - развернуться
+      mx=Math.cos(ang);my=Math.sin(ang);
     }
     const sp=u.effSpd();
+    const bx=u.x,by=u.y;
     moveCircle(u,mx*sp*dt,my*sp*dt);
+    // детектор застревания: почти не сдвинулся - меняем сторону обхода и пересчитываем цель
+    const moved=dist(bx,by,u.x,u.y);
+    if(moved<sp*dt*0.15){
+      ai.stuckT=(ai.stuckT||0)+dt;
+      if(ai.stuckT>0.4){ai.strafe*=-1;ai.thinkT=0;ai.stuckT=0;}
+    }else ai.stuckT=0;
     u.moveAng=Math.atan2(my,mx);u.moving=true;
   }else u.moving=false;
   // атака
@@ -1458,7 +1788,7 @@ function startBattle(){
     dmgToSafe:[0,0],
   };
   G.mode=makeMode(modeId);
-  const diff=P.diff;
+  const diff=currentBotDiff();
   const botLvlBase=clamp((P.levels[bId]||1)+[-1,0,1][diff],1,10);
   const roster=BRAWLERS.slice();
   const pickBrawler=()=>pick(roster);
@@ -1869,16 +2199,23 @@ function render(){
     ctx.lineWidth=3;
     ctx.strokeStyle=un===pu?'#ffffff':(un.team===pu.team?'#3ec6ff':'#ff5a5a');
     ctx.stroke();
-    // направление
-    ctx.fillStyle='rgba(255,255,255,.85)';
-    ctx.beginPath();ctx.arc(un.x+Math.cos(un.facing)*un.r*0.65,un.y+Math.sin(un.facing)*un.r*0.65,4.5,0,Math.PI*2);ctx.fill();
-    // иконка
-    ctx.font='17px serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(un.def.icon,un.x,un.y-1);
+    // "лицо" — рисуем персонажа, а не эмодзи
+    drawUnitFace(un);
+    // маленький значок способности (для узнаваемости бойца)
+    ctx.font='11px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(20,23,38,.55)';
+    ctx.beginPath();ctx.arc(un.x+un.r*0.62,un.y+un.r*0.62,8,0,Math.PI*2);ctx.fill();
+    ctx.fillText(un.def.icon,un.x+un.r*0.62,un.y+un.r*0.63);
     // щит/заморозка
     if(un.shield>0){ctx.strokeStyle='rgba(120,200,255,.8)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(un.x,un.y,un.r+5,0,Math.PI*2);ctx.stroke();}
     if(un.stunT>0){ctx.font='13px serif';ctx.fillText('💫',un.x,un.y-un.r-24);}
     if(un.invulnT>0&&un.def.sup.type==='batform'){ctx.font='13px serif';ctx.fillText('🦇',un.x+14,un.y-un.r-10);}
+    // ник бойца
+    ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.lineWidth=3;ctx.strokeStyle='rgba(10,11,20,.85)';
+    ctx.strokeText(un.nick||'',un.x,un.y-un.r-34);
+    ctx.fillStyle=un===pu?'#ffe9a8':'#fff';
+    ctx.fillText(un.nick||'',un.x,un.y-un.r-34);
     // хп-бар
     const bw=40;
     ctx.fillStyle='#141726';ctx.fillRect(un.x-bw/2,un.y-un.r-16,bw,6);
@@ -1887,9 +2224,9 @@ function render(){
     // супер-индикатор
     if(un.super>=un.superMax){ctx.fillStyle='#ffd24e';ctx.font='11px serif';ctx.fillText('⭐',un.x-bw/2-8,un.y-un.r-13);}
     // кристаллы/кубы/звёзды
-    if(un.gems>0){ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.fillText('💎'+un.gems,un.x,un.y-un.r-26);}
-    if(G.mode.id==='bounty'&&un.stars>2){ctx.fillStyle='#ffd24e';ctx.font='bold 12px sans-serif';ctx.fillText('⭐'+un.stars,un.x,un.y-un.r-26);}
-    if(un.cubes>0){ctx.fillStyle='#c9a2ff';ctx.font='bold 12px sans-serif';ctx.fillText('▣'+un.cubes,un.x,un.y-un.r-26);}
+    if(un.gems>0){ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.fillText('💎'+un.gems,un.x,un.y-un.r-48);}
+    if(G.mode.id==='bounty'&&un.stars>2){ctx.fillStyle='#ffd24e';ctx.font='bold 12px sans-serif';ctx.fillText('⭐'+un.stars,un.x,un.y-un.r-48);}
+    if(un.cubes>0){ctx.fillStyle='#c9a2ff';ctx.font='bold 12px sans-serif';ctx.fillText('▣'+un.cubes,un.x,un.y-un.r-48);}
     ctx.globalAlpha=1;
   }
   // снаряды
@@ -2009,8 +2346,15 @@ function endBattle(result,quit){
     if(P.winStreakBox>=3){P.winStreakBox=0;P.boxes.box++;gotBox=true;}
     if(Math.random()<0.15){gotGems=rndi(2,5);P.gems+=gotGems;}
   }
-  P.trophies=Math.max(0,P.trophies+trophyDelta);
+  const bId=P.selBrawler;
+  P.brawlerTrophies[bId]=Math.max(0,(P.brawlerTrophies[bId]||0)+trophyDelta);
+  recalcTrophies();
   P.coins+=coins;P.pp+=pp;
+  // скрытый ММР: подстраиваем сложность ботов под серию побед/поражений
+  if(!quit){
+    if(win)P.mmr=clamp((P.mmr||0)+1,-10,10);
+    else if(!draw)P.mmr=clamp((P.mmr||0)-1,-10,10);
+  }
   saveP();checkTrophyRoad();
   if(win)AUDIO.win();else if(!draw)AUDIO.lose();
   setTimeout(()=>{
@@ -2031,6 +2375,7 @@ function endBattle(result,quit){
 
 /* ---------- СТАРТ ---------- */
 UI.show('scr-main');
+if(!P.nick)askNick();
 if(!rafId)rafId=requestAnimationFrame(frame);
 document.addEventListener('touchstart',()=>AUDIO.init(),{once:true});
 document.addEventListener('mousedown',()=>AUDIO.init(),{once:true});
