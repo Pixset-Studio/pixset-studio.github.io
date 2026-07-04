@@ -17,6 +17,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 button{font-family:inherit;border:none;cursor:pointer}
 .screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden;background:var(--bg)}
 .screen.active{display:flex}
+.menu-ui{position:fixed;top:50%;left:50%;width:960px;height:460px;z-index:5}
 .topbar{display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top))}
 .topbar h2{font-size:20px;flex:1;text-align:center;letter-spacing:.5px}
 .back-btn{background:var(--panel2);color:var(--text);border-radius:12px;padding:8px 14px;font-size:16px;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.35)}
@@ -180,6 +181,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 .hero-brawler-name{font-weight:900;font-size:15px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .hero-brawler-lvl{font-size:12px;font-weight:800;color:var(--muted)}
 .trophy-pill-wrap{display:flex;flex-direction:column;gap:3px}
+.player-nick{font-size:11px;font-weight:800;color:#fff;line-height:1;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
 .progress-outer.mini{height:5px;width:78px;margin-top:0}
 </style>
 </head>
@@ -192,12 +194,15 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
   <small>Игра работает в ландшафтном режиме</small>
 </div>
 
+<!-- ============ MENU UI (масштабируемая обёртка, часть 1) ============ -->
+<div class="menu-ui">
 <!-- ============ MAIN MENU ============ -->
 <div class="screen active" id="scr-main">
   <div class="topbar-main">
     <div class="player-badge" onclick="openRoadModal()" style="cursor:pointer" title="Трофейный путь">
       <div class="avatar">🙂</div>
       <div class="trophy-pill-wrap">
+        <div class="player-nick" id="main-nick">Игрок</div>
         <div class="trophy-pill">🏆 <span id="main-trophies">0</span></div>
         <div class="progress-outer mini"><div class="progress-inner" id="main-road-bar" style="width:0%"></div></div>
       </div>
@@ -269,9 +274,18 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 
 <!-- ============ BOXES ============ -->
 <div class="screen" id="scr-boxes">
-  <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Ящики</h2><div style="width:44px"></div></div>
+  <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Ящики</h2>
+    <button class="back-btn" onclick="openOddsModal()" title="Текущие шансы">📊</button></div>
   <div class="currbar" id="boxes-curr"></div>
   <div class="content" id="boxes-list"></div>
+</div>
+
+<!-- ============ ODDS MODAL ============ -->
+<div class="modal-overlay" id="modal-odds" onclick="if(event.target===this)closeOddsModal()">
+  <div class="modal-box">
+    <div class="topbar"><div style="width:44px"></div><h2>Шансы в ящиках</h2><button class="back-btn" onclick="closeOddsModal()">✕</button></div>
+    <div class="road-scroll" id="odds-content" style="flex-direction:column"></div>
+  </div>
 </div>
 
 <!-- ============ BOX OPENING ============ -->
@@ -329,6 +343,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <p class="note" style="margin-top:16px;color:#ff8080">Это чит-меню только для локального тестирования. Прогресс хранится в этом браузере/устройстве.</p>
   </div>
 </div>
+</div><!-- /menu-ui часть 1 -->
 
 <!-- ============ GAME ============ -->
 <div class="screen" id="scr-game">
@@ -347,6 +362,8 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
   </div>
 </div>
 
+<!-- ============ MENU UI (масштабируемая обёртка, часть 2) ============ -->
+<div class="menu-ui">
 <!-- ============ RESULTS ============ -->
 <div class="screen" id="scr-results">
   <div id="res-title">Победа!</div>
@@ -356,6 +373,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 
 <!-- ============ BRAWLER DETAIL MODAL ============ -->
 <div class="modal" id="modal-brawler"><div class="modal-box" id="modal-brawler-content"></div></div>
+</div><!-- /menu-ui часть 2 -->
 
 <div id="toast"></div>
 
@@ -738,6 +756,7 @@ const UI={
   renderMain(){
     document.getElementById('main-curr').innerHTML=this.miniCurrHtml();
     document.getElementById('main-trophies').textContent=P.trophies;
+    document.getElementById('main-nick').textContent=P.nick||'Игрок';
     checkTrophyRoad();
     const next=TROPHY_ROAD.find((m,i)=>!P.claimedRoad.includes(i));
     const bar=document.getElementById('main-road-bar');
@@ -830,7 +849,6 @@ const UI={
       {id:'s0',icon:'📦',t:'Ящик',d:'Монеты, очки силы, шанс бойца',cost:{coins:100},give:{box:1}},
       {id:'s1',icon:'🎁',t:'Большой ящик',d:'= 3 обычных ящика',cost:{gems:30},give:{big:1}},
       {id:'s2',icon:'💎',t:'Мега-ящик',d:'= 10 обычных ящиков',cost:{gems:80},give:{mega:1}},
-      {id:'s2b',icon:'🌟',t:'Омега-ящик',d:'10-15 предметов, гарантирован боец!',cost:{gems:150},give:{omega:1}},
       {id:'s3',icon:'🪙',t:'Монеты ×150',d:'Обмен кристаллов',cost:{gems:20},give:{coins:150}},
       {id:'s4',icon:'⚡',t:'Очки силы ×50',d:'Обмен кристаллов',cost:{gems:18},give:{pp:50}},
     ];
@@ -863,13 +881,14 @@ const UI={
       {k:'box',  icon:'📦',t:'Ящик',       d:'1-3 предмета'},
       {k:'big',  icon:'🎁',t:'Большой ящик', d:'3-5 предметов'},
       {k:'mega', icon:'💎',t:'Мега-ящик',    d:'5-7 предметов'},
-      {k:'omega',icon:'🌟',t:'Омега-ящик',   d:'10-15 предметов · гарантирован боец!'},
+      {k:'omega',icon:'🌟',t:'Омега-ящик',   d:'10-15 предметов · гарантирован боец! (только с трофейного пути)'},
     ];
     document.getElementById('boxes-list').innerHTML=defs.map(d=>`
       <div class="shop-item"><div class="si">${d.icon}</div>
       <div class="sm"><div class="t">${d.t} — у тебя: ${P.boxes[d.k]||0}</div><div class="d">${d.d}</div></div>
       <button class="buy-btn ${(P.boxes[d.k]||0)<1?'no':''}" onclick="openBox('${d.k}')">Открыть</button></div>`).join('')+
-      `<p class="note">Шанс получить бойца растёт с каждым открытым ящиком без бойца и сбрасывается, как только боец выпал.<br>Ящики выпадают за победы в боях и на трофейном пути.</p>`;
+      `<button class="menu-btn" onclick="openOddsModal()"><span class="mi" style="background:#2f6fb3">📊</span>Текущие шансы</button>
+      <p class="note">Шанс получить бойца растёт с каждым открытым ящиком без бойца и сбрасывается, как только боец выпал.<br>Обычные ящики выпадают за победы в боях, омега-ящик — только за трофейный путь.</p>`;
   },
   renderSettings(){
     document.getElementById('sound-toggle').innerHTML=
@@ -905,9 +924,12 @@ function rollFillerReward(){
   if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:'⚡',txt:'+'+p+' очков силы'};}
   const g=rndi(2,6);P.gems+=g;return{icon:'💠',txt:'+'+g+' кристаллов'};
 }
+function currentBrawlerChance(){
+  return clamp(0.04+(P.pityBoxes||0)*0.015+(P.totalBoxesOpened||0)*0.0006,0.04,0.65);
+}
 function rollBoxItem(guaranteed){
   const locked=BRAWLERS.filter(b=>!P.unlocked[b.id]);
-  const chance=guaranteed?1:clamp(0.04+(P.pityBoxes||0)*0.015+(P.totalBoxesOpened||0)*0.0006,0.04,0.65);
+  const chance=guaranteed?1:currentBrawlerChance();
   if(locked.length&&Math.random()<chance){
     const b=pickWeightedBrawler(locked);
     P.unlocked[b.id]=1;P.levels[b.id]=1;P.pityBoxes=0;
@@ -924,6 +946,32 @@ function boxItemCount(kind){
   if(kind==='mega')return rndi(5,7);
   return rndi(10,15); // omega
 }
+/* Модалка "Текущие шансы" - пересчитывается заново при каждом открытии,
+   поэтому всегда показывает актуальные цифры (пити-счётчик меняется). */
+function openOddsModal(){
+  const chance=currentBrawlerChance();
+  const locked=BRAWLERS.filter(b=>!P.unlocked[b.id]);
+  let totalW=0;const byRarity={};
+  locked.forEach(b=>{const w=RARITY_WEIGHT[b.rarity]||10;totalW+=w;byRarity[b.rarity]=(byRarity[b.rarity]||0)+w;});
+  const rarRows=Object.keys(RARITY).map(r=>{
+    const w=byRarity[r]||0;
+    const cnt=locked.filter(b=>b.rarity===r).length;
+    if(cnt===0)return '';
+    const pctOverall=totalW>0?chance*(w/totalW)*100:0;
+    return `<div class="road-item"><div class="road-ic" style="color:${RARITY[r].color}">●</div>
+      <div class="road-info"><div class="road-t">${RARITY[r].name}</div>
+      <div class="road-l">${cnt} бойцов доступно · ~${pctOverall.toFixed(1)}% за предмет</div></div></div>`;
+  }).join('');
+  document.getElementById('odds-content').innerHTML=`
+    <div class="road-item ready"><div class="road-ic">🥊</div>
+      <div class="road-info"><div class="road-t">Шанс бойца за 1 предмет сейчас</div>
+      <div class="road-l">${(chance*100).toFixed(1)}% — растёт с каждым ящиком без бойца, сбрасывается при получении бойца</div></div></div>
+    ${locked.length?rarRows:'<p class="note">Все бойцы уже открыты — вместо бойца будут бонусные кристаллы.</p>'}
+    <p class="note" style="margin-top:8px">📦 Ящик: 1-3 предмета · 🎁 Большой: 3-5 · 💎 Мега: 5-7 · 🌟 Омега: 10-15 (гарантирован боец, только с трофейного пути)</p>
+    <p class="note">Ящиков без бойца подряд: ${P.pityBoxes||0} · Всего открыто за всё время: ${P.totalBoxesOpened||0}</p>`;
+  document.getElementById('modal-odds').classList.add('show');
+}
+function closeOddsModal(){document.getElementById('modal-odds').classList.remove('show');}
 let boxOpening=false;
 function openBox(kind){
   if((P.boxes[kind]||0)<1){toast('Нет таких ящиков!');return;}
@@ -996,6 +1044,22 @@ function resizeCanvas(){
   canvas.width=Math.floor(innerWidth*DPR);canvas.height=Math.floor(innerHeight*DPR);
 }
 window.addEventListener('resize',resizeCanvas);resizeCanvas();
+
+/* ---------------- МАСШТАБИРОВАНИЕ UI МЕНЮ ----------------
+   Все экраны меню (не игровой канвас/HUD - у него своя логика) сверстаны
+   под фиксированное "опорное" разрешение и целиком масштабируются под
+   реальный размер экрана/окна, чтобы выглядеть нормально на любом
+   телефоне, планшете или мониторе. */
+const UI_REF_W=960,UI_REF_H=460;
+function applyUIScale(){
+  const scale=Math.min(innerWidth/UI_REF_W, innerHeight/UI_REF_H);
+  document.querySelectorAll('.menu-ui').forEach(el=>{
+    el.style.transform='translate(-50%,-50%) scale('+scale+')';
+  });
+}
+window.addEventListener('resize',applyUIScale);
+window.addEventListener('orientationchange',()=>setTimeout(applyUIScale,60));
+applyUIScale();
 // Попытка заблокировать ландшафтную ориентацию (работает в полноэкранном режиме / Cordova)
 function tryLockLandscape(){
   if(screen.orientation&&screen.orientation.lock){
@@ -1115,6 +1179,52 @@ function moveCircle(o,dx,dy){
   let ny=o.y+dy;
   if(!solidAt(o.x-r*0.7,ny-r)&&!solidAt(o.x+r*0.7,ny-r)&&!solidAt(o.x-r*0.7,ny+r)&&!solidAt(o.x+r*0.7,ny+r))o.y=ny;
   if(dx||dy)unstickFromWalls(o);
+}
+
+/* ---------------- ПУТИ ДЛЯ БОТОВ (обход стен через клетки карты) ----------------
+   Прямая проверка "прямая видимость" + BFS по сетке тайлов, чтобы боты
+   находили дорогу даже через проходы шириной в одну клетку, а не просто
+   тыкались в стену локальным сканированием углов. */
+function hasLineOfSight(x1,y1,x2,y2){
+  const d=dist(x1,y1,x2,y2);
+  const steps=Math.max(1,Math.ceil(d/14));
+  for(let i=1;i<steps;i++){
+    const t=i/steps;
+    if(solidAt(x1+(x2-x1)*t,y1+(y2-y1)*t))return false;
+  }
+  return true;
+}
+function bfsPath(sx,sy,gx,gy){
+  const W=G.map.W,H=G.map.H,t=G.map.t;
+  const stx=clamp(Math.floor(sx/T),0,W-1),sty=clamp(Math.floor(sy/T),0,H-1);
+  const gtx=clamp(Math.floor(gx/T),0,W-1),gty=clamp(Math.floor(gy/T),0,H-1);
+  const walkable=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&t[y][x]!==1&&t[y][x]!==3;
+  if(!walkable(gtx,gty)||stx===gtx&&sty===gty)return null;
+  const key=(x,y)=>y*W+x;
+  const visited=new Set([key(stx,sty)]);
+  const prev=new Map();
+  const queue=[[stx,sty]];
+  let qi=0,found=false;
+  while(qi<queue.length&&queue.length<1500){
+    const cur=queue[qi++];
+    if(cur[0]===gtx&&cur[1]===gty){found=true;break;}
+    const nbrs=[[cur[0]+1,cur[1]],[cur[0]-1,cur[1]],[cur[0],cur[1]+1],[cur[0],cur[1]-1]];
+    for(const nb of nbrs){
+      if(!walkable(nb[0],nb[1]))continue;
+      const k=key(nb[0],nb[1]);
+      if(visited.has(k))continue;
+      visited.add(k);prev.set(k,cur);queue.push(nb);
+    }
+  }
+  if(!found)return null;
+  const path=[];let cur=[gtx,gty];
+  while(!(cur[0]===stx&&cur[1]===sty)){
+    path.push({x:cur[0]*T+T/2,y:cur[1]*T+T/2});
+    const p=prev.get(key(cur[0],cur[1]));
+    if(!p)break;cur=p;
+  }
+  path.reverse();
+  return path;
 }
 
 /* ---------- Сущности ---------- */
@@ -1492,6 +1602,10 @@ function botUpdate(u,dt){
     // целевая точка режима
     const obj=G.mode.botObjective(u,enemy);
     ai.wx=obj.x;ai.wy=obj.y;
+    // если к цели нет прямой видимости - строим путь по клеткам карты (проходит через узкие проходы)
+    if(ai.state==='objective'&&!hasLineOfSight(u.x,u.y,ai.wx,ai.wy)){
+      ai.path=bfsPath(u.x,u.y,ai.wx,ai.wy);ai.pathIdx=0;
+    }else ai.path=null;
   }
   ai.dodgeT-=dt;
   // движение
@@ -1508,8 +1622,14 @@ function botUpdate(u,dt){
       if(Math.random()<0.01)ai.strafe*=-1;
     }
   }else{
-    const d=dist(u.x,u.y,ai.wx,ai.wy);
-    if(d>16){mx=(ai.wx-u.x)/d;my=(ai.wy-u.y)/d;}
+    let tx=ai.wx,ty=ai.wy;
+    if(ai.path&&ai.path.length){
+      let wp=ai.path[ai.pathIdx];
+      while(wp&&dist(u.x,u.y,wp.x,wp.y)<26&&ai.pathIdx<ai.path.length-1){ai.pathIdx++;wp=ai.path[ai.pathIdx];}
+      if(wp){tx=wp.x;ty=wp.y;}
+    }
+    const d=dist(u.x,u.y,tx,ty);
+    if(d>16){mx=(tx-u.x)/d;my=(ty-u.y)/d;}
   }
   // объезд стен: сканируем несколько направлений, если путь вперёд заблокирован
   if(mx||my){
