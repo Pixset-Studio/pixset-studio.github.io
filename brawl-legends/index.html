@@ -25,7 +25,7 @@ button{font-family:inherit;border:none;cursor:pointer}
 .currbar{display:flex;gap:8px;justify-content:center;padding:6px 12px;flex-wrap:wrap}
 .curr{background:var(--panel);border-radius:20px;padding:5px 12px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.06)}
 .curr .ic{font-size:15px}
-.content{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
+.content{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 .big-btn{display:block;width:100%;background:linear-gradient(180deg,#ffd83d,#f5a623);color:#3a2a00;
   border-radius:16px;padding:16px;font-size:20px;font-weight:900;letter-spacing:1px;margin:8px 0;
   box-shadow:0 5px 0 #b97d12,0 8px 14px rgba(0,0,0,.35);text-transform:uppercase}
@@ -71,10 +71,19 @@ body.no-touch #pc-hint{display:block}
 body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 .modal{position:absolute;inset:0;background:rgba(10,12,24,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;pointer-events:auto}
 .modal.active{display:flex}
-.modal-box{background:var(--panel);border-radius:18px;padding:20px;width:100%;max-width:360px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.6);max-height:86vh;overflow-y:auto}
+.brawler-modal-box{background:var(--panel);border-radius:18px;padding:20px;width:100%;max-width:360px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.6);max-height:86%;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 .modal-box h3{font-size:20px;margin-bottom:10px}
 .detail-portrait{width:110px;height:110px;border-radius:16px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:60px}
 .statrow{display:flex;justify-content:space-between;background:var(--panel2);border-radius:9px;padding:8px 12px;margin:5px 0;font-size:14px}
+.star-row{display:flex;align-items:center;gap:8px;background:var(--panel2);border-radius:9px;padding:8px 10px;margin:5px 0;text-align:left}
+.star-row.locked{opacity:.55}
+.star-ic{font-size:18px;width:22px;text-align:center;flex-shrink:0}
+.star-info{flex:1;min-width:0}
+.star-t{font-weight:800;font-size:13px}
+.star-d{font-size:11px;color:var(--muted)}
+.star-eq-btn{flex-shrink:0;background:var(--panel);border:1px solid rgba(255,255,255,.2);color:var(--text);
+  border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800}
+.star-eq-btn.on{background:linear-gradient(180deg,#5adb7c,#2c8a4b);border-color:transparent}
 .statrow b{color:var(--accent)}
 .rarity-tag{display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:800;margin-bottom:8px;color:#101020}
 .shop-item{display:flex;align-items:center;gap:12px;background:var(--panel);border-radius:14px;padding:12px;margin:8px 0;box-shadow:0 3px 0 rgba(0,0,0,.3)}
@@ -103,8 +112,17 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 #scr-main .bottom{padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
 /* box opening */
-#scr-box-open{background:radial-gradient(100% 70% at 50% 40%,#3a2f63 0%,#14101f 70%);align-items:center;justify-content:center}
+#scr-box-open{background:radial-gradient(100% 70% at 50% 40%,#3a2f63 0%,#14101f 70%)}
 #box-anim{font-size:100px;transition:transform .1s;cursor:pointer;filter:drop-shadow(0 10px 20px rgba(0,0,0,.5))}
+#box-remaining{position:absolute;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:20;
+  font-size:15px;font-weight:900;background:rgba(0,0,0,.45);padding:7px 14px;border-radius:20px;pointer-events:none}
+#box-remaining.blink{animation:remain-blink .6s ease-in-out infinite}
+@keyframes remain-blink{0%,100%{opacity:1;transform:scale(1);color:#fff}50%{opacity:.7;transform:scale(1.15);color:#ffd24e}}
+#reveal-wrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+#reveal-wrap.pop{animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+#reveal-icon{font-size:96px;filter:drop-shadow(0 10px 20px rgba(0,0,0,.5))}
+#reveal-name{font-size:24px;font-weight:900;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+#reveal-count{font-size:17px;font-weight:800;color:#ffd24e;text-shadow:0 2px 6px rgba(0,0,0,.6)}
 #box-anim.shake{animation:shake .4s infinite}
 @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg) scale(1.05)}75%{transform:rotate(8deg) scale(1.05)}}
 #box-rewards{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:20px;min-height:100px}
@@ -131,7 +149,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 #countdown{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:110px;font-weight:900;
   color:var(--accent);text-shadow:0 6px 0 rgba(0,0,0,.5);z-index:20}
 /* results */
-#scr-results{background:radial-gradient(100% 70% at 50% 30%,#2b3157 0%,#14101f 70%);align-items:center;justify-content:center;text-align:center;padding:24px}
+#scr-results{background:radial-gradient(100% 70% at 50% 30%,#2b3157 0%,#14101f 70%);text-align:center;padding:0 24px}
 #res-title{font-size:44px;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;filter:drop-shadow(0 5px 0 rgba(0,0,0,.4))}
 #res-rewards{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:20px}
 .trophy-road{background:var(--panel);border-radius:14px;padding:12px;margin:8px 0}
@@ -140,9 +158,9 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 .note{font-size:12px;color:var(--muted);text-align:center;margin:8px 0;line-height:1.5}
 .modal-overlay{position:fixed;inset:0;background:rgba(6,7,14,.72);z-index:300;display:none;align-items:center;justify-content:center;padding:20px;pointer-events:auto}
 .modal-overlay.show{display:flex}
-.modal-box{background:var(--panel);border-radius:16px;width:min(520px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.modal-box{background:var(--panel);border-radius:16px;width:min(520px,94%);max-height:82%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .modal-box .topbar{background:transparent;border:0}
-.road-scroll{overflow-y:auto;padding:4px 14px 14px;display:flex;flex-direction:column-reverse;gap:8px}
+.road-scroll{overflow-y:auto;padding:4px 14px 14px;display:flex;flex-direction:column-reverse;gap:8px;touch-action:pan-y}
 .road-item{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px}
 .road-item.claimed{opacity:.55}
 .road-item.ready{background:rgba(255,216,61,.15);border:1px solid rgba(255,216,61,.5)}
@@ -289,12 +307,19 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 </div>
 
 <!-- ============ BOX OPENING ============ -->
-<div class="screen" id="scr-box-open">
-  <h2 style="margin-bottom:24px" id="box-open-title">Ящик</h2>
-  <div id="box-anim">📦</div>
-  <p class="note" id="box-hint">Нажми на ящик!</p>
-  <div id="box-rewards"></div>
-  <button class="big-btn" style="max-width:280px;display:none" id="box-done-btn" onclick="UI.show('scr-boxes')">Забрать</button>
+<div class="screen" id="scr-box-open" onclick="boxAdvance()">
+  <div id="box-remaining"></div>
+  <h2 style="margin:16px 0 4px;flex-shrink:0;text-align:center" id="box-open-title">Ящик</h2>
+  <div class="content" style="display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center">
+    <div id="box-anim">📦</div>
+    <p class="note" id="box-hint">Нажми на ящик!</p>
+    <div id="reveal-wrap" style="display:none">
+      <div id="reveal-icon"></div>
+      <div id="reveal-name"></div>
+      <div id="reveal-count"></div>
+    </div>
+  </div>
+  <button class="big-btn" style="max-width:280px;display:none;margin:12px auto;flex-shrink:0" id="box-done-btn" onclick="event.stopPropagation();UI.show('scr-boxes')">Забрать</button>
 </div>
 
 <!-- ============ SETTINGS ============ -->
@@ -340,6 +365,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <button class="big-btn" onclick="adminGiveCustom()">Выдать</button>
     <p class="note" style="margin-top:14px">Бойцы</p>
     <button class="menu-btn" onclick="adminUnlockAll()"><span class="mi" style="background:#b3382f">🥊</span>Открыть всех бойцов (макс. уровень)</button>
+    <button class="menu-btn" onclick="adminGiveAllStars()"><span class="mi" style="background:#ffd24e">⭐</span>Выбить все звёздные силы</button>
     <p class="note" style="margin-top:16px;color:#ff8080">Это чит-меню только для локального тестирования. Прогресс хранится в этом браузере/устройстве.</p>
   </div>
 </div>
@@ -366,13 +392,15 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 <div class="menu-ui">
 <!-- ============ RESULTS ============ -->
 <div class="screen" id="scr-results">
-  <div id="res-title">Победа!</div>
-  <div id="res-rewards"></div>
-  <button class="big-btn" style="max-width:300px" onclick="UI.show('scr-main')">Продолжить</button>
+  <div id="res-title" style="flex-shrink:0;margin-top:16px">Победа!</div>
+  <div class="content" style="display:flex;flex-direction:column;align-items:center;text-align:center">
+    <div id="res-rewards"></div>
+  </div>
+  <button class="big-btn" style="max-width:300px;margin:12px auto;flex-shrink:0" onclick="UI.show('scr-main')">Продолжить</button>
 </div>
 
 <!-- ============ BRAWLER DETAIL MODAL ============ -->
-<div class="modal" id="modal-brawler"><div class="modal-box" id="modal-brawler-content"></div></div>
+<div class="modal" id="modal-brawler"><div class="brawler-modal-box" id="modal-brawler-content"></div></div>
 </div><!-- /menu-ui часть 2 -->
 
 <div id="toast"></div>
@@ -480,79 +508,154 @@ const BRAWLERS=[
  {id:'knight',name:'Рыцарь Пламени',icon:'🔥',color:'#e2543e',rarity:'common',hp:5200,spd:150,
   atk:{type:'melee',dmg:640,range:78,reload:0.7,ammo:3,arc:2.1},
   sup:{type:'nova',dmg:1100,radius:150,kb:180,charge:3600},
-  star:'Пламенный доспех: +8% здоровья и урона',
+  stars:[{name:'Пламенный доспех',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Жар клинка',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
   desc:'Мечник ближнего боя. Супер — огненный вихрь, отбрасывающий врагов.'},
  {id:'icemage',name:'Ледяная Волшебница',icon:'❄️',color:'#5db7e8',rarity:'common',hp:3400,spd:145,
   atk:{type:'proj',dmg:520,range:380,reload:0.9,ammo:3,pspd:560,slow:1.4},
   sup:{type:'freeze',dmg:400,radius:130,dur:2.2,charge:3200},
-  star:'Вечная мерзлота: +8% здоровья и урона',
+  stars:[{name:'Вечная мерзлота',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Ледяной щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
   desc:'Ледяные копья замедляют. Супер замораживает область.'},
  {id:'gremlin',name:'Инженер-Гремлин',icon:'🔧',color:'#8fbf46',rarity:'rare',hp:4200,spd:150,
   atk:{type:'proj',dmg:480,range:230,reload:0.75,ammo:3,pspd:520,fixTurret:600},
   sup:{type:'turret',hp:3000,dmg:300,range:300,charge:3000},
-  star:'Мастер-механик: +8% здоровья и урона',
+  stars:[{name:'Мастер-механик',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Форсаж',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'}],
   desc:'Гаечный ключ чинит турель. Супер ставит или улучшает турель.'},
  {id:'assassin',name:'Теневой Ассасин',icon:'🗡️',color:'#6b5b95',rarity:'epic',hp:3000,spd:185,
   atk:{type:'spread',dmg:340,range:250,reload:0.62,ammo:3,pspd:700,count:3,spread:0.22},
   sup:{type:'stealth',dur:4.5,spdMul:1.4,charge:3400},
-  star:'Из тени: +8% здоровья и урона',
+  stars:[{name:'Из тени',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Стремительность',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
   desc:'Быстрые кинжалы, мало здоровья. Супер — невидимость и скорость.'},
  {id:'electro',name:'Электромаг',icon:'⚡',color:'#f3d43a',rarity:'rare',hp:3800,spd:150,
   atk:{type:'chain',dmg:500,range:300,reload:1.0,ammo:3,chains:2,chainR:170},
   sup:{type:'emp',dmg:600,radius:180,stun:1.6,charge:3400},
-  star:'Сверхпроводник: +8% здоровья и урона',
+  stars:[{name:'Сверхпроводник',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Разряд',kind:'lifesteal',val:0.06,desc:'Восстанавливает 6% от нанесённого урона здоровьем.'}],
   desc:'Цепная молния. Супер — импульс, оглушающий всех рядом.'},
  {id:'druid',name:'Друид-Целитель',icon:'🌿',color:'#4ea86b',rarity:'rare',hp:4000,spd:145,
   atk:{type:'healorb',dmg:420,heal:520,range:340,reload:0.9,ammo:3,pspd:480},
   sup:{type:'massheal',heal:1800,radius:170,charge:3000},
-  star:'Дух леса: +8% здоровья и урона',
+  stars:[{name:'Дух леса',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Природная регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
   desc:'Сферы природы лечат союзников. Супер — массовое исцеление.'},
  {id:'golem',name:'Каменный Голем',icon:'🗿',color:'#9c8f7f',rarity:'epic',hp:9200,spd:115,
   atk:{type:'shock',dmg:700,range:120,reload:1.1,ammo:3},
   sup:{type:'pull',dmg:500,radius:210,stun:1.2,charge:4200},
-  star:'Гранитная кожа: +8% здоровья и урона',
+  stars:[{name:'Гранитная кожа',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Каменный панцирь',kind:'shield',val:0.25,desc:'В начале боя получает щит на 25% от макс. здоровья.'}],
   desc:'Огромное здоровье, удар о землю. Супер притягивает и оглушает.'},
  {id:'hunter',name:'Охотник с Бумерангом',icon:'🪃',color:'#c98a3d',rarity:'common',hp:3800,spd:155,
   atk:{type:'boomerang',dmg:480,range:320,reload:0.95,ammo:3,pspd:520},
   sup:{type:'triboom',dmg:560,range:380,charge:3400},
-  star:'Точный бросок: +8% здоровья и урона',
+  stars:[{name:'Точный бросок',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Быстрые руки',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
   desc:'Бумеранг бьёт дважды. Супер — тройной бумеранг.'},
  {id:'pyro',name:'Пиромант-Алхимик',icon:'🧪',color:'#d4552f',rarity:'epic',hp:3600,spd:145,
   atk:{type:'pool',dmg:300,dps:380,range:300,reload:1.05,ammo:3,poolR:70,poolDur:3},
   sup:{type:'bigboom',dmg:1500,radius:170,burnDps:400,burnDur:3,charge:3600},
-  star:'Горючая смесь: +8% здоровья и урона',
+  stars:[{name:'Горючая смесь',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Пламенная вена',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
   desc:'Склянки оставляют горящие лужи. Супер — гигантский взрыв.'},
  {id:'bard',name:'Музыкант-Бард',icon:'🎸',color:'#d84f9e',rarity:'mythic',hp:3900,spd:150,
   atk:{type:'wave',dmg:460,range:340,reload:0.85,ammo:3,pspd:500},
   sup:{type:'rally',shield:1500,spdMul:1.35,dur:4,radius:9999,charge:3200},
-  star:'Мощный рифф: +8% здоровья и урона',
+  stars:[{name:'Мощный рифф',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Ритм боя',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
   desc:'Звуковая волна проходит сквозь врагов. Супер ускоряет союзников и даёт щит.'},
  {id:'ranger',name:'Космический Рейнджер',icon:'🔫',color:'#4d7fe0',rarity:'common',hp:3600,spd:155,
   atk:{type:'burst',dmg:260,range:360,reload:0.85,ammo:3,pspd:720,count:3},
   sup:{type:'orbital',dmg:2000,radius:130,delay:1.1,range:420,charge:3800},
-  star:'Наведение: +8% здоровья и урона',
+  stars:[{name:'Наведение',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Лазерная батарея',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'}],
   desc:'Лазерные очереди. Супер — орбитальный удар с неба.'},
  {id:'vampire',name:'Вампир-Мистик',icon:'🦇',color:'#8c2f5e',rarity:'mythic',hp:4400,spd:150,
   atk:{type:'lifesteal',dmg:520,steal:0.6,range:280,reload:0.9,ammo:3,pspd:520},
   sup:{type:'batform',dur:2.6,spdMul:1.7,healPct:0.35,charge:3600},
-  star:'Жажда крови: +8% здоровья и урона',
+  stars:[{name:'Жажда крови',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Ночной хищник',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'}],
   desc:'Высасывает здоровье. Супер — стая летучих мышей: неуязвим и быстр.'},
  {id:'robot',name:'Робот-Трансформер',icon:'🤖',color:'#5aa9a2',rarity:'legend',hp:5400,spd:140,
   atk:{type:'proj',dmg:420,range:360,reload:0.8,ammo:3,pspd:600,
        meleeDmg:900,meleeRange:90},
   sup:{type:'stance',charge:2400},
-  star:'Оверклок: +8% здоровья и урона',
+  stars:[{name:'Оверклок',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Усиленная броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
   desc:'Супер переключает стойку: пушки на дистанции или мощные кулаки вблизи.'},
  {id:'beastlord',name:'Повелитель Зверей',icon:'🐺',color:'#7a6a4f',rarity:'mythic',hp:4200,spd:150,
   atk:{type:'proj',dmg:440,range:320,reload:0.85,ammo:3,pspd:540},
   sup:{type:'petbuff',petHp:2600,petDmg:420,buffMul:1.5,charge:3400},
-  star:'Вожак стаи: +8% здоровья и урона',
+  stars:[{name:'Вожак стаи',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Звериный инстинкт',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
   desc:'Сражается вместе с волком. Супер призывает/усиливает и лечит питомца.'},
  {id:'monk',name:'Вихревой Монах',icon:'🌀',color:'#57c4b8',rarity:'legend',hp:4600,spd:160,
   atk:{type:'wave',dmg:420,range:300,reload:0.8,ammo:3,pspd:520,kb:140},
   sup:{type:'tornado',dmg:250,radius:120,dur:3.2,pull:220,charge:3600},
-  star:'Дыхание бури: +8% здоровья и урона',
+  stars:[{name:'Дыхание бури',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
+         {name:'Внутренняя гармония',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
   desc:'Порывы ветра отбрасывают. Супер — торнадо, затягивающее врагов.'},
+ {id:'elf',name:'Эльфийская Лучница',icon:'🏹',color:'#6fbf4c',rarity:'common',hp:3500,spd:160,
+  atk:{type:'proj',dmg:440,range:400,reload:0.8,ammo:3,pspd:700,pierce:true},
+  sup:{type:'triboom',dmg:320,range:380,charge:3400},
+  stars:[{name:'Точный выстрел',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Быстрые руки',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+  desc:'Стреляет пронзающими стрелами с дальней дистанции. Супер – ливень стрел.'},
+ {id:'berserk',name:'Берсерк',icon:'🪓',color:'#c94040',rarity:'rare',hp:4800,spd:155,
+  atk:{type:'melee',dmg:720,range:80,reload:0.75,ammo:3,arc:2.2,enrage:true},
+  sup:{type:'nova',dmg:900,radius:140,kb:200,charge:3200},
+  stars:[{name:'Кровожадность',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Боевая ярость',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+  desc:'Чем меньше здоровья, тем сильнее бьёт топором. Супер – яростный круговой удар.'},
+ {id:'sapper',name:'Сапёр',icon:'💣',color:'#b38b40',rarity:'rare',hp:3700,spd:145,
+  atk:{type:'pool',dmg:380,dps:220,range:280,reload:0.9,ammo:3,poolR:60,poolDur:0.6},
+  sup:{type:'bigboom',dmg:1300,radius:160,burnDps:300,burnDur:3,charge:3600},
+  stars:[{name:'Замедленная детонация',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Крепкая броня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+  desc:'Метает мины-ловушки. Супер – мощная взрывчатка, оставляющая горящую воронку.'},
+ {id:'timemage',name:'Маг Времени',icon:'⏳',color:'#8e7cc3',rarity:'mythic',hp:3800,spd:150,
+  atk:{type:'proj',dmg:460,range:320,reload:0.85,ammo:3,pspd:500,slow:1.3},
+  sup:{type:'emp',dmg:400,radius:160,stun:1.5,charge:3500},
+  stars:[{name:'Парадокс',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
+         {name:'Хроноброня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+  desc:'Атаки замедляют врагов. Супер – хроносдвиг, оглушающий врагов.'},
+ {id:'ghostknight',name:'Призрачный Рыцарь',icon:'👻',color:'#6fa8dc',rarity:'mythic',hp:4000,spd:155,
+  atk:{type:'melee',dmg:580,range:85,reload:0.7,ammo:3,arc:2.0},
+  sup:{type:'stealth',dur:4.0,spdMul:1.3,charge:3300},
+  stars:[{name:'Бесплотный клинок',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Эфирная поступь',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'}],
+  desc:'Может ненадолго становиться призрачным. Супер – уход в эфир с ускорением.'},
+ {id:'bloodmage',name:'Маг Крови',icon:'🩸',color:'#b03060',rarity:'epic',hp:4200,spd:145,
+  atk:{type:'lifesteal',dmg:500,steal:0.5,range:270,reload:0.95,ammo:3,pspd:480},
+  sup:{type:'nova',dmg:900,radius:150,kb:100,charge:2800},
+  stars:[{name:'Гематома',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Вампиризм',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+  desc:'Атакует кровавыми снарядами, восстанавливая здоровье. Супер – ритуал крови.'},
+ {id:'rockelem',name:'Каменный Элементаль',icon:'🪨',color:'#8b7355',rarity:'epic',hp:5800,spd:130,
+  atk:{type:'pool',dmg:350,dps:150,range:300,reload:1.0,ammo:3,poolR:65,poolDur:4},
+  sup:{type:'orbital',dmg:1400,radius:140,delay:1.0,range:400,charge:3700},
+  stars:[{name:'Осколки',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Гранитная стойкость',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+  desc:'Создаёт каменные завалы, замедляющие врагов. Супер призывает метеоритный дождь.'},
+ {id:'guardian',name:'Страж',icon:'🛡️',color:'#6a8caf',rarity:'common',hp:6000,spd:125,
+  atk:{type:'shock',dmg:550,range:100,reload:1.05,ammo:3},
+  sup:{type:'rally',shield:2500,spdMul:1.1,dur:3.5,radius:9999,charge:3400},
+  stars:[{name:'Непробиваемость',kind:'shield',val:0.25,desc:'В начале боя получает щит на 25% от макс. здоровья.'},
+         {name:'Несокрушимость',kind:'hp',val:0.12,desc:'+12% к максимальному здоровью.'}],
+  desc:'Медлительный, но очень прочный танк. Супер даёт щит себе и союзникам.'},
+ {id:'cybninja',name:'Кибер-ниндзя',icon:'🥷',color:'#6b4c8a',rarity:'rare',hp:3200,spd:175,
+  atk:{type:'spread',dmg:300,range:280,reload:0.6,ammo:3,pspd:650,count:3,spread:0.25},
+  sup:{type:'nova',dmg:600,radius:130,kb:60,charge:3200},
+  stars:[{name:'Теневой шаг',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
+         {name:'Быстрый клинок',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'}],
+  desc:'Быстрый ниндзя, мечущий сюрикены веером. Супер – взрывной рывок сквозь врагов.'},
+ {id:'transmute',name:'Алхимик-Трансмутатор',icon:'⚗️',color:'#e6b800',rarity:'legend',hp:3700,spd:145,
+  atk:{type:'proj',dmg:400,range:310,reload:0.9,ammo:3,pspd:460,slow:1.3},
+  sup:{type:'freeze',dmg:0,radius:150,dur:3.5,charge:3800},
+  stars:[{name:'Философский камень',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Алхимический катализатор',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Превращает врагов в овечек своими колбами. Супер создаёт зону трансмутации.'},
 ];
 const BRAWLER_BY_ID={};BRAWLERS.forEach(b=>BRAWLER_BY_ID[b.id]=b);
 
@@ -586,6 +689,39 @@ function currentBotDiff(){
   return 1;
 }
 
+/* ---------------- ЗВЁЗДНЫЕ СИЛЫ ----------------
+   У каждого бойца по 2 звёздные силы. Их нужно выбить из ящиков (как и
+   самих бойцов) - обладание ими не гарантировано уровнем. Экипировать
+   добытую звёздную силу можно только на бойце 10 уровня (совпадает со
+   старым порогом раскрытия). */
+function ownedStars(id){return P.starPowers[id]||[];}
+function ownedBrawlersMissingStar(){
+  const out=[];
+  BRAWLERS.forEach(b=>{
+    if(!P.unlocked[b.id])return;
+    const owned=ownedStars(b.id);
+    (b.stars||[]).forEach((s,i)=>{if(!owned.includes(i))out.push({brawler:b,idx:i});});
+  });
+  return out;
+}
+function applyEquippedStar(u){
+  const id=u.def.id,lvl=P.levels[id]||1;
+  if(lvl<10)return;
+  const owned=ownedStars(id),eqIdx=P.equippedStar[id];
+  if(eqIdx===undefined||!owned.includes(eqIdx))return;
+  const s=(u.def.stars||[])[eqIdx];
+  if(!s)return;
+  switch(s.kind){
+    case 'hp': u.maxhp=Math.round(u.maxhp*(1+s.val));u.hp=u.maxhp;break;
+    case 'dmg': u.dmgMul*=(1+s.val);break;
+    case 'spd': u.starSpdMul=1+s.val;break;
+    case 'reload': u.starReloadMul=1-s.val;break;
+    case 'regen': u.starRegenBonus=s.val;break;
+    case 'shield': u.shield=Math.round(u.maxhp*s.val);u.shieldT=999999;break;
+    case 'lifesteal': u.starLifestealPct=s.val;break;
+  }
+}
+
 /* ---------------- ИМЕНА БОТОВ ---------------- */
 const BOT_NAMES=['Ash','Nova','Rex','Vika','Grom','Luna','Zorro','Kira','Max','Dash',
   'Bruno','Milo','Sky','Ray','Fox','Nix','Tigr','Roni','Vex','Zara',
@@ -614,9 +750,13 @@ const DEFAULT_PROFILE=()=>({
   dailySeed:0,dailyBought:[],
   selBrawler:'knight',selMode:'gemgrab',
   mmr:0, // скрытый рейтинг для подбора сложности ботов
+  starPowers:{}, // {brawlerId:[индексы добытых звёздных сил]}
+  equippedStar:{}, // {brawlerId: индекс экипированной звёздной силы}
 });
 let P;
 function loadP(){ try{ P=Object.assign(DEFAULT_PROFILE(),JSON.parse(localStorage.getItem('bl_save')||'{}')); }catch(e){ P=DEFAULT_PROFILE(); } if(!P.unlocked.knight){P.unlocked.knight=1;P.levels.knight=1;} if(!P.brawlerTrophies)P.brawlerTrophies={};
+  if(!P.starPowers)P.starPowers={};
+  if(!P.equippedStar)P.equippedStar={};
   // защита от старых сохранений: если P.boxes сохранён без новых ключей (например omega),
   // Object.assign выше подменяет весь объект целиком и недостающие ключи становятся undefined -
   // из-за этого "+=" превращался в NaN, и купленный/выданный ящик реально не начислялся.
@@ -725,6 +865,11 @@ function adminUnlockAll(){
   saveP();toast('Все бойцы открыты на максимальном уровне!');
   UI.renderAdmin();
 }
+function adminGiveAllStars(){
+  BRAWLERS.forEach(b=>{P.starPowers[b.id]=(b.stars||[]).map((s,i)=>i);});
+  saveP();toast('Все звёздные силы выбиты!');
+  UI.renderAdmin();
+}
 
 /* ---------------- TOAST ---------------- */
 let toastTimer=null;
@@ -795,11 +940,12 @@ const UI={
     g.innerHTML=BRAWLERS.map(b=>{
       const un=P.unlocked[b.id];
       const rk=rankFor(brawlerTrophies(b.id));
+      const starCount=ownedStars(b.id).length;
       return `<div class="card ${un?'':'locked'} ${P.selBrawler===b.id?'sel-brawler':''}" onclick="UI.brawlerDetail('${b.id}')">
         <div class="portrait" style="background:${b.color}">${un?b.icon:'🔒'}</div>
         <div class="nm">${b.name}</div>
         <div class="lvl" style="color:${un?rk.color:RARITY[b.rarity].color}">${un?('Ур. '+(P.levels[b.id]||1)+' · '+rk.name):RARITY[b.rarity].name}</div>
-        ${un?`<div class="lvl" style="color:#ffd24e">🏆 ${brawlerTrophies(b.id)}</div>`:''}
+        ${un?`<div class="lvl" style="color:#ffd24e">🏆 ${brawlerTrophies(b.id)} · ⭐ ${starCount}/2</div>`:''}
         ${P.selBrawler===b.id?`<div class="lvl" style="color:var(--accent2);font-weight:900">В БОЮ</div>`:''}</div>`;
     }).join('');
   },
@@ -807,6 +953,17 @@ const UI={
     const b=BRAWLER_BY_ID[id],un=P.unlocked[id],lvl=P.levels[id]||1,m=statMul(lvl);
     const canUp=un&&lvl<10, ppC=UP_PP[lvl-1],coinC=UP_COIN[lvl-1];
     const rk=rankFor(brawlerTrophies(id));
+    const owned=ownedStars(id);
+    const starsHtml=(b.stars||[]).map((s,i)=>{
+      const has=owned.includes(i);
+      const eq=P.equippedStar[id]===i;
+      const canEquip=has&&lvl>=10;
+      return `<div class="star-row ${has?'':'locked'}">
+        <div class="star-ic">${has?'⭐':'🔒'}</div>
+        <div class="star-info"><div class="star-t">${s.name}</div><div class="star-d">${has?s.desc:'Нужно выбить из ящика'}</div></div>
+        ${canEquip?`<button class="star-eq-btn ${eq?'on':''}" onclick="UI.equipStar('${id}',${i})">${eq?'Экипирована':'Надеть'}</button>`:''}
+      </div>`;
+    }).join('');
     const el=document.getElementById('modal-brawler-content');
     el.innerHTML=`
       <div class="detail-portrait" style="background:${b.color}">${un?b.icon:'🔒'}</div>
@@ -819,12 +976,19 @@ const UI={
       <div class="statrow"><span>❤️ Здоровье</span><b>${Math.round(b.hp*m)}</b></div>
       <div class="statrow"><span>⚔️ Урон атаки</span><b>${Math.round(b.atk.dmg*m)}</b></div>
       <div class="statrow"><span>👟 Скорость</span><b>${b.spd}</b></div>
-      ${lvl>=10?`<div class="statrow" style="background:#443a10"><span>⭐ Звёздная сила</span></div><p class="note">${b.star}</p>`:''}
-      ${canUp?`<button class="big-btn" style="font-size:15px;padding:12px" onclick="UI.upgrade('${id}')">Улучшить — ⚡${ppC} + 🪙${coinC}</button>`:''}
+      <p class="note" style="margin-top:10px;text-align:left">⭐ Звёздные силы ${lvl<10?'(откроются на 10 уровне, выбиваются из ящиков уже сейчас)':''}</p>
+      ${starsHtml}
+      ${canUp?`<button class="big-btn" style="font-size:15px;padding:12px;margin-top:8px" onclick="UI.upgrade('${id}')">Улучшить — ⚡${ppC} + 🪙${coinC}</button>`:''}
       <button class="big-btn" style="font-size:15px;padding:12px;background:linear-gradient(180deg,#5adb7c,#2c8a4b);${P.selBrawler===id?'opacity:.55;pointer-events:none':''}" onclick="UI.selectBrawler('${id}')">${P.selBrawler===id?'✓ Выбран для боя':'Выбрать для боя'}</button>
       `:`<p class="note">Выпадает из ящиков или открывается на трофейном пути.</p>`}
       <button class="menu-btn" style="justify-content:center" onclick="document.getElementById('modal-brawler').classList.remove('active')">Закрыть</button>`;
     document.getElementById('modal-brawler').classList.add('active');
+  },
+  equipStar(id,idx){
+    if(!ownedStars(id).includes(idx))return;
+    P.equippedStar[id]=idx;saveP();
+    toast('Экипирована: '+BRAWLER_BY_ID[id].stars[idx].name);
+    this.brawlerDetail(id);
   },
   selectBrawler(id){
     if(!P.unlocked[id])return;
@@ -926,12 +1090,13 @@ function pickWeightedBrawler(list){
 }
 function rollFillerReward(){
   const roll=Math.random();
-  if(roll<0.55){const c=rndi(20,90);P.coins+=c;return{icon:'🪙',txt:'+'+c+' монет'};}
-  if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:'⚡',txt:'+'+p+' очков силы'};}
-  const g=rndi(2,6);P.gems+=g;return{icon:'💠',txt:'+'+g+' кристаллов'};
+  if(roll<0.55){const c=rndi(20,90);P.coins+=c;return{icon:'🪙',name:'Монеты',txt:'+'+c,kind:'coins'};}
+  if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:'⚡',name:'Очки силы',txt:'+'+p,kind:'pp'};}
+  const g=rndi(2,6);P.gems+=g;return{icon:'💠',name:'Кристаллы',txt:'+'+g,kind:'gems'};
 }
 function currentBrawlerChance(){
-  return clamp(0.04+(P.pityBoxes||0)*0.015+(P.totalBoxesOpened||0)*0.0006,0.04,0.65);
+  // Шансы урезаны вдвое от изначальных
+  return clamp(0.02+(P.pityBoxes||0)*0.0075+(P.totalBoxesOpened||0)*0.0003,0.02,0.325);
 }
 function rollBoxItem(guaranteed){
   const locked=BRAWLERS.filter(b=>!P.unlocked[b.id]);
@@ -939,10 +1104,18 @@ function rollBoxItem(guaranteed){
   if(locked.length&&Math.random()<chance){
     const b=pickWeightedBrawler(locked);
     P.unlocked[b.id]=1;P.levels[b.id]=1;P.pityBoxes=0;
-    return {icon:b.icon,txt:b.name+'!',rar:b.rarity};
+    return {icon:b.icon,name:b.name,txt:'Новый боец!',rar:b.rarity,kind:'brawler'};
   }
-  if(guaranteed){ // все бойцы уже открыты - выдаём крупный бонус вместо гарантии
-    const g=rndi(30,60);P.gems+=g;return{icon:'💠',txt:'+'+g+' кристаллов (все бойцы открыты)'};
+  // звёздные силы выбиваются отдельно (в гарантированном слоте омега-ящика - в приоритете)
+  const starCandidates=ownedBrawlersMissingStar();
+  if(starCandidates.length&&(guaranteed||Math.random()<0.06)){
+    const pickC=pick(starCandidates);
+    P.starPowers[pickC.brawler.id]=P.starPowers[pickC.brawler.id]||[];
+    P.starPowers[pickC.brawler.id].push(pickC.idx);
+    return {icon:'⭐',name:pickC.brawler.stars[pickC.idx].name,txt:pickC.brawler.name,rar:pickC.brawler.rarity,kind:'star'};
+  }
+  if(guaranteed){ // всё уже собрано - выдаём крупный бонус вместо гарантии
+    const g=rndi(30,60);P.gems+=g;return{icon:'💠',name:'Кристаллы',txt:'+'+g+' (всё уже собрано)',kind:'gems'};
   }
   return rollFillerReward();
 }
@@ -968,24 +1141,49 @@ function openOddsModal(){
       <div class="road-info"><div class="road-t">${RARITY[r].name}</div>
       <div class="road-l">${cnt} бойцов доступно · ~${pctOverall.toFixed(1)}% за предмет</div></div></div>`;
   }).join('');
+  const starMissing=ownedBrawlersMissingStar().length;
   document.getElementById('odds-content').innerHTML=`
     <div class="road-item ready"><div class="road-ic">🥊</div>
       <div class="road-info"><div class="road-t">Шанс бойца за 1 предмет сейчас</div>
       <div class="road-l">${(chance*100).toFixed(1)}% — растёт с каждым ящиком без бойца, сбрасывается при получении бойца</div></div></div>
+    <div class="road-item"><div class="road-ic">⭐</div>
+      <div class="road-info"><div class="road-t">Шанс звёздной силы за предмет</div>
+      <div class="road-l">${starMissing?'~6% (не добыто ещё: '+starMissing+') · в омега-ящике гарантирована, если нет бойцов на выдачу':'Все открытые бойцы уже имеют обе звёздные силы'}</div></div></div>
     ${locked.length?rarRows:'<p class="note">Все бойцы уже открыты — вместо бойца будут бонусные кристаллы.</p>'}
     <p class="note" style="margin-top:8px">📦 Ящик: 1-3 предмета · 🎁 Большой: 3-5 · 💎 Мега: 5-7 · 🌟 Омега: 10-15 (гарантирован боец)</p>
     <p class="note">Ящиков без бойца подряд: ${P.pityBoxes||0} · Всего открыто за всё время: ${P.totalBoxesOpened||0}</p>`;
   document.getElementById('modal-odds').classList.add('show');
 }
 function closeOddsModal(){document.getElementById('modal-odds').classList.remove('show');}
+
+/* ---------------- ОТКРЫТИЕ ЯЩИКА: ПО ОДНОМУ ПРЕДМЕТУ ЗА ТАП ----------------
+   Все предметы прокручиваются заранее (чтобы знать, что идёт следующим,
+   и мигать счётчиком перед особым предметом), но показываются игроку
+   по одному - каждый тап по экрану открывает следующий. */
 let boxOpening=false;
+let boxQueue=[],boxIdx=-1,boxFinished=false;
+function itemBg(res){
+  if(res.kind==='brawler')return `radial-gradient(120% 90% at 50% 32%,${RARITY[res.rar].color} 0%,#14101f 72%)`;
+  if(res.kind==='star')return 'radial-gradient(120% 90% at 50% 32%,#ffd24e 0%,#3a2f10 72%)';
+  if(res.kind==='coins')return 'radial-gradient(120% 90% at 50% 32%,#f5c542 0%,#2c2410 72%)';
+  if(res.kind==='pp')return 'radial-gradient(120% 90% at 50% 32%,#8e7cc3 0%,#241a3a 72%)';
+  return 'radial-gradient(120% 90% at 50% 32%,#5db7e8 0%,#102436 72%)'; // gems
+}
+function isSpecialItem(res){return !!res&&(res.kind==='brawler'||res.kind==='star');}
 function openBox(kind){
   if((P.boxes[kind]||0)<1){toast('Нет таких ящиков!');return;}
   P.boxes[kind]--;
   P.pityBoxes=(P.pityBoxes||0)+1;
   P.totalBoxesOpened=(P.totalBoxesOpened||0)+1;
-  saveP();
   const count=boxItemCount(kind);
+  // прокручиваем все предметы заранее
+  boxQueue=[];
+  for(let i=0;i<count;i++){
+    const guaranteed=(kind==='omega'&&i===0);
+    boxQueue.push(rollBoxItem(guaranteed));
+  }
+  saveP();
+  boxIdx=-1;boxFinished=false;boxOpening=false;
   const titleMap={box:'Ящик',big:'Большой ящик',mega:'Мега-ящик',omega:'Омега-ящик'};
   const iconMap={box:'📦',big:'🎁',mega:'💎',omega:'🌟'};
   UI.show('scr-box-open');
@@ -994,29 +1192,42 @@ function openBox(kind){
   anim.textContent=iconMap[kind];
   anim.style.display='block';anim.classList.add('shake');
   document.getElementById('box-hint').style.display='block';
-  document.getElementById('box-rewards').innerHTML='';
+  document.getElementById('reveal-wrap').style.display='none';
   document.getElementById('box-done-btn').style.display='none';
-  boxOpening=false;
-  anim.onclick=()=>{
-    if(boxOpening)return;boxOpening=true;
-    AUDIO.box();anim.classList.remove('shake');
+  const remainEl=document.getElementById('box-remaining');
+  remainEl.textContent='';remainEl.classList.remove('blink');
+  document.getElementById('scr-box-open').style.background='';
+}
+function boxAdvance(){
+  if(boxFinished||boxIdx>=boxQueue.length)return;
+  if(boxIdx===-1){
+    if(boxOpening)return;
+    boxOpening=true;
+    AUDIO.box();
+    document.getElementById('box-anim').classList.remove('shake');
     document.getElementById('box-hint').style.display='none';
     spawnConfetti();
-    anim.style.display='none';
-    const rw=document.getElementById('box-rewards');
-    for(let i=0;i<count;i++){
-      const guaranteed=(kind==='omega'&&i===0);
-      setTimeout(()=>{
-        const res=rollBoxItem(guaranteed);
-        saveP();
-        const div=document.createElement('div');div.className='reward-item';
-        if(res.rar)div.style.outline='3px solid '+RARITY[res.rar].color;
-        div.innerHTML=`<div class="ri">${res.icon}</div><div class="rt">${res.txt}</div>`;
-        rw.appendChild(div);AUDIO.coin();
-        if(i===count-1)document.getElementById('box-done-btn').style.display='block';
-      },250+i*(count>8?150:300));
-    }
-  };
+  }
+  boxIdx++;
+  const anim=document.getElementById('box-anim');
+  const wrap=document.getElementById('reveal-wrap');
+  const remainEl=document.getElementById('box-remaining');
+  anim.style.display='none';
+  const res=boxQueue[boxIdx];
+  document.getElementById('scr-box-open').style.background=itemBg(res);
+  document.getElementById('reveal-icon').textContent=res.icon;
+  document.getElementById('reveal-name').textContent=res.name;
+  document.getElementById('reveal-count').textContent=res.txt;
+  wrap.style.display='flex';wrap.classList.remove('pop');void wrap.offsetWidth;wrap.classList.add('pop');
+  AUDIO.coin();
+  const isLast=boxIdx>=boxQueue.length-1;
+  remainEl.textContent=isLast?'Последний предмет':('Осталось: '+(boxQueue.length-boxIdx-1));
+  const next=boxQueue[boxIdx+1];
+  remainEl.classList.toggle('blink',!isLast&&isSpecialItem(next));
+  if(isLast){
+    boxFinished=true;
+    document.getElementById('box-done-btn').style.display='block';
+  }
 }
 function spawnConfetti(){
   const scr=document.getElementById('scr-box-open');
@@ -1256,9 +1467,12 @@ class Unit{
     this.hitFlash=0;this.lastShotT=0;this.moveAng=0;this.moving=false;
     this.hue=def.color;
     this.nick=isPlayer?(P.nick||'Игрок'):pick(BOT_NAMES);
+    // звёздная сила (только у игрока; открыта с 10 уровня и должна быть добыта из ящиков)
+    this.starReloadMul=1;this.starSpdMul=1;this.starRegenBonus=0;this.starLifestealPct=0;
+    if(isPlayer)applyEquippedStar(this);
   }
   effSpd(){
-    let s=this.spd*this.speedMul;
+    let s=this.spd*this.speedMul*this.starSpdMul;
     if(this.slowT>0)s*=0.55;
     if(this.def.sup.type==='stance'&&this.stance===1)s*=1.12;
     return s;
@@ -1280,6 +1494,7 @@ class Unit{
     if(src&&src.team!==undefined&&src!==this){
       const owner=src.ownerUnit||src;
       if(owner&&owner.chargeSuper)owner.chargeSuper(dmg);
+      if(owner&&owner.starLifestealPct)owner.heal(dmg*owner.starLifestealPct);
     }
     AUDIO.hit();
     if(this.hp<=0)this.die(src);
@@ -1306,16 +1521,17 @@ class Unit{
     if(this.ammo<this.ammoMax){this.reloadT+=dt;const need=this.def.atk.reload*1.6;
       if(this.reloadT>=need){this.reloadT=0;this.ammo++;}}
     // пассивная регенерация вне боя (как в оригинале)
-    if(G.time-(this.lastCombatT||0)>4&&this.hp<this.maxhp)this.heal(this.maxhp*0.12*dt);
+    if(G.time-(this.lastCombatT||0)>4&&this.hp<this.maxhp)this.heal(this.maxhp*(0.12+this.starRegenBonus)*dt);
   }
   tryAttack(ax,ay){ // направление
     if(this.dead||this.stunT>0||this.ammo<1||this.atkCd>0)return false;
     const a=this.def.atk,len=Math.hypot(ax,ay)||1;ax/=len;ay/=len;
-    this.ammo--;this.atkCd=a.reload;this.facing=Math.atan2(ay,ax);
+    this.ammo--;this.atkCd=a.reload*this.starReloadMul;this.facing=Math.atan2(ay,ax);
     this.lastShotT=G.time;this.lastCombatT=G.time;
     if(this.invisT>0)this.invisT=0;
     AUDIO.shoot();
-    const dmg=Math.round(a.dmg*this.dmgMul);
+    const dmg0=Math.round(a.dmg*this.dmgMul);
+    const dmg=a.enrage?Math.round(dmg0*(1+Math.min(0.5,(1-this.hp/this.maxhp)*0.5))):dmg0;
     const robotMelee=this.def.sup.type==='stance'&&this.stance===1;
     switch(robotMelee?'melee':a.type){
       case 'melee':{
@@ -1326,7 +1542,7 @@ class Unit{
         ring(this.x,this.y,a.range,'#c9b8a0');
         G.units.forEach(u=>{if(u.team!==this.team&&!u.dead&&dist(u.x,u.y,this.x,this.y)<a.range+u.r){u.takeDamage(dmg,this);knock(u,this.x,this.y,90);}});
         break;}
-      case 'proj':spawnProj(this,ax,ay,{dmg,spd:a.pspd,range:a.range,slow:a.slow});break;
+      case 'proj':spawnProj(this,ax,ay,{dmg,spd:a.pspd,range:a.range,slow:a.slow,pierce:a.pierce});break;
       case 'spread':for(let i=0;i<a.count;i++){const o=(i-(a.count-1)/2)*a.spread,c=Math.cos(o),s=Math.sin(o);
           spawnProj(this,ax*c-ay*s,ax*s+ay*c,{dmg,spd:a.pspd,range:a.range});}break;
       case 'burst':for(let i=0;i<a.count;i++)setTimeout(()=>{if(!this.dead&&G)spawnProj(this,ax,ay,{dmg,spd:a.pspd,range:a.range});},i*90);break;
