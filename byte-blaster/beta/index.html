@@ -23,6 +23,56 @@
 <link rel="stylesheet" href="assets/ui-fix.css">
 <link rel="stylesheet" href="assets/touch.css">
 <script src="assets/version.js"></script>
+<script>
+  // ── Global error catcher ────────────────────────────────────────────────
+  // Without this, ANY uncaught error while the game's scripts load or run
+  // (a typo, a missing function, anything) fails completely silently — the
+  // player just sees a black screen with zero indication of what broke, and
+  // there's no way to know without manually opening DevTools. This shows a
+  // readable on-screen panel with the actual error instead, and always logs
+  // to console so it also shows up in a packaged .exe's log output.
+  (function () {
+    var shown = false;
+    function showFatalError(title, detail) {
+      if (shown) return; // only show the FIRST error — later ones are usually just fallout from the first
+      shown = true;
+      try {
+        var el = document.createElement('div');
+        el.id = 'fatalErrorOverlay';
+        el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0a0208;color:#fff;'
+          + 'font-family:monospace;display:flex;flex-direction:column;align-items:center;'
+          + 'justify-content:center;padding:24px;text-align:center;gap:14px;';
+        el.innerHTML =
+          '<div style="font-size:20px;color:#f55;letter-spacing:2px;">⚠ BYTE BLASTER FAILED TO START</div>' +
+          '<div style="font-size:13px;color:#faa;max-width:640px;">' + title + '</div>' +
+          '<pre style="font-size:11px;color:#999;max-width:800px;max-height:240px;overflow:auto;' +
+            'background:#000;border:1px solid #500;padding:10px;text-align:left;white-space:pre-wrap;">' +
+            detail + '</pre>' +
+          '<div style="font-size:11px;color:#8cf;max-width:640px;">' +
+            'Please screenshot this and send it — it tells us exactly what broke.' +
+          '</div>' +
+          '<button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#204;' +
+            'color:#fff;border:2px solid #f4a;cursor:pointer;font-family:monospace;font-size:12px;">RELOAD</button>';
+        document.body.appendChild(el);
+      } catch (e2) { /* even the fallback failed — nothing more we can do client-side */ }
+    }
+    window.addEventListener('error', function (e) {
+      console.error('[fatal]', e.message, e.filename, e.lineno + ':' + e.colno, e.error && e.error.stack);
+      showFatalError(
+        'A script error occurred while the game was loading or running.',
+        (e.message || 'Unknown error') + '\n' + (e.filename || '') + ':' + e.lineno + ':' + e.colno +
+        (e.error && e.error.stack ? '\n\n' + e.error.stack : '')
+      );
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      console.error('[fatal] unhandled promise rejection:', e.reason);
+      showFatalError(
+        'An async operation failed while the game was loading or running.',
+        String(e.reason && e.reason.stack ? e.reason.stack : e.reason)
+      );
+    });
+  })();
+</script>
 </head>
 <body>
 <!-- Boot/loading screen: covers everything until scripts, fonts and locales are
