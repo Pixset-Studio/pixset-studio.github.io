@@ -494,7 +494,243 @@
   //  DRAWING FUNCTIONS
   // ═══════════════════════════════════════════════
 
+  // Per-world map backdrop. "Space" (the original look — orbit motes, starfield,
+  // nebula) is kept as an alternate style via Settings → World Map Environment;
+  // by default each world now gets its own themed sky + ground silhouette +
+  // weather particles so Neon Jungle doesn't look like a space station.
+  const WORLD_ENV = [
+    { sky:['#001a2a','#04304a','#0a4a5a'], ground:'skyline', weather:'spark',  weatherCol:'#0ff' }, // Cyber City
+    { sky:['#001a0a','#0a3315','#145522'], ground:'vines',   weather:'leaf',   weatherCol:'#7f8' }, // Neon Jungle
+    { sky:['#1a0400','#441100','#7a2200'], ground:'rocks',   weather:'ember',  weatherCol:'#f80' }, // Lava World
+    { sky:['#001028','#002a55','#0a4a7a'], ground:'icicles', weather:'snow',   weatherCol:'#cff' }, // Ice Caves
+    { sky:['#1a1000','#442800','#6a3f0a'], ground:'dunes',   weather:'sand',   weatherCol:'#eb8' }, // Desert Ruins
+    { sky:['#050014','#1a0033','#2a0055'], ground:'none',    weather:'star',   weatherCol:'#fff' }, // Space Station
+    { sky:['#000c04','#001a0a','#0a2a12'], ground:'trees',   weather:'spore',  weatherCol:'#4f8' }, // Dark Forest
+    { sky:['#0a1200','#1a2200','#2a3300'], ground:'pipes',   weather:'bubble', weatherCol:'#cf0' }, // Toxic Zone
+    { sky:['#050510','#0a0a1a','#15152a'], ground:'clouds',  weather:'bolt',   weatherCol:'#88f' }, // Storm Peaks
+    { sky:['#140000','#2a0000','#440000'], ground:'walls',   weather:'rune',   weatherCol:'#f44' }, // Final Fortress
+  ];
+
+  function _mapEnvMode(){
+    return (window.gameSettings && window.gameSettings.mapEnvironment === 'space') ? 'space' : 'themed';
+  }
+
   function drawBackground() {
+    if (_mapEnvMode() === 'space') _drawSpaceBackground();
+    else _drawThemedBackground();
+  }
+
+  // ── Themed mode: unique sky + horizon silhouette + weather per world ───────
+  function _drawThemedBackground() {
+    const ctx = mapCtx;
+    const W = mapW, H = mapH, t = MAP_STATE.time;
+    const world = WORLDS[MAP_STATE.activeWorld];
+    const env = WORLD_ENV[MAP_STATE.activeWorld];
+
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, env.sky[0]);
+    sky.addColorStop(0.55, env.sky[1]);
+    sky.addColorStop(1, env.sky[2]);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    // Soft accent-tinted glow washes — keeps some atmospheric depth without
+    // committing to the "space nebula" look specifically.
+    const NEB = [{ x:0.2, y:0.25, r:0.28 }, { x:0.8, y:0.2, r:0.26 }, { x:0.5, y:0.9, r:0.36 }];
+    ctx.save();
+    for (let i = 0; i < NEB.length; i++) {
+      const n = NEB[i], cx = n.x*W, cy = n.y*H, rr = n.r*Math.min(W,H)*(1+Math.sin(t*0.2+i)*0.05);
+      const g = ctx.createRadialGradient(cx,cy,0,cx,cy,rr);
+      g.addColorStop(0, world.mid); g.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.18; ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    _drawEnvGround(ctx, env.ground, world, W, H, t);
+    _drawEnvWeather(ctx, env.weather, env.weatherCol, W, H, t);
+  }
+
+  // Horizon silhouette along the lower part of the screen — gives each world a
+  // distinct sense of place at a glance, drawn cheaply (a handful of shapes).
+  function _drawEnvGround(ctx, type, world, W, H, t) {
+    const GY = H * 0.86; // horizon line
+    ctx.save();
+    switch (type) {
+      case 'skyline': { // Cyber City — neon building silhouettes
+        for (let i = 0; i < 9; i++) {
+          const bw = 40 + (i*53)%50, bh = 60 + (i*97)%140;
+          const bx = (i * (W/9)) + (i*23)%20;
+          ctx.globalAlpha = 0.85; ctx.fillStyle = '#010a14';
+          ctx.fillRect(bx, GY-bh, bw, bh+H*0.14);
+          // lit windows
+          for (let wy = GY-bh+8; wy < GY-10; wy += 14) {
+            for (let wx = bx+6; wx < bx+bw-6; wx += 12) {
+              if ((Math.floor(wx+wy+i)) % 4 !== 0) continue;
+              ctx.globalAlpha = 0.5 + Math.sin(t*0.8+wx*0.1)*0.2;
+              ctx.fillStyle = world.accent;
+              ctx.fillRect(wx, wy, 4, 5);
+            }
+          }
+        }
+        break;
+      }
+      case 'vines': { // Neon Jungle — hanging canopy + undergrowth
+        ctx.globalAlpha = 0.8; ctx.fillStyle = '#03170a';
+        ctx.fillRect(0, GY, W, H-GY);
+        for (let i = 0; i < 14; i++) {
+          const x = (i*97)%W, len = 30+(i*53)%70;
+          ctx.strokeStyle = '#0a4a1a'; ctx.lineWidth = 5; ctx.globalAlpha = 0.7;
+          ctx.beginPath(); ctx.moveTo(x,0); ctx.quadraticCurveTo(x+Math.sin(t*0.5+i)*10, len/2, x, len); ctx.stroke();
+          ctx.fillStyle = world.accent; ctx.globalAlpha = 0.35;
+          ctx.beginPath(); ctx.arc(x, len, 6, 0, Math.PI*2); ctx.fill();
+        }
+        break;
+      }
+      case 'rocks': { // Lava World — volcanic peaks with glowing cracks
+        ctx.beginPath(); ctx.moveTo(0,H);
+        for (let x = 0; x <= W; x += W/10) { ctx.lineTo(x, GY - (Math.sin(x*0.01+2)*40+40)); }
+        ctx.lineTo(W,H); ctx.closePath();
+        ctx.fillStyle = '#150400'; ctx.globalAlpha = 0.9; ctx.fill();
+        for (let i = 0; i < 6; i++) {
+          const x = (i*167)%W, glow = 0.5+Math.sin(t*1.2+i)*0.4;
+          ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 2; ctx.globalAlpha = Math.max(0.15,glow);
+          ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x+10, GY+10); ctx.lineTo(x-6, GY-6); ctx.stroke();
+        }
+        break;
+      }
+      case 'icicles': { // Ice Caves — stalactites/stalagmites frame
+        ctx.fillStyle = '#dff'; ctx.globalAlpha = 0.22;
+        for (let i = 0; i < 10; i++) {
+          const x = (i*(W/10)), w = 24+(i*17)%20, len = 20+(i*31)%50;
+          ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x+w,0); ctx.lineTo(x+w/2,len); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x,H); ctx.lineTo(x+w,H); ctx.lineTo(x+w/2,H-len*0.8); ctx.closePath(); ctx.fill();
+        }
+        break;
+      }
+      case 'dunes': { // Desert Ruins — layered sand dunes
+        const layers = [{c:'#3a2408', y:0.72},{c:'#2a1a04', y:0.82},{c:'#1a1002', y:0.94}];
+        for (const L of layers) {
+          ctx.beginPath(); ctx.moveTo(0,H);
+          for (let x = 0; x <= W; x += 8) ctx.lineTo(x, H*L.y + Math.sin(x*0.006+L.y*10)*18);
+          ctx.lineTo(W,H); ctx.closePath();
+          ctx.globalAlpha = 0.85; ctx.fillStyle = L.c; ctx.fill();
+        }
+        break;
+      }
+      case 'trees': { // Dark Forest — trunk silhouettes
+        ctx.globalAlpha = 0.85; ctx.fillStyle = '#010601';
+        for (let i = 0; i < 12; i++) {
+          const x = (i*83)%W, tw = 8+(i*13)%10, th = 90+(i*37)%110;
+          ctx.fillRect(x, GY-th, tw, th+H*0.14);
+          ctx.beginPath(); ctx.ellipse(x+tw/2, GY-th, tw*2.4, tw*3, 0, 0, Math.PI*2); ctx.fill();
+        }
+        break;
+      }
+      case 'pipes': { // Toxic Zone — industrial pipe/tank silhouettes
+        ctx.globalAlpha = 0.85; ctx.fillStyle = '#141a02';
+        for (let i = 0; i < 8; i++) {
+          const x = (i*(W/8))+10, w = 20+(i*11)%14, h = 70+(i*29)%90;
+          ctx.fillRect(x, GY-h, w, h+H*0.14);
+          ctx.fillStyle = world.accent; ctx.globalAlpha = 0.4+Math.sin(t+i)*0.2;
+          ctx.beginPath(); ctx.arc(x+w/2, GY-h+10, 4, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#141a02'; ctx.globalAlpha = 0.85;
+        }
+        break;
+      }
+      case 'clouds': { // Storm Peaks — puffy storm clouds
+        ctx.fillStyle = '#1a1a2a'; ctx.globalAlpha = 0.6;
+        for (let i = 0; i < 6; i++) {
+          const cx = (i*(W/6))+((t*6+i*40)%W*0)+30, cy = H*0.18+(i%2)*30;
+          for (let k = 0; k < 4; k++) ctx.beginPath(), ctx.arc(cx+k*22, cy+Math.sin(k)*8, 22, 0, Math.PI*2), ctx.fill();
+        }
+        break;
+      }
+      case 'walls': { // Final Fortress — dark blocky ramparts
+        ctx.globalAlpha = 0.9; ctx.fillStyle = '#0a0000';
+        ctx.fillRect(0, GY, W, H-GY);
+        for (let x = 0; x < W; x += 44) ctx.fillRect(x, GY-24, 26, 24);
+        ctx.strokeStyle = world.accent; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 44) ctx.strokeRect(x+2, GY+2, 40, H-GY-4);
+        break;
+      }
+      case 'none': default: break; // Space Station — clean starfield, no ground
+    }
+    ctx.restore();
+  }
+
+  // Ambient weather/atmosphere particles — the "living air" layer on top of the
+  // ground silhouette. Deterministic positions (index-based), animated by time.
+  function _drawEnvWeather(ctx, type, col, W, H, t) {
+    if (type === 'none') return;
+    const n = Math.min(70, Math.round((W*H)/9000));
+    ctx.save();
+    ctx.fillStyle = col;
+    for (let i = 0; i < n; i++) {
+      let x, y, a = 0.5, sz = 2;
+      switch (type) {
+        case 'spark':
+          x = (i*137.5)%W; y = (i*97.3)%H;
+          a = Math.random() < 0.02 ? 1 : 0.15+Math.sin(t*3+i)*0.15;
+          break;
+        case 'leaf':
+          x = ((i*211 + t*10) % (W+40)) - 20;
+          y = ((i*151 + t*22 + Math.sin(t*0.6+i)*30) % H);
+          a = 0.5; sz = 3;
+          break;
+        case 'ember':
+          x = (i*173)%W;
+          y = H - ((t*30 + i*61) % H);
+          a = 0.7*(1 - y/H); sz = 1.6;
+          break;
+        case 'snow':
+          x = ((i*191 + Math.sin(t*0.4+i)*20) % W + W) % W;
+          y = (i*137 + t*18) % H;
+          a = 0.6; sz = 1.8;
+          break;
+        case 'sand':
+          x = ((i*181 + t*40) % (W+30)) - 15;
+          y = H*0.6 + ((i*89) % (H*0.4));
+          a = 0.35; sz = 1.4;
+          break;
+        case 'star':
+          x = (i*149.3)%W; y = (i*97.7)%H;
+          a = 0.22 + Math.sin(t*0.6+i)*0.22; sz = i%11===0?2:1;
+          break;
+        case 'spore':
+          x = (i*163)%W;
+          y = H - ((t*12 + i*71) % H);
+          a = 0.45+Math.sin(t*2+i)*0.25; sz = 1.6;
+          break;
+        case 'bubble':
+          x = (i*179)%W;
+          y = H - ((t*22 + i*53) % H);
+          a = 0.4; sz = 2+((i*7)%3);
+          break;
+        case 'bolt':
+          if (i > 2) continue; // just a couple of occasional bolts
+          if (Math.sin(t*2+i*7) < 0.93) continue;
+          ctx.globalAlpha = 0.8; ctx.strokeStyle = col; ctx.lineWidth = 2;
+          { const bx = (i*W/3)+W/6; ctx.beginPath(); ctx.moveTo(bx,0); ctx.lineTo(bx-10,H*0.3); ctx.lineTo(bx+8,H*0.32); ctx.lineTo(bx-6,H*0.6); ctx.stroke(); }
+          continue;
+        case 'rune':
+          x = (i*197)%W; y = (i*127)%H;
+          a = 0.3+Math.sin(t*1.5+i)*0.2; sz = 3;
+          ctx.save(); ctx.translate(x,y); ctx.rotate(t*0.3+i);
+          ctx.globalAlpha = a; ctx.strokeStyle = col; ctx.lineWidth = 1;
+          ctx.strokeRect(-sz,-sz,sz*2,sz*2);
+          ctx.restore();
+          continue;
+        default: continue;
+      }
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.beginPath(); ctx.arc(x, y, sz, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── Space mode: the original look (kept as an alternate style) ─────────────
+  function _drawSpaceBackground() {
     const ctx = mapCtx;
     const W = mapW, H = mapH, t = MAP_STATE.time;
     const world = WORLDS[MAP_STATE.activeWorld];
@@ -858,12 +1094,20 @@
     }
   }
 
+  function worldUnlocked(w) {
+    const first = LEVELS[w * LEVELS_PER_WORLD];
+    return !!(first && first.unlocked);
+  }
+
   function render() {
     drawBackground();
     drawActiveWorldZone();
-    drawPaths();
 
     const w = MAP_STATE.activeWorld;
+    const locked = !worldUnlocked(w);
+
+    drawPaths();
+
     const startIdx = w * LEVELS_PER_WORLD;
     // Draw all nodes of the active world except current
     for (let i = 0; i < LEVELS_PER_WORLD; i++) {
@@ -875,7 +1119,72 @@
     const current = LEVELS.find(l => l.id === MAP_STATE.currentLevelId);
     if (current && current.worldId === w) drawLevelNode(current);
 
-    drawPlayer();
+    // The robot only ever stands on a world the player has actually reached —
+    // browsing ahead to a locked world previews its layout, but empty, with a
+    // big lock over it (see drawWorldLockOverlay), never the player's avatar.
+    if (!locked) drawPlayer();
+    else drawWorldLockOverlay(w);
+  }
+
+  // Big padlock + caption over a world the player hasn't reached yet. Levels
+  // still render underneath (dimmed/locked, same as any individual locked
+  // level) so browsing ahead previews the shape of what's coming.
+  function drawWorldLockOverlay(w) {
+    const ctx = mapCtx;
+    const cx = mapW / 2, cy = mapH / 2;
+    const pulse = Math.sin(MAP_STATE.time * 1.4) * 0.08 + 0.92;
+
+    // Dim everything behind the lock so it reads clearly as inaccessible.
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, mapW, mapH);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, cy - 10);
+    ctx.scale(pulse, pulse);
+
+    // Padlock body
+    ctx.fillStyle = '#0a0a0a';
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 3;
+    const bw = 56, bh = 46;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(-bw/2, -bh/2 + 14, bw, bh, 6) : ctx.rect(-bw/2, -bh/2 + 14, bw, bh);
+    ctx.fill(); ctx.stroke();
+
+    // Shackle
+    ctx.beginPath();
+    ctx.arc(0, -6, 20, Math.PI, 0, false);
+    ctx.stroke();
+
+    // Keyhole
+    ctx.fillStyle = '#888';
+    ctx.beginPath(); ctx.arc(0, 32, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillRect(-2, 32, 4, 10);
+
+    // Soft red glow ring behind the lock — reads as "blocked" at a glance.
+    ctx.globalAlpha = 0.25 + Math.sin(MAP_STATE.time*1.4)*0.06;
+    const g = ctx.createRadialGradient(0, 14, 0, 0, 14, 70);
+    g.addColorStop(0, '#f44'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 14, 70, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Caption
+    const tt = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f44';
+    ctx.font = "bold 15px 'Press Start 2P', monospace";
+    ctx.shadowColor = '#f44'; ctx.shadowBlur = 10;
+    ctx.fillText(tt('mapWorldLockedTitle', 'WORLD LOCKED'), cx, cy + 62);
+    ctx.shadowBlur = 0;
+    ctx.font = "10px 'Share Tech Mono', monospace";
+    ctx.fillStyle = '#ccc';
+    ctx.fillText(tt('mapWorldLockedHint', 'Complete the previous world to unlock it'), cx, cy + 84);
+    ctx.restore();
   }
 
   // ═══════════════════════════════════════════════

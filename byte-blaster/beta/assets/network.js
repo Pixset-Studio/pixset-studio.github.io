@@ -250,8 +250,14 @@ function connect(){
     if(ws !== sock) return; // stale socket closing — don't touch the live one's UI/state
     stopPing();
     if(_manualClose) return;
-    // Mid-game drop: can't silently rejoin a relay room — surface it.
+    // Mid-game drop: can't silently rejoin a relay room — surface it. Also
+    // drop netActive immediately (not just on the player's explicit "Return
+    // to Lobby" click) — leaving it true with no working connection made
+    // boss/enemy AI permanently think "I'm a guest, the host drives this"
+    // (see updateBoss()'s network guard), i.e. bosses stopped attacking and
+    // stopped colliding with the player until the room was properly left.
     if(window.netActive){
+      window.netActive = false;
       showConnLost();
       return;
     }
@@ -784,6 +790,46 @@ function startNetworkGame(allPlayers){
 
 let _stateInterval = null;
 let _netTickDiv = 0; // for sending enemies/bullets at lower rate than position
+let _netKeyframeDiv = 0; // counts sync ticks to schedule periodic full-state "keyframes"
+// Per-enemy id → last full state actually sent to guests. Used to compute
+// deltas (see _deltaOf) so unchanged fields aren't re-sent every tick.
+let _lastSentEnemy = new Map();
+let _lastSentBoss = null;       // last full boss state sent (null = none sent yet this "boss session")
+let _lastSentBossAlive = null;  // tri-state: null=unknown yet, true/false=last sent boss-alive flag
+let _lastSyncedEnemiesRef = null; // identity of the `enemies` array we last built caches for (see _stateTick)
+
+// Generic delta encoder for an id-keyed entity: compares `full` against the
+// last state sent for this id and returns an object containing only the
+// fields that changed (always including `id`), or null if nothing changed at
+// all (caller should then omit this entity from the payload entirely). First
+// time an id is seen, the complete object is sent and cached.
+function _deltaOf(id, full, cache){
+  const prev = cache.get(id);
+  if(!prev){ cache.set(id, {...full}); return full; }
+  let out = null;
+  for(const k in full){
+    if(k==='id') continue;
+    if(full[k] !== prev[k]){
+      if(!out) out = {id};
+      out[k] = full[k];
+      prev[k] = full[k];
+    }
+  }
+  return out;
+}
+// Same idea for the single boss object (no id — there's only ever one boss).
+function _bossDeltaOf(full){
+  if(!_lastSentBoss){ _lastSentBoss = {...full}; return full; }
+  let out = null;
+  for(const k in full){
+    if(full[k] !== _lastSentBoss[k]){
+      if(!out) out = {};
+      out[k] = full[k];
+      _lastSentBoss[k] = full[k];
+    }
+  }
+  return out;
+}
 let _lastStateSend = 0;
 // One iteration of the state broadcast. Normally driven by a 20 Hz setInterval,
 // but ALSO callable from the background ticker (game.js) so that when this tab is
@@ -798,6 +844,19 @@ function _stateTick(){
     _lastStateSend = _now;
 
     _netTickDiv++;
+
+    // Enemy ids restart from 1 every new level (see game.js genLevel()), so a
+    // stale delta-cache entry from the PREVIOUS level could wrongly suppress a
+    // field for a same-numbered enemy in the new one. `enemies` is a brand new
+    // array object every genLevel() call, so a reference change is a reliable,
+    // zero-maintenance signal that a (re)generation happened — retries and
+    // checkpoint restarts included, not just moving to a new level number.
+    if(typeof enemies!=='undefined' && enemies!==_lastSyncedEnemiesRef){
+      _lastSyncedEnemiesRef = enemies;
+      _lastSentEnemy.clear();
+      _lastSentBoss = null;
+      _lastSentBossAlive = null;
+    }
 
     // ── Player state (20 Hz) ─────────────────────────────────────────────────
     wsSend({
@@ -819,37 +878,65 @@ function _stateTick(){
     });
 
     // ── Host: sync enemies + boss + bullets every 3 ticks (~7 Hz) ────────────
-    // Enemies are synced by ARRAY INDEX: every client generates an identical
-    // enemy array from the same seed, so enemies[i] is the same enemy on every
-    // client. We only send the small mutable state (position, hp, status flags)
-    // and apply it in order. Guest enemy/boss AI is disabled (host authoritative).
+    // Enemies are synced by stable id (see applyEnemiesSync / hit_enemy in
+    // handleRemoteEvent — NOT array index, which breaks once split-enemy
+    // children make the two clients' arrays diverge in length/order).
+    //
+    // Delta-sync: most enemy fields (hp, alive, frozen, burning, shielded,
+    // type) change rarely — re-sending them every tick for every enemy is
+    // wasted bandwidth/JSON work. We only include a field in the payload when
+    // it differs from what was last sent for that id, and skip an enemy
+    // entirely once nothing about it has changed. A full snapshot (every
+    // field, every enemy) still goes out periodically as a "keyframe" so a
+    // late-joining guest or any missed state self-heals within a couple of
+    // seconds instead of staying wrong until that exact field happens to
+    // change again.
     if(isHost && _netTickDiv % 3 === 0){
+      _netKeyframeDiv++;
+      const forceKeyframe = (_netKeyframeDiv % 20 === 0); // ~ every 3s at 7Hz
+      if(forceKeyframe) _lastSentEnemy.clear();
       if(typeof enemies!=='undefined'){
-        wsSend({
-          type: 'enemies_sync',
-          enemies: enemies.map(e=>({
-            id:  e.id, // stable identity — see applyEnemiesSync / hit_enemy (not array index)
-            x:   Math.round(e.x),
-            y:   Math.round(e.y),
-            vx:  +(e.vx||0).toFixed(2),
-            hp:  e.hp,
-            al:  e.alive ? 1 : 0,
-            fl:  e.flash|0,
-            fz:  e._frozen ? 1 : 0,
-            bn:  e._burning ? 1 : 0,
-            sh:  e.shielded ? 1 : 0,
-            t:   e.type, // needed so guests can build stubs for host-spawned extras (split enemies)
-          })),
-        });
+        const list = [];
+        for(const e of enemies){
+          const full = {
+            id: e.id,
+            x:  Math.round(e.x), y: Math.round(e.y),
+            vx: +(e.vx||0).toFixed(2),
+            hp: e.hp,
+            al: e.alive ? 1 : 0,
+            fl: e.flash|0,
+            fz: e._frozen ? 1 : 0,
+            bn: e._burning ? 1 : 0,
+            sh: e.shielded ? 1 : 0,
+            t:  e.type, // needed so guests can build stubs for host-spawned extras (split enemies)
+          };
+          const d = _deltaOf(e.id, full, _lastSentEnemy);
+          if(d) list.push(d);
+        }
+        // Only send the message at all if there's something to say — an empty
+        // enemies_sync every 150ms for a level with no state changes (e.g. all
+        // enemies dead/off-screen) is itself wasted traffic.
+        if(list.length) wsSend({type: 'enemies_sync', enemies: list});
       }
       // Boss authoritative state (null when no boss / dead)
       if(typeof boss!=='undefined'){
-        wsSend({
-          type: 'boss_sync',
-          boss: (boss && boss.alive) ? {
-            x:    Math.round(boss.x),
-            y:    Math.round(boss.y),
-            hp:   boss.hp,
+        if(!boss || !boss.alive){
+          // "Boss is gone" is a one-time transition, not a per-tick value — only
+          // send it once (delta against the cached previous null-ness), instead
+          // of an unconditional null every tick even outside boss levels.
+          if(_lastSentBossAlive !== false){
+            wsSend({type: 'boss_sync', boss: null});
+            _lastSentBossAlive = false;
+          }
+        } else {
+          // Boss just (re)appeared (was dead/absent last tick) — force a full
+          // snapshot so the guest's freshly-spawned local boss object gets every
+          // field immediately instead of waiting for fields to individually change.
+          if(_lastSentBossAlive !== true || forceKeyframe) _lastSentBoss = null;
+          _lastSentBossAlive = true;
+          const full = {
+            x: Math.round(boss.x), y: Math.round(boss.y),
+            hp: boss.hp,
             facing: boss.facing,
             phase: boss.phase,
             flash: boss.flash|0,
@@ -859,13 +946,13 @@ function _stateTick(){
             shieldsDown: !!boss.shieldsDown,
             solid: !!boss.solid,
             windowOpen: !!boss.windowOpen,
-            // Extra gate state guests need to decide if their shots can hurt the
-            // boss (see _bossBulletContact()'s canHit logic in game.js).
             descending: !!boss.descending,
             shellBroken: !!boss.shellBroken,
             stunTimer: boss.stunTimer|0,
-          } : null,
-        });
+          };
+          const toSend = _bossDeltaOf(full);
+          if(toSend) wsSend({type: 'boss_sync', boss: toSend});
+        }
       }
       // Player bullets (host) — guests render these as ghost bullets
       if(typeof pBullets!=='undefined'){
@@ -984,15 +1071,20 @@ function applyEnemiesSync(list){
       enemies.push(e);
       byId.set(ne.id, e);
     }
-    e.x  = ne.x;
-    e.y  = ne.y;
-    e.vx = ne.vx;
-    e.hp = ne.hp;
-    e.alive    = !!ne.al;
-    e.flash    = ne.fl|0;
-    e._frozen  = !!ne.fz;
-    e._burning = !!ne.bn;
-    e.shielded = !!ne.sh;
+    // Delta-sync: a message may only contain the FEW fields that actually
+    // changed since the last one (see _deltaOf in _stateTick) — apply only
+    // the fields that are present, leaving everything else exactly as it was.
+    // A full snapshot (all fields present) applies exactly the same way, so
+    // this code doesn't need to know which kind of message it received.
+    if(ne.x!==undefined)  e.x  = ne.x;
+    if(ne.y!==undefined)  e.y  = ne.y;
+    if(ne.vx!==undefined) e.vx = ne.vx;
+    if(ne.hp!==undefined) e.hp = ne.hp;
+    if(ne.al!==undefined) e.alive    = !!ne.al;
+    if(ne.fl!==undefined) e.flash    = ne.fl|0;
+    if(ne.fz!==undefined) e._frozen  = !!ne.fz;
+    if(ne.bn!==undefined) e._burning = !!ne.bn;
+    if(ne.sh!==undefined) e.shielded = !!ne.sh;
   }
 }
 
@@ -1023,19 +1115,22 @@ function applyBossSync(b){
     return;
   }
   if(!boss) return; // guest hasn't spawned boss locally yet; wait until it does
-  boss.x      = b.x;
-  boss.y      = b.y;
-  boss.hp     = b.hp;
-  boss.facing = b.facing;
-  boss.phase  = b.phase;
-  boss.flash  = b.flash|0;
-  boss.anim   = b.anim|0;
-  boss.shieldsDown = !!b.shieldsDown;
-  boss.solid  = !!b.solid;
-  boss.windowOpen = !!b.windowOpen;
-  boss.descending = !!b.descending;
-  boss.shellBroken = !!b.shellBroken;
-  boss.stunTimer = b.stunTimer|0;
+  // Delta-sync: only present fields are applied (see _bossDeltaOf in
+  // _stateTick) — a full snapshot (right after the boss spawns, or every
+  // periodic keyframe) has every field, a delta only has what changed.
+  if(b.x!==undefined)      boss.x      = b.x;
+  if(b.y!==undefined)      boss.y      = b.y;
+  if(b.hp!==undefined)     boss.hp     = b.hp;
+  if(b.facing!==undefined) boss.facing = b.facing;
+  if(b.phase!==undefined)  boss.phase  = b.phase;
+  if(b.flash!==undefined)  boss.flash  = b.flash|0;
+  if(b.anim!==undefined)   boss.anim   = b.anim|0;
+  if(b.shieldsDown!==undefined) boss.shieldsDown = !!b.shieldsDown;
+  if(b.solid!==undefined)       boss.solid       = !!b.solid;
+  if(b.windowOpen!==undefined)  boss.windowOpen  = !!b.windowOpen;
+  if(b.descending!==undefined)  boss.descending  = !!b.descending;
+  if(b.shellBroken!==undefined) boss.shellBroken = !!b.shellBroken;
+  if(b.stunTimer!==undefined)   boss.stunTimer   = b.stunTimer|0;
   if(b.orbs && Array.isArray(boss.orbs)){
     for(let i=0;i<boss.orbs.length&&i<b.orbs.length;i++) boss.orbs[i].alive = !!b.orbs[i];
   }

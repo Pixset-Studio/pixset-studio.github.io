@@ -372,6 +372,26 @@ window.applyGameplaySettings=function(){
   const hint=document.getElementById('hint');
   if(hint)hint.style.display=(s.showHints===false)?'none':'';
 };
+let _audioAutoSuspendInit=false;
+// Music/SFX used to keep playing forever in the background — Web Audio
+// contexts are NOT paused automatically when a tab is hidden or the window is
+// minimized, only when the page is actually closed. Suspending the single
+// shared AudioContext on hide (and resuming on show) silences everything
+// (procedural tones AND the baked-sample player, since both route through
+// this same `AC`) with zero per-sound bookkeeping, and playback resumes
+// exactly where it left off.
+function _initAudioAutoSuspend(){
+  if(_audioAutoSuspendInit||!AC)return;
+  _audioAutoSuspendInit=true;
+  const suspend=()=>{ if(AC&&AC.state==='running')AC.suspend().catch(()=>{}); };
+  const resume=()=>{ if(AC&&AC.state==='suspended'&&!document.hidden)AC.resume().catch(()=>{}); };
+  document.addEventListener('visibilitychange',()=>{ document.hidden?suspend():resume(); });
+  // Electron/desktop: minimizing or Alt-Tabbing away doesn't always toggle
+  // document.hidden depending on OS/window manager, so also listen for the
+  // window itself losing/gaining OS focus.
+  window.addEventListener('blur',suspend);
+  window.addEventListener('focus',resume);
+}
 function initAudio(){
   if(AC)return;
   try{
@@ -397,6 +417,7 @@ function initAudio(){
     if(window.AudioFiles&&typeof window.AudioFiles.init==='function'){
       try{window.AudioFiles.init(AC,SG,MUG);}catch(e){}
     }
+    _initAudioAutoSuspend();
   }catch(e){}
 }
 
@@ -663,6 +684,7 @@ const _CHEATS={
   'GODMODE':   ()=>{godMode=!godMode;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return godMode?'😇 GOD MODE ON — you are immortal':'💀 GOD MODE OFF'},
   'GOD':       ()=>{godMode=!godMode;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return godMode?'😇 GOD MODE ON — you are immortal':'💀 GOD MODE OFF'},
   'LIVES':     ()=>{infiniteLives=!infiniteLives;lives=infiniteLives?99:3;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return infiniteLives?'♾ INFINITE LIVES ON (×99)':'❤ INFINITE LIVES OFF'},
+  'BOSSDEBUG': ()=>{window._bbDebugBoss=!window._bbDebugBoss;return window._bbDebugBoss?'🐞 Boss debug logging ON (check console)':'🐞 Boss debug logging OFF'},
 };
 // Cheat codes sorted longest-first so that a longer code (e.g. HARDUNLOCK, GODMODE)
 // is matched before any shorter code it happens to end with (UNLOCK, GOD).
@@ -1257,6 +1279,7 @@ function genLevel(diff,rng,advN){
 
   platforms=[];blocks=[];coins=[];enemies=[];_enemyIdSeq=0;
   pBullets=[];eBullets=[];powerups=[];_initParticlePool();decors=[];fireBalls=[];iceBalls=[];checkpoints=[];flagDone=false;exitAnim=false;exitTimer=0;
+  _decorCacheInvalidate();
   hazards=[];jumpPads=[];conveyors=[];buttons=[];doors=[];spotlights=[];mazeKeys=[];mazeKeysCollected=0;
   dataShards=[];dataShardsTotal=0;dataShardsGot=0;shardBonusGiven=false;
   _cpSafeZone=null;
@@ -1802,34 +1825,77 @@ function genDecors(rng){
 }
 
 // ── Draw decorations with parallax ──────────────
+// ── Decor layer cache (bug #22: "full redraw every frame") ──────────────────
+// drawDecors() used to re-run every building/ruin/tree's full draw code (shape +
+// windows + blinking lights, up to MAX_DECORS items × 2 layers) every single
+// frame, just to shift it a few pixels for parallax. Positions only need a
+// blit-shift each frame; only the actual PIXELS need occasional re-drawing.
+//
+// Each layer gets a modest offscreen "window" canvas (NOT the whole level —
+// Android/Capacitor WebViews commonly cap canvas width around 4096px, so a
+// level-spanning cache is unsafe on the game's own Android target) covering the
+// viewport plus a wide margin. It's refilled — by calling the exact same
+// _drawDecorItem code, unchanged — only when the camera nears its edge or a new
+// level starts, then every frame just gets a single drawImage() blit per layer
+// instead of redrawing every shape. Window-blink/rooftop-light animation still
+// updates correctly each refill (every few seconds at normal movement speed),
+// which is fine since those already only change every 30-50 ticks anyway.
+const DECOR_CACHE_W_MAX = 4000;  // hard ceiling — stays under mobile canvas-size limits
+const DECOR_CACHE_MARGIN = 500;  // refill when the visible window gets within this of a cache edge
+let _decorCache = [null, null];  // per layer: {canvas, cctx, originX, w}
+
+function _decorCacheInvalidate(){ _decorCache = [null, null]; }
+
+function _decorCacheRebuild(layerIdx, centerWorldX){
+  // Cache width scales with the actual viewport (plus margins on both sides)
+  // so it always covers W with room to spare, without over-allocating on a
+  // typical-sized window — capped at DECOR_CACHE_W_MAX for platform safety.
+  const cw = Math.min(DECOR_CACHE_W_MAX, Math.round(W + DECOR_CACHE_MARGIN*4));
+  let dc = _decorCache[layerIdx];
+  if(!dc || dc.w!==cw){
+    const c=document.createElement('canvas'); c.width=cw; c.height=H;
+    dc = _decorCache[layerIdx] = {canvas:c, cctx:c.getContext('2d'), originX:0, w:cw};
+  }
+  const originX = centerWorldX - cw/2;
+  dc.originX = originX;
+  const cctx = dc.cctx;
+  cctx.clearRect(0,0,cw,H);
+  cctx.save();
+  cctx.globalAlpha = layerIdx===0 ? 0.48 : 0.80;
+  cctx.shadowBlur = 0;
+  const GY = H-40;
+  let drawn = 0;
+  const MAX_DECORS = Math.max(6, Math.round(40 * ((typeof GFX==='object'&&GFX&&GFX.decorMul)?GFX.decorMul:1)));
+  for(const d of decors){
+    if(d.layer!==layerIdx) continue;
+    const localX = d.x - originX;
+    if(localX < -300 || localX > cw+300) continue;
+    if(drawn++ > MAX_DECORS) break;
+    cctx.save();
+    _drawDecorItem(cctx, d, localX, GY, layerIdx);
+    cctx.restore();
+  }
+  cctx.restore();
+}
+
 function drawDecors(){
   if(!decors||!decors.length)return;
-  const GY=H-40;
-  // Ограничиваем количество декоров на экране для производительности.
-  // Scaled by the Graphics Quality tier so lower tiers draw fewer background
-  // props (faster, sparser) and higher tiers draw denser scenery.
-  let drawnCount = 0;
-  const MAX_DECORS = Math.max(6, Math.round(40 * ((typeof GFX==='object'&&GFX&&GFX.decorMul)?GFX.decorMul:1)));
 
-  for(const layerIdx of [0,1]){
+  for (const layerIdx of [0,1]) {
     const pFactor = layerIdx===0 ? 0.22 : 0.58;
-    ctx.save();
-    ctx.globalAlpha = layerIdx===0 ? 0.48 : 0.80;
-    // Для дальнего слоя — отключаем shadowBlur полностью
-    ctx.shadowBlur = 0;
+    const viewWorldX = camX*pFactor; // world-x currently at the left edge of the screen, in this layer's space
 
-    for(const d of decors){
-      if(d.layer!==layerIdx)continue;
-      const sx = d.x - camX*pFactor;
-      if(sx<-300||sx>W+300)continue;
-      if(drawnCount++ > MAX_DECORS) break;
-
-      ctx.save();
-      // Передаём флаг — разрешён ли shadowBlur (только ближний слой)
-      _drawDecorItem(ctx, d, sx, GY, layerIdx);
-      ctx.restore();
+    let dc = _decorCache[layerIdx];
+    const needsRebuild = !dc
+      || viewWorldX < dc.originX + DECOR_CACHE_MARGIN
+      || (viewWorldX + W) > dc.originX + dc.w - DECOR_CACHE_MARGIN;
+    if (needsRebuild) {
+      _decorCacheRebuild(layerIdx, viewWorldX + W/2);
+      dc = _decorCache[layerIdx];
     }
-    ctx.restore();
+
+    // One blit per layer — this is the entire per-frame cost now.
+    ctx.drawImage(dc.canvas, dc.originX - viewWorldX, 0);
   }
 }
 
@@ -2476,6 +2542,21 @@ function updateBoss(){
     return;
   }
   if(!boss||!boss.alive)return;
+  // Diagnostics for the "player passes through boss / boss doesn't attack"
+  // report — prints once a second so it's cheap, but gives concrete runtime
+  // values (godMode, network flags, invincibility, live contact test) instead
+  // of guessing blind. Safe to remove once the cause is confirmed.
+  if(window._bbDebugBoss && tick%60===0){
+    const _p=nearestPlayer(boss.x+boss.w/2);
+    console.log('[bossDebug]', {
+      godMode, netActive:window.netActive, netIsHost:window.netIsHost,
+      bossAlive:boss.alive, bossWorldId:boss.worldId, weaknessType:boss.weaknessType,
+      playerInv:_p&&_p.inv, playerRespawning:_p&&_p.respawning,
+      aabbOverlap: _p?aabb(_p,boss):null,
+      bossPos:{x:Math.round(boss.x),y:Math.round(boss.y),w:boss.w,h:boss.h},
+      playerPos:_p?{x:Math.round(_p.x),y:Math.round(_p.y),w:_p.w,h:_p.h}:null,
+    });
+  }
   const b=boss,p=nearestPlayer(b.x+b.w/2);
   b.anim++;
   if(b.flash>0)b.flash--;
@@ -2808,7 +2889,15 @@ function drawBoss(){
 
   ctx.save();
   if(b.flash>0&&Math.floor(b.flash/3)%2===0)ctx.globalAlpha=.25;
-  ctx.shadowColor=b.glow;ctx.shadowBlur=4;
+  // Ambient body glow — used to be a whole-body ctx.shadowBlur left set across
+  // every shape each of the ~10 boss draw functions below fills (big ellipses/
+  // rects, unlike a player's small limbs, so this was the priciest shadowBlur
+  // user in the game). A single sprite-based bloom() behind the boss gives the
+  // same "boss glows" read for a flat, one-time cost; bodies now draw crisp and
+  // each boss function's own small local accent blurs (eyes, cracks, etc.) are
+  // untouched.
+  bloom(bx+b.w/2,by+b.h/2,Math.max(b.w,b.h)*0.85,b.glow,0.5);
+  ctx.shadowBlur=0;
 
   // ── Bodies per boss ──────────────────────────
   if(id==='stomp'){           _drawGuardian(b,bx,by);}
@@ -6943,25 +7032,25 @@ function drawEnemies(){
     // A blanket halo just added a thick coloured outline around every sprite and ate FPS.
     const df=DRAW_E[e.type];if(df)df(e);
     if(e._frozen){
-      ctx.save();ctx.globalAlpha=0.45+Math.sin(tick*.2)*.1;
+      ctx.globalAlpha=0.45+Math.sin(tick*.2)*.1;
       ctx.fillStyle='#00ffff';ctx.fillRect(e.x,e.y,e.w,e.h);
       ctx.strokeStyle='#aaffff';ctx.lineWidth=2;ctx.shadowBlur=0;
       ctx.strokeRect(e.x+1,e.y+1,e.w-2,e.h-2);
       ctx.globalAlpha=0.9;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
       const ex=e.x+e.w/2,ey=e.y+e.h/2;
       for(let a=0;a<3;a++){const ang=a/3*Math.PI;ctx.beginPath();ctx.moveTo(ex-Math.cos(ang)*8,ey-Math.sin(ang)*8);ctx.lineTo(ex+Math.cos(ang)*8,ey+Math.sin(ang)*8);ctx.stroke();}
-      ctx.restore();
+      ctx.globalAlpha=1;
     }
     if(e.shielded){
-      ctx.save();ctx.globalAlpha=0.35+Math.sin(tick*.1)*.12;
+      ctx.globalAlpha=0.35+Math.sin(tick*.1)*.12;
       ctx.strokeStyle='#aaf';ctx.lineWidth=3;ctx.shadowBlur=0;
       ctx.beginPath();ctx.ellipse(e.x+e.w/2,e.y+e.h/2,e.w*.65,e.h*.65,0,0,Math.PI*2);ctx.stroke();
-      ctx.restore();
+      ctx.globalAlpha=1;
     }
     // Spiked enemies: draw spikes on top
     const cfg=EC[e.type];
     if(cfg&&cfg.moveType==='spiked'){
-      ctx.save();ctx.shadowBlur=0;
+      ctx.shadowBlur=0;
       ctx.fillStyle='#888';
       const spikeCount=4;
       for(let i=0;i<spikeCount;i++){
@@ -6973,32 +7062,29 @@ function drawEnemies(){
         ctx.closePath();
         ctx.fill();
       }
-      ctx.restore();
     }
     // Armored enemies: draw armor plating
     if(cfg&&cfg.moveType==='armored'){
-      ctx.save();ctx.shadowBlur=0;
+      ctx.shadowBlur=0;
       ctx.strokeStyle='#666';ctx.lineWidth=2;
       ctx.strokeRect(e.x+2,e.y+2,e.w-4,e.h-4);
       ctx.strokeStyle='#999';ctx.lineWidth=1;
       ctx.strokeRect(e.x+4,e.y+4,e.w-8,e.h-8);
-      ctx.restore();
     }
     // Split enemies: draw split indicator
     if(cfg&&cfg.moveType==='split'){
-      ctx.save();ctx.shadowBlur=0;
+      ctx.shadowBlur=0;
       ctx.strokeStyle=e.glow;ctx.lineWidth=1;
       ctx.beginPath();
       ctx.moveTo(e.x+e.w/2,e.y+2);
       ctx.lineTo(e.x+e.w/2,e.y+e.h-2);
       ctx.stroke();
-      ctx.restore();
     }
     if(e.charging){
-      ctx.save();ctx.globalAlpha=0.6;ctx.shadowBlur=0;
+      ctx.globalAlpha=0.6;ctx.shadowBlur=0;
       ctx.strokeStyle=e.glow;ctx.lineWidth=2;
       ctx.beginPath();ctx.moveTo(e.x-8,e.y+e.h/2);ctx.lineTo(e.x+e.w+8,e.y+e.h/2);ctx.stroke();
-      ctx.restore();
+      ctx.globalAlpha=1;
     }
     if(e.hp<e.mhp&&e.mhp>1){ctx.shadowBlur=0;ctx.fillStyle='#400';ctx.fillRect(e.x,e.y-9,e.w,5);ctx.fillStyle=e.glow;ctx.fillRect(e.x,e.y-9,e.w*(e.hp/e.mhp),5);}
     if(hardMode){ctx.fillStyle=e.glow;ctx.shadowBlur=0;ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('★',e.x+e.w/2,e.y-2);}
@@ -7735,14 +7821,21 @@ function drawOnePlayer(p){
   // Boots speed trail
   if(p.boots&&Math.abs(p.vx)>2){for(let i=1;i<p.trail.length;i+=2){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.22;ctx.fillStyle='#0ff';ctx.beginPath();ctx.arc(t.x,t.y,5,0,Math.PI*2);ctx.fill();ctx.restore();}}
   ctx.save();ctx.translate(p.x+p.w/2,p.y+p.h/2);ctx.scale(p.facing,1);ctx.translate(-p.w/2,-p.h/2);
-  // Star rainbow glow
+  // Ambient body glow (star/blaster/respawn/boots) — used to be a whole-body
+  // ctx.shadowBlur left set across every single body part (legs, torso, arms,
+  // head, visor — ~20-30 fills per player per frame), which is the expensive
+  // way to blur: cost scales with every shape drawn while it's active, not
+  // just the glow itself. A single sprite-based bloom() behind the body gives
+  // the same "player is glowing" read for a flat, one-time cost instead.
   if(p.starMode){
     const hue=(tick*12)%360;
-    ctx.shadowColor=`hsl(${hue},100%,65%)`;ctx.shadowBlur=14;
-  } else if(p.blaster){ctx.shadowColor=trailCol;ctx.shadowBlur=8;}
-  if(p.respawning){ctx.shadowColor='#fff';ctx.shadowBlur=11;}
-  // Boots tint indicator
-  if(p.boots&&!p.starMode){ctx.shadowColor='#0ff';ctx.shadowBlur=Math.max(ctx.shadowBlur||0,10);}
+    bloom(p.w/2,p.h/2,p.w*0.9,`hsl(${hue},100%,65%)`,0.85);
+  } else if(p.blaster){
+    bloom(p.w/2,p.h/2,p.w*0.75,trailCol,0.55);
+  }
+  if(p.respawning){ bloom(p.w/2,p.h/2,p.w*0.85,'#fff',0.6); }
+  if(p.boots&&!p.starMode){ bloom(p.w/2,p.h/2,p.w*0.7,'#0ff',0.45); }
+  ctx.shadowBlur=0;
   const lk=p.onGnd?Math.sin(p.animFr/4*Math.PI)*4:0;
 
   // Robot stage drives the body "damage" skin now (lives are shown separately
@@ -7760,7 +7853,8 @@ function drawOnePlayer(p){
     // Trails (reuse trailCol from above)
     if(p.blaster&&!p.starMode){for(let i=2;i<p.trail.length;i+=3){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.18;ctx.fillStyle=pp.visor;ctx.beginPath();ctx.arc(t.x-p.x-p.w/2+p.w/2,t.y-p.y-p.h/2+p.h/2,7,0,Math.PI*2);ctx.fill();ctx.restore();}}
 
-    ctx.shadowColor=pp.shadow;ctx.shadowBlur=8;
+    // Body drawn crisp — the ambient glow is already handled by bloom() above.
+    ctx.shadowBlur=0;
 
     // Legs
     ctx.fillStyle=dmgN>=2?pp.dark:pp.mid;
@@ -8049,7 +8143,17 @@ function drawWatermark(){
   ctx.save();ctx.globalAlpha=.08;ctx.font="bold 40px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=CT.mc;ctx.fillText(worldName(CT),W/2,H/2);ctx.restore();
 }
 function drawLevelClear(){
-  ctx.save();ctx.globalAlpha=.42;ctx.fillStyle=CT.clr;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+  ctx.save();
+  // Soft vignette instead of a flat full-screen tint — a solid 42% fill of the
+  // world's theme colour (e.g. Desert Ruins' sandy '#eebb66') washed out the
+  // whole screen so hard it read as "everything turns yellow" rather than a
+  // celebratory accent. Center stays clear/readable; colour only builds up
+  // toward the edges.
+  const cx=W/2, cy=H/2, rIn=Math.min(W,H)*0.28, rOut=Math.max(W,H)*0.75;
+  const g=ctx.createRadialGradient(cx,cy,rIn,cx,cy,rOut);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,CT.clr);
+  ctx.globalAlpha=.55;ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
   ctx.fillStyle='#fff';ctx.shadowColor=CT.clr;ctx.shadowBlur=35;
   ctx.font="bold 15px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(T('levelClear',advMode?advLevel:level),W/2,H/2-12);
@@ -8136,7 +8240,19 @@ function _advanceLogic(maxClamp){
   if(dt>(maxClamp||250))dt=maxClamp||250; // clamp after a stall — no spiral of death
   _logicAcc+=dt;
   let steps=0;
-  while(_logicAcc>=LOGIC_STEP&&steps<5){update();_logicAcc-=LOGIC_STEP;steps++;}
+  while(_logicAcc>=LOGIC_STEP&&steps<5){
+    try{ update(); }
+    catch(e){
+      // A single bad frame must never permanently kill the whole game loop —
+      // without this, one thrown error inside update() (anywhere: player,
+      // enemies, boss, particles...) stopped requestAnimationFrame from ever
+      // being scheduled again, silently freezing all game LOGIC while input
+      // still felt "alive" and the last rendered frame stayed on screen.
+      // Logging keeps it visible during testing instead of failing silently.
+      console.error('[update] uncaught error, skipping this logic step:', e);
+    }
+    _logicAcc-=LOGIC_STEP;steps++;
+  }
   if(steps>=5)_logicAcc=0;
   return steps;
 }

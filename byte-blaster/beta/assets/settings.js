@@ -64,7 +64,7 @@
     customResolution: '1600x900',
     gameScale: 0,            // 0 = auto-fit to window (preserve aspect ratio)
     showFPS: false,
-    fpsLimit: 0,
+    fpsLimit: 'auto',        // 'auto' = detect the screen's refresh rate on first run (60Hz→60fps, 90Hz→90fps…), or a number, or 0 = unlimited
     adaptiveQuality: 'auto', // auto-lower gfx under sustained low FPS: 'auto' | 'on' | 'off'
     vsync: true,             // V-Sync (applied at startup; off = uncapped FPS)
     graphicsQuality: 'auto', // preset name, 'auto' (detect on first run) or 'custom'
@@ -72,6 +72,7 @@
     // pre-fills these; the player can then change any of them (→ 'custom').
     gfx: { glow:1.0, particleMul:1.0, bgDetail:1.0, trails:1.0, bossFx:1.0, decorMul:1.0, renderScale:2.0 },
     windowMode: 'windowed',
+    mapEnvironment: 'themed', // world-map backdrop: 'themed' (per-world) | 'space' (classic orbit-in-space)
     language: 'auto',        // 'auto' = detect from system on first run
     cutscenes: true,         // story dialogue cutscenes on/off
     // Audio settings
@@ -453,7 +454,7 @@
     if (elapsed >= 1000) {
       fps = Math.round((frameCount * 1000) / elapsed);
       if (fpsCounter) {
-        const limit = window.gameSettings.fpsLimit || 0;
+        const limit = (typeof window.gameSettings.fpsLimit === 'number') ? window.gameSettings.fpsLimit : 0;
         const displayText = limit > 0 ? `FPS: ${fps} / ${limit}` : `FPS: ${fps}`;
         fpsCounter.textContent = displayText;
         
@@ -476,8 +477,8 @@
 
   // FPS Limiter
   function shouldSkipFrame() {
-    const limit = window.gameSettings.fpsLimit || 0;
-    if (limit <= 0) return false; // No limit
+    const limit = (typeof window.gameSettings.fpsLimit === 'number') ? window.gameSettings.fpsLimit : 0;
+    if (limit <= 0) return false; // No limit (also covers 'auto' before detection resolves)
     
     const now = performance.now();
     const targetFrameTime = 1000 / limit;
@@ -489,6 +490,34 @@
     
     lastLimitTime = now;
     return false;
+  }
+
+  // ── Screen refresh-rate detection ───────────────────────────────────────
+  // There's no direct "get monitor Hz" browser API, so we sample real
+  // requestAnimationFrame intervals (rAF is vsync-paced) over ~40 frames,
+  // take the median (robust against one-off hitches), and snap to the
+  // nearest common refresh rate. Used to seed fpsLimit on first run so a
+  // 90/120/144Hz screen isn't capped at a stale default — it plays at its
+  // own native rate, and a 60Hz screen correctly gets 60.
+  function detectRefreshRate(callback) {
+    const samples = [];
+    let last = null;
+    const COMMON_HZ = [30, 60, 75, 90, 120, 144, 165, 180, 240];
+    function tick(t) {
+      if (last !== null) samples.push(t - last);
+      last = t;
+      if (samples.length < 40) {
+        requestAnimationFrame(tick);
+      } else {
+        samples.sort((a, b) => a - b);
+        const median = samples[Math.floor(samples.length / 2)];
+        const hz = median > 0 ? Math.round(1000 / median) : 60;
+        let best = 60, bestDiff = Infinity;
+        for (const c of COMMON_HZ) { const d = Math.abs(c - hz); if (d < bestDiff) { bestDiff = d; best = c; } }
+        callback(best);
+      }
+    }
+    requestAnimationFrame(tick);
   }
 
   // ── Adaptive quality controller ───────────────────────────────────────────
@@ -553,7 +582,8 @@
     const measured = (_aqFrames * 1000) / dt;
     _aqFrames = 0; _aqWinStart = now;
     // Target tracks any FPS cap the player set; otherwise assume a 60 Hz display.
-    const cap = (window.gameSettings.fpsLimit || 0) > 0 ? window.gameSettings.fpsLimit : 60;
+    const fl = window.gameSettings.fpsLimit;
+    const cap = (typeof fl === 'number' && fl > 0) ? fl : 60;
     const low = cap * 0.75, good = cap * 0.92;
     if (measured < low)      { _aqLowStreak++;  _aqHighStreak = 0; }
     else if (measured > good){ _aqHighStreak++; _aqLowStreak = 0; }
@@ -599,6 +629,19 @@
       try { sys = (navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en'; } catch (e) {}
       settings.language = sys;
       saveSettings(settings);
+    }
+    // FPS limit: 'auto' on first run → detect the screen's actual refresh rate
+    // (60Hz→60fps, 90Hz→90fps, 120Hz→120fps…) instead of defaulting to
+    // unlimited. Async (needs a couple dozen real frames to measure), so the
+    // limiter just behaves as "unlimited" for that brief moment — see
+    // shouldSkipFrame()'s explicit `typeof === 'number'` guard.
+    if (settings.fpsLimit === 'auto') {
+      detectRefreshRate(function (hz) {
+        settings.fpsLimit = hz;
+        saveSettings(settings);
+        const fpsLimitSelect = document.getElementById('fpsLimitSelect');
+        if (fpsLimitSelect) fpsLimitSelect.value = String(hz);
+      });
     }
     if (typeof window.setLanguage === 'function') window.setLanguage(settings.language);
     applyGfxSettings();
@@ -682,6 +725,15 @@
               <option value="fullscreen" data-i18n="fullscreen">⛶ Fullscreen</option>
               <option value="frameless" data-i18n="borderless">▣ Borderless</option>
             </select>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="mapEnvironment" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">World Map Environment:</label>
+            <select id="mapEnvSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="themed" data-i18n="mapEnvThemed">🌍 Normal (per-world)</option>
+              <option value="space" data-i18n="mapEnvSpace">🛸 Space (classic)</option>
+            </select>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="mapEnvNote">* Normal gives each world its own map backdrop (jungle, lava, ice…). Space keeps the original orbit-in-space look for every world.</div>
           </div>
 
           <div style="margin-bottom: 20px;">
@@ -773,9 +825,11 @@
           <div style="margin-bottom: 20px;">
             <label data-i18n="fpsLimit" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">FPS Limit:</label>
             <select id="fpsLimitSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="auto" data-i18n="fpsAuto">🖥 Auto (match screen Hz)</option>
               <option value="0" data-i18n="fpsNoLimit">No Limit (Unlimited)</option>
               <option value="30">30 FPS</option>
               <option value="60">60 FPS</option>
+              <option value="90">90 FPS</option>
               <option value="120">120 FPS</option>
               <option value="144">144 FPS</option>
               <option value="custom" data-i18n="fpsCustom">Custom...</option>
@@ -1022,9 +1076,12 @@
     // FPS limit: if the saved value isn't one of the presets, treat it as Custom.
     const fpsCustomDiv = document.getElementById('fpsCustomDiv');
     const fpsCustomInput = document.getElementById('fpsCustomInput');
-    const fpsVal = (window.gameSettings.fpsLimit || 0);
-    const fpsPresets = ['0', '30', '60', '120', '144'];
-    if (fpsPresets.includes(String(fpsVal))) {
+    const fpsVal = window.gameSettings.fpsLimit;
+    const fpsPresets = ['0', '30', '60', '90', '120', '144'];
+    if (fpsVal === 'auto') {
+      fpsLimitSelect.value = 'auto';
+      if (fpsCustomDiv) fpsCustomDiv.style.display = 'none';
+    } else if (fpsPresets.includes(String(fpsVal))) {
       fpsLimitSelect.value = String(fpsVal);
       if (fpsCustomDiv) fpsCustomDiv.style.display = 'none';
     } else {
@@ -1037,6 +1094,7 @@
     };
     const graphicsSelect = document.getElementById('graphicsSelect');
     const windowModeSelect = document.getElementById('windowModeSelect');
+    const mapEnvSelect = document.getElementById('mapEnvSelect');
 
     // ── Per-parameter graphics sliders ──────────────────────────────────────
     // Each row maps a gfx key to its slider; UI value is a percentage that maps
@@ -1079,6 +1137,7 @@
       };
     }
     if (windowModeSelect) windowModeSelect.value = window.gameSettings.windowMode || 'windowed';
+    if (mapEnvSelect) mapEnvSelect.value = window.gameSettings.mapEnvironment || 'themed';
 
     // Audio sliders
     const masterVolumeSlider = document.getElementById('masterVolumeSlider');
@@ -1332,12 +1391,19 @@
       
       window.gameSettings.gameScale = parseFloat(scaleSelect.value);
       window.gameSettings.showFPS = fpsCheck.checked;
-      // FPS limit: a preset, or a clamped custom value (10–1000) when "Custom" chosen.
+      // FPS limit: a preset, 'auto' (detect screen Hz), or a clamped custom
+      // value (10–1000) when "Custom" chosen.
       if (fpsLimitSelect.value === 'custom') {
         let cf = parseInt(fpsCustomInput && fpsCustomInput.value, 10);
         if (isNaN(cf) || cf <= 0) cf = 0;
         else cf = Math.max(10, Math.min(cf, 1000));
         window.gameSettings.fpsLimit = cf;
+      } else if (fpsLimitSelect.value === 'auto') {
+        window.gameSettings.fpsLimit = 'auto';
+        detectRefreshRate(function (hz) {
+          window.gameSettings.fpsLimit = hz;
+          saveSettings(window.gameSettings);
+        });
       } else {
         window.gameSettings.fpsLimit = parseInt(fpsLimitSelect.value, 10) || 0;
       }
@@ -1364,6 +1430,13 @@
       const vsyncChanged = (window.gameSettings.vsync !== false) !== prevVsync;
       const wmSel = document.getElementById('windowModeSelect');
       if (wmSel) { window.gameSettings.windowMode = wmSel.value; }
+      const mapEnvSel = document.getElementById('mapEnvSelect');
+      if (mapEnvSel) {
+        window.gameSettings.mapEnvironment = mapEnvSel.value;
+        // Live-apply: if the world map is open right now, redraw with the new
+        // environment immediately instead of waiting for the next time it opens.
+        if (window.WorldMap && typeof window.WorldMap.refresh === 'function') window.WorldMap.refresh();
+      }
       const langSel = document.getElementById('languageSelect');
       if (langSel) { window.gameSettings.language = langSel.value; }
 
