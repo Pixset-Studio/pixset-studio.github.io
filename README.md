@@ -1,1 +1,1 @@
-## Официальный сайт Pixset Studio
+## Официальный сайт Pixset Studio.
