@@ -136,9 +136,12 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 #hud{position:absolute;inset:0;pointer-events:none;z-index:10}
 #hud-top{position:absolute;top:calc(8px + env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center;gap:10px;align-items:center}
 .hud-chip{background:rgba(12,14,28,.72);border-radius:12px;padding:5px 14px;font-weight:800;font-size:15px;text-align:center}
-#btn-super{position:absolute;right:24px;bottom:calc(150px + env(safe-area-inset-bottom));width:74px;height:74px;border-radius:50%;
+#super-ring{position:absolute;right:16px;bottom:calc(142px + env(safe-area-inset-bottom));width:90px;height:90px;
+  border-radius:50%;background:conic-gradient(#ffd24e calc(var(--chg,0)*1%), rgba(255,255,255,.16) 0);
+  display:flex;align-items:center;justify-content:center;pointer-events:none;transition:background .1s linear}
+#btn-super{position:static;right:auto;bottom:auto;width:74px;height:74px;border-radius:50%;
   background:radial-gradient(circle at 35% 30%,#ffe27a,#e79b00);display:flex;align-items:center;justify-content:center;font-size:30px;
-  pointer-events:auto;opacity:.35;box-shadow:0 0 0 4px rgba(255,210,78,.35),0 5px 12px rgba(0,0,0,.5);transition:opacity .2s}
+  pointer-events:auto;opacity:.35;box-shadow:0 5px 12px rgba(0,0,0,.5);transition:opacity .2s}
 #btn-super.ready{opacity:1;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(255,210,78,.4),0 5px 12px rgba(0,0,0,.5)}50%{box-shadow:0 0 0 12px rgba(255,210,78,.15),0 5px 12px rgba(0,0,0,.5)}}
 #btn-attack{position:absolute;right:16px;bottom:calc(40px + env(safe-area-inset-bottom));width:96px;height:96px;border-radius:50%;
@@ -382,7 +385,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <button id="btn-quit">✕ Выйти</button>
     <button id="hud-fullscreen" title="Полный экран">⛶</button>
     <div id="pc-hint">WASD/стрелки — движение · ЛКМ — атака · ПКМ/Space — суперспособность</div>
-    <div id="btn-super">⭐</div>
+    <div id="super-ring"><div id="btn-super">⭐</div></div>
     <div id="btn-attack">💥</div>
     <div id="countdown">3</div>
   </div>
@@ -741,7 +744,7 @@ const DEFAULT_PROFILE=()=>({
   coins:200,gems:20,pp:40,trophies:0,
   brawlerTrophies:{knight:0},
   boxes:{box:1,big:0,mega:0,omega:0},
-  pityBoxes:0,totalBoxesOpened:0,
+  pityBoxes:0,pityStars:0,totalBoxesOpened:0,
   winStreakBox:0,
   unlocked:{knight:1},
   levels:{knight:1},
@@ -1050,7 +1053,7 @@ const UI={
     const defs=[
       {k:'box',  icon:'📦',t:'Ящик',       d:'1-3 предмета'},
       {k:'big',  icon:'🎁',t:'Большой ящик', d:'3-5 предметов'},
-      {k:'mega', icon:'💎',t:'Мега-ящик',    d:'5-7 предметов'},
+      {k:'mega', icon:'💎',t:'Мега-ящик',    d:'5-10 предметов'},
       {k:'omega',icon:'🌟',t:'Омега-ящик',   d:'10-15 предметов · гарантирован боец!'},
     ];
     document.getElementById('boxes-list').innerHTML=defs.map(d=>`
@@ -1081,7 +1084,7 @@ function resetProgress(){
    Шанс на бойца в предмете растёт с числом ящиков, открытых без бойца
    (pityBoxes), и сбрасывается в 0, как только боец выпал. Среди бойцов
    более редкие выпадают реже (весовой выбор по редкости). */
-const RARITY_WEIGHT={common:100,rare:45,epic:20,mythic:8,legend:3};
+const RARITY_WEIGHT={common:100,rare:50,epic:25,mythic:10,legend:1};
 function pickWeightedBrawler(list){
   let total=0;const weighted=list.map(b=>{const w=RARITY_WEIGHT[b.rarity]||10;total+=w;return{b,w};});
   let r=Math.random()*total;
@@ -1090,13 +1093,15 @@ function pickWeightedBrawler(list){
 }
 function rollFillerReward(){
   const roll=Math.random();
-  if(roll<0.55){const c=rndi(20,90);P.coins+=c;return{icon:'🪙',name:'Монеты',txt:'+'+c,kind:'coins'};}
+  if(roll<0.45){const c=rndi(20,90);P.coins+=c;return{icon:'🪙',name:'Монеты',txt:'+'+c,kind:'coins'};}
   if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:'⚡',name:'Очки силы',txt:'+'+p,kind:'pp'};}
   const g=rndi(2,6);P.gems+=g;return{icon:'💠',name:'Кристаллы',txt:'+'+g,kind:'gems'};
 }
 function currentBrawlerChance(){
-  // Шансы урезаны вдвое от изначальных
-  return clamp(0.02+(P.pityBoxes||0)*0.0075+(P.totalBoxesOpened||0)*0.0003,0.02,0.325);
+  return clamp(0.01+(P.pityBoxes||0)*0.001+(P.totalBoxesOpened||0)*0.0001,0.01,0.10);
+}
+function currentStarChance(){
+  return clamp(0.025+(P.pityStars||0)*0.001+(P.totalBoxesOpened||0)*0.0001,0.025,0.25);
 }
 function rollBoxItem(guaranteed){
   const locked=BRAWLERS.filter(b=>!P.unlocked[b.id]);
@@ -1108,10 +1113,12 @@ function rollBoxItem(guaranteed){
   }
   // звёздные силы выбиваются отдельно (в гарантированном слоте омега-ящика - в приоритете)
   const starCandidates=ownedBrawlersMissingStar();
-  if(starCandidates.length&&(guaranteed||Math.random()<0.06)){
+  const starChance=currentStarChance();
+  if(starCandidates.length&&(guaranteed||Math.random()<starChance)){
     const pickC=pick(starCandidates);
     P.starPowers[pickC.brawler.id]=P.starPowers[pickC.brawler.id]||[];
     P.starPowers[pickC.brawler.id].push(pickC.idx);
+    P.pityStars=0;
     return {icon:'⭐',name:pickC.brawler.stars[pickC.idx].name,txt:pickC.brawler.name,rar:pickC.brawler.rarity,kind:'star'};
   }
   if(guaranteed){ // всё уже собрано - выдаём крупный бонус вместо гарантии
@@ -1122,7 +1129,7 @@ function rollBoxItem(guaranteed){
 function boxItemCount(kind){
   if(kind==='box')return rndi(1,3);
   if(kind==='big')return rndi(3,5);
-  if(kind==='mega')return rndi(5,7);
+  if(kind==='mega')return rndi(5,10);
   return rndi(10,15); // omega
 }
 /* Модалка "Текущие шансы" - пересчитывается заново при каждом открытии,
@@ -1142,16 +1149,17 @@ function openOddsModal(){
       <div class="road-l">${cnt} бойцов доступно · ~${pctOverall.toFixed(1)}% за предмет</div></div></div>`;
   }).join('');
   const starMissing=ownedBrawlersMissingStar().length;
+  const starChance=currentStarChance();
   document.getElementById('odds-content').innerHTML=`
     <div class="road-item ready"><div class="road-ic">🥊</div>
       <div class="road-info"><div class="road-t">Шанс бойца за 1 предмет сейчас</div>
-      <div class="road-l">${(chance*100).toFixed(1)}% — растёт с каждым ящиком без бойца, сбрасывается при получении бойца</div></div></div>
+      <div class="road-l">${(chance*100).toFixed(2)}% — растёт с каждым ящиком без бойца, сбрасывается при получении бойца</div></div></div>
     <div class="road-item"><div class="road-ic">⭐</div>
       <div class="road-info"><div class="road-t">Шанс звёздной силы за предмет</div>
-      <div class="road-l">${starMissing?'~6% (не добыто ещё: '+starMissing+') · в омега-ящике гарантирована, если нет бойцов на выдачу':'Все открытые бойцы уже имеют обе звёздные силы'}</div></div></div>
+      <div class="road-l">${starMissing?(starChance*100).toFixed(2)+'% (не добыто ещё: '+starMissing+') · в омега-ящике гарантирована, если нет бойцов на выдачу':'Все открытые бойцы уже имеют обе звёздные силы'}</div></div></div>
     ${locked.length?rarRows:'<p class="note">Все бойцы уже открыты — вместо бойца будут бонусные кристаллы.</p>'}
-    <p class="note" style="margin-top:8px">📦 Ящик: 1-3 предмета · 🎁 Большой: 3-5 · 💎 Мега: 5-7 · 🌟 Омега: 10-15 (гарантирован боец)</p>
-    <p class="note">Ящиков без бойца подряд: ${P.pityBoxes||0} · Всего открыто за всё время: ${P.totalBoxesOpened||0}</p>`;
+    <p class="note" style="margin-top:8px">📦 Ящик: 1-3 предмета · 🎁 Большой: 3-5 · 💎 Мега: 5-10 · 🌟 Омега: 10-15 (гарантирован боец)</p>
+    <p class="note">Ящиков без бойца подряд: ${P.pityBoxes||0} · Ящиков без звёздной силы подряд: ${P.pityStars||0} · Всего открыто за всё время: ${P.totalBoxesOpened||0}</p>`;
   document.getElementById('modal-odds').classList.add('show');
 }
 function closeOddsModal(){document.getElementById('modal-odds').classList.remove('show');}
@@ -1174,6 +1182,7 @@ function openBox(kind){
   if((P.boxes[kind]||0)<1){toast('Нет таких ящиков!');return;}
   P.boxes[kind]--;
   P.pityBoxes=(P.pityBoxes||0)+1;
+  P.pityStars=(P.pityStars||0)+1;
   P.totalBoxesOpened=(P.totalBoxesOpened||0)+1;
   const count=boxItemCount(kind);
   // прокручиваем все предметы заранее
@@ -2254,7 +2263,7 @@ canvas.addEventListener('touchcancel',e=>{
   }
 });
 // кнопки атаки/супера (тап = автоприцел, удержание+тяга = ручной)
-const btnAttack=document.getElementById('btn-attack'),btnSuper=document.getElementById('btn-super');
+const btnAttack=document.getElementById('btn-attack'),btnSuper=document.getElementById('btn-super'),superRing=document.getElementById('super-ring');
 function bindBtn(el,mode){
   el.addEventListener('touchstart',e=>{
     e.preventDefault();e.stopPropagation();AUDIO.init();
@@ -2410,6 +2419,7 @@ function update(dt){
   document.getElementById('hud-timer').textContent=Math.max(0,Math.floor(tl/60))+':'+String(Math.max(0,Math.floor(tl%60))).padStart(2,'0');
   document.getElementById('hud-score').textContent=G.mode.hudScore();
   btnSuper.classList.toggle('ready',u.super>=u.superMax&&!u.dead);
+  superRing.style.setProperty('--chg',Math.round(clamp(u.super/u.superMax,0,1)*100));
   // конец боя
   const res=G.mode.checkEnd(tl);
   if(res!==null)endBattle(res,false);
@@ -2563,6 +2573,10 @@ function render(){
     ctx.fillStyle='#141726';ctx.fillRect(un.x-bw/2,un.y-un.r-16,bw,6);
     ctx.fillStyle=un.team===pu.team?'#5adb7c':'#ff5a5a';
     ctx.fillRect(un.x-bw/2,un.y-un.r-16,bw*clamp(un.hp/un.maxhp,0,1),6);
+    ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.lineWidth=2;ctx.strokeStyle='rgba(10,11,20,.85)';
+    ctx.strokeText(Math.max(0,Math.ceil(un.hp))+'',un.x,un.y-un.r-7);
+    ctx.fillStyle='#fff';ctx.fillText(Math.max(0,Math.ceil(un.hp))+'',un.x,un.y-un.r-7);
     // супер-индикатор
     if(un.super>=un.superMax){ctx.fillStyle='#ffd24e';ctx.font='11px serif';ctx.fillText('⭐',un.x-bw/2-8,un.y-un.r-13);}
     // кристаллы/кубы/звёзды
@@ -2636,18 +2650,23 @@ function render(){
     ctx.beginPath();ctx.arc(s.ox+Math.cos(a)*l,s.oy+Math.sin(a)*l,22,0,Math.PI*2);ctx.fill();
     ctx.globalAlpha=1;
   }
-  // патроны и хп игрока (низ)
+  // хп, патроны игрока (низ) - индикатор супера теперь кольцом вокруг кнопки
   if(pu&&!pu.dead){
-    const bx=innerWidth/2,by=innerHeight-28;
+    const bx=innerWidth/2;
+    const hpY=innerHeight-30,hpW=180,hpH=15;
+    // патроны - НАД полоской хп
+    const ammoY=hpY-20;
     for(let i=0;i<pu.ammoMax;i++){
       ctx.fillStyle=i<pu.ammo?'#ffcc00':'rgba(255,255,255,.2)';
-      ctx.beginPath();ctx.roundRect(bx-pu.ammoMax*16+i*32,by,26,10,5);ctx.fill();
+      ctx.beginPath();ctx.roundRect(bx-pu.ammoMax*16+i*32,ammoY,26,10,5);ctx.fill();
     }
-    // шкала супера
-    ctx.fillStyle='rgba(255,255,255,.15)';
-    ctx.beginPath();ctx.roundRect(bx-70,by-16,140,8,4);ctx.fill();
-    ctx.fillStyle='#ffd24e';
-    ctx.beginPath();ctx.roundRect(bx-70,by-16,140*clamp(pu.super/pu.superMax,0,1),8,4);ctx.fill();
+    // хп-бар с числом
+    ctx.fillStyle='#141726';
+    ctx.beginPath();ctx.roundRect(bx-hpW/2,hpY,hpW,hpH,7);ctx.fill();
+    ctx.fillStyle='#5adb7c';
+    ctx.beginPath();ctx.roundRect(bx-hpW/2,hpY,hpW*clamp(pu.hp/pu.maxhp,0,1),hpH,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(Math.max(0,Math.ceil(pu.hp))+' / '+pu.maxhp,bx,hpY+hpH/2+1);
   }else if(pu&&pu.dead&&G.mode.respawns){
     ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 22px sans-serif';ctx.textAlign='center';
     ctx.fillText('Возрождение через '+Math.ceil(pu.respawnT)+'...',innerWidth/2,innerHeight/2);
