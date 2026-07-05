@@ -544,10 +544,10 @@ const BRAWLERS=[
   desc:'Мечник ближнего боя. Супер — огненный вихрь, отбрасывающий врагов.'},
  {id:'icemage',name:'Ледяная Волшебница',icon:'❄️',color:'#5db7e8',rarity:'common',hp:3400,spd:145,
   atk:{type:'proj',dmg:520,range:380,reload:0.9,ammo:3,pspd:560,slow:1.4},
-  sup:{type:'freeze',dmg:400,radius:130,dur:2.2,charge:3200},
+  sup:{type:'nova',dmg:500,radius:140,kb:120,charge:3200},
   stars:[{name:'Вечная мерзлота',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
          {name:'Ледяной щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
-  desc:'Ледяные копья замедляют. Супер замораживает область.'},
+  desc:'Ледяные копья замедляют. Супер — ледяной взрыв, отбрасывающий врагов.'},
  {id:'gremlin',name:'Инженер-Гремлин',icon:'🔧',color:'#8fbf46',rarity:'rare',hp:4200,spd:150,
   atk:{type:'proj',dmg:480,range:230,reload:0.75,ammo:3,pspd:520,fixTurret:600},
   sup:{type:'turret',hp:3000,dmg:300,range:300,charge:3000},
@@ -635,16 +635,16 @@ const BRAWLERS=[
   desc:'Стреляет пронзающими стрелами с дальней дистанции. Супер – ливень стрел.'},
  {id:'berserk',name:'Берсерк',icon:'🪓',color:'#c94040',rarity:'rare',hp:4800,spd:155,
   atk:{type:'melee',dmg:720,range:80,reload:0.75,ammo:3,arc:2.2,enrage:true},
-  sup:{type:'nova',dmg:900,radius:140,kb:200,charge:3200},
+  sup:{type:'tornado',dmg:900,radius:140,dur:2.5,pull:180,charge:3200},
   stars:[{name:'Кровожадность',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
          {name:'Боевая ярость',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
-  desc:'Чем меньше здоровья, тем сильнее бьёт топором. Супер – яростный круговой удар.'},
+  desc:'Чем меньше здоровья, тем сильнее бьёт топором. Супер – яростный вихрь, затягивающий врагов.'},
  {id:'sapper',name:'Сапёр',icon:'💣',color:'#b38b40',rarity:'rare',hp:3700,spd:145,
   atk:{type:'pool',dmg:380,dps:220,range:280,reload:0.9,ammo:3,poolR:60,poolDur:0.6},
-  sup:{type:'bigboom',dmg:1300,radius:160,burnDps:300,burnDur:3,charge:3600},
+  sup:{type:'turret',hp:2400,dmg:280,range:260,charge:3200},
   stars:[{name:'Замедленная детонация',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
          {name:'Крепкая броня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
-  desc:'Метает мины-ловушки. Супер – мощная взрывчатка, оставляющая горящую воронку.'},
+  desc:'Метает мины-ловушки. Супер – устанавливает мину-турель, обстреливающую врагов.'},
  {id:'timemage',name:'Маг Времени',icon:'⏳',color:'#8e7cc3',rarity:'mythic',hp:3800,spd:150,
   atk:{type:'proj',dmg:460,range:320,reload:0.85,ammo:3,pspd:500,slow:1.3},
   sup:{type:'emp',dmg:400,radius:160,stun:1.5,charge:3500},
@@ -687,6 +687,156 @@ const BRAWLERS=[
   stars:[{name:'Философский камень',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
          {name:'Алхимический катализатор',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
   desc:'Превращает врагов в овечек своими колбами. Супер создаёт зону трансмутации.'},
+ {id:'shadowthief',name:'Телепортирующийся вор',icon:'🕶️',color:'#2c2c54',rarity:'legend',hp:3700,spd:170,
+  atk:{type:'melee',dmg:520,range:80,reload:0.7,ammo:3,arc:1.7,backstab:true},
+  sup:{type:'pull',dmg:800,radius:130,stun:1.0,charge:3200},
+  stars:[{name:'Двойной прыжок',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
+         {name:'Воровское чутьё',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+  desc:'Наносит бонусный урон, атакуя со спины. Супер – мгновенный рывок к цели с мощным ударом.'},
+ {id:'graviton',name:'Маг-гравитатор',icon:'🕳️',color:'#4a148c',rarity:'mythic',hp:3900,spd:140,
+  atk:{type:'proj',dmg:430,range:340,reload:0.95,ammo:3,pspd:480,slow:1.35},
+  sup:{type:'pull',dmg:900,radius:130,stun:1.5,charge:3600},
+  stars:[{name:'Горизонт событий',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
+         {name:'Искривление',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+  desc:'Снаряды притягивают врагов. Супер создаёт чёрную дыру, затягивающую и оглушающую противников.'},
+ {id:'lightningwar',name:'Воин-электрик',icon:'🌩️',color:'#ffd600',rarity:'rare',hp:4100,spd:155,
+  atk:{type:'melee',dmg:580,range:85,reload:0.85,ammo:3,arc:1.8},
+  sup:{type:'turret',hp:2200,dmg:260,range:280,charge:3200},
+  stars:[{name:'Электрический щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Грозовой разряд',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Каждый удар потрескивает электричеством. Супер устанавливает потрескивающую электротурель.'},
+ {id:'mudking',name:'Болотный король',icon:'🐸',color:'#33691e',rarity:'epic',hp:5500,spd:125,
+  atk:{type:'pool',dmg:350,dps:200,range:290,reload:1.0,ammo:3,poolR:70,poolDur:4},
+  sup:{type:'petbuff',petHp:3500,petDmg:400,buffMul:1.4,charge:3500},
+  stars:[{name:'Целебная грязь',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Грязевая броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+  desc:'Оставляет вязкие лужи, замедляющие врагов. Супер призывает грязевого голема на подмогу.'},
+ {id:'firearcher',name:'Огненный лучник',icon:'🎇',color:'#bf360c',rarity:'rare',hp:3600,spd:155,
+  atk:{type:'proj',dmg:460,range:370,reload:0.9,ammo:3,pspd:560,burn:true,burnDur:3,burnDps:130},
+  sup:{type:'orbital',dmg:1500,radius:150,delay:0.9,range:380,charge:3400},
+  stars:[{name:'Пламенный шквал',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Огненная регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+  desc:'Стрелы поджигают цель. Супер – дождь огненных стрел с неба.'},
+ {id:'shieldcapt',name:'Капитан щита',icon:'🔰',color:'#78909c',rarity:'common',hp:5800,spd:135,
+  atk:{type:'melee',dmg:560,range:85,reload:0.85,ammo:3,arc:1.8},
+  sup:{type:'rally',shield:1800,spdMul:1.15,dur:4,radius:9999,charge:3300},
+  stars:[{name:'Отражающий барьер',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Укрепление',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+  desc:'Крепкий боец ближнего боя. Супер ставит энергетический барьер, дающий щит союзникам.'},
+ {id:'voodoo',name:'Шаман вуду',icon:'🎭',color:'#311b92',rarity:'mythic',hp:3800,spd:150,
+  atk:{type:'proj',dmg:370,range:310,reload:0.9,ammo:3,pspd:480,slow:1.25},
+  sup:{type:'batform',dur:3,spdMul:1.4,healPct:0.25,charge:3400},
+  stars:[{name:'Обмен душами',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Проклятие боли',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Проклинает врагов на расстоянии. Супер призывает духовную связь, дающую защиту и скорость.'},
+ {id:'jetracoon',name:'Реактивный енот',icon:'🦝',color:'#795548',rarity:'epic',hp:3500,spd:175,
+  atk:{type:'spread',dmg:290,range:270,reload:0.65,ammo:3,pspd:620,count:3,spread:0.2},
+  sup:{type:'orbital',dmg:1300,radius:130,delay:0.7,range:350,charge:3000},
+  stars:[{name:'Топливный бак',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
+         {name:'Адреналин',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+  desc:'Стреляет веером и делает реактивные рывки. Супер – прыжок с ракетным ранцем и мощный удар.'},
+ {id:'icelemental',name:'Ледяной элементаль',icon:'🧊',color:'#81d4fa',rarity:'mythic',hp:5000,spd:130,
+  atk:{type:'shock',dmg:600,range:110,reload:1.0,ammo:3},
+  sup:{type:'freeze',dmg:500,radius:180,dur:2.5,charge:3700},
+  stars:[{name:'Ледяной панцирь',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Холодная ярость',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Удары по площади обмораживают врагов. Супер – метель, замедляющая и замораживающая всех рядом.'},
+ {id:'healmonk',name:'Монах-исцелитель',icon:'🧘',color:'#a5d6a7',rarity:'common',hp:4000,spd:145,
+  atk:{type:'healorb',dmg:380,heal:480,range:330,reload:0.9,ammo:3,pspd:480},
+  sup:{type:'rally',shield:1600,spdMul:1.1,dur:4,radius:9999,charge:3100},
+  stars:[{name:'Аура умиротворения',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Просветление',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Сферы ци лечат союзников. Супер – медитация: щит и ускорение для всей команды.'},
+ {id:'trapper',name:'Механик-траппер',icon:'🪤',color:'#5d4037',rarity:'epic',hp:3900,spd:150,
+  atk:{type:'proj',dmg:400,range:280,reload:0.85,ammo:3,pspd:460,slow:1.3},
+  sup:{type:'bigboom',dmg:1200,radius:160,burnDps:100,burnDur:1.5,charge:3400},
+  stars:[{name:'Усиленные пружины',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Запасы',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+  desc:'Снаряды ставят замедляющие капканы. Супер разбрасывает кластер мини-капканов, взрывающихся при срабатывании.'},
+ {id:'phoenix',name:'Феникс',icon:'🐦',color:'#ff6d00',rarity:'legend',hp:3400,spd:160,
+  atk:{type:'burst',dmg:280,range:340,reload:0.8,ammo:3,pspd:600,count:3,revive:true},
+  sup:{type:'bigboom',dmg:1100,radius:150,burnDps:150,burnDur:2,charge:3500},
+  stars:[{name:'Огненное возрождение',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Пылающий след',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'При смертельном ударе один раз за бой возрождается со взрывом вместо гибели. Супер – огненное пике по области.'},
+ {id:'psiblade',name:'Пси-блейд',icon:'🧿',color:'#e040fb',rarity:'rare',hp:3800,spd:155,
+  atk:{type:'melee',dmg:520,range:82,reload:0.75,ammo:3,arc:1.7},
+  sup:{type:'bigboom',dmg:1000,radius:150,burnDps:80,burnDur:1.5,charge:3300},
+  stars:[{name:'Глубокая рана',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Ментальная блокада',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Режущие удары клинком разума. Супер – ментальный взрыв, ошеломляющий врагов в зоне.'},
+ {id:'cactus',name:'Живой кактус',icon:'🌵',color:'#4caf50',rarity:'rare',hp:4800,spd:130,
+  atk:{type:'spread',dmg:320,range:300,reload:0.9,ammo:3,pspd:500,count:5,spread:0.4},
+  sup:{type:'rally',shield:2000,spdMul:1.1,dur:4,radius:9999,charge:3400},
+  stars:[{name:'Ядовитые иглы',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+  desc:'Веер колючих игл во все стороны. Супер покрывает шипами — щит себе и союзникам.'},
+ {id:'windmage',name:'Вихревой маг',icon:'🌪️',color:'#90caf9',rarity:'epic',hp:3700,spd:155,
+  atk:{type:'wave',dmg:400,range:340,reload:0.85,ammo:3,pspd:520,kb:100},
+  sup:{type:'pull',dmg:700,radius:150,stun:1.2,charge:3500},
+  stars:[{name:'Электрический ветер',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Попутный ветер',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+  desc:'Волны ветра отбрасывают врагов. Супер – ураган, затягивающий противников в центр.'},
+ {id:'gunner',name:'Инженер-пулемётчик',icon:'🎯',color:'#616161',rarity:'rare',hp:3800,spd:145,
+  atk:{type:'burst',dmg:210,range:330,reload:0.75,ammo:3,pspd:640,count:4},
+  sup:{type:'turret',hp:3000,dmg:260,range:320,charge:3500},
+  stars:[{name:'Бронебойные патроны',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Ремонтный комплект',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+  desc:'Ведёт очереди из пулемёта. Супер ставит стационарную турель-часового.'},
+ {id:'mirrorknight',name:'Зеркальный рыцарь',icon:'🪞',color:'#cfd8dc',rarity:'mythic',hp:4300,spd:145,
+  atk:{type:'melee',dmg:550,range:80,reload:0.8,ammo:3,arc:1.7},
+  sup:{type:'petbuff',petHp:2600,petDmg:350,buffMul:1.4,charge:3400},
+  stars:[{name:'Идеальное отражение',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Зеркальная броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+  desc:'Мечник, отражающий удары. Супер создаёт зеркальную копию, сражающуюся рядом.'},
+ {id:'acidslime',name:'Кислотный слизень',icon:'🟢',color:'#76ff03',rarity:'epic',hp:4500,spd:140,
+  atk:{type:'pool',dmg:300,dps:280,range:280,reload:1.0,ammo:3,poolR:60,poolDur:4},
+  sup:{type:'freeze',dmg:400,radius:150,dur:2,charge:3600},
+  stars:[{name:'Едкая слизь',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Регенерация делением',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+  desc:'Кислотные лужи разъедают броню. Супер разделяется, обездвиживая врагов вокруг.'},
+ {id:'executioner',name:'Палач',icon:'⚰️',color:'#212121',rarity:'legend',hp:4200,spd:140,
+  atk:{type:'melee',dmg:650,range:90,reload:0.9,ammo:3,arc:1.6,execute:true},
+  sup:{type:'orbital',dmg:1500,radius:140,delay:0.8,range:400,charge:3700},
+  stars:[{name:'Кровавая жатва',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
+         {name:'Тяжёлое лезвие',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Добивает ослабленных врагов тройным уроном. Супер – топор, падающий с небес по цели.'},
+ {id:'necromancer',name:'Некромант',icon:'💀',color:'#4a148c',rarity:'mythic',hp:3700,spd:145,
+  atk:{type:'proj',dmg:380,range:320,reload:0.9,ammo:3,pspd:480},
+  sup:{type:'tornado',dmg:700,radius:150,dur:3,pull:150,charge:3600},
+  stars:[{name:'Призрачная ярость',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Жертвоприношение',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'}],
+  desc:'Тёмная магия на расстоянии. Супер призывает вихрь тьмы, засасывающий и терзающий врагов.'},
+ {id:'blademaster',name:'Мастер клинков',icon:'⚔️',color:'#90a4ae',rarity:'rare',hp:3900,spd:165,
+  atk:{type:'melee',dmg:500,range:80,reload:0.6,ammo:3,arc:1.6},
+  sup:{type:'emp',dmg:700,radius:140,stun:1.3,charge:3000},
+  stars:[{name:'Вихрь клинков',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Заточка',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+  desc:'Быстрые точные удары клинком. Супер – вращение с оглушающей энергетической волной.'},
+ {id:'energymage',name:'Энергетический маг',icon:'🔮',color:'#00e5ff',rarity:'epic',hp:3500,spd:150,
+  atk:{type:'proj',dmg:420,range:360,reload:0.85,ammo:3,pspd:560},
+  sup:{type:'rally',shield:1500,spdMul:1.2,dur:4,radius:9999,charge:3200},
+  stars:[{name:'Энергетический всплеск',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Кража силы',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+  desc:'Энергетические снаряды на дальней дистанции. Супер – кольцо энергии, ускоряющее союзников.'},
+ {id:'darkwarrior',name:'Воин-тень',icon:'🌑',color:'#1a1a1a',rarity:'legend',hp:4000,spd:160,
+  atk:{type:'melee',dmg:570,range:85,reload:0.8,ammo:3,arc:1.7,shadowStep:true},
+  sup:{type:'freeze',dmg:600,radius:150,dur:2,charge:3500},
+  stars:[{name:'Теневой разрыв',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Тёмная регенерация',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'}],
+  desc:'После убийства становится невидимым. Супер создаёт портал тьмы, замораживающий врагов рядом.'},
+ {id:'beardruid',name:'Друид-медведь',icon:'🐻',color:'#5d4037',rarity:'mythic',hp:4800,spd:140,
+  atk:{type:'melee',dmg:620,range:85,reload:0.9,ammo:3,arc:1.7,burn:true,burnDur:3,burnDps:100},
+  sup:{type:'batform',dur:5,spdMul:1.2,healPct:0.3,charge:3600},
+  stars:[{name:'Инстинкт хищника',kind:'hp',val:0.12,desc:'+12% к максимальному здоровью.'},
+         {name:'Медвежья хватка',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+  desc:'Когти оставляют кровоточащие раны. Супер – превращение в медведя: больше здоровья, урона и регенерации.'},
+ {id:'technomage',name:'Техно-маг',icon:'💻',color:'#7c4dff',rarity:'legend',hp:3600,spd:145,
+  atk:{type:'proj',dmg:390,range:330,reload:0.85,ammo:3,pspd:520},
+  sup:{type:'massheal',heal:1400,radius:160,charge:3500},
+  stars:[{name:'Вирус',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Цифровой щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+  desc:'Цифровые метки на врагах. Супер создаёт зону, восстанавливающую здоровье союзникам рядом.'},
 ];
 const BRAWLER_BY_ID={};BRAWLERS.forEach(b=>BRAWLER_BY_ID[b.id]=b);
 
@@ -1511,7 +1661,7 @@ class Unit{
     this.atkCd=0;this.super=0;this.superMax=def.sup.charge;
     this.dead=false;this.respawnT=0;
     this.facing=team===0?-Math.PI/2:Math.PI/2;
-    this.slowT=0;this.stunT=0;this.burnT=0;this.burnDps=0;this.shield=0;this.shieldT=0;
+    this.slowT=0;this.stunT=0;this.burnT=0;this.burnDps=0;this.shield=0;this.shieldT=0;this.usedRevive=false;
     this.invisT=0;this.invulnT=0;this.speedT=0;this.speedMul=1;
     this.stance=0; // робот: 0=дальняя 1=ближняя
     this.gems=0;this.stars=2;this.cubes=0;
@@ -1542,15 +1692,34 @@ class Unit{
   takeDamage(dmg,src){
     if(this.dead||this.invulnT>0)return;
     dmg=Math.round(dmg);
+    const owner=(src&&(src.ownerUnit||src))||null;
+    if(owner&&owner.def&&owner.def.atk){
+      // казнь: добивание врагов с малым остатком хп
+      if(owner.def.atk.execute&&this.hp/this.maxhp<0.3)dmg=Math.round(dmg*3);
+      // удар в спину: бонус, если атакующий бьёт со стороны, противоположной взгляду цели
+      if(owner.def.atk.backstab&&owner===src){
+        const dirToAtk=Math.atan2(src.y-this.y,src.x-this.x);
+        const backAng=this.facing+Math.PI;
+        let da=Math.abs(dirToAtk-backAng);if(da>Math.PI)da=Math.PI*2-da;
+        if(da<0.9)dmg=Math.round(dmg*1.6);
+      }
+    }
     if(this.shield>0){const a=Math.min(this.shield,dmg);this.shield-=a;dmg-=a;}
     this.hp-=dmg;this.hitFlash=0.12;this.lastCombatT=G.time;
     addDmgNum(this.x,this.y-24,dmg,'#ffd24e');
     if(src&&src.team!==undefined&&src!==this){
-      const owner=src.ownerUnit||src;
       if(owner&&owner.chargeSuper)owner.chargeSuper(dmg);
       if(owner&&owner.starLifestealPct)owner.heal(dmg*owner.starLifestealPct);
     }
     AUDIO.hit();
+    // феникс: раз за бой не умирает, а возрождается со взрывом
+    if(this.hp<=0&&this.def.atk.revive&&!this.usedRevive){
+      this.usedRevive=true;
+      this.hp=Math.round(this.maxhp*0.6);
+      burst(this.x,this.y,'#ff6d00',24);
+      G.units.forEach(o=>{if(o.team!==this.team&&!o.dead&&dist(o.x,o.y,this.x,this.y)<140+o.r)o.takeDamage(600,this);});
+      return;
+    }
     if(this.hp<=0)this.die(src);
   }
   chargeSuper(dmg){ if(!this.dead)this.super=Math.min(this.superMax,this.super+dmg); }
@@ -1559,6 +1728,8 @@ class Unit{
     this.dead=true;this.deathAt=G.time;AUDIO.death();
     burst(this.x,this.y,this.hue,16);
     if(this.pet){this.pet.dead=true;this.pet=null;}
+    // воин тени: невидимость после убийства
+    if(src){const owner=src.ownerUnit||src;if(owner&&owner.def&&owner.def.atk&&owner.def.atk.shadowStep&&!owner.dead)owner.invisT=Math.max(owner.invisT||0,1.5);}
     G.mode.onDeath(this,src);
     this.respawnT=3;
   }
@@ -1591,12 +1762,12 @@ class Unit{
       case 'melee':{
         const range=robotMelee?a.meleeRange:a.range;
         const md=robotMelee?Math.round(a.meleeDmg*this.dmgMul):dmg;
-        slash(this,ax,ay,range,md,a.arc||1.6);break;}
+        slash(this,ax,ay,range,md,a.arc||1.6,a.burn?{dur:a.burnDur,dps:a.burnDps}:null);break;}
       case 'shock':{
         ring(this.x,this.y,a.range,'#c9b8a0');
         G.units.forEach(u=>{if(u.team!==this.team&&!u.dead&&dist(u.x,u.y,this.x,this.y)<a.range+u.r){u.takeDamage(dmg,this);knock(u,this.x,this.y,90);}});
         break;}
-      case 'proj':spawnProj(this,ax,ay,{dmg,spd:a.pspd,range:a.range,slow:a.slow,pierce:a.pierce});break;
+      case 'proj':spawnProj(this,ax,ay,{dmg,spd:a.pspd,range:a.range,slow:a.slow,pierce:a.pierce,burn:a.burn,burnDur:a.burnDur,burnDps:a.burnDps});break;
       case 'spread':for(let i=0;i<a.count;i++){const o=(i-(a.count-1)/2)*a.spread,c=Math.cos(o),s=Math.sin(o);
           spawnProj(this,ax*c-ay*s,ax*s+ay*c,{dmg,spd:a.pspd,range:a.range});}break;
       case 'burst':for(let i=0;i<a.count;i++)setTimeout(()=>{if(!this.dead&&G)spawnProj(this,ax,ay,{dmg,spd:a.pspd,range:a.range});},i*90);break;
@@ -1718,14 +1889,20 @@ function knock(u,fx,fy,power){
   const d=dist(u.x,u.y,fx,fy)||1;
   moveCircle(u,(u.x-fx)/d*power,(u.y-fy)/d*power);
 }
-function slash(u,ax,ay,range,dmg,arc){
+function slash(u,ax,ay,range,dmg,arc,burnCfg){
   G.fx.push({type:'slash',x:u.x,y:u.y,a:Math.atan2(ay,ax),r:range,t:0.18,max:0.18,color:u.hue});
   const fa=Math.atan2(ay,ax);
   const hitOne=(o,isSafe)=>{
     const d=dist(o.x,o.y,u.x,u.y);if(d>range+o.r||d<1)return;
     const oa=Math.atan2(o.y-u.y,o.x-u.x);
     let da=Math.abs(oa-fa);if(da>Math.PI)da=Math.PI*2-da;
-    if(da<arc/2){ if(isSafe)damageSafe(o,dmg,u); else o.takeDamage(dmg,u); }
+    if(da<arc/2){
+      if(isSafe)damageSafe(o,dmg,u);
+      else{
+        o.takeDamage(dmg,u);
+        if(burnCfg&&o.burnT!==undefined){o.burnT=Math.max(o.burnT,burnCfg.dur);o.burnDps=burnCfg.dps;o.burnSrc=u;}
+      }
+    }
   };
   G.units.forEach(o=>{if(o.team!==u.team&&!o.dead)hitOne(o,false);});
   G.turrets.forEach(o=>{if(o.team!==u.team&&!o.dead)hitOne(o,false)||0;});
@@ -1785,6 +1962,7 @@ function updateProjs(dt){
         if(u.takeDamage)u.takeDamage(dmg,p);
         else{u.hp-=dmg;if(u.hp<=0)u.dead=true;if(p.ownerUnit)p.ownerUnit.chargeSuper(dmg);}
         if(p.slow&&u.slowT!==undefined)u.slowT=Math.max(u.slowT,p.slow);
+        if(p.burn&&u.burnT!==undefined){u.burnT=Math.max(u.burnT,p.burnDur||2);u.burnDps=p.burnDps||100;u.burnSrc=p.ownerUnit;}
         if(p.kb&&u.takeDamage)knock(u,p.x-p.vx*0.01,p.y-p.vy*0.01,p.kb*dt*60>p.kb?p.kb:p.kb);
         if(p.steal&&p.ownerUnit)p.ownerUnit.heal(dmg*p.steal);
         p.hitSet.push(u.eid||u);
