@@ -36,6 +36,7 @@ button{font-family:inherit;border:none;cursor:pointer}
 .menu-btn .mi{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.brawler-count{text-align:center;font-size:13px;font-weight:800;color:var(--accent2);padding:0 12px 6px}
 .brawler-filters{display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap}
 .brawler-filters input,.brawler-filters select{background:#1b1e30;color:var(--text);border:1px solid rgba(255,255,255,.15);
   border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700}
@@ -89,6 +90,30 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 .star-eq-btn{flex-shrink:0;background:var(--panel);border:1px solid rgba(255,255,255,.2);color:var(--text);
   border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800}
 .star-eq-btn.on{background:linear-gradient(180deg,#5adb7c,#2c8a4b);border-color:transparent}
+.profile-avatar-big{width:88px;height:88px;border-radius:50%;background:linear-gradient(160deg,#ffd83d,#f5a623);
+  display:flex;align-items:center;justify-content:center;font-size:44px;border:3px solid rgba(255,255,255,.5);
+  margin:8px auto;cursor:pointer;position:relative}
+.profile-avatar-big::after{content:'✏️';position:absolute;right:-2px;bottom:-2px;font-size:16px;
+  background:var(--panel2);border-radius:50%;padding:3px}
+.profile-nick-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px}
+.profile-nick-row h3{margin:0}
+.profile-nick-row button{background:var(--panel2);border:1px solid rgba(255,255,255,.15);color:var(--text);
+  border-radius:8px;padding:5px 10px;font-size:12px;font-weight:800}
+.profile-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:14px 0}
+.profile-stat{background:var(--panel2);border-radius:10px;padding:10px;text-align:center}
+.profile-stat .ps-val{font-size:18px;font-weight:900;color:var(--accent2)}
+.profile-stat .ps-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.ach-item{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:10px;padding:9px 12px;margin:6px 0}
+.ach-item.done{background:rgba(90,219,124,.15);border:1px solid rgba(90,219,124,.4)}
+.ach-ic{font-size:22px;width:30px;text-align:center;flex-shrink:0}
+.ach-info{flex:1;min-width:0}
+.ach-t{font-weight:800;font-size:13px}
+.ach-d{font-size:11px;color:var(--muted)}
+.ach-bar{background:#141726;border-radius:6px;height:6px;margin-top:4px;overflow:hidden}
+.ach-bar-in{height:100%;background:linear-gradient(90deg,#3ec6ff,#5adb7c)}
+.avatar-opt{width:52px;height:52px;border-radius:50%;background:var(--panel2);border:2px solid transparent;
+  font-size:26px;display:flex;align-items:center;justify-content:center;margin:4px}
+.avatar-opt.sel{border-color:var(--accent2);background:rgba(255,210,78,.2)}
 .statrow b{color:var(--accent)}
 .rarity-tag{display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:800;margin-bottom:8px;color:#101020}
 .shop-item{display:flex;align-items:center;gap:12px;background:var(--panel);border-radius:14px;padding:12px;margin:8px 0;box-shadow:0 3px 0 rgba(0,0,0,.3)}
@@ -128,6 +153,12 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 #reveal-icon{font-size:96px;filter:drop-shadow(0 10px 20px rgba(0,0,0,.5))}
 #reveal-name{font-size:24px;font-weight:900;text-shadow:0 2px 8px rgba(0,0,0,.6)}
 #reveal-count{font-size:17px;font-weight:800;color:#ffd24e;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+#box-summary{margin-top:10px;max-height:220px;overflow-y:auto;touch-action:pan-y;width:100%;max-width:340px}
+#box-summary-list{display:flex;flex-direction:column;gap:6px}
+.summary-item{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.35);border-radius:10px;padding:7px 12px;text-align:left}
+.summary-item .si-ic{font-size:20px;flex-shrink:0}
+.summary-item .si-txt{font-size:13px;font-weight:700;color:#fff}
+.summary-item .si-sub{font-size:11px;color:var(--muted)}
 #box-anim.shake{animation:shake .4s infinite}
 @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg) scale(1.05)}75%{transform:rotate(8deg) scale(1.05)}}
 #box-rewards{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:20px;min-height:100px}
@@ -233,7 +264,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 <div class="screen active" id="scr-main">
   <div class="topbar-main">
     <div class="player-badge" onclick="openRoadModal()" style="cursor:pointer" title="Трофейный путь">
-      <div class="avatar">🙂</div>
+      <div class="avatar" id="main-avatar" onclick="event.stopPropagation();UI.show('scr-profile')" title="Профиль">🙂</div>
       <div class="trophy-pill-wrap">
         <div class="player-nick" id="main-nick">Игрок</div>
         <div class="trophy-pill">🏆 <span id="main-trophies">0</span></div>
@@ -293,6 +324,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 <div class="screen" id="scr-brawlers">
   <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Бойцы</h2><div style="width:44px"></div></div>
   <div class="currbar" id="brawlers-curr"></div>
+  <div class="brawler-count" id="brawler-count"></div>
   <div class="brawler-filters">
     <input type="text" id="bf-search" placeholder="🔍 Поиск по имени..." oninput="UI.renderBrawlers()">
     <select id="bf-rarity" onchange="UI.renderBrawlers()">
@@ -349,8 +381,26 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
       <div id="reveal-name"></div>
       <div id="reveal-count"></div>
     </div>
+    <div id="box-summary" style="display:none">
+      <p class="note" style="font-weight:900;color:#fff;font-size:15px">Получено:</p>
+      <div id="box-summary-list"></div>
+    </div>
   </div>
   <button class="big-btn" style="max-width:280px;display:none;margin:12px auto;flex-shrink:0" id="box-done-btn" onclick="event.stopPropagation();UI.show('scr-boxes')">Забрать</button>
+</div>
+
+<!-- ============ ПРОФИЛЬ ИГРОКА ============ -->
+<div class="screen" id="scr-profile">
+  <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Профиль</h2><div style="width:44px"></div></div>
+  <div class="content" id="profile-content"></div>
+</div>
+
+<!-- ============ ВЫБОР АВАТАРА ============ -->
+<div class="modal-overlay" id="modal-avatar" onclick="if(event.target===this)closeAvatarModal()">
+  <div class="modal-box">
+    <div class="topbar"><div style="width:44px"></div><h2>Выбери аватар</h2><button class="back-btn" onclick="closeAvatarModal()">✕</button></div>
+    <div class="road-scroll" id="avatar-grid" style="flex-direction:row;flex-wrap:wrap;justify-content:center;align-content:flex-start"></div>
+  </div>
 </div>
 
 <!-- ============ SETTINGS ============ -->
@@ -840,6 +890,20 @@ const BRAWLERS=[
 ];
 const BRAWLER_BY_ID={};BRAWLERS.forEach(b=>BRAWLER_BY_ID[b.id]=b);
 
+/* ---------------- ПРОФИЛЬ: АВАТАРЫ И ДОСТИЖЕНИЯ ---------------- */
+const AVATAR_OPTIONS=['🙂','😎','🤠','🥷','🧙','🦸','👽','🤖','🐺','🦁','🐯','🐻','🦊','🐸','🔥','⚡','💀','👑','🎃','🐙'];
+const ACHIEVEMENTS=[
+  {id:'first_win',name:'Первая победа',icon:'🏆',desc:'Выиграй свой первый бой',target:1,cur:P=>P.wins||0},
+  {id:'ten_wins',name:'Ветеран арены',icon:'⚔️',desc:'Выиграй 10 боёв',target:10,cur:P=>P.wins||0},
+  {id:'fifty_wins',name:'Чемпион арены',icon:'🥇',desc:'Выиграй 50 боёв',target:50,cur:P=>P.wins||0},
+  {id:'collector10',name:'Коллекционер',icon:'🥊',desc:'Открой 10 бойцов',target:10,cur:P=>Object.keys(P.unlocked||{}).length},
+  {id:'collectorAll',name:'Полная коллекция',icon:'🌟',desc:'Открой всех бойцов',target:BRAWLERS.length,cur:P=>Object.keys(P.unlocked||{}).length},
+  {id:'trophies1000',name:'Тысяча кубков',icon:'🏆',desc:'Набери 1000 кубков',target:1000,cur:P=>P.trophies||0},
+  {id:'trophies5000',name:'Легенда арены',icon:'👑',desc:'Набери 5000 кубков',target:5000,cur:P=>P.trophies||0},
+  {id:'boxes50',name:'Любитель ящиков',icon:'📦',desc:'Открой 50 ящиков',target:50,cur:P=>P.totalBoxesOpened||0},
+  {id:'maxlevel',name:'Мастер бойца',icon:'⭐',desc:'Прокачай бойца до 10 уровня',target:1,cur:P=>Object.values(P.levels||{}).some(l=>l>=10)?1:0},
+];
+
 /* уровни: стоимость улучшения (уровень 1→2 ... 9→10) */
 const UP_PP  =[20,30,50,80,130,210,340,550,890];
 const UP_COIN=[20,35,75,140,290,480,800,1250,1875];
@@ -934,6 +998,9 @@ const DEFAULT_PROFILE=()=>({
   mmr:0, // скрытый рейтинг для подбора сложности ботов
   starPowers:{}, // {brawlerId:[индексы добытых звёздных сил]}
   equippedStar:{}, // {brawlerId: индекс экипированной звёздной силы}
+  avatar:'🙂',
+  gamesPlayed:0,wins:0,losses:0,
+  createdAt:Date.now(),
 });
 let P;
 function loadP(){ try{ P=Object.assign(DEFAULT_PROFILE(),JSON.parse(localStorage.getItem('bl_save')||'{}')); }catch(e){ P=DEFAULT_PROFILE(); } if(!P.unlocked.knight){P.unlocked.knight=1;P.levels.knight=1;} if(!P.brawlerTrophies)P.brawlerTrophies={};
@@ -1073,6 +1140,7 @@ const UI={
     if(id==='scr-battle')this.renderBattle();
     if(id==='scr-settings')this.renderSettings();
     if(id==='scr-admin')this.renderAdmin();
+    if(id==='scr-profile')this.renderProfile();
   },
   currHtml(){
     return `<div class="curr"><span class="ic">🏆</span>${P.trophies}</div>
@@ -1089,6 +1157,7 @@ const UI={
     document.getElementById('main-curr').innerHTML=this.miniCurrHtml();
     document.getElementById('main-trophies').textContent=P.trophies;
     document.getElementById('main-nick').textContent=P.nick||'Игрок';
+    document.getElementById('main-avatar').textContent=P.avatar||'🙂';
     checkTrophyRoad();
     const next=TROPHY_ROAD.find((m,i)=>!P.claimedRoad.includes(i));
     const bar=document.getElementById('main-road-bar');
@@ -1119,6 +1188,8 @@ const UI={
   },
   renderBrawlers(){
     document.getElementById('brawlers-curr').innerHTML=this.currHtml();
+    const unlockedCount=BRAWLERS.filter(b=>P.unlocked[b.id]).length;
+    document.getElementById('brawler-count').textContent=`Открыто бойцов: ${unlockedCount} / ${BRAWLERS.length}`;
     const searchEl=document.getElementById('bf-search'),rarityEl=document.getElementById('bf-rarity'),sortEl=document.getElementById('bf-sort');
     const search=(searchEl?searchEl.value:'').toLowerCase().trim();
     const rarityF=rarityEl?rarityEl.value:'all';
@@ -1265,8 +1336,54 @@ const UI={
   renderAdmin(){
     document.getElementById('admin-curr').innerHTML=this.currHtml();
   },
+  renderProfile(){
+    const unlockedCount=BRAWLERS.filter(b=>P.unlocked[b.id]).length;
+    const starsCount=BRAWLERS.reduce((a,b)=>a+ownedStars(b.id).length,0);
+    const totalStars=BRAWLERS.length*2;
+    const games=P.gamesPlayed||0,wins=P.wins||0,losses=P.losses||0;
+    const winrate=games?Math.round(wins/games*100):0;
+    const daysSince=Math.max(0,Math.floor((Date.now()-(P.createdAt||Date.now()))/86400000));
+    const el=document.getElementById('profile-content');
+    el.innerHTML=`
+      <div class="profile-avatar-big" onclick="openAvatarModal()">${P.avatar||'🙂'}</div>
+      <div class="profile-nick-row"><h3>${P.nick||'Игрок'}</h3><button onclick="askNick()">✏️ Ник</button></div>
+      <p class="note">Играет ${daysSince} ${daysSince===1?'день':'дней'}</p>
+      <div class="profile-stats">
+        <div class="profile-stat"><div class="ps-val">🏆 ${P.trophies||0}</div><div class="ps-lbl">Кубков всего</div></div>
+        <div class="profile-stat"><div class="ps-val">${games}</div><div class="ps-lbl">Боёв сыграно</div></div>
+        <div class="profile-stat"><div class="ps-val">${wins} / ${losses}</div><div class="ps-lbl">Победы / поражения</div></div>
+        <div class="profile-stat"><div class="ps-val">${winrate}%</div><div class="ps-lbl">Процент побед</div></div>
+        <div class="profile-stat"><div class="ps-val">${unlockedCount} / ${BRAWLERS.length}</div><div class="ps-lbl">Бойцов открыто</div></div>
+        <div class="profile-stat"><div class="ps-val">${starsCount} / ${totalStars}</div><div class="ps-lbl">Звёздных сил</div></div>
+        <div class="profile-stat"><div class="ps-val">${P.totalBoxesOpened||0}</div><div class="ps-lbl">Ящиков открыто</div></div>
+        <div class="profile-stat"><div class="ps-val">🪙 ${P.coins||0}</div><div class="ps-lbl">Монет на счету</div></div>
+      </div>
+      <p class="note" style="text-align:left;font-weight:900;color:#fff;font-size:15px;margin-top:16px">Достижения</p>
+      ${ACHIEVEMENTS.map(a=>{
+        const cur=Math.min(a.target,a.cur(P));
+        const done=cur>=a.target;
+        return `<div class="ach-item ${done?'done':''}">
+          <div class="ach-ic">${done?a.icon:'🔒'}</div>
+          <div class="ach-info"><div class="ach-t">${a.name}</div><div class="ach-d">${a.desc} (${cur}/${a.target})</div>
+          <div class="ach-bar"><div class="ach-bar-in" style="width:${(cur/a.target*100).toFixed(0)}%"></div></div></div>
+        </div>`;
+      }).join('')}
+      <button class="menu-btn" onclick="UI.show('scr-settings')"><span class="mi" style="background:#555d78">⚙️</span>Настройки</button>`;
+  },
   clanStub(){toast('Кланы скоро появятся!')},
 };
+function openAvatarModal(){
+  document.getElementById('avatar-grid').innerHTML=AVATAR_OPTIONS.map(a=>
+    `<button class="avatar-opt ${P.avatar===a?'sel':''}" onclick="chooseAvatar('${a}')">${a}</button>`).join('');
+  document.getElementById('modal-avatar').classList.add('show');
+}
+function closeAvatarModal(){document.getElementById('modal-avatar').classList.remove('show');}
+function chooseAvatar(a){
+  P.avatar=a;saveP();
+  closeAvatarModal();
+  UI.renderMain();
+  if(document.getElementById('scr-profile').classList.contains('active'))UI.renderProfile();
+}
 function toggleSound(){P.sound=!P.sound;AUDIO.on=P.sound;saveP();UI.renderSettings();}
 function resetProgress(){
   if(confirm('Сбросить весь прогресс?')){localStorage.removeItem('bl_save');loadP();saveP();toast('Прогресс сброшен');UI.show('scr-main');}
@@ -1397,6 +1514,8 @@ function openBox(kind){
   anim.style.display='block';anim.classList.add('shake');
   document.getElementById('box-hint').style.display='block';
   document.getElementById('reveal-wrap').style.display='none';
+  document.getElementById('box-summary').style.display='none';
+  document.getElementById('box-summary-list').innerHTML='';
   document.getElementById('box-done-btn').style.display='none';
   const remainEl=document.getElementById('box-remaining');
   remainEl.textContent='';remainEl.classList.remove('blink');
@@ -1431,6 +1550,11 @@ function boxAdvance(){
   if(isLast){
     boxFinished=true;
     document.getElementById('box-done-btn').style.display='block';
+    const list=document.getElementById('box-summary-list');
+    list.innerHTML=boxQueue.map(it=>`<div class="summary-item">
+      <div class="si-ic">${it.icon}</div>
+      <div><div class="si-txt">${it.name}</div><div class="si-sub">${it.txt}</div></div></div>`).join('');
+    document.getElementById('box-summary').style.display='block';
   }
 }
 function spawnConfetti(){
@@ -1496,35 +1620,69 @@ function genMap(mode){
   // портретные карты: узкие и длинные
   let W=15,H=25;
   if(mode==='showdown'){W=23;H=23;}
-  const t=[];for(let y=0;y<H;y++){t.push(new Array(W).fill(0));}
-  const set=(x,y,v)=>{if(x>0&&y>0&&x<W-1&&y<H-1)t[y][x]=v;};
-  // границы
-  for(let x=0;x<W;x++){t[0][x]=1;t[H-1][x]=1;}
-  for(let y=0;y<H;y++){t[y][0]=1;t[y][W-1]=1;}
   const mirror=mode!=='showdown';
   const half=Math.floor(H/2);
-  const placeBlob=(x,y,v,size)=>{
-    for(let i=0;i<size;i++){
-      const bx=clamp(x+rndi(-1,1),1,W-2),by=clamp(y+rndi(-1,1),1,mirror?half-1:H-2);
-      set(bx,by,v);
-      if(mirror)set(W-1-bx,H-1-by,v);
+
+  function buildAttempt(){
+    const t=[];for(let y=0;y<H;y++){t.push(new Array(W).fill(0));}
+    const set=(x,y,v)=>{if(x>0&&y>0&&x<W-1&&y<H-1)t[y][x]=v;};
+    // границы
+    for(let x=0;x<W;x++){t[0][x]=1;t[H-1][x]=1;}
+    for(let y=0;y<H;y++){t[y][0]=1;t[y][W-1]=1;}
+    // структурная сетка "участков" - вместо случайных пятен где угодно,
+    // делим поле на ровные ячейки и решаем для каждой отдельно, оставляя
+    // явные проходы между препятствиями (как на настоящих картах)
+    const plotSize=3;
+    const halfLimit=mirror?half-1:H-2;
+    const rows=Math.max(1,Math.floor((halfLimit-1)/plotSize));
+    const cols=Math.max(1,Math.floor((W-2)/plotSize));
+    const shapes=[[[0,0]],[[0,0],[1,0]],[[0,0],[0,1]],[[0,0],[1,0],[0,1]]];
+    for(let py=0;py<rows;py++){
+      for(let px=0;px<cols;px++){
+        if(Math.random()>0.45)continue; // не каждый участок занят - гарантируем проходы
+        const cx=1+px*plotSize+1,cy=1+py*plotSize+1;
+        const r=Math.random();
+        const v=r<0.45?1:(r<0.85?2:3); // стена / куст / вода
+        const shape=v===2?[[0,0],[1,0],[0,1],[1,1]]:pick(shapes);
+        shape.forEach(([dx,dy])=>{
+          const bx=clamp(cx+dx,1,W-2),by=clamp(cy+dy,1,halfLimit);
+          set(bx,by,v);
+          if(mirror)set(W-1-bx,H-1-by,v);
+        });
+      }
     }
-  };
-  // стены
-  for(let i=0;i<(mirror?9:16);i++)placeBlob(rndi(2,W-3),rndi(2,(mirror?half-2:H-3)),1,rndi(2,4));
-  // кусты
-  for(let i=0;i<(mirror?7:12);i++)placeBlob(rndi(2,W-3),rndi(2,(mirror?half-2:H-3)),2,rndi(3,5));
-  // вода
-  for(let i=0;i<(mirror?3:5);i++)placeBlob(rndi(3,W-4),rndi(3,(mirror?half-3:H-4)),3,rndi(2,3));
-  // очистить центр и зоны спавна
-  const clear=(cx,cy,r)=>{for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++)if(x>0&&y>0&&x<W-1&&y<H-1)t[y][x]=0;};
-  clear(Math.floor(W/2),half,2);
-  if(mirror){clear(Math.floor(W/2),2,2);clear(Math.floor(W/2),H-3,2);}
-  if(mode==='brawlball'){ // ворота: проёмы в торцах
-    const gx=Math.floor(W/2);
-    clear(gx,2,1);clear(gx,H-3,1);
+    // очистить центр и зоны спавна
+    const clear=(cx,cy,r)=>{for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++)if(x>0&&y>0&&x<W-1&&y<H-1)t[y][x]=0;};
+    clear(Math.floor(W/2),half,2);
+    if(mirror){clear(Math.floor(W/2),2,2);clear(Math.floor(W/2),H-3,2);}
+    if(mode==='brawlball'){ // ворота: проёмы в торцах
+      const gx=Math.floor(W/2);
+      clear(gx,2,1);clear(gx,H-3,1);
+    }
+    if(mode==='heist'){clear(Math.floor(W/2),2,2);clear(Math.floor(W/2),H-3,2);}
+    return t;
   }
-  if(mode==='heist'){clear(Math.floor(W/2),2,2);clear(Math.floor(W/2),H-3,2);}
+  // проверка связности: от одной зоны спавна до другой должен быть путь
+  function isConnected(t){
+    const sx=Math.floor(W/2),sy=mirror?2:Math.floor(H/2);
+    const gx=Math.floor(W/2),gy=mirror?H-3:Math.floor(H/2);
+    const walk=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&t[y][x]!==1&&t[y][x]!==3;
+    if(!walk(sx,sy)||!walk(gx,gy))return false;
+    const visited=new Set([sy*W+sx]);const q=[[sx,sy]];let qi=0;
+    while(qi<q.length){
+      const cur=q[qi++];
+      if(cur[0]===gx&&cur[1]===gy)return true;
+      const nbrs=[[cur[0]+1,cur[1]],[cur[0]-1,cur[1]],[cur[0],cur[1]+1],[cur[0],cur[1]-1]];
+      for(const nb of nbrs){if(walk(nb[0],nb[1])){const k=nb[1]*W+nb[0];if(!visited.has(k)){visited.add(k);q.push(nb);}}}
+    }
+    return false;
+  }
+  let t=buildAttempt(),tries=0;
+  while(!isConnected(t)&&tries<6){t=buildAttempt();tries++;}
+  if(!isConnected(t)){ // гарантированный запасной коридор по центру, если не повезло
+    const gx=Math.floor(W/2);
+    for(let y=1;y<H-1;y++){t[y][clamp(gx-1,1,W-2)]=0;t[y][gx]=0;t[y][clamp(gx+1,1,W-2)]=0;}
+  }
   return {W,H,t};
 }
 function tileAt(x,y){ // мировые координаты
@@ -2926,6 +3084,11 @@ function endBattle(result,quit){
   P.brawlerTrophies[bId]=Math.max(0,(P.brawlerTrophies[bId]||0)+trophyDelta);
   recalcTrophies();
   P.coins+=coins;P.pp+=pp;
+  // статистика для профиля
+  if(!quit){
+    P.gamesPlayed=(P.gamesPlayed||0)+1;
+    if(win)P.wins=(P.wins||0)+1; else if(!draw)P.losses=(P.losses||0)+1;
+  }
   // скрытый ММР: подстраиваем сложность ботов под серию побед/поражений
   if(!quit){
     if(win)P.mmr=clamp((P.mmr||0)+1,-10,10);
