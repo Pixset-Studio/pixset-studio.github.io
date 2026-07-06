@@ -1,0 +1,2093 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  СМЕХОТВОРИКИ: ХРОНИКИ ХОХОТУНА — CHANGELOG
+  ═══════════════════════════════════════════════════════════════
+  Полная кампания: 7 регионов (Смехолесье, Ворчащие горы, Пустыня
+  Скуки, Болото Хмурых Испарений, Ледяной Архив, Замок Хмуриля,
+  бонусный Остров Забытого Смеха), 5 героев, 6 боссов.
+
+  Последнее обновление добавило:
+  1. Тултипы способностей в бою — наведение мышью (десктоп) или
+     долгое нажатие 400мс (мобильные) на кнопку показывает карточку
+     с точным уроном/лечением, ярость, шанс и длительность статуса.
+  2. Прогрессия героев — уровень и опыт (state.heroStates[id].level/
+     xp), опыт даётся за победу всем живым участникам боя, при
+     левел-апе +10 HP и +2 к урону способностей (bonusHp/bonusAtk).
+     Отображается в бою (под именем) и в лагере (полоса опыта).
+  3. Масштабирование сложности врагов по региону: обычные враги
+     +15% HP/урона за регион, боссы +10% за регион (makeEnemyUnit).
+  4. Простая процедурная 8-битная фоновая музыка на Web Audio для
+     каждого региона (свой лад/темп), с плавным fade при смене
+     региона и кнопкой вкл/выкл в HUD (сохраняется в localStorage).
+  5. Плавное появление баннера «Ход противника», индикатор
+     прогресса региона «X/Y боёв» на карте, уровень героя в лагере.
+
+  Существующие механики (бой, крафт, карта, сюжет, сохранение)
+  не переписывались — всё новое добавлено поверх.
+  ═══════════════════════════════════════════════════════════════
+-->
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Смехотворики: Хроники Хохотуна</title>
+<style>
+  :root{
+    --paper:#F3E9D2; --ink:#3A2A1A; --teal:#4FA3A0; --terracotta:#D9704F;
+    --gold:#C9A227; --green:#5E9142; --danger:#B84C3E; --panel:#EFE0BC;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:#241A10;color:var(--ink);
+    font-family:'Georgia','Segoe UI',serif; overflow:hidden;}
+  /* Внешний контейнер занимает весь экран/окно; #app — «виртуальный экран» игры
+     фиксированного дизайн-разрешения 900×480, который целиком масштабируется под
+     реальный размер экрана через JS (transform:scale), поэтому весь интерфейс —
+     шрифты, кнопки, спрайты — увеличивается/уменьшается пропорционально и без
+     переверстки для разных устройств (телефон/десктоп/полный экран). */
+  #viewportRoot{position:fixed;inset:0;width:100%;height:100%;background:#241A10;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  #app{position:relative;width:900px;height:480px;flex:none;
+    background:linear-gradient(180deg,#F7EFD8,#EAD9AE); border:3px solid var(--ink);
+    border-radius:16px; overflow:hidden; transform-origin:center center;}
+  canvas.sprite-canvas{image-rendering:pixelated;image-rendering:-moz-crisp-edges;image-rendering:crisp-edges;}
+
+  /* ---------- СТАРТОВЫЙ ЭКРАН / ПОЛНЫЙ ЭКРАН ---------- */
+  #startOverlay{position:fixed;inset:0;z-index:1000;background:#241A10;color:#F3E9D2;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;padding:20px;}
+  #startOverlay h1{color:#F3E9D2;font-size:clamp(18px,4vw,28px);}
+  #startOverlay .btn{font-size:clamp(14px,2.4vw,18px);padding:14px 26px;}
+  #startOverlay .hint{font-size:12px;opacity:.7;max-width:340px;}
+  .fs-btn{position:absolute;top:6px;right:6px;z-index:40;font-size:14px;padding:4px 8px;
+    background:rgba(58,42,26,.55);border:2px solid var(--gold);color:#F3E9D2;border-radius:8px;cursor:pointer;}
+  #rotateNote{position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:900;
+    background:rgba(58,42,26,.85);color:#F3E9D2;font-size:11px;padding:4px 12px;border-radius:8px;
+    display:none;pointer-events:none;}
+  @media (orientation:portrait){ #rotateNote{display:block;} }
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;padding:10px 14px;overflow-y:auto;
+    opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  .screen.active{opacity:1;pointer-events:auto;}
+  h1,h2,h3{font-family:'Georgia',serif;margin:0 0 6px;color:var(--ink);}
+  h1{font-size:19px;letter-spacing:.5px;}
+  h2{font-size:16px;border-bottom:2px solid var(--gold);padding-bottom:3px;}
+  .btn{background:linear-gradient(180deg,#5C4632,#4A3826);color:#F3E9D2;border:2px solid var(--gold);
+    border-radius:10px;padding:9px 13px;font-size:13px;font-weight:bold;cursor:pointer;
+    box-shadow:0 3px 0 #2E2418; user-select:none; transition:transform .05s;}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #2E2418;}
+  .btn.secondary{background:linear-gradient(180deg,#EFE0BC,#DCC793);color:var(--ink);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.small{padding:6px 10px;font-size:11px;}
+  .topbar{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+
+  /* ---------- HUD / MAP ---------- */
+  #hud{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11px;gap:6px;}
+  #hud .gold{color:#8A6A16;font-weight:bold;}
+  #hud .hud-right{display:flex;gap:6px;}
+  #mapPanoramaWrap{flex:1;position:relative;border:3px solid var(--ink);border-radius:14px;overflow:hidden;margin-bottom:6px;min-height:0;}
+  #mapSvg{width:100%;height:100%;display:block;}
+  #mapNodesLayer{position:absolute;inset:0;}
+  #regionCaption{position:absolute;top:8px;left:10px;background:rgba(58,42,26,.75);color:#F3E9D2;
+    padding:4px 10px;border-radius:8px;font-size:11px;}
+  .map-node{position:absolute;transform:translate(-50%,-50%);width:50px;height:50px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:20px;
+    border:3px solid var(--ink);cursor:pointer;background:var(--terracotta);color:#fff;
+    box-shadow:0 3px 0 rgba(0,0,0,.35);}
+  .map-node.boss{background:var(--danger);width:62px;height:62px;font-size:24px;}
+  .map-node.done{background:var(--green);}
+  .map-node.locked{background:#C9BB98;opacity:.55;cursor:not-allowed;}
+  #squadBar{display:flex;gap:6px;flex-wrap:wrap;}
+  .mini-hero{width:34px;height:34px;border-radius:8px;border:2px solid var(--ink);display:flex;
+    align-items:center;justify-content:center;overflow:hidden;background:#DCC793;}
+  .mini-hero.locked-hero{opacity:.35;}
+  .mini-hero.chosen{outline:3px solid var(--gold);}
+
+  /* ---------- MODAL DIALOG ---------- */
+  #modalOverlay{position:absolute;inset:0;background:rgba(20,14,8,.6);display:none;
+    align-items:center;justify-content:center;z-index:80;padding:16px;}
+  #modalOverlay.active{display:flex;}
+  .modal-box{background:var(--panel);border:3px solid var(--ink);border-radius:14px;padding:14px;
+    max-width:520px;width:100%;display:flex;flex-direction:column;gap:8px;}
+  #modal-portraits{display:flex;justify-content:center;gap:16px;}
+  #modal-portraits canvas{background:#EFE0BC;border:3px solid var(--ink);border-radius:12px;}
+  #modal-speaker{font-weight:bold;color:var(--terracotta);font-size:13px;}
+  #modal-text{font-size:13px;line-height:1.35;min-height:40px;}
+  #modalNextBtn{align-self:flex-end;}
+
+  /* ---------- CAMP ---------- */
+  #campSquadPreview{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  #campSquadPreview .res-chip{display:flex;align-items:center;gap:6px;}
+  #campButtons{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px;}
+
+  /* ---------- BATTLE (ландшафтный layout) ---------- */
+  #battle-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;}
+  #rageWrap{flex:1;}
+  #rageLabel{font-size:9px;text-align:center;margin-bottom:1px;}
+  #rageBarOuter{height:12px;border:2px solid var(--ink);border-radius:8px;background:#DCC793;overflow:hidden;}
+  #rageBarInner{height:100%;width:0%;background:linear-gradient(90deg,#F2A93C,#F26B3C);transition:width .3s;}
+  #battleMain{display:flex;flex:1;gap:12px;min-height:0;}
+  #allyRow, #enemyRow{flex:1;display:flex;flex-direction:column;justify-content:center;gap:5px;overflow-y:auto;min-height:0;}
+  .unit{display:flex;flex-direction:row;align-items:center;gap:8px;background:var(--panel);
+    border:2px solid var(--ink);border-radius:10px;padding:4px 8px;position:relative;}
+  .unit .sprite{width:46px;height:46px;border-radius:8px;flex-shrink:0;position:relative;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:#DCC793;}
+  .unit .sprite.dead{filter:grayscale(1) brightness(.6);cursor:default;}
+  .unit .sprite.selected{outline:3px solid var(--gold);outline-offset:2px;}
+  .unit .sprite.targetable{outline:3px dashed var(--danger);outline-offset:2px;}
+  .unit .sprite.heal-target{outline:3px dashed var(--green);outline-offset:2px;}
+  .unit .info{flex:1;text-align:left;min-width:0;}
+  .unit .name{font-size:10px;font-weight:bold;}
+  .hpbar-outer{height:7px;border:1px solid var(--ink);border-radius:5px;background:#ccc;margin-top:2px;overflow:hidden;}
+  .hpbar-inner{height:100%;background:linear-gradient(90deg,#7FBF6A,#4E8F3E);}
+  .hp-text{font-size:8px;}
+  .status-icons{position:absolute;top:-6px;left:0;right:0;display:flex;justify-content:center;gap:2px;flex-wrap:wrap;z-index:2;}
+  .status-icon{font-size:8px;background:#222;color:#fff;border-radius:4px;padding:0 2px;}
+  .acted{opacity:.45;}
+  #abilityBar{display:flex;gap:6px;justify-content:center;padding:6px 0;flex-wrap:wrap;min-height:44px;}
+  .ability-btn{width:68px;background:linear-gradient(180deg,#4A3826,#2E2418);color:#F3E9D2;
+    border:2px solid var(--gold);border-radius:9px;padding:5px 3px;font-size:9px;text-align:center;cursor:pointer;}
+  .ability-btn.ultra{border-color:#F2A93C;background:linear-gradient(180deg,#8A4B2E,#5C2C18);}
+  .ability-btn:disabled{opacity:.35;cursor:not-allowed;}
+  #battleLog{background:var(--panel);border:2px solid var(--ink);border-radius:9px;padding:4px 8px;
+    font-size:10px;height:44px;overflow-y:auto;margin-top:4px;}
+  #turnControls{display:flex;justify-content:center;gap:8px;margin-top:2px;}
+
+  /* ---------- ЭФФЕКТЫ БОЯ: всплывающие числа, индикатор хода врага ---------- */
+  #battleFxLayer{position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:30;}
+  .floating-dmg{position:absolute;transform:translate(-50%,0);font-weight:bold;font-size:15px;
+    color:#E8483A; text-shadow:0 1px 2px rgba(0,0,0,.6); animation:floatUp .9s ease-out forwards; white-space:nowrap;}
+  .floating-dmg.heal{color:#5E9142;}
+  .floating-dmg.miss{color:#DCC793;font-size:11px;font-style:italic;}
+  @keyframes floatUp{
+    0%{opacity:1; transform:translate(-50%,0) scale(1);}
+    15%{transform:translate(-50%,-6px) scale(1.15);}
+    100%{opacity:0; transform:translate(-50%,-42px) scale(1);}
+  }
+  #enemyTurnBanner{position:absolute;top:8px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:35;
+    background:rgba(58,42,26,.85);color:#F3E9D2;font-size:12px;font-weight:bold;
+    padding:5px 14px;border-radius:10px;border:2px solid var(--gold);
+    opacity:0;pointer-events:none;transition:opacity .3s ease, transform .3s ease;}
+  #enemyTurnBanner.show{opacity:1;transform:translateX(-50%) translateY(0);animation:pulseBanner 1s ease-in-out infinite;}
+  @keyframes pulseBanner{ 0%,100%{opacity:1;} 50%{opacity:.6;} }
+
+  /* ---------- ПОДСКАЗКИ СПОСОБНОСТЕЙ ---------- */
+  #abilityTooltip{position:absolute;z-index:60;display:none;max-width:220px;
+    background:rgba(30,22,14,.97);color:#F3E9D2;border:2px solid var(--gold);border-radius:10px;
+    padding:8px 10px;font-size:11px;line-height:1.5;pointer-events:none;box-shadow:0 4px 10px rgba(0,0,0,.4);}
+  #abilityTooltip b{color:#F2C230;font-size:12px;display:block;margin-bottom:3px;}
+  #abilityTooltip .tt-desc{opacity:.85;font-style:italic;margin-top:4px;border-top:1px solid rgba(255,255,255,.15);padding-top:4px;}
+  #abilityTooltip .tt-ultra{color:#F2A93C;font-weight:bold;margin-top:3px;}
+
+  /* ---------- ОПЫТ / УРОВЕНЬ ---------- */
+  .xpbar-outer{height:4px;border:1px solid var(--ink);border-radius:3px;background:#3A2A1A;margin-top:2px;overflow:hidden;}
+  .xpbar-inner{height:100%;background:linear-gradient(90deg,#5FA8D3,#3A7CA5);}
+  .level-tag{font-size:8px;font-weight:bold;color:var(--gold);background:rgba(58,42,26,.5);
+    border-radius:4px;padding:0 3px;margin-left:3px;}
+  #regionProgress{text-align:center;font-size:11px;font-weight:bold;color:var(--ink);margin:2px 0 4px;}
+
+  /* ---------- SHOP / FORGE ---------- */
+  .card{background:var(--panel);border:2px solid var(--ink);border-radius:10px;padding:8px 10px;margin-bottom:6px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .card .info{flex:1;font-size:11px;}
+  .card .info b{display:block;font-size:12px;margin-bottom:2px;}
+  .res-row{display:flex;gap:8px;font-size:11px;margin-bottom:8px;flex-wrap:wrap;}
+  .res-chip{background:var(--panel);border:1px solid var(--ink);border-radius:8px;padding:3px 8px;}
+
+  /* ---------- RESULT ---------- */
+  #result-box{margin:auto;text-align:center;}
+  #result-box .stars{font-size:26px;margin:10px 0;}
+</style>
+</head>
+<body>
+
+<div id="rotateNote">📱 Совет: в горизонтальной ориентации будет удобнее</div>
+
+<div id="startOverlay">
+  <h1>🎭 Смехотворики: Хроники Хохотуна</h1>
+  <div class="hint">Игра лучше всего смотрится на весь экран. Нажмите «Играть», чтобы запустить полноэкранный режим (на телефоне — в горизонтальной ориентации).</div>
+  <button class="btn" id="startPlayBtn">▶ Играть на весь экран</button>
+  <div class="hint" id="startSkipHint" style="cursor:pointer;text-decoration:underline;">или играть в окне</div>
+</div>
+
+<div id="viewportRoot">
+<div id="app">
+  <button class="fs-btn" id="fsToggleBtn" title="Полноэкранный режим">⛶</button>
+
+  <!-- MAP -->
+  <div class="screen active" id="screen-map">
+    <div id="hud">
+      <div><span class="gold">⛁ <span id="goldCount">0</span></span></div>
+      <div id="regionLabel">Регион</div>
+      <div class="hud-right">
+        <button class="btn small secondary" id="musicToggleBtn">🔊 Музыка</button>
+        <button class="btn small secondary" id="campBtn">🏕 Лагерь</button>
+        <button class="btn small secondary" id="resetBtn">🔄 Заново</button>
+      </div>
+    </div>
+    <div id="mapPanoramaWrap">
+      <svg id="mapSvg" viewBox="0 0 900 340" preserveAspectRatio="xMidYMid slice"></svg>
+      <div id="mapNodesLayer"></div>
+      <div id="regionCaption"></div>
+    </div>
+    <div id="regionProgress"></div>
+    <div id="squadBar"></div>
+  </div>
+
+  <!-- CAMP -->
+  <div class="screen" id="screen-camp">
+    <div class="topbar"><button class="btn small secondary" id="campBackBtn">◂ Назад</button><h2 style="margin:0;">🏕 Лагерь отряда</h2></div>
+    <div id="campSquadPreview"></div>
+    <div id="campButtons">
+      <button class="btn" id="campForgeBtn">🔨 Кузница</button>
+      <button class="btn" id="campShopBtn">🛒 Лавка</button>
+      <button class="btn" id="campRestBtn">🛌 Отдых (лечит весь отряд)</button>
+    </div>
+    <div id="campMsg" style="margin-top:12px;font-size:12px;text-align:center;"></div>
+  </div>
+
+  <!-- BATTLE -->
+  <div class="screen" id="screen-battle">
+    <div id="battleFxLayer"></div>
+    <div id="abilityTooltip"></div>
+    <div id="enemyTurnBanner">⚔ Ход противника...</div>
+    <div id="battle-top">
+      <div style="font-size:10px;" id="battleRegionLabel">Бой</div>
+      <div id="rageWrap">
+        <div id="rageLabel">ЯРОСТЬ ОТРЯДА</div>
+        <div id="rageBarOuter"><div id="rageBarInner"></div></div>
+      </div>
+      <div style="font-size:10px;" id="roundCounter">Раунд 1</div>
+    </div>
+    <div id="battleMain">
+      <div id="allyRow"></div>
+      <div id="enemyRow"></div>
+    </div>
+    <div id="abilityBar"></div>
+    <div id="turnControls">
+      <button class="btn small secondary" id="cancelSelectBtn">Отмена</button>
+      <button class="btn small" id="endTurnBtn">Закончить ход ▸</button>
+    </div>
+    <div id="battleLog"></div>
+  </div>
+
+  <!-- SHOP -->
+  <div class="screen" id="screen-shop">
+    <div class="topbar"><button class="btn small secondary" id="shopBackBtn">◂ В лагерь</button><h2 style="margin:0;">🛒 Лавка Смехоторговца</h2></div>
+    <div class="res-row" id="shopGold"></div>
+    <div id="shopList"></div>
+  </div>
+
+  <!-- FORGE -->
+  <div class="screen" id="screen-forge">
+    <div class="topbar"><button class="btn small secondary" id="forgeBackBtn">◂ В лагерь</button><h2 style="margin:0;">🔨 Кузница Хихиканья</h2></div>
+    <div class="res-row" id="forgeRes"></div>
+    <div id="forgeList"></div>
+    <h3 style="margin-top:10px;font-size:13px;">Инвентарь</h3>
+    <div id="inventoryList" class="res-row"></div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="screen" id="screen-result">
+    <div id="result-box">
+      <h1 id="resultTitle">Победа!</h1>
+      <div class="stars" id="resultStars"></div>
+      <div id="resultRewards" style="font-size:12px;margin-bottom:16px;"></div>
+      <button class="btn" id="resultContinueBtn">Продолжить</button>
+    </div>
+  </div>
+
+  <!-- MODAL DIALOG (диалоги вместо узлов-историй) -->
+  <div id="modalOverlay">
+    <div class="modal-box">
+      <div id="modal-portraits"></div>
+      <div id="modal-speaker">???</div>
+      <div id="modal-text">...</div>
+      <button class="btn" id="modalNextBtn">Далее ▸</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+/* =========================================================
+   СМЕХОТВОРИКИ: ХРОНИКИ ХОХОТУНА — прототип (landscape-версия)
+   Один файл, без внешних зависимостей и картинок.
+   ========================================================= */
+
+/* =========================================================
+   1. ПИКСЕЛЬ-АРТ ДВИЖОК (без изменений в логике рисования)
+   ========================================================= */
+class PixelArt{
+  constructor(size=16){ this.size=size; this.grid = Array.from({length:size},()=>Array(size).fill(null)); }
+  rect(x,y,w,h,color){
+    for(let j=y;j<y+h;j++){
+      for(let i=x;i<x+w;i++){
+        if(j>=0 && j<this.size && i>=0 && i<this.size) this.grid[j][i]=color;
+      }
+    }
+  }
+  draw(ctx, px){
+    for(let y=0;y<this.size;y++){
+      for(let x=0;x<this.size;x++){
+        const c = this.grid[y][x];
+        if(c){ ctx.fillStyle=c; ctx.fillRect(x*px,y*px,px,px); }
+      }
+    }
+  }
+}
+const ART_BUILDERS = {
+  finn(){
+    const a=new PixelArt(); const fur='#E8A33D', dark='#B5732E', eye='#2E2418';
+    a.rect(3,0,2,3,fur); a.rect(11,0,2,3,fur);
+    a.rect(3,3,10,6,fur);
+    a.rect(4,1,2,2,'#4FA3A0'); a.rect(7,0,2,2,'#F2C230'); a.rect(10,1,2,2,'#D94F4F');
+    a.rect(5,7,2,2,eye); a.rect(9,7,2,2,eye);
+    a.rect(4,9,8,5,fur);
+    a.rect(5,10,6,3,'#C9A66B');
+    a.rect(4,14,3,2,dark); a.rect(9,14,3,2,dark);
+    return a;
+  },
+  dama(){
+    const a=new PixelArt(); const shell='#6B7A4E', metal='#8C8378', dark='#4A5A38';
+    a.rect(4,2,8,5,metal);
+    a.rect(6,3,1,1,'#2E2418'); a.rect(9,3,1,1,'#2E2418');
+    a.rect(6,1,4,1,'#D94F4F');
+    a.rect(2,8,12,6,shell);
+    a.rect(3,9,3,4,dark);
+    a.rect(0,7,4,7,metal);
+    a.rect(12,14,3,2,dark); a.rect(4,14,3,2,dark);
+    return a;
+  },
+  pryg(){
+    const a=new PixelArt(); const fur='#D8CBB0', vest='#5B4636', goggle='#7FA5A3';
+    a.rect(4,0,2,5,fur); a.rect(10,1,2,3,fur);
+    a.rect(3,4,10,6,fur);
+    a.rect(5,6,2,2,goggle); a.rect(9,6,2,2,goggle);
+    a.rect(4,10,8,4,vest);
+    a.rect(3,14,3,2,fur); a.rect(10,14,3,2,fur);
+    return a;
+  },
+  matushka(){
+    const a=new PixelArt(); const feather='#8C7A63', hat='#B5473A', dot='#F2EDE4';
+    a.rect(2,3,12,3,hat); a.rect(5,0,6,4,hat);
+    a.rect(6,1,1,1,dot); a.rect(9,1,1,1,dot);
+    a.rect(4,6,8,6,feather);
+    a.rect(5,8,2,2,'#F2EDE4'); a.rect(9,8,2,2,'#F2EDE4');
+    a.rect(6,9,1,1,'#2E2418'); a.rect(10,9,1,1,'#2E2418');
+    a.rect(4,12,8,3,feather);
+    return a;
+  },
+  bum(){
+    const a=new PixelArt(); const skin='#6E8B3D', apron='#A8763E', pot='#9AA0A6';
+    a.rect(4,1,8,4,pot); a.rect(3,0,10,1,pot);
+    a.rect(4,5,8,5,skin);
+    a.rect(6,7,1,1,'#2E2418'); a.rect(9,7,1,1,'#2E2418');
+    a.rect(4,10,8,4,apron);
+    a.rect(11,9,2,3,'#7FD1AE');
+    a.rect(3,14,3,2,skin); a.rect(10,14,3,2,skin);
+    return a;
+  },
+  squirrel(){
+    const a=new PixelArt(); const fur='#B5732E', tail='#8C5A22';
+    a.rect(2,10,4,5,tail);
+    a.rect(4,4,8,6,fur);
+    a.rect(3,2,2,3,fur); a.rect(11,2,2,3,fur);
+    a.rect(6,6,1,1,'#2E2418'); a.rect(9,6,1,1,'#2E2418');
+    a.rect(5,10,6,4,fur);
+    return a;
+  },
+  mushroom(){
+    const a=new PixelArt(); const cap='#8C5E9A', stem='#D8CBB0', dot='#F2EDE4';
+    a.rect(2,2,12,5,cap);
+    a.rect(4,3,1,1,dot); a.rect(8,4,1,1,dot); a.rect(11,3,1,1,dot);
+    a.rect(5,7,6,7,stem);
+    a.rect(6,9,1,1,'#2E2418'); a.rect(9,9,1,1,'#2E2418');
+    return a;
+  },
+  bossMama(){
+    const a=new PixelArt(); const cap='#B84C3E', stem='#E8D9B8', dot='#F2EDE4';
+    a.rect(0,1,16,6,cap);
+    a.rect(2,2,2,2,dot); a.rect(6,3,2,2,dot); a.rect(10,2,2,2,dot); a.rect(13,3,2,2,dot);
+    a.rect(4,8,8,7,stem);
+    a.rect(5,10,2,2,'#2E2418'); a.rect(9,10,2,2,'#2E2418');
+    a.rect(6,13,4,1,'#5C1A12');
+    return a;
+  },
+  stoneOgre(){
+    const a=new PixelArt(); const stone='#8C8378', dark='#5A544C';
+    a.rect(3,2,10,6,stone);
+    a.rect(5,4,1,1,dark); a.rect(10,4,1,1,dark);
+    a.rect(2,8,12,7,stone);
+    a.rect(4,9,2,2,dark); a.rect(10,9,2,2,dark);
+    return a;
+  },
+  bandit(){
+    const a=new PixelArt(); const cloth='#7A5C3E', skin='#C79A6B', mask='#3A2A1A';
+    a.rect(4,2,8,5,skin);
+    a.rect(4,4,8,2,mask);
+    a.rect(6,5,1,1,'#F2EDE4'); a.rect(9,5,1,1,'#F2EDE4');
+    a.rect(3,8,10,6,cloth);
+    return a;
+  },
+  mountainBoss(){
+    const a=new PixelArt(); const stone='#5B6B4E', dark='#3A4530', horn='#D8CBB0';
+    a.rect(2,3,4,3,horn); a.rect(10,3,4,3,horn);
+    a.rect(2,4,12,6,stone);
+    a.rect(5,6,2,2,'#2E2418'); a.rect(9,6,2,2,'#2E2418');
+    a.rect(1,11,14,5,stone);
+    a.rect(3,12,3,3,dark); a.rect(10,12,3,3,dark);
+    return a;
+  },
+  scorpion(){
+    const a=new PixelArt(); const body='#C9A66B', dark='#5A4A32', eye='#2E2418', kase='#6B4A2E';
+    a.rect(6,0,4,2,dark);
+    a.rect(7,2,2,5,dark);
+    a.rect(3,6,10,6,body);
+    a.rect(1,7,3,3,body); a.rect(12,7,3,3,body);
+    a.rect(6,8,1,1,eye); a.rect(9,8,1,1,eye);
+    a.rect(2,12,4,3,kase);
+    return a;
+  },
+  mirage(){
+    const a=new PixelArt(); const body='#BFD8DC', dark='#8FB3B8', eye='#3A2A1A';
+    a.rect(4,2,8,6,body);
+    a.rect(2,3,2,4,body); a.rect(12,3,2,4,body);
+    a.rect(6,5,1,1,eye); a.rect(9,5,1,1,eye);
+    a.rect(3,8,10,6,dark);
+    a.rect(4,14,2,2,body); a.rect(10,14,2,2,body);
+    return a;
+  },
+  desertBoss(){
+    const a=new PixelArt(); const robe='#8C7A5A', dark='#5A4A32', glass='#D8CBB0', eye='#2E2418';
+    a.rect(4,0,8,5,glass);
+    a.rect(5,1,2,2,eye); a.rect(9,1,2,2,eye);
+    a.rect(2,5,12,4,robe);
+    a.rect(1,9,14,6,robe);
+    a.rect(3,10,3,4,dark); a.rect(10,10,3,4,dark);
+    a.rect(6,15,4,1,'#3A2A1A');
+    return a;
+  },
+  frog(){
+    const a=new PixelArt(); const skin='#7A9B5C', dark='#4E6B3A', white='#F2EDE4', pupil='#2E2418';
+    a.rect(3,3,3,3,skin); a.rect(10,3,3,3,skin);
+    a.rect(4,4,2,2,white); a.rect(11,4,2,2,white);
+    a.rect(5,5,1,1,pupil); a.rect(12,5,1,1,pupil);
+    a.rect(2,6,12,7,skin);
+    a.rect(3,12,3,3,dark); a.rect(10,12,3,3,dark);
+    return a;
+  },
+  lily(){
+    const a=new PixelArt(); const pad='#4E6B3A', petal='#B15FA0', center='#F2C230';
+    a.rect(1,10,14,5,pad);
+    a.rect(5,3,6,7,petal);
+    a.rect(3,5,2,4,petal); a.rect(11,5,2,4,petal);
+    a.rect(7,6,2,2,center);
+    return a;
+  },
+  swampBoss(){
+    const a=new PixelArt(); const petal='#7A3B78', pad='#3E5A32', crown='#F2C230', dark='#2E2418';
+    a.rect(5,0,6,2,crown);
+    a.rect(3,2,10,6,petal);
+    a.rect(6,4,1,1,dark); a.rect(9,4,1,1,dark);
+    a.rect(1,8,14,4,pad);
+    a.rect(2,12,12,4,petal);
+    return a;
+  },
+  iceScholar(){
+    const a=new PixelArt(); const robe='#AFD9E8', dark='#6FA3B8', book='#E8D9B8', eye='#2E2418';
+    a.rect(5,1,6,5,robe);
+    a.rect(6,3,1,1,eye); a.rect(9,3,1,1,eye);
+    a.rect(3,6,10,7,robe);
+    a.rect(4,8,3,3,dark);
+    a.rect(10,9,3,4,book);
+    return a;
+  },
+  frostClown(){
+    const a=new PixelArt(); const skin='#DCEAF0', frill='#7FB3C7', nose='#D9704F', eye='#2E2418';
+    a.rect(4,2,8,6,skin);
+    a.rect(6,4,1,1,eye); a.rect(9,4,1,1,eye);
+    a.rect(7,6,2,2,nose);
+    a.rect(2,8,12,3,frill);
+    a.rect(3,11,10,5,skin);
+    return a;
+  },
+  iceBoss(){
+    const a=new PixelArt(); const robe='#8FC1D9', trim='#C9A227', dark='#4A6B7A', eye='#2E2418';
+    a.rect(4,0,8,5,robe);
+    a.rect(5,1,2,2,eye); a.rect(9,1,2,2,eye);
+    a.rect(2,5,12,5,robe);
+    a.rect(2,9,12,2,trim);
+    a.rect(1,11,14,5,dark);
+    return a;
+  },
+  clownMinion(){
+    const a=new PixelArt(); const skin='#E0C9A6', hat='#6B4A8C', nose='#D9704F', eye='#2E2418';
+    a.rect(5,0,2,2,hat); a.rect(9,0,2,2,hat);
+    a.rect(4,2,8,6,hat);
+    a.rect(4,5,8,4,skin);
+    a.rect(6,6,1,1,eye); a.rect(9,6,1,1,eye);
+    a.rect(7,7,2,2,nose);
+    a.rect(3,10,10,5,hat);
+    return a;
+  },
+  finalBoss(){
+    const a=new PixelArt(); const robe='#4A3B5C', skin='#C9A88A', collar='#7A5C3E', eye='#2E2418', frown='#8C3A2E';
+    a.rect(4,1,8,6,skin);
+    a.rect(6,3,1,1,eye); a.rect(9,3,1,1,eye);
+    a.rect(6,6,4,1,frown);
+    a.rect(2,7,12,3,collar);
+    a.rect(2,10,12,6,robe);
+    a.rect(4,11,2,2,'#2E2418');
+    return a;
+  },
+  swordIcon(){
+    const a=new PixelArt();
+    const blade='#E8E4D8', dark='#8C8378', hilt='#C9A227', grip='#5A4A32';
+    a.rect(7,0,2,8,blade);
+    a.rect(7,0,1,8,'#FFFFFF');
+    a.rect(6,8,1,1,dark); a.rect(9,8,1,1,dark);
+    a.rect(4,9,8,2,hilt);
+    a.rect(7,11,2,4,grip);
+    a.rect(6,15,4,1,dark);
+    return a;
+  },
+  crownIcon(){
+    const a=new PixelArt();
+    const gold='#F2C230', dark='#C9A227', jewel='#D9704F';
+    a.rect(2,6,12,7,gold);
+    a.rect(2,3,2,4,gold); a.rect(7,1,2,6,gold); a.rect(12,3,2,4,gold);
+    a.rect(7,3,2,2,jewel);
+    a.rect(3,9,10,1,dark);
+    return a;
+  }
+};
+const ART_CACHE = {};
+function getArt(key){
+  if(!ART_CACHE[key]) ART_CACHE[key] = (ART_BUILDERS[key]||ART_BUILDERS.squirrel)();
+  return ART_CACHE[key];
+}
+function paintSprite(canvas, key, extra){
+  extra = extra || {};
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const art = getArt(key);
+  const px = canvas.width/art.size;
+  ctx.save();
+  ctx.globalAlpha = extra.dead ? 0.35 : 1;
+  let dx=0, dy=0;
+  if(!extra.dead){
+    const t = performance.now();
+    dy = Math.sin((t/260)+(extra.seed||0))*1.4;
+    if(extra.attackAnim) dx = extra.enemySide ? -4 : 4;
+  }
+  ctx.translate(dx,dy);
+  art.draw(ctx, px);
+  ctx.restore();
+  if(extra.hitFlash){
+    ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#ff3b3b';
+    ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+  }
+}
+function makeSpriteCanvas(key, size, extra){
+  const c = document.createElement('canvas');
+  c.width=size; c.height=size; c.className='sprite-canvas';
+  c.dataset.key = key;
+  paintSprite(c,key,extra);
+  return c;
+}
+function tickSprites(){
+  document.querySelectorAll('canvas.sprite-canvas[data-unitid]').forEach(canvas=>{
+    const u = findUnit(canvas.dataset.unitid);
+    if(!u) return;
+    paintSprite(canvas, canvas.dataset.key, {
+      dead: u.hp<=0, attackAnim: !!u.attackAnim, hitFlash: !!u.hitFlash, enemySide: u.isEnemy, seed: u.animSeed||0
+    });
+  });
+  document.querySelectorAll('canvas.sprite-canvas:not([data-unitid])').forEach(canvas=>{
+    paintSprite(canvas, canvas.dataset.key, {});
+  });
+}
+setInterval(tickSprites, 120);
+
+/* =========================================================
+   2. ЗВУК (Web Audio, без файлов)
+   ========================================================= */
+let audioCtx;
+function ensureAudio(){
+  if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx=null; } }
+  if(audioCtx && audioCtx.state==='suspended'){ audioCtx.resume().catch(()=>{}); }
+  return audioCtx;
+}
+function beep(freq, dur, type, vol){
+  const ctx = ensureAudio(); if(!ctx) return;
+  const osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.type = type||'square'; osc.frequency.value = freq;
+  gain.gain.value = vol!==undefined?vol:0.05;
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start();
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + (dur||0.12));
+  osc.stop(ctx.currentTime + (dur||0.12) + 0.02);
+}
+const sndAttack = ()=>beep(320,0.12,'square',0.06);
+const sndHit = ()=>beep(140,0.16,'sawtooth',0.07);
+const sndHeal = ()=>beep(660,0.18,'sine',0.05);
+const sndUI = ()=>beep(520,0.05,'triangle',0.04);
+const sndVictory = ()=>{ beep(520,0.1); setTimeout(()=>beep(700,0.15),110); setTimeout(()=>beep(920,0.22),240); };
+const sndDefeat = ()=>{ beep(220,0.3,'sawtooth',0.06); setTimeout(()=>beep(160,0.4,'sawtooth',0.06),160); };
+
+/* ---------- ФОНОВАЯ МУЗЫКА (простые 8-битные лупы через осцилляторы) ---------- */
+const REGION_MUSIC = {
+  forest:    { notes:[261.6,329.6,392.0,329.6, 261.6,329.6,392.0,523.3], bpm:120, wave:'square' },
+  mountains: { notes:[293.7,349.2,440.0,349.2, 293.7,246.9,293.7,349.2], bpm:90,  wave:'triangle' },
+  desert:    { notes:[329.6,392.0,329.6,293.7, 246.9,293.7,329.6,246.9], bpm:70,  wave:'sawtooth' },
+  swamp:     { notes:[370.0,415.3,370.0,311.1, 349.2,370.0,311.1,277.2], bpm:60,  wave:'square' },
+  ice:       { notes:[392.0,493.9,587.3,493.9, 392.0,493.9,587.3,784.0], bpm:80,  wave:'sine' },
+  castle:    { notes:[220.0,261.6,220.0,196.0, 174.6,196.0,220.0,174.6], bpm:75,  wave:'sawtooth' },
+  island:    { notes:[261.6,329.6,392.0,440.0, 392.0,329.6,392.0,523.3], bpm:110, wave:'square' }
+};
+const musicState = { enabled:true, timer:null, currentRegion:null, gainNode:null };
+function stopRegionMusic(fadeMs){
+  const ctx = ensureAudio();
+  if(musicState.gainNode && ctx){
+    const g = musicState.gainNode;
+    g.gain.cancelScheduledValues(ctx.currentTime);
+    g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + (fadeMs||400)/1000);
+  }
+  if(musicState.timer){ clearInterval(musicState.timer); musicState.timer=null; }
+  musicState.currentRegion = null;
+}
+function playRegionMusic(regionId){
+  if(!musicState.enabled) return;
+  if(musicState.currentRegion === regionId) return;
+  const ctx = ensureAudio(); if(!ctx) return;
+  stopRegionMusic(300);
+  const cfg = REGION_MUSIC[regionId];
+  if(!cfg) return;
+  musicState.currentRegion = regionId;
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = 0.0001;
+  gainNode.connect(ctx.destination);
+  gainNode.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 0.6);
+  musicState.gainNode = gainNode;
+  const stepTime = 60/cfg.bpm;
+  let i = 0;
+  function playNote(){
+    if(musicState.currentRegion !== regionId) return;
+    const freq = cfg.notes[i % cfg.notes.length];
+    const osc = ctx.createOscillator();
+    osc.type = cfg.wave;
+    osc.frequency.value = freq;
+    const noteGain = ctx.createGain();
+    noteGain.gain.value = 0.9;
+    osc.connect(noteGain);
+    noteGain.connect(gainNode);
+    osc.start();
+    noteGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + stepTime*0.85);
+    osc.stop(ctx.currentTime + stepTime);
+    i++;
+  }
+  playNote();
+  musicState.timer = setInterval(playNote, stepTime*1000);
+}
+function toggleMusic(){
+  musicState.enabled = !musicState.enabled;
+  $('musicToggleBtn').textContent = musicState.enabled ? '🔊 Музыка' : '🔇 Музыка';
+  if(musicState.enabled){ playRegionMusic(REGIONS[state.regionIndex].id); }
+  else { stopRegionMusic(300); }
+  try{ localStorage.setItem('smehotvoriki_music_pref', musicState.enabled?'1':'0'); }catch(e){}
+}
+$('musicToggleBtn').onclick = ()=>{ sndUI(); toggleMusic(); };
+try{
+  const pref = localStorage.getItem('smehotvoriki_music_pref');
+  if(pref==='0'){ musicState.enabled = false; $('musicToggleBtn').textContent = '🔇 Музыка'; }
+}catch(e){}
+
+/* =========================================================
+   3. ДАННЫЕ: ГЕРОИ / ВРАГИ
+   ========================================================= */
+const HERO_DEFS = {
+  finn: {
+    id:'finn', name:'Финн Смешинка', cls:'Шут-баллистик', maxHp:120,
+    abilities:[
+      {key:'confetti', name:'Конфетти-залп', type:'single', dmg:35, rage:20, desc:'Урон 35 по 1 врагу'},
+      {key:'laugh', name:'Заразительный хохот', type:'all_enemies', dmg:15, rage:15, statusChance:0.3, status:'laugh', statusDur:1, desc:'15 урона всем + 30% "смешинка"'}
+    ],
+    passive:'Везунчик (10% уклонение)', dodge:0.10, ultra:'confetti'
+  },
+  dama: {
+    id:'dama', name:'Дама Скрипучка', cls:'Паладин-танк', maxHp:220,
+    abilities:[
+      {key:'wall', name:'Панцирная стена', type:'ally', shieldDur:2, rage:15, desc:'-40% урона союзнику на 2 хода'},
+      {key:'shieldbash', name:'Удар крышкой', type:'single', dmg:45, rage:20, status:'provoke', statusDur:1, desc:'45 урона + провокация'}
+    ],
+    passive:'Старая закалка (-20% крит. урона)', ultra:'shieldbash'
+  },
+  pryg: {
+    id:'pryg', name:'Прыг Пружинкин', cls:'Скаут', maxHp:100,
+    abilities:[
+      {key:'doubleshot', name:'Двойной выстрел', type:'double_random', dmg:25, rage:20, desc:'25×2 по случайным врагам'},
+      {key:'smoke', name:'Дымовая петарда', type:'all_enemies_debuff', rage:15, status:'blind', statusDur:2, desc:'-25% точности всем врагам'}
+    ],
+    passive:'Быстрые лапы (15% доп. ход)', ultra:'doubleshot'
+  },
+  matushka: {
+    id:'matushka', name:'Матушка Хохотушка', cls:'Целитель', maxHp:110,
+    abilities:[
+      {key:'heal', name:'Целебный отвар', type:'ally_heal', heal:40, rage:10, desc:'+40 HP союзнику'},
+      {key:'aoheal', name:'Аромат бодрости', type:'all_allies_heal', heal:20, rage:15, cleanse:true, desc:'+20 HP всем, снимает дебафф'}
+    ],
+    passive:'Травяное чутьё (щит слабейшему в начале боя)', ultra:'aoheal'
+  },
+  bum: {
+    id:'bum', name:'Бум Кастрюлькин', cls:'Алхимик', maxHp:105,
+    abilities:[
+      {key:'slime', name:'Липкая слизь', type:'single', dmg:20, rage:15, status:'slow', statusDur:2, desc:'20 урона + замедление'},
+      {key:'poisoncloud', name:'Пенное облако', type:'all_enemies', dmg:0, rage:15, status:'poison', statusDur:3, desc:'Яд 15/ход на 3 хода всем врагам'}
+    ],
+    passive:'Химик-самоучка (10% щит вместо урона)', ultra:'poisoncloud'
+  }
+};
+
+const ENEMY_DEFS = {
+  squirrel:{ name:'Хихи-белка', maxHp:60, dmg:15, sleepChance:0.2 },
+  mushroom:{ name:'Грибной Ворчун', maxHp:120, dmg:10, poison:3 },
+  bossMama:{ name:'Матрон Гриб-Мамочка', maxHp:800, dmg:35, boss:true },
+  stoneOgre:{ name:'Каменный Ворчалыч', maxHp:150, dmg:30, armor:25 },
+  bandit:{ name:'Разбойник-Ворчун', maxHp:80, dmg:20, steals:true },
+  mountainBoss:{ name:'Ворчун-Патриарх', maxHp:1100, dmg:60, boss:true, phaseArmor:true },
+  scorpion:{ name:'Скорпион-Бюрократ', maxHp:70, dmg:18, slowChance:0.25 },
+  mirage:{ name:'Мираж-Нытик', maxHp:50, dmg:20, sleepChance:0.15 },
+  desertBoss:{ name:'Архивариус Скуки', maxHp:1300, dmg:25, armor:15, boss:true, castsApathy:true, phaseDoubleDmg:true },
+  frog:{ name:'Жаба-Шептун', maxHp:90, dmg:12, sleepChance:0.3 },
+  lily:{ name:'Ядовитая Кувшинка', maxHp:100, dmg:8, poison:3, poisonDmg:10 },
+  swampBoss:{ name:'Королева Кувшинок Ядвига', maxHp:1500, dmg:20, boss:true, castsPoisonMist:true, healIfPoisoned:true },
+  iceScholar:{ name:'Ледяной книгочей', maxHp:100, dmg:22, sleepChance:0.25 },
+  frostClown:{ name:'Замороженный клоун', maxHp:110, dmg:18, slowChance:0.3 },
+  iceBoss:{ name:'Хранитель Архива', maxHp:1400, dmg:28, boss:true, castsFreezeOne:true, phaseArmor:true,
+    phaseArmorMsg:'👑 Ледяной панцирь укрывает Хранителя Архива! (+50% брони)' },
+  clownMinion:{ name:'Клоун-Прислужник', maxHp:80, dmg:15 },
+  finalBoss:{ name:'Лорд Хмуриль', maxHp:2500, dmg:32, boss:true, provokeSleepCombo:true, summonsAtPhase2:true, finalPhaseAt15:true }
+};
+
+/* ---------- РЕГИОНЫ / КАРТА (только бои — диалоги и лагерь вынесены отдельно) ---------- */
+const REGIONS = [
+  {
+    id:'forest', title:'🌲 Смехолесье', sub:'Лес гигантских грибов и весёлых зверушек',
+    nodes:[
+      {id:'f1', type:'battle', enemies:['squirrel','squirrel'], afterDialog:'meetDama'},
+      {id:'f2', type:'battle', enemies:['mushroom','squirrel'], afterDialog:'meetPryg'},
+      {id:'f3', type:'battle', enemies:['squirrel','squirrel','mushroom'], noHealAfter:true, afterDialog:'meetBum'},
+      {id:'f4', type:'battle', enemies:['mushroom','mushroom'], noHealAfter:true},
+      {id:'f5', type:'battle', enemies:['squirrel','mushroom','squirrel'], noHealAfter:true, afterDialog:'meetMatushka'},
+      {id:'f6', type:'boss', enemies:['bossMama'], beforeDialog:'preBoss'}
+    ]
+  },
+  {
+    id:'mountains', title:'⛰ Ворчащие горы', sub:'Каменистые перевалы вечно хмурящихся троллей',
+    nodes:[
+      {id:'m1', type:'battle', enemies:['stoneOgre']},
+      {id:'m2', type:'battle', enemies:['bandit','stoneOgre']},
+      {id:'m3', type:'battle', enemies:['bandit','bandit'], noHealAfter:true},
+      {id:'m4', type:'battle', enemies:['stoneOgre','bandit'], noHealAfter:true},
+      {id:'m5', type:'boss', enemies:['mountainBoss'], beforeDialog:'preBossMountain'}
+    ]
+  },
+  {
+    id:'desert', title:'🏜 Пустыня Скуки', sub:'Серо-жёлтые дюны, где всё будто выцвело от уныния',
+    nodes:[
+      {id:'d1', type:'battle', enemies:['scorpion']},
+      {id:'d2', type:'battle', enemies:['scorpion','mirage'], afterDialog:'desertBanter'},
+      {id:'d3', type:'battle', enemies:['scorpion','scorpion'], noHealAfter:true},
+      {id:'d4', type:'battle', enemies:['mirage','scorpion','mirage'], noHealAfter:true},
+      {id:'d5', type:'boss', enemies:['desertBoss'], beforeDialog:'preBossDesert'}
+    ]
+  },
+  {
+    id:'swamp', title:'🐸 Болото Хмурых Испарений', sub:'Туманные топи с фиолетово-зелёными парами',
+    nodes:[
+      {id:'s1', type:'battle', enemies:['frog']},
+      {id:'s2', type:'battle', enemies:['frog','lily'], afterDialog:'swampBanter'},
+      {id:'s3', type:'battle', enemies:['frog','frog'], noHealAfter:true},
+      {id:'s4', type:'battle', enemies:['lily','frog','lily'], noHealAfter:true},
+      {id:'s5', type:'boss', enemies:['swampBoss'], beforeDialog:'preBossSwamp'}
+    ]
+  },
+  {
+    id:'ice', title:'❄ Ледяной Архив Забытых Шуток', sub:'Заброшенная библиотека во льдах, где хранятся неоценённые шутки',
+    nodes:[
+      {id:'i1', type:'battle', enemies:['iceScholar']},
+      {id:'i2', type:'battle', enemies:['iceScholar','frostClown'], afterDialog:'iceBanter'},
+      {id:'i3', type:'battle', enemies:['frostClown','frostClown'], noHealAfter:true},
+      {id:'i4', type:'battle', enemies:['iceScholar','frostClown','iceScholar'], noHealAfter:true},
+      {id:'i5', type:'boss', enemies:['iceBoss'], beforeDialog:'preBossIce'}
+    ]
+  },
+  {
+    id:'castle', title:'🏰 Замок Хмуриля', sub:'Мрачная, но всё ещё немного нелепая крепость антагониста',
+    nodes:[
+      {id:'c1', type:'battle', enemies:['clownMinion','clownMinion']},
+      {id:'c2', type:'battle', enemies:['clownMinion','clownMinion','clownMinion'], noHealAfter:true},
+      {id:'c3', type:'battle', enemies:['clownMinion','clownMinion'], noHealAfter:true},
+      {id:'c4', type:'boss', enemies:['finalBoss'], beforeDialog:'preBossFinal'}
+    ]
+  },
+  {
+    id:'island', title:'🏝 Остров Забытого Смеха', sub:'Карнавальный остров, где хранятся самые незабываемые шутки',
+    nodes:[
+      {id:'isl1', type:'battle', enemies:['bandit','mirage']},
+      {id:'isl2', type:'battle', enemies:['stoneOgre','frog'], afterDialog:'epilogue'}
+    ]
+  }
+];
+const REGION_INTRO = {
+  forest:'prologue', mountains:'mountainIntro', desert:'desertIntro', swamp:'swampIntro',
+  ice:'iceIntro', castle:'castleIntro', island:'islandIntro'
+};
+
+const STORY_UNLOCKS = { meetDama:'dama', meetPryg:'pryg', meetBum:'bum', meetMatushka:'matushka' };
+const STORY_COMPANION = {
+  prologue:'matushka', meetDama:'dama', meetPryg:'pryg', meetBum:'bum', meetMatushka:'matushka',
+  preBoss:'dama', mountainIntro:'dama', preBossMountain:'dama', transition_to_mountains:'dama',
+  desertIntro:'dama', desertBanter:'pryg', preBossDesert:'dama', transition_to_desert:'dama',
+  swampIntro:'bum', swampBanter:'matushka', preBossSwamp:'dama', transition_to_swamp:'dama',
+  iceIntro:'matushka', iceBanter:'bum', preBossIce:'dama', transition_to_ice:'dama',
+  castleIntro:'dama', preBossFinal:'dama', transition_to_castle:'dama', transition_to_island:'dama',
+  islandIntro:'pryg', epilogue:'matushka'
+};
+const STORIES = {
+  prologue:[
+    {who:'Матушка Хохотушка', text:'Финн, милый... Хохотун пропал. Без него я чувствую себя так, будто разучилась печь пироги.'},
+    {who:'Финн', text:'Тогда я его верну. Даже если придётся объехать всю Смехоланию на честном слове и рогатке.'},
+    {who:'Матушка Хохотушка', text:'Возьми хотя бы зонт. И чувство юмора — оно у тебя, к счастью, встроенное.'}
+  ],
+  meetDama:[
+    {who:'Дама Скрипучка', text:'Кто тут топчет мой любимый папоротник?! ...А, мальчишка-шут. Ладно уж, полезай под щит, пока цел.'},
+    {who:'Финн', text:'Спасибо! А вы правда носите латы, чтобы вязать было удобнее?'},
+    {who:'Дама Скрипучка', text:'Именно. Спицы — в специальном отсеке. Не смейся, юнец, я старше твоей рогатки в три раза.'}
+  ],
+  meetPryg:[
+    {who:'Прыг Пружинкин', text:'Опаньки! Ещё живые герои! Ставлю два ореха, что вы не пройдёте следующий бой.'},
+    {who:'Финн', text:'А если пройдём?'},
+    {who:'Прыг Пружинкин', text:'Тогда я с вами! Всё равно мне тут скучно прыгать в одиночку.'}
+  ],
+  meetBum:[
+    {who:'Бум Кастрюлькин', text:'Ой! Не трогайте эту колбу, она... а, поздно.'},
+    {who:'Бум Кастрюлькин', text:'(небольшой хлопок и облако зелёного дыма) Ничего страшного, побочный эффект временный. Обычно.'},
+    {who:'Бум Кастрюлькин', text:'Возьмёте меня с собой? Обещаю взрывать только врагов!'}
+  ],
+  meetMatushka:[
+    {who:'Матушка Хохотушка', text:'Финн? Ты нашёл меня... Я всё бродила по лесу, надеясь хоть немного развеселиться.'},
+    {who:'Финн', text:'Тогда пойдём с нами! Говорят, лучший способ развеселиться — надавать по шляпе грустному лорду.'},
+    {who:'Матушка Хохотушка', text:'Ох, молодёжь. Ладно, давай хоть зелья вам заварю по дороге.'}
+  ],
+  preBoss:[
+    {who:'Гриб-Мамочка', text:'Мои детки-грибочки так расстроились без Хохотуна... а расстроенные грибы — это, поверьте, куда опаснее весёлых!'},
+    {who:'Финн', text:'Может, просто обнимемся и всё обсудим?'},
+    {who:'Гриб-Мамочка', text:'Обниматься будете с моими спорами, шутник!'}
+  ],
+  transition_to_mountains:[
+    {who:'Финн', text:'Хохотун ещё далеко, но мы хотя бы заставили грибы снова улыбаться!'},
+    {who:'Дама Скрипучка', text:'Не время отдыхать, юнец. Разведка доложила — следующий путь лежит через Ворчащие горы.'}
+  ],
+  mountainIntro:[
+    {who:'Дама Скрипучка', text:'Горы Ворчания... тут даже эхо огрызается.'},
+    {who:'Финн', text:'Отлично, значит будет с кем поспорить, если заскучаем.'}
+  ],
+  preBossMountain:[
+    {who:'Ворчун-Патриарх', text:'Кто посмел шуметь у моего порога?! Тут положено ВОРЧАТЬ, а не смеяться!'},
+    {who:'Финн', text:'А можно и то, и другое одновременно?'},
+    {who:'Ворчун-Патриарх', text:'...Это будет незаконно весело. Значит, будем драться!'}
+  ],
+  transition_to_desert:[
+    {who:'Финн', text:'Горы пройдены, но Хохотун всё ещё где-то там, хихикает у Хмуриля в кармане.'},
+    {who:'Дама Скрипучка', text:'Разведка донесла — впереди Пустыня Скуки. Приготовьтесь как следует заскучать... а потом надрать кому-то шляпу.'}
+  ],
+  desertIntro:[
+    {who:'Дама Скрипучка', text:'Пустыня Скуки... даже песок здесь зевает.'},
+    {who:'Финн', text:'Ну хотя бы не с кем спорить — тут вообще никого нет.'},
+    {who:'Дама Скрипучка', text:'Договорилась. Вон, кажется, скорпион с портфелем идёт снимать показания.'}
+  ],
+  desertBanter:[
+    {who:'Прыг Пружинкин', text:'Я насчитал уже сто барханов. Сто первый выглядит точно так же.'},
+    {who:'Дама Скрипучка', text:'Зато тут тихо. Наконец-то никто не ворчит, кроме гор в моей памяти.'},
+    {who:'Финн', text:'Погодите, а вон то — это оазис или ещё один скорпион с портфелем?'}
+  ],
+  preBossDesert:[
+    {who:'Архивариус Скуки', text:'Тишина в архиве! Никакого смеха, никакого шума — только вечная, блаженная скука.'},
+    {who:'Финн', text:'А можно мне взять один формуляр на радость навынос?'},
+    {who:'Архивариус Скуки', text:'НИКАКИХ ФОРМУЛЯРОВ НА РАДОСТЬ. Список зачитан. Приступаем к процедуре наказания весельем.'}
+  ],
+  transition_to_swamp:[
+    {who:'Финн', text:'Пустыня Скуки позади — и мы её всё-таки развеселили немного!'},
+    {who:'Дама Скрипучка', text:'Не расслабляйся, юнец. Впереди Болото Хмурых Испарений — там веселья ещё меньше, а сырости куда больше.'}
+  ],
+  swampIntro:[
+    {who:'Бум Кастрюлькин', text:'Ого, сколько тут интересных спор и плесени! Тут можно варить зелья годами!'},
+    {who:'Дама Скрипучка', text:'Или утонуть в тине через пять минут. Держитесь тропинки.'}
+  ],
+  swampBanter:[
+    {who:'Матушка Хохотушка', text:'Ах, кувшинки... красивые, но кусаются похуже иных грибов.'},
+    {who:'Финн', text:'Может, хватит их гладить и начнём уже бить?'},
+    {who:'Матушка Хохотушка', text:'Одно другому не мешает, милый.'}
+  ],
+  preBossSwamp:[
+    {who:'Королева Кувшинок Ядвига', text:'Кто посмел потревожить мои воды? Здесь царят тишина, туман и лёгкая грусть — и мне это нравится.'},
+    {who:'Финн', text:'А нам нравится солнце, смех и сухие ботинки. Так что не обессудьте.'},
+    {who:'Королева Кувшинок Ядвига', text:'Тогда утоплю вас в тоске, шутник!'}
+  ],
+  transition_to_ice:[
+    {who:'Финн', text:'Болото позади, хоть ботинки уже не отстираю никогда.'},
+    {who:'Дама Скрипучка', text:'Дальше — Ледяной Архив Забытых Шуток. Говорят, там хранится каждая шутка, которую никто не оценил.'}
+  ],
+  iceIntro:[
+    {who:'Матушка Хохотушка', text:'Бррр, холодно-то как... Даже мои травы тут промёрзли насквозь.'},
+    {who:'Финн', text:'Зато шутки тут, наверное, отлично сохранились. Как в морозилке.'},
+    {who:'Матушка Хохотушка', text:'Будем надеяться, что не протухли за компанию.'}
+  ],
+  iceBanter:[
+    {who:'Бум Кастрюлькин', text:'Ох, гляньте — целая полка нереализованных каламбуров! Вот это залежи!'},
+    {who:'Финн', text:'Может, потом почитаем. Сейчас у нас тут книгочей с ледяным взглядом.'},
+    {who:'Бум Кастрюлькин', text:'Согласен, сначала бой, потом культурная программа.'}
+  ],
+  preBossIce:[
+    {who:'Хранитель Архива', text:'Кто смеет тревожить покой забытых шуток?! Здесь им место — в вечной, ледяной тишине.'},
+    {who:'Финн', text:'А по-моему, шутки надо рассказывать, а не хранить под замком.'},
+    {who:'Хранитель Архива', text:'Ересь! За такие слова — заморожу вас вместе с самым несмешным анекдотом в архиве!'}
+  ],
+  transition_to_castle:[
+    {who:'Дама Скрипучка', text:'Архив позади. Осталось одно место — Замок Хмуриля.'},
+    {who:'Финн', text:'Наконец-то. Пора вернуть Хохотун и напомнить одному лорду, что смеяться не запрещено.'}
+  ],
+  castleIntro:[
+    {who:'Дама Скрипучка', text:'Вот он, замок. Мрачный, кривой и до жути гордый собой.'},
+    {who:'Финн', text:'Ну что, покажем Хмурилю, что мы тоже умеем в драматичные монологи?'}
+  ],
+  preBossFinal:[
+    {who:'Лорд Хмуриль', text:'Думаете, ваши смешные шляпы меня остановят? Я двадцать лет репетировал этот злодейский монолог!'},
+    {who:'Дама Скрипучка', text:'Двадцать лет монолог репетировал, а костюм зашить так и не удосужился.'},
+    {who:'Лорд Хмуриль', text:'...Он что, правда порван? ЧТО, ПРАВДА?! Ладно — всё равно вас побеждю!'},
+    {who:'Финн', text:'Побежу, Хмуриль. И даже не побежу — а не победишь.'}
+  ],
+  transition_to_island:[
+    {who:'Финн', text:'Хохотун снова у нас в руках! Лорд Хмуриль повержен, а замок... ну, чуть менее мрачный, чем был.'},
+    {who:'Дама Скрипучка', text:'Осталось одно место, куда стоит заглянуть — Остров Забытого Смеха. Говорят, там праздник, который никогда не кончался.'}
+  ],
+  islandIntro:[
+    {who:'Прыг Пружинкин', text:'Остров Забытого Смеха! Говорят, тут хранятся шутки, которые даже Хмуриль не смог испортить.'},
+    {who:'Дама Скрипучка', text:'Тогда идём собирать урожай веселья. Заслужили после всего этого пути.'}
+  ],
+  epilogue:[
+    {who:'Финн', text:'Хохотун снова смеётся над каждой шуткой в королевстве. Кажется, мы справились.'},
+    {who:'Дама Скрипучка', text:'Справились — это громко сказано. Но да, неплохо для одного шута с рогаткой.'},
+    {who:'Матушка Хохотушка', text:'Идёмте домой, я испеку пирог. Всем нам он не помешает.'},
+    {who:'Финн', text:'Конец... или начало новой смешной истории. Спасибо, что прошли этот путь с нами!'}
+  ]
+};
+
+/* ---------- РЕЦЕПТЫ / ТОВАРЫ ---------- */
+const RECIPES = [
+  {id:'sword', name:'Меч «Хихишка»', cost:{ore:3,wood:2}, effect:'+15 урона', apply:h=>h.bonusDmg=(h.bonusDmg||0)+15},
+  {id:'shield', name:'Щит «Стойкий Смешок»', cost:{ore:4,dust:1}, effect:'+20 брони', apply:h=>h.armor=(h.armor||0)+20},
+  {id:'potion', name:'Зелье Бодрости', cost:{dust:2,wood:1}, effect:'+30 к макс. HP (и лечит на столько же)', apply:h=>{ h.preHeal=(h.preHeal||0)+30; if(h.currentHp!==undefined) h.currentHp+=30; }},
+  {id:'cloak', name:'Плащ Ловкости', cost:{silk:3,dust:1}, effect:'+10% уклонения', apply:h=>h.dodge=(h.dodge||0)+0.10},
+  {id:'amulet', name:'Амулет Ярости', cost:{dust:2,ore:2}, effect:'+15% к ярости', apply:h=>h.rageBonus=(h.rageBonus||0)+0.15}
+];
+const SHOP_ITEMS = [
+  {id:'wood5', name:'5× Древесина Смеха', price:20, give:{wood:5}},
+  {id:'ore5', name:'5× Смехо-руда', price:30, give:{ore:5}},
+  {id:'dust5', name:'5× Кристальная пыльца', price:35, give:{dust:5}},
+  {id:'silk5', name:'5× Шёлк Радости', price:25, give:{silk:5}}
+];
+
+/* =========================================================
+   4. СОСТОЯНИЕ + СОХРАНЕНИЕ
+   ========================================================= */
+const SAVE_KEY = 'smehotvoriki_save_v3';
+function freshState(){
+  const s = {
+    gold: 40,
+    resources: {wood:4, ore:2, dust:1, silk:0},
+    unlocked: ['finn'],
+    squad: ['finn'],
+    progress: {},
+    regionIndex: 0,
+    currentNodeIndex: 0,
+    heroStates: {}
+  };
+  Object.keys(HERO_DEFS).forEach(id=>s.heroStates[id] = {});
+  return s;
+}
+const state = freshState();
+state.battle = null;
+
+function saveGame(){
+  try{
+    const dump = {
+      gold:state.gold, resources:state.resources, unlocked:state.unlocked, squad:state.squad,
+      progress:state.progress, regionIndex:state.regionIndex, currentNodeIndex:state.currentNodeIndex,
+      heroStates:state.heroStates
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(dump));
+  }catch(e){ /* игнорируем ошибки хранилища */ }
+}
+function loadGame(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return false;
+    Object.assign(state, JSON.parse(raw));
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- УТИЛИТЫ ---------- */
+function $(id){return document.getElementById(id);}
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function rnd(n){return Math.floor(Math.random()*n);}
+function currentNodes(){ return REGIONS[state.regionIndex].nodes; }
+
+/* =========================================================
+   5. МОДАЛЬНЫЕ ДИАЛОГИ (заменяют узлы-истории на карте)
+   ========================================================= */
+let modalLines=[], modalIdx=0, modalOnComplete=null, modalStoryKey=null;
+function openModal(storyKey, onComplete){
+  modalStoryKey = storyKey;
+  modalLines = STORIES[storyKey] || [{who:'???', text:'...'}];
+  modalIdx = 0;
+  modalOnComplete = onComplete || null;
+  renderModalPortraits(storyKey);
+  renderModalLine();
+  $('modalOverlay').classList.add('active');
+}
+function renderModalPortraits(storyKey){
+  const wrap = $('modal-portraits'); wrap.innerHTML='';
+  const companion = STORY_COMPANION[storyKey] || 'dama';
+  ['finn', companion].forEach(key=> wrap.appendChild(makeSpriteCanvas(key,60,{})));
+}
+function renderModalLine(){
+  const line = modalLines[modalIdx];
+  $('modal-speaker').textContent = line.who;
+  $('modal-text').textContent = line.text;
+  $('modalNextBtn').textContent = modalIdx<modalLines.length-1 ? 'Далее ▸' : 'Продолжить ▸';
+}
+$('modalNextBtn').onclick = ()=>{
+  sndUI();
+  modalIdx++;
+  if(modalIdx>=modalLines.length){
+    $('modalOverlay').classList.remove('active');
+    const heroToUnlock = STORY_UNLOCKS[modalStoryKey];
+    if(heroToUnlock && !state.unlocked.includes(heroToUnlock)){
+      state.unlocked.push(heroToUnlock);
+      if(state.squad.length<3) state.squad.push(heroToUnlock);
+      saveGame();
+    }
+    const cb = modalOnComplete; modalOnComplete=null;
+    if(cb) cb();
+    return;
+  }
+  renderModalLine();
+};
+
+function maybeShowRegionIntro(){
+  const region = REGIONS[state.regionIndex];
+  const flag = 'introShown_'+region.id;
+  if(!state.progress[flag]){
+    state.progress[flag] = true;
+    saveGame();
+    openModal(REGION_INTRO[region.id], ()=>{ showScreen('screen-map'); renderMap(); });
+  }
+}
+
+/* =========================================================
+   6. ЭКРАН КАРТЫ (панорама + узлы вдоль тропы)
+   ========================================================= */
+const REGION_ART = {
+  forest: {
+    sky:['#FCEFC7','#BFE3E0'],
+    hills:[
+      {d:'M0,340 L0,230 C120,190 220,260 340,220 C460,180 560,240 680,210 C780,190 860,230 900,210 L900,340 Z', color:'#A9C4D1'},
+      {d:'M0,340 L0,260 C140,220 260,280 380,250 C500,220 620,270 740,245 C820,230 870,255 900,245 L900,340 Z', color:'#6E8F5C'},
+      {d:'M0,340 L0,300 C160,275 300,310 440,290 C560,275 680,300 780,285 C830,278 870,288 900,285 L900,340 Z', color:'#4C6B3E'}
+    ],
+    trail:'M50,300 C160,260 220,180 320,200 C420,220 460,140 560,150 C660,160 700,90 830,95'
+  },
+  mountains: {
+    sky:['#DCE7EC','#9FB6C4'],
+    hills:[
+      {d:'M0,340 L0,220 C130,170 240,230 350,190 C470,150 570,210 690,180 C790,155 860,190 900,175 L900,340 Z', color:'#8C97A0'},
+      {d:'M0,340 L0,255 C150,220 270,270 390,245 C520,215 630,260 750,235 C820,220 870,240 900,235 L900,340 Z', color:'#6F7B72'},
+      {d:'M0,340 L0,295 C170,275 300,305 440,290 C560,275 680,300 780,288 C830,280 870,288 900,288 L900,340 Z', color:'#4E594F'}
+    ],
+    trail:'M50,300 C160,270 210,190 310,200 C420,215 450,150 560,145 C680,140 720,100 830,90'
+  },
+  desert: {
+    sky:['#F2E4B8','#E0C089'],
+    hills:[
+      {d:'M0,340 L0,250 C140,230 260,270 380,250 C500,230 620,265 740,248 C810,238 860,250 900,245 L900,340 Z', color:'#DCC28C'},
+      {d:'M0,340 L0,275 C150,260 280,290 400,275 C520,260 650,285 770,270 C830,262 870,270 900,268 L900,340 Z', color:'#C9A66B'},
+      {d:'M0,340 L0,305 C170,295 300,315 440,305 C560,295 690,312 790,303 C835,298 870,303 900,302 L900,340 Z', color:'#B08C52'}
+    ],
+    trail:'M50,300 C160,285 220,230 330,235 C440,240 470,190 570,180 C670,170 710,130 830,110'
+  },
+  swamp: {
+    sky:['#C9D6B8','#7E9A82'],
+    hills:[
+      {d:'M0,340 L0,255 C140,235 260,270 380,255 C500,240 620,268 740,252 C810,244 860,254 900,250 L900,340 Z', color:'#6B8A6E'},
+      {d:'M0,340 L0,280 C150,265 280,295 400,280 C520,265 650,290 770,275 C830,268 870,275 900,273 L900,340 Z', color:'#4E6B4A'},
+      {d:'M0,340 L0,308 C170,298 300,315 440,308 C560,298 690,313 790,305 C835,300 870,305 900,304 L900,340 Z', color:'#38503A'}
+    ],
+    trail:'M50,300 C150,290 200,250 300,255 C400,260 430,220 530,215 C630,210 660,180 780,160 C820,150 830,130 830,120'
+  },
+  ice: {
+    sky:['#E8F4F8','#B8D4E0'],
+    hills:[
+      {d:'M0,340 L0,235 C130,205 240,250 350,225 C470,200 570,240 690,220 C790,205 860,225 900,218 L900,340 Z', color:'#D8E8ED'},
+      {d:'M0,340 L0,265 C150,245 270,280 390,262 C520,245 630,275 750,258 C820,248 870,258 900,255 L900,340 Z', color:'#AECBD6'},
+      {d:'M0,340 L0,300 C170,288 300,310 440,298 C560,288 680,308 780,297 C830,292 870,297 900,296 L900,340 Z', color:'#7FA8B8'}
+    ],
+    trail:'M50,300 C160,275 220,210 320,215 C420,220 460,160 560,155 C660,150 700,110 830,100'
+  },
+  castle: {
+    sky:['#4A3B5C','#2A2038'],
+    hills:[
+      {d:'M0,340 L0,240 C130,210 240,250 350,225 C470,200 570,235 690,215 C790,200 860,220 900,210 L900,340 Z', color:'#5C4A6E'},
+      {d:'M0,340 L0,270 C150,250 270,285 390,265 C520,245 630,270 750,255 C820,245 870,255 900,252 L900,340 Z', color:'#3E2E4E'},
+      {d:'M0,340 L0,300 C170,288 300,308 440,298 C560,288 680,305 780,296 C830,290 870,296 900,295 L900,340 Z', color:'#241830'}
+    ],
+    trail:'M50,300 C160,280 210,220 310,215 C420,210 450,160 560,150 C660,140 710,105 830,90'
+  },
+  island: {
+    sky:['#FCE8B8','#F2A93C'],
+    hills:[
+      {d:'M0,340 L0,250 C140,225 260,260 380,242 C500,225 620,255 740,240 C810,230 860,240 900,236 L900,340 Z', color:'#F2C230'},
+      {d:'M0,340 L0,278 C150,260 280,292 400,275 C520,258 650,282 770,268 C830,260 870,268 900,266 L900,340 Z', color:'#E8955C'},
+      {d:'M0,340 L0,305 C170,295 300,315 440,305 C560,295 690,312 790,303 C835,298 870,303 900,302 L900,340 Z', color:'#D9704F'}
+    ],
+    trail:'M50,300 C160,285 220,240 330,245 C440,250 470,210 570,200 C670,190 710,160 830,145'
+  }
+};
+
+function renderMap(){
+  $('goldCount').textContent = state.gold;
+  $('regionLabel').textContent = 'Регион ' + (state.regionIndex+1) + '/' + REGIONS.length;
+  const nodes = currentNodes();
+  const doneCount = nodes.filter(n=>state.progress[n.id]).length;
+  $('regionProgress').textContent = `Прогресс региона: ${doneCount}/${nodes.length} боёв`;
+  renderSquadBar();
+  renderPanorama();
+  renderNodesOverlay();
+  playRegionMusic(REGIONS[state.regionIndex].id);
+  saveGame();
+}
+function renderSquadBar(){
+  const squadBar = $('squadBar');
+  squadBar.innerHTML = '';
+  Object.keys(HERO_DEFS).forEach(id=>{
+    const unlocked = state.unlocked.includes(id);
+    const def = HERO_DEFS[id];
+    const div = document.createElement('div');
+    div.className='mini-hero'+(unlocked?'':' locked-hero')+(state.squad.includes(id)?' chosen':'');
+    div.title = def.name + (unlocked?'':' (не открыт)');
+    div.appendChild(makeSpriteCanvas(id, 28, {}));
+    if(unlocked){
+      div.style.cursor='pointer';
+      div.onclick = ()=>{
+        sndUI();
+        if(state.squad.includes(id)){ state.squad = state.squad.filter(x=>x!==id); }
+        else if(state.squad.length<3){ state.squad.push(id); }
+        renderMap();
+      };
+    }
+    squadBar.appendChild(div);
+  });
+}
+function renderPanorama(){
+  const region = REGIONS[state.regionIndex];
+  const art = REGION_ART[region.id];
+  $('regionCaption').innerHTML = `<b>${region.title}</b> — ${region.sub}`;
+  const svg = $('mapSvg');
+  svg.innerHTML = `
+    <defs><linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${art.sky[0]}"/><stop offset="100%" stop-color="${art.sky[1]}"/>
+    </linearGradient></defs>
+    <rect x="0" y="0" width="900" height="340" fill="url(#skyGrad)"/>
+    ${art.hills.map(h=>`<path d="${h.d}" fill="${h.color}"/>`).join('')}
+    <path id="trailPath" d="${art.trail}" fill="none" stroke="#C9A227" stroke-width="5" stroke-dasharray="11,9" stroke-linecap="round" opacity="0.9"/>
+  `;
+}
+function renderNodesOverlay(){
+  const nodes = currentNodes();
+  const layer = $('mapNodesLayer');
+  layer.innerHTML='';
+  const trail = $('trailPath');
+  const total = trail.getTotalLength();
+  const n = nodes.length;
+  nodes.forEach((node,i)=>{
+    const t = n===1 ? 0 : i/(n-1);
+    const pt = trail.getPointAtLength(t*total);
+    const el = document.createElement('div');
+    const done = !!state.progress[node.id];
+    const locked = i>0 && !state.progress[nodes[i-1].id];
+    let cls = 'map-node ' + node.type;
+    if(done) cls += ' done';
+    if(locked) cls = 'map-node locked';
+    el.className = cls;
+    el.style.left = (pt.x/900*100).toFixed(2)+'%';
+    el.style.top = (pt.y/340*100).toFixed(2)+'%';
+    if(done){
+      el.textContent = '✓';
+    } else {
+      const iconKey = node.type==='boss' ? 'crownIcon' : 'swordIcon';
+      el.appendChild(makeSpriteCanvas(iconKey, node.type==='boss' ? 32 : 26, {}));
+    }
+    if(!locked) el.onclick = ()=>{ sndUI(); enterNode(i); };
+    layer.appendChild(el);
+  });
+}
+
+function enterNode(index){
+  state.currentNodeIndex = index;
+  const node = currentNodes()[index];
+  if(node.beforeDialog){ openModal(node.beforeDialog, ()=> startBattle(node)); }
+  else { startBattle(node); }
+}
+
+function afterNodeWin(node){
+  if(node.afterDialog){ openModal(node.afterDialog, ()=> finalizeNodeCompletion(node)); }
+  else { finalizeNodeCompletion(node); }
+}
+function finalizeNodeCompletion(node){
+  state.progress[node.id] = true;
+  const nodes = currentNodes();
+  const isLast = nodes[nodes.length-1].id === node.id;
+  if(isLast && node.type==='boss' && state.regionIndex < REGIONS.length-1){
+    const nextRegion = REGIONS[state.regionIndex+1];
+    openModal('transition_to_'+nextRegion.id, ()=>{
+      state.regionIndex++;
+      state.currentNodeIndex = 0;
+      saveGame();
+      showScreen('screen-map');
+      renderMap();
+      maybeShowRegionIntro();
+    });
+    return;
+  }
+  showScreen('screen-map');
+  renderMap();
+}
+
+/* =========================================================
+   7. ЛАГЕРЬ (кузница / лавка / отдых)
+   ========================================================= */
+function startCamp(){ showScreen('screen-camp'); renderCamp(); }
+function renderCamp(){
+  const wrap = $('campSquadPreview'); wrap.innerHTML='';
+  state.unlocked.forEach(id=>{
+    const def = HERO_DEFS[id];
+    const bonus = state.heroStates[id] || {};
+    const maxHp = def.maxHp + (bonus.preHeal||0) + (bonus.bonusHp||0);
+    const hp = bonus.currentHp!==undefined ? clamp(bonus.currentHp,0,maxHp) : maxHp;
+    const level = bonus.level||1;
+    const xp = bonus.xp||0;
+    const chip = document.createElement('div');
+    chip.className='res-chip';
+    chip.style.display='flex'; chip.style.flexDirection='column'; chip.style.minWidth='120px';
+    const topRow = document.createElement('div');
+    topRow.style.display='flex'; topRow.style.alignItems='center';
+    topRow.appendChild(makeSpriteCanvas(id,26,{dead:hp<=0}));
+    const label = document.createElement('span');
+    label.style.marginLeft='4px';
+    label.innerHTML = `${def.name} <span class="level-tag">Ур.${level}</span><br>${Math.max(0,Math.round(hp))}/${maxHp} HP`;
+    topRow.appendChild(label);
+    chip.appendChild(topRow);
+    const xpOuter = document.createElement('div'); xpOuter.className='xpbar-outer'; xpOuter.style.marginTop='3px';
+    const xpInner = document.createElement('div'); xpInner.className='xpbar-inner';
+    xpInner.style.width = clamp(xp/xpToNextLevel(level)*100,0,100)+'%';
+    xpOuter.appendChild(xpInner);
+    chip.appendChild(xpOuter);
+    wrap.appendChild(chip);
+  });
+  $('campMsg').textContent='';
+}
+$('campBtn').onclick = ()=>{ sndUI(); startCamp(); };
+$('campBackBtn').onclick = ()=>{ sndUI(); showScreen('screen-map'); renderMap(); };
+$('campForgeBtn').onclick = ()=>{ sndUI(); startForge(); };
+$('campShopBtn').onclick = ()=>{ sndUI(); startShop(); };
+$('campRestBtn').onclick = ()=>{
+  sndUI(); sndHeal();
+  state.unlocked.forEach(id=>{
+    const def = HERO_DEFS[id];
+    const bonus = state.heroStates[id] || (state.heroStates[id]={});
+    bonus.currentHp = def.maxHp + (bonus.preHeal||0) + (bonus.bonusHp||0);
+  });
+  renderCamp();
+  $('campMsg').textContent = 'Отряд отдохнул у костра и полностью восстановил здоровье!';
+  saveGame();
+};
+
+/* =========================================================
+   8. БОЙ
+   ========================================================= */
+function makeHeroUnit(id){
+  const def = HERO_DEFS[id];
+  const bonus = state.heroStates[id] || {};
+  const maxHp = def.maxHp + (bonus.preHeal||0) + (bonus.bonusHp||0);
+  const hp = clamp(bonus.currentHp!==undefined ? bonus.currentHp : maxHp, 0, maxHp);
+  return {
+    id, artKey:id, def, isEnemy:false,
+    hp, maxHp,
+    armor: bonus.armor||0, bonusDmg: bonus.bonusDmg||0, bonusAtk: bonus.bonusAtk||0,
+    dodge: (def.dodge||0) + (bonus.dodge||0),
+    rageBonus: bonus.rageBonus||0,
+    level: bonus.level||1, xp: bonus.xp||0,
+    statuses: [], acted:false, attackAnim:false, hitFlash:false, animSeed: Math.random()*10
+  };
+}
+function xpToNextLevel(level){ return level*15 + 10; }
+function gainXp(heroId, amount){
+  const hs = state.heroStates[heroId] || (state.heroStates[heroId]={});
+  hs.level = hs.level || 1;
+  hs.xp = (hs.xp||0) + amount;
+  let leveledUp = false;
+  while(hs.xp >= xpToNextLevel(hs.level)){
+    hs.xp -= xpToNextLevel(hs.level);
+    hs.level++;
+    hs.bonusHp = (hs.bonusHp||0) + 10;
+    hs.bonusAtk = (hs.bonusAtk||0) + 2;
+    if(hs.currentHp!==undefined) hs.currentHp += 10;
+    leveledUp = true;
+  }
+  return leveledUp;
+}
+function makeEnemyUnit(key, idx){
+  const def = ENEMY_DEFS[key];
+  const scale = def.boss ? (1 + state.regionIndex*0.10) : (1 + state.regionIndex*0.15);
+  const maxHp = Math.ceil(def.maxHp * scale);
+  const dmg = Math.ceil(def.dmg * scale);
+  return {
+    id: key+'_'+idx, artKey:key, def, isEnemy:true,
+    hp: maxHp, maxHp: maxHp, armor: def.armor||0, dmg,
+    statuses:[], acted:false, phase:1, attackAnim:false, hitFlash:false, animSeed: Math.random()*10
+  };
+}
+function startBattle(node){
+  const allies = state.squad.map(makeHeroUnit);
+  if(allies.length===0){ allies.push(makeHeroUnit('finn')); }
+  const enemies = node.enemies.map((k,i)=>makeEnemyUnit(k,i));
+  if(allies.some(a=>a.id==='matushka')){
+    const weakest = allies.reduce((a,b)=> a.hp/a.maxHp < b.hp/b.maxHp ? a : b);
+    weakest.hp = Math.min(weakest.maxHp, weakest.hp + 15);
+  }
+  state.battle = { node, allies, enemies, rage:0, round:1, selectedAlly:null, selectedAbility:null, awaitingTarget:false, log:[], counterBonus:1 };
+  showScreen('screen-battle');
+  $('enemyTurnBanner').classList.remove('show');
+  $('battleFxLayer').innerHTML = '';
+  $('battleRegionLabel').textContent = REGIONS[state.regionIndex].title;
+  logMsg('Бой начался! Выберите героя → способность → цель.');
+  renderBattle();
+}
+function logMsg(msg){
+  state.battle.log.unshift(msg);
+  $('battleLog').innerHTML = state.battle.log.slice(0,30).map(m=>`<div>${m}</div>`).join('');
+}
+function statusLabel(s){
+  const map = {poison:'☠ Яд',sleep:'💤 Сон',slow:'🐌 Замедл.',provoke:'❗ Провок.',blind:'🌫 Слепота',laugh:'😂 Смешинка',defend:'🛡 Защита',apathy:'😐 Апатия'};
+  return map[s.type] || s.type;
+}
+function renderBattle(){
+  const b = state.battle;
+  if(!b) return;
+  $('roundCounter').textContent = 'Раунд ' + b.round;
+  $('rageBarInner').style.width = clamp(b.rage,0,100)+'%';
+  const enemyRow = $('enemyRow'); enemyRow.innerHTML='';
+  b.enemies.forEach(u=>enemyRow.appendChild(renderUnit(u)));
+  const allyRow = $('allyRow'); allyRow.innerHTML='';
+  b.allies.forEach(u=>allyRow.appendChild(renderUnit(u)));
+  renderAbilityBar();
+}
+function renderUnit(u){
+  const wrap = document.createElement('div');
+  wrap.className='unit';
+  const dead = u.hp<=0;
+  const b = state.battle;
+  let extraCls = '';
+  if(b.awaitingTarget && isValidTarget(u)){
+    const wantsAlly = ['ally','ally_heal'].includes(b.selectedAbility.type);
+    extraCls = wantsAlly ? ' heal-target' : ' targetable';
+  }
+  const sprite = document.createElement('div');
+  sprite.className='sprite'+(dead?' dead':'')+(b.selectedAlly===u.id?' selected':'')+extraCls;
+  sprite.onclick = ()=> onUnitClick(u);
+  const canvas = makeSpriteCanvas(u.artKey, 46, {dead, attackAnim:u.attackAnim, hitFlash:u.hitFlash, enemySide:u.isEnemy, seed:u.animSeed});
+  canvas.dataset.unitid = u.id;
+  sprite.appendChild(canvas);
+  const statusWrap = document.createElement('div');
+  statusWrap.className='status-icons';
+  u.statuses.forEach(s=>{
+    const chip = document.createElement('span');
+    chip.className='status-icon'; chip.textContent = statusLabel(s);
+    statusWrap.appendChild(chip);
+  });
+  sprite.appendChild(statusWrap);
+
+  const info = document.createElement('div'); info.className='info';
+  const name = document.createElement('div');
+  name.className='name'+(!u.isEnemy && u.acted && !dead ? ' acted':'');
+  name.textContent = u.isEnemy ? u.def.name : u.def.name.split(' ')[0];
+  if(!u.isEnemy){
+    const lvl = document.createElement('span');
+    lvl.className='level-tag';
+    lvl.textContent = 'Ур.'+(u.level||1);
+    name.appendChild(lvl);
+  }
+  const hpOuter = document.createElement('div'); hpOuter.className='hpbar-outer';
+  const hpInner = document.createElement('div'); hpInner.className='hpbar-inner';
+  hpInner.style.width = clamp(u.hp/u.maxHp*100,0,100)+'%';
+  hpOuter.appendChild(hpInner);
+  const hpText = document.createElement('div');
+  hpText.className='hp-text'; hpText.textContent = Math.max(0,Math.round(u.hp))+'/'+u.maxHp;
+  info.appendChild(name); info.appendChild(hpOuter); info.appendChild(hpText);
+  if(!u.isEnemy){
+    const xpOuter = document.createElement('div'); xpOuter.className='xpbar-outer';
+    const xpInner = document.createElement('div'); xpInner.className='xpbar-inner';
+    xpInner.style.width = clamp((u.xp||0)/xpToNextLevel(u.level||1)*100,0,100)+'%';
+    xpOuter.appendChild(xpInner);
+    info.appendChild(xpOuter);
+  }
+
+  wrap.appendChild(sprite); wrap.appendChild(info);
+  return wrap;
+}
+function isValidTarget(u){
+  const b = state.battle;
+  if(!b.awaitingTarget) return false;
+  const ab = b.selectedAbility;
+  if(!ab) return false;
+  if(u.hp<=0) return false;
+  const wantsEnemy = ['single','all_enemies','double_random','all_enemies_debuff'].includes(ab.type);
+  const wantsAlly = ['ally','ally_heal'].includes(ab.type);
+  if(wantsEnemy) return u.isEnemy;
+  if(wantsAlly) return !u.isEnemy;
+  return false;
+}
+function onUnitClick(u){
+  const b = state.battle;
+  if(b.awaitingTarget){ if(isValidTarget(u)){ resolveAbility(u); } return; }
+  if(u.isEnemy) return;
+  if(u.hp<=0 || u.acted) return;
+  b.selectedAlly = u.id; b.selectedAbility = null; b.awaitingTarget = false;
+  sndUI();
+  renderBattle();
+}
+function findUnit(id){
+  const b = state.battle;
+  if(!b) return null;
+  return b.allies.find(a=>a.id===id) || b.enemies.find(e=>e.id===id);
+}
+function abilityTooltipHTML(ab, hero, isUltra){
+  const mult = isUltra ? 2 : 1;
+  const extraDmg = (hero.bonusDmg||0) + (hero.bonusAtk||0);
+  const noBonusTypes = ['ally','ally_heal','all_allies_heal','all_enemies_debuff'];
+  let html = `<b>${ab.name}${isUltra?' ✨':''}</b>`;
+  if(ab.dmg){
+    const total = ab.dmg*mult + (noBonusTypes.includes(ab.type) ? 0 : extraDmg);
+    html += `<div>Урон: ${total}</div>`;
+  }
+  if(ab.heal){ html += `<div>Лечение: ${ab.heal*mult}</div>`; }
+  if(ab.rage){ html += `<div>Ярость: +${ab.rage}</div>`; }
+  if(ab.status){
+    const chance = ab.statusChance!==undefined ? Math.round(ab.statusChance*100) : 100;
+    html += `<div>Эффект: ${statusLabel({type:ab.status})} (${chance}%, ${ab.statusDur||1} х.)</div>`;
+  }
+  html += `<div class="tt-desc">${ab.desc}</div>`;
+  if(isUltra) html += `<div class="tt-ultra">✨ Ультра — требует полную шкалу ярости</div>`;
+  return html;
+}
+function showAbilityTooltip(btnEl, html){
+  const tip = $('abilityTooltip');
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  const appEl = $('app');
+  const appRect = appEl.getBoundingClientRect();
+  const btnRect = btnEl.getBoundingClientRect();
+  const scale = appRect.width / 900;
+  const tipW = tip.offsetWidth, tipH = tip.offsetHeight;
+  const btnX = (btnRect.left - appRect.left + btnRect.width/2) / scale;
+  const btnTop = (btnRect.top - appRect.top) / scale;
+  const btnBottom = (btnRect.bottom - appRect.top) / scale;
+  let left = Math.max(4, Math.min(900 - tipW - 4, btnX - tipW/2));
+  let top = btnTop - tipH - 8;
+  if(top < 4){ top = btnBottom + 8; }
+  tip.style.left = left+'px';
+  tip.style.top = top+'px';
+}
+function hideAbilityTooltip(){ $('abilityTooltip').style.display = 'none'; }
+function attachAbilityTooltip(btnEl, getHtml){
+  btnEl.addEventListener('mouseenter', ()=> showAbilityTooltip(btnEl, getHtml()));
+  btnEl.addEventListener('mouseleave', hideAbilityTooltip);
+  let timer = null;
+  btnEl.addEventListener('touchstart', ()=>{ timer = setTimeout(()=> showAbilityTooltip(btnEl, getHtml()), 400); }, {passive:true});
+  btnEl.addEventListener('touchend', ()=>{ clearTimeout(timer); hideAbilityTooltip(); });
+  btnEl.addEventListener('touchcancel', ()=>{ clearTimeout(timer); hideAbilityTooltip(); });
+}
+function renderAbilityBar(){
+  const bar = $('abilityBar');
+  bar.innerHTML='';
+  hideAbilityTooltip();
+  const b = state.battle;
+  if(!b.selectedAlly){ bar.innerHTML = '<div style="font-size:10px;opacity:.6;align-self:center;">Выберите героя ↑</div>'; return; }
+  const hero = findUnit(b.selectedAlly);
+  if(!hero || hero.hp<=0 || hero.acted){ bar.innerHTML=''; return; }
+  hero.def.abilities.forEach(ab=>{
+    const btn = document.createElement('div');
+    btn.className='ability-btn';
+    btn.innerHTML = `<b style="font-size:9px;">${ab.name}</b><br><span style="font-size:8px;opacity:.8;">${ab.desc}</span>`;
+    btn.onclick = ()=>{
+      sndUI();
+      hideAbilityTooltip();
+      b.selectedAbility = ab; b.awaitingTarget = true;
+      if(['all_enemies','all_enemies_debuff','all_allies_heal','double_random'].includes(ab.type)){ resolveAbility(null); return; }
+      renderBattle();
+    };
+    attachAbilityTooltip(btn, ()=> abilityTooltipHTML(ab, hero, false));
+    bar.appendChild(btn);
+  });
+  const defBtn = document.createElement('div');
+  defBtn.className='ability-btn';
+  defBtn.innerHTML = `<b style="font-size:9px;">🛡 Защита</b><br><span style="font-size:8px;">-50% урона</span>`;
+  defBtn.onclick = ()=>{
+    sndUI();
+    hideAbilityTooltip();
+    hero.statuses.push({type:'defend', dur:1});
+    hero.acted = true;
+    logMsg(`${hero.def.name} встаёт в защитную стойку.`);
+    b.selectedAlly = null; b.selectedAbility=null; b.awaitingTarget=false;
+    checkBattleEnd(); renderBattle();
+  };
+  attachAbilityTooltip(defBtn, ()=> `<b>🛡 Защита</b><div>Снижает получаемый урон на 50% в этот ход.</div><div class="tt-desc">Не требует цели — герой просто готовится к удару.</div>`);
+  bar.appendChild(defBtn);
+  if(b.rage>=100){
+    const ultraAb = hero.def.abilities.find(a=>a.key===hero.def.ultra);
+    if(ultraAb){
+      const ubtn = document.createElement('div');
+      ubtn.className='ability-btn ultra';
+      ubtn.innerHTML = `<b style="font-size:9px;">✨ УЛЬТА</b><br><span style="font-size:8px;">${ultraAb.name}</span>`;
+      ubtn.onclick = ()=>{
+        sndUI();
+        hideAbilityTooltip();
+        b.selectedAbility = {...ultraAb, dmg:(ultraAb.dmg||0)*2, heal:(ultraAb.heal||0)*2, ultra:true};
+        b.awaitingTarget = true;
+        if(['all_enemies','all_enemies_debuff','all_allies_heal','double_random'].includes(ultraAb.type)){ resolveAbility(null); return; }
+        renderBattle();
+      };
+      attachAbilityTooltip(ubtn, ()=> abilityTooltipHTML(ultraAb, hero, true));
+      bar.appendChild(ubtn);
+    }
+  }
+}
+$('cancelSelectBtn').onclick = ()=>{
+  sndUI();
+  hideAbilityTooltip();
+  const b = state.battle;
+  b.selectedAlly=null; b.selectedAbility=null; b.awaitingTarget=false;
+  renderBattle();
+};
+function addRage(amount, hero){
+  const b = state.battle;
+  if(hero && hero.statuses && hero.statuses.some(s=>s.type==='apathy')) return;
+  const bonus = hero && hero.rageBonus ? (1+hero.rageBonus) : 1;
+  b.rage = clamp(b.rage + amount*bonus, 0, 100);
+}
+function spawnFloatingNumber(unitId, text, cls){
+  try{
+    const canvas = document.querySelector(`canvas.sprite-canvas[data-unitid="${unitId}"]`);
+    const appEl = $('app');
+    const fx = $('battleFxLayer');
+    if(!canvas || !appEl || !fx) return;
+    const appRect = appEl.getBoundingClientRect();
+    const cRect = canvas.getBoundingClientRect();
+    const scale = appRect.width / 900;
+    const x = (cRect.left - appRect.left + cRect.width/2) / scale;
+    const y = (cRect.top - appRect.top) / scale;
+    const el = document.createElement('div');
+    el.className = 'floating-dmg' + (cls?(' '+cls):'');
+    el.textContent = text;
+    el.style.left = x+'px';
+    el.style.top = y+'px';
+    fx.appendChild(el);
+    setTimeout(()=> el.remove(), 900);
+  }catch(e){ /* визуальный эффект необязателен, ошибки игнорируем */ }
+}
+function applyHeal(target, amount){
+  target.hp = clamp(target.hp + amount, 0, target.maxHp);
+  spawnFloatingNumber(target.id, '+'+amount, 'heal');
+  return amount;
+}
+function applyDamage(target, amount){
+  if(target.isEnemy && state.battle && state.battle.counterBonus) amount *= state.battle.counterBonus;
+  if(target.armor) amount *= (1 - clamp(target.armor,0,80)/100);
+  const defending = target.statuses.find(s=>s.type==='defend');
+  if(defending) amount *= 0.5;
+  if(!target.isEnemy && target.dodge && Math.random()<target.dodge){
+    logMsg(`${target.def.name} уворачивается от удара!`);
+    spawnFloatingNumber(target.id, 'Уворот!', 'miss');
+    return 0;
+  }
+  amount = Math.max(amount>0?1:0, Math.round(amount));
+  target.hp = clamp(target.hp - amount, 0, target.maxHp);
+  if(amount>0){ target.statuses = target.statuses.filter(s=>s.type!=='sleep'); }
+  spawnFloatingNumber(target.id, '-'+amount, '');
+  return amount;
+}
+function maybeApplyStatus(target, type, dur, chance, extra){
+  if(chance!==undefined && Math.random()>chance) return;
+  target.statuses = target.statuses.filter(s=>s.type!==type);
+  const st = {type, dur: dur||1};
+  if(extra) Object.assign(st, extra);
+  target.statuses.push(st);
+  logMsg(`${target.def.name} получает эффект: ${statusLabel({type})}`);
+}
+function resolveAbility(targetUnit){
+  const b = state.battle;
+  const hero = findUnit(b.selectedAlly);
+  const ab = b.selectedAbility;
+  if(!hero || !ab) return;
+  const hitList = [];
+  const enemiesAlive = ()=> b.enemies.filter(e=>e.hp>0);
+  const alliesAlive = ()=> b.allies.filter(a=>a.hp>0);
+  let anyDamage = false, anyHeal = false;
+
+  if(ab.type==='single'){
+    const dmg = ab.dmg + (hero.bonusDmg||0) + (hero.bonusAtk||0);
+    const d = applyDamage(targetUnit, dmg);
+    hitList.push(targetUnit); anyDamage = true;
+    logMsg(`${hero.def.name} применяет «${ab.name}» на ${targetUnit.def.name}: ${d} урона.`);
+    if(ab.status){ maybeApplyStatus(targetUnit, ab.status, ab.statusDur); }
+  } else if(ab.type==='ally'){
+    targetUnit.statuses.push({type:'defend', dur: ab.shieldDur||1, from:'wall'});
+    logMsg(`${hero.def.name} накрывает ${targetUnit.def.name} «${ab.name}».`);
+    anyHeal = true;
+  } else if(ab.type==='ally_heal'){
+    applyHeal(targetUnit, ab.heal);
+    logMsg(`${hero.def.name} лечит ${targetUnit.def.name} на ${ab.heal} HP.`);
+    anyHeal = true;
+  } else if(ab.type==='all_enemies'){
+    enemiesAlive().forEach(e=>{
+      const dmg = ab.dmg + (hero.bonusDmg||0) + (hero.bonusAtk||0);
+      if(dmg>0){ const d = applyDamage(e, dmg); hitList.push(e); anyDamage=true; logMsg(`«${ab.name}» задевает ${e.def.name}: ${d} урона.`); }
+      if(ab.status){ maybeApplyStatus(e, ab.status, ab.statusDur, ab.statusChance!==undefined?ab.statusChance:1); }
+    });
+  } else if(ab.type==='all_enemies_debuff'){
+    enemiesAlive().forEach(e=> maybeApplyStatus(e, ab.status, ab.statusDur, 1));
+    logMsg(`${hero.def.name} накрывает врагов «${ab.name}».`);
+  } else if(ab.type==='all_allies_heal'){
+    alliesAlive().forEach(a=>{
+      applyHeal(a, ab.heal);
+      if(ab.cleanse) a.statuses = a.statuses.filter(s=>s.type==='defend');
+    });
+    logMsg(`${hero.def.name} применяет «${ab.name}»: отряд восстановлен.`);
+    anyHeal = true;
+  } else if(ab.type==='double_random'){
+    for(let i=0;i<2;i++){
+      const pool = enemiesAlive();
+      if(pool.length===0) break;
+      const t = pool[rnd(pool.length)];
+      const dmg = ab.dmg + (hero.bonusDmg||0) + (hero.bonusAtk||0);
+      const d = applyDamage(t, dmg);
+      hitList.push(t); anyDamage = true;
+      logMsg(`${hero.def.name} стреляет в ${t.def.name}: ${d} урона.`);
+    }
+  }
+
+  if(anyDamage) sndAttack(); else if(anyHeal) sndHeal();
+  if(hitList.length) sndHit();
+
+  addRage(ab.rage||0, hero);
+  hero.acted = true;
+  hero.attackAnim = true;
+  hitList.forEach(t=> t.hitFlash = true);
+  b.selectedAlly = null; b.selectedAbility=null; b.awaitingTarget=false;
+  if(ab.ultra) b.rage = 0;
+
+  checkBattleEnd();
+  renderBattle();
+  setTimeout(()=>{ hero.attackAnim=false; hitList.forEach(t=> t.hitFlash=false); }, 350);
+}
+$('endTurnBtn').onclick = ()=>{ sndUI(); enemyTurn(); };
+function enemyTurn(){
+  const b = state.battle;
+  if(!b) return;
+  $('enemyTurnBanner').classList.add('show');
+  let idx = 0;
+  function step(){
+    if(!state.battle) return;
+    const list = state.battle.enemies;
+    while(idx<list.length && list[idx].hp<=0) idx++;
+    if(idx>=list.length){ $('enemyTurnBanner').classList.remove('show'); endRound(); return; }
+    const e = list[idx];
+    doEnemyAttack(e);
+    idx++;
+    renderBattle();
+    setTimeout(step, 550);
+  }
+  step();
+}
+function doEnemyAttack(e){
+  const b = state.battle;
+  if(e.statuses.some(s=>s.type==='sleep')){
+    logMsg(`${e.def.name} крепко спит и не может атаковать.`);
+    return;
+  }
+  const allies = ()=> b.allies.filter(a=>a.hp>0);
+  const targets = allies();
+  if(targets.length===0) return;
+  let target = targets[rnd(targets.length)];
+  const provoker = targets.find(a=>a.statuses.some(s=>s.type==='provoke'));
+  if(provoker) target = provoker;
+  if(e.def.steals){
+    const withDefend = targets.find(a=>a.statuses.some(s=>s.type==='defend'));
+    if(withDefend){
+      withDefend.statuses = withDefend.statuses.filter(s=>s.type!=='defend');
+      logMsg(`${e.def.name} срывает защиту с ${withDefend.def.name}!`);
+      target = withDefend;
+    }
+  }
+  if(e.def.castsApathy && !e.usedApathy){
+    e.usedApathy = true;
+    logMsg(`👑 ${e.def.name} накладывает Апатию — герои не копят ярость 2 хода!`);
+    b.allies.forEach(a=>a.statuses.push({type:'apathy', dur:2}));
+    e.attackAnim = true;
+    checkBattleEnd();
+    setTimeout(()=>{ e.attackAnim=false; }, 350);
+    return;
+  }
+  if(e.def.castsPoisonMist && !e.usedPoisonMist){
+    e.usedPoisonMist = true;
+    logMsg(`👑 ${e.def.name} выдыхает ядовитый туман — вся команда отравлена!`);
+    b.allies.forEach(a=> maybeApplyStatus(a,'poison',3,1,{dmg:15}));
+    e.attackAnim = true;
+    checkBattleEnd();
+    setTimeout(()=>{ e.attackAnim=false; }, 350);
+    return;
+  }
+  if(e.def.castsFreezeOne && !e.usedFreezeOne){
+    e.usedFreezeOne = true;
+    if(targets.length){
+      const t = targets[rnd(targets.length)];
+      maybeApplyStatus(t,'sleep',2,1);
+      logMsg(`👑 ${e.def.name} замораживает ${t.def.name} в глыбе льда!`);
+    }
+    e.attackAnim = true;
+    checkBattleEnd();
+    setTimeout(()=>{ e.attackAnim=false; }, 350);
+    return;
+  }
+  if(e.def.finalPhaseAt15 && e.hp/e.maxHp<=0.15 && e.phase<3){
+    e.phase = 3;
+    logMsg(`👑 ${e.def.name} издаёт Последний Скучный Крик — 40 урона по всему отряду!`);
+    b.allies.forEach(a=>{ if(a.hp>0){ applyDamage(a,40); a.hitFlash=true; } });
+    b.counterBonus = 1.5;
+    logMsg(`✨ Отряд в ярости! Удары героев усилены на 50% до конца боя.`);
+    e.attackAnim = true;
+    checkBattleEnd();
+    setTimeout(()=>{ e.attackAnim=false; b.allies.forEach(a=>a.hitFlash=false); }, 350);
+    return;
+  }
+  if(e.def.summonsAtPhase2 && e.hp/e.maxHp<=0.4 && e.phase===1 && !e.summonedMinions){
+    e.phase = 2;
+    e.summonedMinions = true;
+    logMsg(`👑 ${e.def.name} закатывает театральный монолог о старых обидах... и подзывает подкрепление!`);
+    b.enemies.push(makeEnemyUnit('clownMinion', 'summon0_'+Date.now()));
+    b.enemies.push(makeEnemyUnit('clownMinion', 'summon1_'+Date.now()));
+    e.attackAnim = true;
+    checkBattleEnd();
+    setTimeout(()=>{ e.attackAnim=false; }, 350);
+    return;
+  }
+  let dmg = e.dmg;
+  if(e.def.boss){
+    if(e.hp/e.maxHp<=0.4 && e.phase===1){
+      e.phase=2;
+      if(e.def.phaseArmor){
+        e.armor = (e.armor||0)+50;
+        logMsg(e.def.phaseArmorMsg || `👑 ${e.def.name} воздвигает каменный щит! (+50% брони)`);
+      } else if(e.def.phaseDoubleDmg){
+        e.armor = 0;
+        e.dmgMult = 2;
+        logMsg(`👑 ${e.def.name} впадает в ярость — удваивает урон, но щиты сняты!`);
+      } else if(e.def.healIfPoisoned){
+        logMsg(`👑 ${e.def.name} начинает впитывать яд из болота, чтобы исцеляться!`);
+      } else {
+        logMsg(`👑 ${e.def.name} входит в ярость! Туман Забвения окутывает поле боя (-20% точности героям).`);
+        b.allies.forEach(a=>a.statuses.push({type:'blind',dur:3}));
+      }
+    }
+    if(e.phase===2){
+      if(e.def.phaseArmor) dmg = Math.round(dmg*1.3);
+      if(e.dmgMult) dmg = Math.round(dmg*e.dmgMult);
+      if(e.def.healIfPoisoned && b.allies.some(a=>a.hp>0 && a.statuses.some(s=>s.type==='poison'))){
+        const healAmt = Math.round(e.maxHp*0.1);
+        applyHeal(e, healAmt);
+        logMsg(`👑 ${e.def.name} впитывает яд и восстанавливает ${healAmt} HP!`);
+      }
+    }
+  }
+  const blinded = target.statuses.some(s=>s.type==='blind') && Math.random()<0.25;
+  e.attackAnim = true; target.hitFlash = true;
+  if(blinded){
+    logMsg(`${e.def.name} промахивается по ${target.def.name} (слепота)!`);
+  } else {
+    const d = applyDamage(target, dmg);
+    logMsg(`${e.def.name} атакует ${target.def.name}: ${d} урона.`);
+    sndHit();
+    if(e.def.sleepChance && Math.random()<e.def.sleepChance) maybeApplyStatus(target,'sleep',1,1);
+    if(e.def.slowChance && Math.random()<e.def.slowChance) maybeApplyStatus(target,'slow',2,1);
+    if(e.def.poison) maybeApplyStatus(target,'poison',3,1, e.def.poisonDmg?{dmg:e.def.poisonDmg}:undefined);
+    if(e.def.provokeSleepCombo && e.phase===1){
+      maybeApplyStatus(target,'provoke',1,1);
+      const others = targets.filter(a=>a.id!==target.id);
+      if(others.length && Math.random()<0.3){
+        maybeApplyStatus(others[rnd(others.length)],'sleep',1,1);
+      }
+    }
+  }
+  checkBattleEnd();
+  setTimeout(()=>{ e.attackAnim=false; target.hitFlash=false; }, 350);
+}
+function endRound(){
+  const b = state.battle;
+  if(!b) return;
+  [...b.allies, ...b.enemies].forEach(u=>{
+    if(u.hp<=0) return;
+    u.statuses.forEach(s=>{
+      if(s.type==='poison'){
+        const d = s.dmg || 15;
+        u.hp = clamp(u.hp-d,0,u.maxHp);
+        logMsg(`${u.def.name} страдает от яда: -${d} HP.`);
+        spawnFloatingNumber(u.id, '-'+d, '');
+      }
+    });
+    u.statuses.forEach(s=>s.dur--);
+    u.statuses = u.statuses.filter(s=>s.dur>0);
+  });
+  b.allies.forEach(a=>a.acted=false);
+  b.allies.forEach(a=>{
+    if(a.hp>0 && a.statuses.some(s=>s.type==='sleep')){
+      a.acted = true;
+      logMsg(`${a.def.name} крепко спит и пропускает ход.`);
+    }
+  });
+  b.round++;
+  checkBattleEnd();
+  if(state.battle) renderBattle();
+}
+function checkBattleEnd(){
+  const b = state.battle;
+  if(!b) return;
+  const enemiesDead = b.enemies.every(e=>e.hp<=0);
+  const alliesDead = b.allies.every(a=>a.hp<=0);
+  if(enemiesDead){ finishBattle(true); }
+  else if(alliesDead){ finishBattle(false); }
+}
+function persistSquadHp(node){
+  const b = state.battle;
+  b.allies.forEach(a=>{
+    const bonus = state.heroStates[a.id] || (state.heroStates[a.id]={});
+    bonus.currentHp = node.noHealAfter ? Math.max(1, a.hp) : a.maxHp;
+  });
+}
+function finishBattle(won){
+  const node = currentNodes()[state.currentNodeIndex];
+  persistSquadHp(node);
+  const stars = won ? (Math.random()<0.5?3:2) : 0;
+  if(won){
+    sndVictory();
+    const goldGain = 10 + rnd(15);
+    const woodGain = rnd(3), oreGain = rnd(2), dustGain = rnd(2), silkGain = rnd(2);
+    state.gold += goldGain;
+    state.resources.wood += woodGain; state.resources.ore += oreGain;
+    state.resources.dust += dustGain; state.resources.silk += silkGain;
+    const xpGain = 10 + (state.regionIndex*3) + (node.enemies.length*2);
+    let levelUpNames = [];
+    state.battle.allies.forEach(a=>{
+      if(a.hp>0){ if(gainXp(a.id, xpGain)) levelUpNames.push(a.def.name); }
+    });
+    $('resultTitle').textContent = node.type==='boss' ? '🏆 Босс повержен!' : 'Победа!';
+    $('resultStars').textContent = '⭐'.repeat(stars);
+    let rewardsHtml = `+${goldGain} золота · +${woodGain} древесины · +${oreGain} руды · +${dustGain} пыльцы · +${silkGain} шёлка · +${xpGain} опыта`;
+    if(levelUpNames.length) rewardsHtml += `<br><b style="color:#3A7CA5;">⬆ Новый уровень: ${levelUpNames.join(', ')}!</b>`;
+    $('resultRewards').innerHTML = rewardsHtml;
+  } else {
+    sndDefeat();
+    $('resultTitle').textContent = 'Поражение...';
+    $('resultStars').textContent = '';
+    $('resultRewards').textContent = 'Отряд отступает зализывать раны. Загляните в лагерь, чтобы отдохнуть перед новой попыткой.';
+  }
+  state.battle = null;
+  saveGame();
+  showScreen('screen-result');
+  $('resultContinueBtn').onclick = ()=>{
+    sndUI();
+    if(won) afterNodeWin(node); else { showScreen('screen-map'); renderMap(); }
+  };
+}
+
+/* =========================================================
+   9. ЛАВКА
+   ========================================================= */
+function startShop(){ showScreen('screen-shop'); renderShop(); }
+function renderShop(){
+  $('shopGold').innerHTML = `<div class="res-chip">⛁ Золото: ${state.gold}</div>`;
+  const list = $('shopList'); list.innerHTML='';
+  SHOP_ITEMS.forEach(item=>{
+    const card = document.createElement('div'); card.className='card';
+    card.innerHTML = `<div class="info"><b>${item.name}</b>Цена: ${item.price} золота</div>`;
+    const buy = document.createElement('button'); buy.className='btn small'; buy.textContent='Купить';
+    buy.disabled = state.gold < item.price;
+    buy.onclick = ()=>{
+      sndUI();
+      state.gold -= item.price;
+      Object.entries(item.give).forEach(([k,v])=> state.resources[k]=(state.resources[k]||0)+v);
+      renderShop(); saveGame();
+    };
+    card.appendChild(buy); list.appendChild(card);
+  });
+}
+$('shopBackBtn').onclick = ()=>{ sndUI(); startCamp(); };
+
+/* =========================================================
+   10. КУЗНИЦА
+   ========================================================= */
+let forgeSelectedHero = 'finn';
+function startForge(){
+  if(!state.unlocked.includes(forgeSelectedHero)) forgeSelectedHero = state.unlocked[0];
+  showScreen('screen-forge'); renderForge();
+}
+function renderForge(){
+  const r = state.resources;
+  $('forgeRes').innerHTML = `
+    <div class="res-chip">🪵 Древесина: ${r.wood}</div>
+    <div class="res-chip">⛏ Руда: ${r.ore}</div>
+    <div class="res-chip">✨ Пыльца: ${r.dust}</div>
+    <div class="res-chip">🧵 Шёлк: ${r.silk}</div>`;
+  const heroPicker = document.createElement('div'); heroPicker.className='res-row';
+  state.unlocked.forEach(id=>{
+    const chip = document.createElement('div'); chip.className='res-chip'; chip.style.cursor='pointer';
+    chip.style.fontWeight = forgeSelectedHero===id ? 'bold':'normal';
+    chip.style.background = forgeSelectedHero===id ? 'var(--gold)':'';
+    chip.textContent = HERO_DEFS[id].name;
+    chip.onclick = ()=>{ sndUI(); forgeSelectedHero=id; renderForge(); };
+    heroPicker.appendChild(chip);
+  });
+  const list = $('forgeList'); list.innerHTML='';
+  const heading = document.createElement('h3'); heading.style.fontSize='13px';
+  heading.textContent = 'Выберите героя для экипировки:';
+  list.appendChild(heading); list.appendChild(heroPicker);
+  RECIPES.forEach(rec=>{
+    const canCraft = Object.entries(rec.cost).every(([k,v])=> (r[k]||0)>=v);
+    const card = document.createElement('div'); card.className='card';
+    const costStr = Object.entries(rec.cost).map(([k,v])=>`${v} ${({wood:'древ.',ore:'руды',dust:'пыльцы',silk:'шёлка'})[k]}`).join(' + ');
+    card.innerHTML = `<div class="info"><b>${rec.name}</b>${rec.effect}<br><span style="opacity:.7;">Цена: ${costStr}</span></div>`;
+    const btn = document.createElement('button'); btn.className='btn small'; btn.textContent='Скрафтить';
+    btn.disabled = !canCraft;
+    btn.onclick = ()=>{
+      sndUI();
+      Object.entries(rec.cost).forEach(([k,v])=> state.resources[k]-=v);
+      rec.apply(state.heroStates[forgeSelectedHero]);
+      renderForge(); saveGame();
+    };
+    card.appendChild(btn); list.appendChild(card);
+  });
+  const inv = $('inventoryList'); inv.innerHTML='';
+  Object.entries(state.heroStates).forEach(([id,bonus])=>{
+    const parts = [];
+    if(bonus.bonusDmg) parts.push(`+${bonus.bonusDmg} урона`);
+    if(bonus.armor) parts.push(`+${bonus.armor}% брони`);
+    if(bonus.preHeal) parts.push(`+${bonus.preHeal} HP`);
+    if(bonus.dodge) parts.push(`+${Math.round(bonus.dodge*100)}% уклон.`);
+    if(bonus.rageBonus) parts.push(`+${Math.round(bonus.rageBonus*100)}% ярости`);
+    if(parts.length){
+      const chip = document.createElement('div'); chip.className='res-chip';
+      chip.textContent = `${HERO_DEFS[id].name}: ${parts.join(', ')}`;
+      inv.appendChild(chip);
+    }
+  });
+}
+$('forgeBackBtn').onclick = ()=>{ sndUI(); startCamp(); };
+
+/* =========================================================
+   11. СБРОС / ЗАПУСК
+   ========================================================= */
+$('resetBtn').onclick = ()=>{
+  if(confirm('Точно начать новую игру? Весь текущий прогресс будет удалён.')){
+    try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+    location.reload();
+  }
+};
+
+loadGame();
+showScreen('screen-map');
+renderMap();
+maybeShowRegionIntro();
+
+/* =========================================================
+   12. МАСШТАБИРОВАНИЕ ПОД ЭКРАН + ПОЛНОЭКРАННЫЙ РЕЖИМ
+   ========================================================= */
+const DESIGN_W = 900, DESIGN_H = 480;
+function rescale(){
+  const root = $('viewportRoot');
+  const app = $('app');
+  const scale = Math.min(root.clientWidth / DESIGN_W, root.clientHeight / DESIGN_H);
+  app.style.transform = 'scale(' + scale + ')';
+}
+window.addEventListener('resize', rescale);
+window.addEventListener('orientationchange', ()=> setTimeout(rescale, 300));
+if(window.visualViewport){ window.visualViewport.addEventListener('resize', rescale); }
+rescale();
+
+function isFullscreenActive(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+async function goFullscreen(){
+  const el = document.documentElement;
+  try{
+    if(el.requestFullscreen) await el.requestFullscreen();
+    else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  }catch(e){ /* полный экран недоступен (например, iOS Safari) — продолжаем в обычном окне */ }
+  try{
+    if(screen.orientation && screen.orientation.lock){ await screen.orientation.lock('landscape'); }
+  }catch(e){ /* блокировка ориентации недоступна без полноэкранного режима или в этом браузере */ }
+  setTimeout(rescale, 200);
+}
+function exitFullscreenMode(){
+  try{
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }catch(e){}
+  try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
+}
+$('fsToggleBtn').onclick = ()=>{
+  sndUI();
+  if(isFullscreenActive()) exitFullscreenMode(); else goFullscreen();
+};
+document.addEventListener('fullscreenchange', ()=>{
+  $('fsToggleBtn').textContent = isFullscreenActive() ? '⛶ ✕' : '⛶';
+  setTimeout(rescale, 200);
+});
+
+$('startPlayBtn').onclick = async ()=>{
+  await goFullscreen();
+  $('startOverlay').style.display = 'none';
+  rescale();
+};
+$('startSkipHint').onclick = ()=>{
+  $('startOverlay').style.display = 'none';
+  rescale();
+};
+</script>
+</body>
+</html>
