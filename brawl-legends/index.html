@@ -280,7 +280,8 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <button class="rail-btn" onclick="UI.show('scr-boxes')"><span class="ri" style="background:#b97d12">📦</span>Ящики</button>
   </div>
   <div class="side-rail side-rail-right">
-    <button class="rail-btn" onclick="UI.clanStub()"><span class="ri" style="background:#2f6fb3">🛡️</span>Клан</button>
+    <button class="rail-btn" onclick="UI.show('scr-clan')"><span class="ri" style="background:#2f6fb3">🛡️</span>Клан</button>
+    <button class="rail-btn" onclick="UI.show('scr-challenges')"><span class="ri" style="background:#c98a3d">🎯</span>Испытания</button>
   </div>
   <div class="hero">
     <button id="btn-fullscreen" title="Полный экран">⛶</button>
@@ -400,6 +401,26 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
   <div class="modal-box">
     <div class="topbar"><div style="width:44px"></div><h2>Выбери аватар</h2><button class="back-btn" onclick="closeAvatarModal()">✕</button></div>
     <div class="road-scroll" id="avatar-grid" style="flex-direction:row;flex-wrap:wrap;justify-content:center;align-content:flex-start"></div>
+  </div>
+</div>
+
+<!-- ============ ИСПЫТАНИЯ ============ -->
+<div class="screen" id="scr-challenges">
+  <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Испытания</h2><div style="width:44px"></div></div>
+  <div class="content" id="challenges-content"></div>
+</div>
+
+<!-- ============ КЛАН ============ -->
+<div class="screen" id="scr-clan">
+  <div class="topbar"><button class="back-btn" onclick="UI.show('scr-main')">‹</button><h2>Клан</h2><div style="width:44px"></div></div>
+  <div class="content" id="clan-content"></div>
+</div>
+
+<!-- ============ СЕЗОН ============ -->
+<div class="modal-overlay" id="modal-season" onclick="if(event.target===this)closeSeasonModal()">
+  <div class="modal-box">
+    <div class="topbar"><div style="width:44px"></div><h2>Сезон</h2><button class="back-btn" onclick="closeSeasonModal()">✕</button></div>
+    <div class="road-scroll" id="season-scroll"></div>
   </div>
 </div>
 
@@ -590,302 +611,352 @@ const BRAWLERS=[
   atk:{type:'melee',dmg:640,range:78,reload:0.7,ammo:3,arc:2.1},
   sup:{type:'nova',dmg:1100,radius:150,kb:180,charge:3600},
   stars:[{name:'Пламенный доспех',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Жар клинка',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Жар клинка',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Быстрые ноги',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'Мечник ближнего боя. Супер — огненный вихрь, отбрасывающий врагов.'},
  {id:'icemage',name:'Ледяная Волшебница',icon:'❄️',color:'#5db7e8',rarity:'common',hp:3400,spd:145,
   atk:{type:'proj',dmg:520,range:380,reload:0.9,ammo:3,pspd:560,slow:1.4},
   sup:{type:'nova',dmg:500,radius:140,kb:120,charge:3200},
   stars:[{name:'Вечная мерзлота',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Ледяной щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+         {name:'Ледяной щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Сокрушение',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Ледяные копья замедляют. Супер — ледяной взрыв, отбрасывающий врагов.'},
  {id:'gremlin',name:'Инженер-Гремлин',icon:'🔧',color:'#8fbf46',rarity:'rare',hp:4200,spd:150,
   atk:{type:'proj',dmg:480,range:230,reload:0.75,ammo:3,pspd:520,fixTurret:600},
   sup:{type:'turret',hp:3000,dmg:300,range:300,charge:3000},
   stars:[{name:'Мастер-механик',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Форсаж',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'}],
+         {name:'Форсаж',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
+         {name:'Мощный удар',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Гаечный ключ чинит турель. Супер ставит или улучшает турель.'},
  {id:'assassin',name:'Теневой Ассасин',icon:'🗡️',color:'#6b5b95',rarity:'epic',hp:3000,spd:185,
   atk:{type:'spread',dmg:340,range:250,reload:0.62,ammo:3,pspd:700,count:3,spread:0.22},
   sup:{type:'stealth',dur:4.5,spdMul:1.4,charge:3400},
   stars:[{name:'Из тени',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Стремительность',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+         {name:'Стремительность',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'},
+         {name:'Ярость клинка',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Быстрые кинжалы, мало здоровья. Супер — невидимость и скорость.'},
  {id:'electro',name:'Электромаг',icon:'⚡',color:'#f3d43a',rarity:'rare',hp:3800,spd:150,
   atk:{type:'chain',dmg:500,range:300,reload:1.0,ammo:3,chains:2,chainR:170},
   sup:{type:'emp',dmg:600,radius:180,stun:1.6,charge:3400},
   stars:[{name:'Сверхпроводник',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Разряд',kind:'lifesteal',val:0.06,desc:'Восстанавливает 6% от нанесённого урона здоровьем.'}],
+         {name:'Разряд',kind:'lifesteal',val:0.06,desc:'Восстанавливает 6% от нанесённого урона здоровьем.'},
+         {name:'Сокрушение',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Цепная молния. Супер — импульс, оглушающий всех рядом.'},
  {id:'druid',name:'Друид-Целитель',icon:'🌿',color:'#4ea86b',rarity:'rare',hp:4000,spd:145,
   atk:{type:'healorb',dmg:420,heal:520,range:340,reload:0.9,ammo:3,pspd:480},
   sup:{type:'massheal',heal:1800,radius:170,charge:3000},
   stars:[{name:'Дух леса',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Природная регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+         {name:'Природная регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Мощный удар',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Сферы природы лечат союзников. Супер — массовое исцеление.'},
  {id:'golem',name:'Каменный Голем',icon:'🗿',color:'#9c8f7f',rarity:'epic',hp:9200,spd:115,
   atk:{type:'shock',dmg:700,range:120,reload:1.1,ammo:3},
   sup:{type:'pull',dmg:500,radius:210,stun:1.2,charge:4200},
   stars:[{name:'Гранитная кожа',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Каменный панцирь',kind:'shield',val:0.25,desc:'В начале боя получает щит на 25% от макс. здоровья.'}],
+         {name:'Каменный панцирь',kind:'shield',val:0.25,desc:'В начале боя получает щит на 25% от макс. здоровья.'},
+         {name:'Ярость клинка',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Огромное здоровье, удар о землю. Супер притягивает и оглушает.'},
  {id:'hunter',name:'Охотник с Бумерангом',icon:'🪃',color:'#c98a3d',rarity:'common',hp:3800,spd:155,
   atk:{type:'boomerang',dmg:480,range:320,reload:0.95,ammo:3,pspd:520},
   sup:{type:'triboom',dmg:560,range:380,charge:3400},
   stars:[{name:'Точный бросок',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Быстрые руки',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+         {name:'Быстрые руки',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
+         {name:'Сокрушение',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Бумеранг бьёт дважды. Супер — тройной бумеранг.'},
  {id:'pyro',name:'Пиромант-Алхимик',icon:'🧪',color:'#d4552f',rarity:'epic',hp:3600,spd:145,
   atk:{type:'pool',dmg:300,dps:380,range:300,reload:1.05,ammo:3,poolR:70,poolDur:3},
   sup:{type:'bigboom',dmg:1500,radius:170,burnDps:400,burnDur:3,charge:3600},
   stars:[{name:'Горючая смесь',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Пламенная вена',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Пламенная вена',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Прилив сил',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'Склянки оставляют горящие лужи. Супер — гигантский взрыв.'},
  {id:'bard',name:'Музыкант-Бард',icon:'🎸',color:'#d84f9e',rarity:'mythic',hp:3900,spd:150,
   atk:{type:'wave',dmg:460,range:340,reload:0.85,ammo:3,pspd:500},
   sup:{type:'rally',shield:1500,spdMul:1.35,dur:4,radius:9999,charge:3200},
   stars:[{name:'Мощный рифф',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Ритм боя',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+         {name:'Ритм боя',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'},
+         {name:'Мощный удар',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Звуковая волна проходит сквозь врагов. Супер ускоряет союзников и даёт щит.'},
  {id:'ranger',name:'Космический Рейнджер',icon:'🔫',color:'#4d7fe0',rarity:'common',hp:3600,spd:155,
   atk:{type:'burst',dmg:260,range:360,reload:0.85,ammo:3,pspd:720,count:3},
   sup:{type:'orbital',dmg:2000,radius:130,delay:1.1,range:420,charge:3800},
   stars:[{name:'Наведение',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Лазерная батарея',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'}],
+         {name:'Лазерная батарея',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
+         {name:'Ярость клинка',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Лазерные очереди. Супер — орбитальный удар с неба.'},
  {id:'vampire',name:'Вампир-Мистик',icon:'🦇',color:'#8c2f5e',rarity:'mythic',hp:4400,spd:150,
   atk:{type:'lifesteal',dmg:520,steal:0.6,range:280,reload:0.9,ammo:3,pspd:520},
   sup:{type:'batform',dur:2.6,spdMul:1.7,healPct:0.35,charge:3600},
   stars:[{name:'Жажда крови',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Ночной хищник',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'}],
+         {name:'Ночной хищник',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Сокрушение',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Высасывает здоровье. Супер — стая летучих мышей: неуязвим и быстр.'},
  {id:'robot',name:'Робот-Трансформер',icon:'🤖',color:'#5aa9a2',rarity:'legend',hp:5400,spd:140,
   atk:{type:'proj',dmg:420,range:360,reload:0.8,ammo:3,pspd:600,
        meleeDmg:900,meleeRange:90},
   sup:{type:'stance',charge:2400},
   stars:[{name:'Оверклок',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Усиленная броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+         {name:'Усиленная броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Мощный удар',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Супер переключает стойку: пушки на дистанции или мощные кулаки вблизи.'},
  {id:'beastlord',name:'Повелитель Зверей',icon:'🐺',color:'#7a6a4f',rarity:'mythic',hp:4200,spd:150,
   atk:{type:'proj',dmg:440,range:320,reload:0.85,ammo:3,pspd:540},
   sup:{type:'petbuff',petHp:2600,petDmg:420,buffMul:1.5,charge:3400},
   stars:[{name:'Вожак стаи',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Звериный инстинкт',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Звериный инстинкт',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Второе дыхание',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'Сражается вместе с волком. Супер призывает/усиливает и лечит питомца.'},
  {id:'monk',name:'Вихревой Монах',icon:'🌀',color:'#57c4b8',rarity:'legend',hp:4600,spd:160,
   atk:{type:'wave',dmg:420,range:300,reload:0.8,ammo:3,pspd:520,kb:140},
   sup:{type:'tornado',dmg:250,radius:120,dur:3.2,pull:220,charge:3600},
   stars:[{name:'Дыхание бури',kind:'hp',val:0.08,desc:'+8% к максимальному здоровью.'},
-         {name:'Внутренняя гармония',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+         {name:'Внутренняя гармония',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Ярость клинка',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Порывы ветра отбрасывают. Супер — торнадо, затягивающее врагов.'},
  {id:'elf',name:'Эльфийская Лучница',icon:'🏹',color:'#6fbf4c',rarity:'common',hp:3500,spd:160,
   atk:{type:'proj',dmg:440,range:400,reload:0.8,ammo:3,pspd:700,pierce:true},
   sup:{type:'triboom',dmg:320,range:380,charge:3400},
   stars:[{name:'Точный выстрел',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Быстрые руки',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+         {name:'Быстрые руки',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Стреляет пронзающими стрелами с дальней дистанции. Супер – ливень стрел.'},
  {id:'berserk',name:'Берсерк',icon:'🪓',color:'#c94040',rarity:'rare',hp:4800,spd:155,
   atk:{type:'melee',dmg:720,range:80,reload:0.75,ammo:3,arc:2.2,enrage:true},
   sup:{type:'tornado',dmg:900,radius:140,dur:2.5,pull:180,charge:3200},
   stars:[{name:'Кровожадность',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
-         {name:'Боевая ярость',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+         {name:'Боевая ярость',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Сокрушение',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Чем меньше здоровья, тем сильнее бьёт топором. Супер – яростный вихрь, затягивающий врагов.'},
  {id:'sapper',name:'Сапёр',icon:'💣',color:'#b38b40',rarity:'rare',hp:3700,spd:145,
   atk:{type:'pool',dmg:380,dps:220,range:280,reload:0.9,ammo:3,poolR:60,poolDur:0.6},
   sup:{type:'turret',hp:2400,dmg:280,range:260,charge:3200},
   stars:[{name:'Замедленная детонация',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Крепкая броня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+         {name:'Крепкая броня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Быстрые ноги',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'Метает мины-ловушки. Супер – устанавливает мину-турель, обстреливающую врагов.'},
  {id:'timemage',name:'Маг Времени',icon:'⏳',color:'#8e7cc3',rarity:'mythic',hp:3800,spd:150,
   atk:{type:'proj',dmg:460,range:320,reload:0.85,ammo:3,pspd:500,slow:1.3},
   sup:{type:'emp',dmg:400,radius:160,stun:1.5,charge:3500},
   stars:[{name:'Парадокс',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
-         {name:'Хроноброня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+         {name:'Хроноброня',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Мощный удар',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Атаки замедляют врагов. Супер – хроносдвиг, оглушающий врагов.'},
  {id:'ghostknight',name:'Призрачный Рыцарь',icon:'👻',color:'#6fa8dc',rarity:'mythic',hp:4000,spd:155,
   atk:{type:'melee',dmg:580,range:85,reload:0.7,ammo:3,arc:2.0},
   sup:{type:'stealth',dur:4.0,spdMul:1.3,charge:3300},
   stars:[{name:'Бесплотный клинок',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Эфирная поступь',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'}],
+         {name:'Эфирная поступь',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Может ненадолго становиться призрачным. Супер – уход в эфир с ускорением.'},
  {id:'bloodmage',name:'Маг Крови',icon:'🩸',color:'#b03060',rarity:'epic',hp:4200,spd:145,
   atk:{type:'lifesteal',dmg:500,steal:0.5,range:270,reload:0.95,ammo:3,pspd:480},
   sup:{type:'nova',dmg:900,radius:150,kb:100,charge:2800},
   stars:[{name:'Гематома',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
-         {name:'Вампиризм',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+         {name:'Вампиризм',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Ярость клинка',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Атакует кровавыми снарядами, восстанавливая здоровье. Супер – ритуал крови.'},
  {id:'rockelem',name:'Каменный Элементаль',icon:'🪨',color:'#8b7355',rarity:'epic',hp:5800,spd:130,
   atk:{type:'pool',dmg:350,dps:150,range:300,reload:1.0,ammo:3,poolR:65,poolDur:4},
   sup:{type:'orbital',dmg:1400,radius:140,delay:1.0,range:400,charge:3700},
   stars:[{name:'Осколки',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Гранитная стойкость',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+         {name:'Гранитная стойкость',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Создаёт каменные завалы, замедляющие врагов. Супер призывает метеоритный дождь.'},
  {id:'guardian',name:'Страж',icon:'🛡️',color:'#6a8caf',rarity:'common',hp:6000,spd:125,
   atk:{type:'shock',dmg:550,range:100,reload:1.05,ammo:3},
   sup:{type:'rally',shield:2500,spdMul:1.1,dur:3.5,radius:9999,charge:3400},
   stars:[{name:'Непробиваемость',kind:'shield',val:0.25,desc:'В начале боя получает щит на 25% от макс. здоровья.'},
-         {name:'Несокрушимость',kind:'hp',val:0.12,desc:'+12% к максимальному здоровью.'}],
+         {name:'Несокрушимость',kind:'hp',val:0.12,desc:'+12% к максимальному здоровью.'},
+         {name:'Сокрушение',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Медлительный, но очень прочный танк. Супер даёт щит себе и союзникам.'},
  {id:'cybninja',name:'Кибер-ниндзя',icon:'🥷',color:'#6b4c8a',rarity:'rare',hp:3200,spd:175,
   atk:{type:'spread',dmg:300,range:280,reload:0.6,ammo:3,pspd:650,count:3,spread:0.25},
   sup:{type:'nova',dmg:600,radius:130,kb:60,charge:3200},
   stars:[{name:'Теневой шаг',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
-         {name:'Быстрый клинок',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'}],
+         {name:'Быстрый клинок',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Быстрый ниндзя, мечущий сюрикены веером. Супер – взрывной рывок сквозь врагов.'},
  {id:'transmute',name:'Алхимик-Трансмутатор',icon:'⚗️',color:'#e6b800',rarity:'legend',hp:3700,spd:145,
   atk:{type:'proj',dmg:400,range:310,reload:0.9,ammo:3,pspd:460,slow:1.3},
   sup:{type:'freeze',dmg:0,radius:150,dur:3.5,charge:3800},
   stars:[{name:'Философский камень',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
-         {name:'Алхимический катализатор',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Алхимический катализатор',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Превращает врагов в овечек своими колбами. Супер создаёт зону трансмутации.'},
  {id:'shadowthief',name:'Телепортирующийся вор',icon:'🕶️',color:'#2c2c54',rarity:'legend',hp:3700,spd:170,
   atk:{type:'melee',dmg:520,range:80,reload:0.7,ammo:3,arc:1.7,backstab:true},
   sup:{type:'pull',dmg:800,radius:130,stun:1.0,charge:3200},
   stars:[{name:'Двойной прыжок',kind:'reload',val:0.12,desc:'Перезарядка оружия быстрее на 12%.'},
-         {name:'Воровское чутьё',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+         {name:'Воровское чутьё',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Наносит бонусный урон, атакуя со спины. Супер – мгновенный рывок к цели с мощным ударом.'},
  {id:'graviton',name:'Маг-гравитатор',icon:'🕳️',color:'#4a148c',rarity:'mythic',hp:3900,spd:140,
   atk:{type:'proj',dmg:430,range:340,reload:0.95,ammo:3,pspd:480,slow:1.35},
   sup:{type:'pull',dmg:900,radius:130,stun:1.5,charge:3600},
   stars:[{name:'Горизонт событий',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
-         {name:'Искривление',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+         {name:'Искривление',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Снаряды притягивают врагов. Супер создаёт чёрную дыру, затягивающую и оглушающую противников.'},
  {id:'lightningwar',name:'Воин-электрик',icon:'🌩️',color:'#ffd600',rarity:'rare',hp:4100,spd:155,
   atk:{type:'melee',dmg:580,range:85,reload:0.85,ammo:3,arc:1.8},
   sup:{type:'turret',hp:2200,dmg:260,range:280,charge:3200},
   stars:[{name:'Электрический щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
-         {name:'Грозовой разряд',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Грозовой разряд',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Каждый удар потрескивает электричеством. Супер устанавливает потрескивающую электротурель.'},
  {id:'mudking',name:'Болотный король',icon:'🐸',color:'#33691e',rarity:'epic',hp:5500,spd:125,
   atk:{type:'pool',dmg:350,dps:200,range:290,reload:1.0,ammo:3,poolR:70,poolDur:4},
   sup:{type:'petbuff',petHp:3500,petDmg:400,buffMul:1.4,charge:3500},
   stars:[{name:'Целебная грязь',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
-         {name:'Грязевая броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+         {name:'Грязевая броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Оставляет вязкие лужи, замедляющие врагов. Супер призывает грязевого голема на подмогу.'},
  {id:'firearcher',name:'Огненный лучник',icon:'🎇',color:'#bf360c',rarity:'rare',hp:3600,spd:155,
   atk:{type:'proj',dmg:460,range:370,reload:0.9,ammo:3,pspd:560,burn:true,burnDur:3,burnDps:130},
   sup:{type:'orbital',dmg:1500,radius:150,delay:0.9,range:380,charge:3400},
   stars:[{name:'Пламенный шквал',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Огненная регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+         {name:'Огненная регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Стрелы поджигают цель. Супер – дождь огненных стрел с неба.'},
  {id:'shieldcapt',name:'Капитан щита',icon:'🔰',color:'#78909c',rarity:'common',hp:5800,spd:135,
   atk:{type:'melee',dmg:560,range:85,reload:0.85,ammo:3,arc:1.8},
   sup:{type:'rally',shield:1800,spdMul:1.15,dur:4,radius:9999,charge:3300},
   stars:[{name:'Отражающий барьер',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
-         {name:'Укрепление',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+         {name:'Укрепление',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Мощный удар',kind:'dmg',val:0.08,desc:'+8% к урону атаки.'}],
   desc:'Крепкий боец ближнего боя. Супер ставит энергетический барьер, дающий щит союзникам.'},
  {id:'voodoo',name:'Шаман вуду',icon:'🎭',color:'#311b92',rarity:'mythic',hp:3800,spd:150,
   atk:{type:'proj',dmg:370,range:310,reload:0.9,ammo:3,pspd:480,slow:1.25},
   sup:{type:'batform',dur:3,spdMul:1.4,healPct:0.25,charge:3400},
   stars:[{name:'Обмен душами',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
-         {name:'Проклятие боли',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Проклятие боли',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Проклинает врагов на расстоянии. Супер призывает духовную связь, дающую защиту и скорость.'},
  {id:'jetracoon',name:'Реактивный енот',icon:'🦝',color:'#795548',rarity:'epic',hp:3500,spd:175,
   atk:{type:'spread',dmg:290,range:270,reload:0.65,ammo:3,pspd:620,count:3,spread:0.2},
   sup:{type:'orbital',dmg:1300,radius:130,delay:0.7,range:350,charge:3000},
   stars:[{name:'Топливный бак',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
-         {name:'Адреналин',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+         {name:'Адреналин',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Стреляет веером и делает реактивные рывки. Супер – прыжок с ракетным ранцем и мощный удар.'},
  {id:'icelemental',name:'Ледяной элементаль',icon:'🧊',color:'#81d4fa',rarity:'mythic',hp:5000,spd:130,
   atk:{type:'shock',dmg:600,range:110,reload:1.0,ammo:3},
   sup:{type:'freeze',dmg:500,radius:180,dur:2.5,charge:3700},
   stars:[{name:'Ледяной панцирь',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
-         {name:'Холодная ярость',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Холодная ярость',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Удары по площади обмораживают врагов. Супер – метель, замедляющая и замораживающая всех рядом.'},
  {id:'healmonk',name:'Монах-исцелитель',icon:'🧘',color:'#a5d6a7',rarity:'common',hp:4000,spd:145,
   atk:{type:'healorb',dmg:380,heal:480,range:330,reload:0.9,ammo:3,pspd:480},
   sup:{type:'rally',shield:1600,spdMul:1.1,dur:4,radius:9999,charge:3100},
   stars:[{name:'Аура умиротворения',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
-         {name:'Просветление',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Просветление',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Сферы ци лечат союзников. Супер – медитация: щит и ускорение для всей команды.'},
  {id:'trapper',name:'Механик-траппер',icon:'🪤',color:'#5d4037',rarity:'epic',hp:3900,spd:150,
   atk:{type:'proj',dmg:400,range:280,reload:0.85,ammo:3,pspd:460,slow:1.3},
   sup:{type:'bigboom',dmg:1200,radius:160,burnDps:100,burnDur:1.5,charge:3400},
   stars:[{name:'Усиленные пружины',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Запасы',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'}],
+         {name:'Запасы',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
+         {name:'Прилив сил',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'Снаряды ставят замедляющие капканы. Супер разбрасывает кластер мини-капканов, взрывающихся при срабатывании.'},
  {id:'phoenix',name:'Феникс',icon:'🐦',color:'#ff6d00',rarity:'legend',hp:3400,spd:160,
   atk:{type:'burst',dmg:280,range:340,reload:0.8,ammo:3,pspd:600,count:3,revive:true},
   sup:{type:'bigboom',dmg:1100,radius:150,burnDps:150,burnDur:2,charge:3500},
   stars:[{name:'Огненное возрождение',kind:'hp',val:0.10,desc:'+10% к максимальному здоровью.'},
-         {name:'Пылающий след',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Пылающий след',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Второе дыхание',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'При смертельном ударе один раз за бой возрождается со взрывом вместо гибели. Супер – огненное пике по области.'},
  {id:'psiblade',name:'Пси-блейд',icon:'🧿',color:'#e040fb',rarity:'rare',hp:3800,spd:155,
   atk:{type:'melee',dmg:520,range:82,reload:0.75,ammo:3,arc:1.7},
   sup:{type:'bigboom',dmg:1000,radius:150,burnDps:80,burnDur:1.5,charge:3300},
   stars:[{name:'Глубокая рана',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
-         {name:'Ментальная блокада',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Ментальная блокада',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Режущие удары клинком разума. Супер – ментальный взрыв, ошеломляющий врагов в зоне.'},
  {id:'cactus',name:'Живой кактус',icon:'🌵',color:'#4caf50',rarity:'rare',hp:4800,spd:130,
   atk:{type:'spread',dmg:320,range:300,reload:0.9,ammo:3,pspd:500,count:5,spread:0.4},
   sup:{type:'rally',shield:2000,spdMul:1.1,dur:4,radius:9999,charge:3400},
   stars:[{name:'Ядовитые иглы',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+         {name:'Регенерация',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Веер колючих игл во все стороны. Супер покрывает шипами — щит себе и союзникам.'},
  {id:'windmage',name:'Вихревой маг',icon:'🌪️',color:'#90caf9',rarity:'epic',hp:3700,spd:155,
   atk:{type:'wave',dmg:400,range:340,reload:0.85,ammo:3,pspd:520,kb:100},
   sup:{type:'pull',dmg:700,radius:150,stun:1.2,charge:3500},
   stars:[{name:'Электрический ветер',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Попутный ветер',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'}],
+         {name:'Попутный ветер',kind:'spd',val:0.08,desc:'+8% к скорости передвижения.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Волны ветра отбрасывают врагов. Супер – ураган, затягивающий противников в центр.'},
  {id:'gunner',name:'Инженер-пулемётчик',icon:'🎯',color:'#616161',rarity:'rare',hp:3800,spd:145,
   atk:{type:'burst',dmg:210,range:330,reload:0.75,ammo:3,pspd:640,count:4},
   sup:{type:'turret',hp:3000,dmg:260,range:320,charge:3500},
   stars:[{name:'Бронебойные патроны',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Ремонтный комплект',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+         {name:'Ремонтный комплект',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Ведёт очереди из пулемёта. Супер ставит стационарную турель-часового.'},
  {id:'mirrorknight',name:'Зеркальный рыцарь',icon:'🪞',color:'#cfd8dc',rarity:'mythic',hp:4300,spd:145,
   atk:{type:'melee',dmg:550,range:80,reload:0.8,ammo:3,arc:1.7},
   sup:{type:'petbuff',petHp:2600,petDmg:350,buffMul:1.4,charge:3400},
   stars:[{name:'Идеальное отражение',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Зеркальная броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+         {name:'Зеркальная броня',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Мечник, отражающий удары. Супер создаёт зеркальную копию, сражающуюся рядом.'},
  {id:'acidslime',name:'Кислотный слизень',icon:'🟢',color:'#76ff03',rarity:'epic',hp:4500,spd:140,
   atk:{type:'pool',dmg:300,dps:280,range:280,reload:1.0,ammo:3,poolR:60,poolDur:4},
   sup:{type:'freeze',dmg:400,radius:150,dur:2,charge:3600},
   stars:[{name:'Едкая слизь',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Регенерация делением',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'}],
+         {name:'Регенерация делением',kind:'regen',val:0.03,desc:'+3% макс. здоровья/сек восстановления вне боя.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Кислотные лужи разъедают броню. Супер разделяется, обездвиживая врагов вокруг.'},
  {id:'executioner',name:'Палач',icon:'⚰️',color:'#212121',rarity:'legend',hp:4200,spd:140,
   atk:{type:'melee',dmg:650,range:90,reload:0.9,ammo:3,arc:1.6,execute:true},
   sup:{type:'orbital',dmg:1500,radius:140,delay:0.8,range:400,charge:3700},
   stars:[{name:'Кровавая жатва',kind:'spd',val:0.10,desc:'+10% к скорости передвижения.'},
-         {name:'Тяжёлое лезвие',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Тяжёлое лезвие',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Добивает ослабленных врагов тройным уроном. Супер – топор, падающий с небес по цели.'},
  {id:'necromancer',name:'Некромант',icon:'💀',color:'#4a148c',rarity:'mythic',hp:3700,spd:145,
   atk:{type:'proj',dmg:380,range:320,reload:0.9,ammo:3,pspd:480},
   sup:{type:'tornado',dmg:700,radius:150,dur:3,pull:150,charge:3600},
   stars:[{name:'Призрачная ярость',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Жертвоприношение',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'}],
+         {name:'Жертвоприношение',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Тёмная магия на расстоянии. Супер призывает вихрь тьмы, засасывающий и терзающий врагов.'},
  {id:'blademaster',name:'Мастер клинков',icon:'⚔️',color:'#90a4ae',rarity:'rare',hp:3900,spd:165,
   atk:{type:'melee',dmg:500,range:80,reload:0.6,ammo:3,arc:1.6},
   sup:{type:'emp',dmg:700,radius:140,stun:1.3,charge:3000},
   stars:[{name:'Вихрь клинков',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Заточка',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+         {name:'Заточка',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Быстрые точные удары клинком. Супер – вращение с оглушающей энергетической волной.'},
  {id:'energymage',name:'Энергетический маг',icon:'🔮',color:'#00e5ff',rarity:'epic',hp:3500,spd:150,
   atk:{type:'proj',dmg:420,range:360,reload:0.85,ammo:3,pspd:560},
   sup:{type:'rally',shield:1500,spdMul:1.2,dur:4,radius:9999,charge:3200},
   stars:[{name:'Энергетический всплеск',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Кража силы',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'}],
+         {name:'Кража силы',kind:'reload',val:0.10,desc:'Перезарядка оружия быстрее на 10%.'},
+         {name:'Живучесть',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Энергетические снаряды на дальней дистанции. Супер – кольцо энергии, ускоряющее союзников.'},
  {id:'darkwarrior',name:'Воин-тень',icon:'🌑',color:'#1a1a1a',rarity:'legend',hp:4000,spd:160,
   atk:{type:'melee',dmg:570,range:85,reload:0.8,ammo:3,arc:1.7,shadowStep:true},
   sup:{type:'freeze',dmg:600,radius:150,dur:2,charge:3500},
   stars:[{name:'Теневой разрыв',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Тёмная регенерация',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'}],
+         {name:'Тёмная регенерация',kind:'lifesteal',val:0.08,desc:'Восстанавливает 8% от нанесённого урона здоровьем.'},
+         {name:'Стойкость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'После убийства становится невидимым. Супер создаёт портал тьмы, замораживающий врагов рядом.'},
  {id:'beardruid',name:'Друид-медведь',icon:'🐻',color:'#5d4037',rarity:'mythic',hp:4800,spd:140,
   atk:{type:'melee',dmg:620,range:85,reload:0.9,ammo:3,arc:1.7,burn:true,burnDur:3,burnDps:100},
   sup:{type:'batform',dur:5,spdMul:1.2,healPct:0.3,charge:3600},
   stars:[{name:'Инстинкт хищника',kind:'hp',val:0.12,desc:'+12% к максимальному здоровью.'},
-         {name:'Медвежья хватка',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'}],
+         {name:'Медвежья хватка',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
+         {name:'Быстрые ноги',kind:'spd',val:0.07,desc:'+7% к скорости передвижения.'}],
   desc:'Когти оставляют кровоточащие раны. Супер – превращение в медведя: больше здоровья, урона и регенерации.'},
  {id:'technomage',name:'Техно-маг',icon:'💻',color:'#7c4dff',rarity:'legend',hp:3600,spd:145,
   atk:{type:'proj',dmg:390,range:330,reload:0.85,ammo:3,pspd:520},
   sup:{type:'massheal',heal:1400,radius:160,charge:3500},
   stars:[{name:'Вирус',kind:'dmg',val:0.10,desc:'+10% к урону атаки.'},
-         {name:'Цифровой щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'}],
+         {name:'Цифровой щит',kind:'shield',val:0.20,desc:'В начале боя получает щит на 20% от макс. здоровья.'},
+         {name:'Несгибаемость',kind:'hp',val:0.1,desc:'+10% к максимальному здоровью.'}],
   desc:'Цифровые метки на врагах. Супер создаёт зону, восстанавливающую здоровье союзникам рядом.'},
 ];
 const BRAWLER_BY_ID={};BRAWLERS.forEach(b=>BRAWLER_BY_ID[b.id]=b);
@@ -940,6 +1011,47 @@ function currentBotDiff(){
    добытую звёздную силу можно только на бойце 10 уровня (совпадает со
    старым порогом раскрытия). */
 function ownedStars(id){return P.starPowers[id]||[];}
+
+/* ---------------- СКИНЫ (косметика) ---------------- */
+const SKINS_BY_BRAWLER={
+  knight:[{id:'ice',name:'Ледяной Рыцарь Пламени',color:'#4fc3f7',cost:{gems:120}}],
+  berserk:[{id:'shadow',name:'Теневой Берсерк',color:'#4a148c',cost:{gems:120}}],
+  phoenix:[{id:'ash',name:'Пепельный Феникс',color:'#616161',cost:{gems:150}}],
+  vampire:[{id:'royal',name:'Королевский Вампир',color:'#c62828',cost:{gems:130}}],
+  robot:[{id:'gold',name:'Золотой Робот',color:'#ffb300',cost:{gems:140}}],
+  assassin:[{id:'crimson',name:'Багровый Ассасин',color:'#b71c1c',cost:{gems:110}}],
+  guardian:[{id:'emerald',name:'Изумрудный Страж',color:'#2e7d32',cost:{gems:110}}],
+  monk:[{id:'storm',name:'Штормовой Монах',color:'#1565c0',cost:{gems:130}}],
+  ranger:[{id:'neon',name:'Неоновый Рейнджер',color:'#d500f9',cost:{gems:120}}],
+  bloodmage:[{id:'void',name:'Мертвенный Маг Крови',color:'#212121',cost:{gems:140}}],
+};
+function ownedSkins(id){return P.skins[id]||[];}
+function skinColor(id){
+  const eq=P.equippedSkin[id];
+  if(!eq)return null;
+  const s=(SKINS_BY_BRAWLER[id]||[]).find(x=>x.id===eq);
+  return s?s.color:null;
+}
+function buySkin(brawlerId,skinId){
+  const s=(SKINS_BY_BRAWLER[brawlerId]||[]).find(x=>x.id===skinId);
+  if(!s)return;
+  if(ownedSkins(brawlerId).includes(skinId)){toast('Уже куплено!');return;}
+  if(P.gems<s.cost.gems){toast('Не хватает кристаллов!');return;}
+  P.gems-=s.cost.gems;
+  P.skins[brawlerId]=P.skins[brawlerId]||[];
+  P.skins[brawlerId].push(skinId);
+  P.equippedSkin[brawlerId]=skinId;
+  saveP();
+  toast('Скин куплен и надет: '+s.name);
+  UI.brawlerDetail(brawlerId);UI.renderMain();
+}
+function equipSkin(brawlerId,skinId){
+  if(skinId!=='default'&&!ownedSkins(brawlerId).includes(skinId))return;
+  if(skinId==='default')delete P.equippedSkin[brawlerId];
+  else P.equippedSkin[brawlerId]=skinId;
+  saveP();
+  UI.brawlerDetail(brawlerId);UI.renderMain();
+}
 function ownedBrawlersMissingStar(){
   const out=[];
   BRAWLERS.forEach(b=>{
@@ -982,6 +1094,179 @@ const MODES=[
  {id:'brawlball',name:'Броул-бол',icon:'⚽',desc:'3v3. Забей 2 гола в ворота соперника.'},
 ];
 
+/* ---------------- ЕЖЕДНЕВНЫЕ ИСПЫТАНИЯ ---------------- */
+const CHALLENGE_POOL=[
+  ()=>({kind:'winMode',modeId:pick(MODES).id,target:rndi(2,4)}),
+  ()=>({kind:'winAny',target:rndi(3,6)}),
+  ()=>({kind:'playGames',target:rndi(4,8)}),
+  ()=>({kind:'noDeathWin',target:1}),
+  ()=>({kind:'dealDamage',target:rndi(15000,30000)}),
+  ()=>({kind:'openBoxes',target:rndi(2,5)}),
+];
+function challengeDesc(c){
+  switch(c.kind){
+    case 'winMode':{const m=MODES.find(x=>x.id===c.modeId);return `Одержи ${c.target} побед в режиме «${m?m.name:'?'}»`;}
+    case 'winAny':return `Одержи ${c.target} побед`;
+    case 'playGames':return `Сыграй ${c.target} боёв`;
+    case 'noDeathWin':return `Выиграй бой без единой смерти`;
+    case 'dealDamage':return `Нанеси ${c.target} урона за один бой`;
+    case 'openBoxes':return `Открой ${c.target} ящиков`;
+    default:return '';
+  }
+}
+function challengeIcon(c){
+  return {winMode:'⚔️',winAny:'🏆',playGames:'🎮',noDeathWin:'🛡️',dealDamage:'💥',openBoxes:'📦'}[c.kind]||'🎯';
+}
+function genChallengeReward(){
+  const k=pick(['coins','pp','gems','box']);
+  if(k==='coins')return{coins:rndi(80,160)};
+  if(k==='pp')return{pp:rndi(30,60)};
+  if(k==='gems')return{gems:rndi(8,20)};
+  return{box:1};
+}
+function rewardLabel(r){
+  if(r.coins)return '🪙 '+r.coins;
+  if(r.pp)return '⚡ '+r.pp;
+  if(r.gems)return '💠 '+r.gems;
+  if(r.box)return '📦 '+r.box;
+  if(r.big)return '🎁 '+r.big;
+  if(r.omega)return '🌟 '+r.omega;
+  return '';
+}
+function ensureDailyChallenges(){
+  const day=Math.floor(Date.now()/86400000);
+  if(P.challSeed!==day){
+    P.challSeed=day;
+    const templates=CHALLENGE_POOL.slice();
+    const chosen=[];
+    while(chosen.length<3&&templates.length){
+      const i=rndi(0,templates.length-1);
+      chosen.push(templates.splice(i,1)[0]());
+    }
+    P.challenges=chosen.map((c,i)=>({...c,id:'c'+day+'_'+i,progress:0,reward:genChallengeReward(),done:false,claimed:false}));
+    saveP();
+  }
+}
+function updateChallengeProgress(kind,amount,extra){
+  ensureDailyChallenges();
+  let changed=false;
+  P.challenges.forEach(c=>{
+    if(c.claimed||c.done||c.kind!==kind)return;
+    if(kind==='winMode'&&extra!==c.modeId)return;
+    if(kind==='dealDamage')c.progress=Math.max(c.progress,amount);
+    else c.progress=Math.min(c.target,c.progress+amount);
+    if(c.progress>=c.target)c.done=true;
+    changed=true;
+  });
+  if(changed)saveP();
+}
+function claimChallenge(id){
+  const c=P.challenges.find(x=>x.id===id);
+  if(!c||!c.done||c.claimed)return;
+  c.claimed=true;
+  applyReward(c.reward);
+  saveP();
+  toast('Награда получена: '+rewardLabel(c.reward));
+  UI.renderChallenges();UI.renderMain();
+}
+
+/* ---------------- КЛАН (локальная эмуляция без интернета) ---------------- */
+const CLAN_EMBLEMS=['🛡️','⚔️','🐉','🦅','🐺','☠️','🔥','⭐','👑','🌙'];
+function ensureClanWeek(){
+  if(!P.clan)return;
+  const week=Math.floor(Date.now()/604800000);
+  if(P.clan.weekSeed!==week){
+    const kind=pick(['dealDamage','winAny','playGames']);
+    let target;
+    if(kind==='dealDamage')target=rndi(50000,90000);
+    else if(kind==='winAny')target=rndi(10,20);
+    else target=rndi(15,25);
+    P.clan.weekSeed=week;
+    P.clan.challenge={kind,target,progress:0};
+    P.clan.weekClaimed=false;
+    saveP();
+  }
+}
+function updateClanProgress(kind,amount){
+  if(!P.clan)return;
+  ensureClanWeek();
+  const c=P.clan.challenge;
+  if(!c||c.kind!==kind||P.clan.weekClaimed)return;
+  if(kind==='dealDamage')c.progress=Math.max(c.progress,amount);
+  else c.progress=Math.min(c.target,c.progress+amount);
+  P.clan.points=Math.round((P.clan.points||0)+amount*(kind==='dealDamage'?0.01:5));
+  saveP();
+}
+function createClan(name,emblem){
+  if(!name||!name.trim()){toast('Введи название клана!');return;}
+  P.clan={name:name.trim().slice(0,16),emblem,points:0,weekSeed:-1,challenge:null,weekClaimed:false};
+  ensureClanWeek();
+  saveP();
+  UI.renderClan();
+}
+function leaveClan(){
+  if(confirm('Покинуть клан? Весь прогресс клана будет потерян.')){
+    P.clan=null;saveP();UI.renderClan();
+  }
+}
+function claimClanReward(){
+  if(!P.clan||!P.clan.challenge)return;
+  const c=P.clan.challenge;
+  if(c.progress<c.target||P.clan.weekClaimed)return;
+  P.clan.weekClaimed=true;
+  applyReward({big:2});
+  saveP();
+  toast('Клановая награда получена!');
+  UI.renderClan();
+}
+
+/* ---------------- СЕЗОНЫ ---------------- */
+const SEASON_LEN_DAYS=30;
+function ensureSeason(){
+  if(!P.season)P.season={num:1,startedAt:Date.now(),points:0,claimedRewards:[]};
+  const elapsedDays=(Date.now()-P.season.startedAt)/86400000;
+  if(elapsedDays>=SEASON_LEN_DAYS){
+    Object.keys(P.brawlerTrophies).forEach(id=>{P.brawlerTrophies[id]=Math.floor(P.brawlerTrophies[id]*0.5);});
+    recalcTrophies();
+    const finishedNum=P.season.num;
+    P.season={num:finishedNum+1,startedAt:Date.now(),points:0,claimedRewards:[]};
+    saveP();
+    toast('Начался сезон '+P.season.num+'! Часть кубков сброшена.');
+  }
+}
+const SEASON_ROAD=[50,100,150,250,350,500,650,800,1000,1250,1500,1800,2100,2500,3000].map((pts,i)=>{
+  const cyc=i%4;
+  if(cyc===0){const v=60+pts;return{pts,reward:{coins:v},label:v+' монет'};}
+  if(cyc===1){const v=8+Math.round(pts/40);return{pts,reward:{gems:v},label:v+' кристаллов'};}
+  if(cyc===2)return{pts,reward:{big:1},label:'Большой ящик'};
+  return{pts,reward:{omega:1},label:'Омега-ящик!'};
+});
+function checkSeasonRoad(){
+  ensureSeason();
+  SEASON_ROAD.forEach((m,i)=>{
+    if(P.season.points>=m.pts&&!P.season.claimedRewards.includes(i)){
+      P.season.claimedRewards.push(i);
+      applyReward(m.reward);
+      toast('Сезон: '+m.label+'!');
+    }
+  });
+  saveP();
+}
+function openSeasonModal(){
+  ensureSeason();
+  const el=document.getElementById('season-scroll');
+  el.innerHTML=SEASON_ROAD.map((m,i)=>{
+    const claimed=P.season.claimedRewards.includes(i);
+    const reached=P.season.points>=m.pts;
+    return `<div class="road-item ${claimed?'claimed':(reached?'ready':'')}">
+      <div class="road-ic">${claimed?'✅':(reached?'🎁':'🔒')}</div>
+      <div class="road-info"><div class="road-t">📅 ${m.pts} очков</div><div class="road-l">${m.label}</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('modal-season').classList.add('show');
+}
+function closeSeasonModal(){document.getElementById('modal-season').classList.remove('show');}
+
 /* ---------------- ПРОФИЛЬ / СОХРАНЕНИЕ ---------------- */
 const DEFAULT_PROFILE=()=>({
   coins:200,gems:20,pp:40,trophies:0,
@@ -1001,11 +1286,20 @@ const DEFAULT_PROFILE=()=>({
   avatar:'🙂',
   gamesPlayed:0,wins:0,losses:0,
   createdAt:Date.now(),
+  challSeed:0,challenges:[],
+  clan:null, // {name,emblem,points,weekSeed,challenge:{kind,target,progress},weekClaimed}
+  season:{num:1,startedAt:Date.now(),points:0,claimedRewards:[]},
+  skins:{}, // {brawlerId:[skinId,...]}
+  equippedSkin:{}, // {brawlerId: skinId}
 });
 let P;
 function loadP(){ try{ P=Object.assign(DEFAULT_PROFILE(),JSON.parse(localStorage.getItem('bl_save')||'{}')); }catch(e){ P=DEFAULT_PROFILE(); } if(!P.unlocked.knight){P.unlocked.knight=1;P.levels.knight=1;} if(!P.brawlerTrophies)P.brawlerTrophies={};
   if(!P.starPowers)P.starPowers={};
   if(!P.equippedStar)P.equippedStar={};
+  if(!P.skins)P.skins={};
+  if(!P.equippedSkin)P.equippedSkin={};
+  if(!P.challenges)P.challenges=[];
+  if(!P.season)P.season={num:1,startedAt:Date.now(),points:0,claimedRewards:[]};
   // защита от старых сохранений: если P.boxes сохранён без новых ключей (например omega),
   // Object.assign выше подменяет весь объект целиком и недостающие ключи становятся undefined -
   // из-за этого "+=" превращался в NaN, и купленный/выданный ящик реально не начислялся.
@@ -1141,6 +1435,8 @@ const UI={
     if(id==='scr-settings')this.renderSettings();
     if(id==='scr-admin')this.renderAdmin();
     if(id==='scr-profile')this.renderProfile();
+    if(id==='scr-challenges')this.renderChallenges();
+    if(id==='scr-clan')this.renderClan();
   },
   currHtml(){
     return `<div class="curr"><span class="ic">🏆</span>${P.trophies}</div>
@@ -1169,7 +1465,7 @@ const UI={
     const b=BRAWLER_BY_ID[P.selBrawler];
     const rk=rankFor(brawlerTrophies(b.id));
     document.getElementById('hero-brawler').innerHTML=
-      `<div class="hero-brawler-big" style="background:${b.color}">${b.icon}</div>
+      `<div class="hero-brawler-big" style="background:${skinColor(b.id)||b.color}">${b.icon}</div>
        <div class="hero-brawler-name">${b.name}</div>
        <div class="hero-brawler-lvl">Ур. ${P.levels[b.id]||1} · <span style="color:${rk.color}">${rk.name}</span></div>`;
     const md=MODES.find(m=>m.id===P.selMode)||MODES[0];
@@ -1211,10 +1507,10 @@ const UI={
       const rk=rankFor(brawlerTrophies(b.id));
       const starCount=ownedStars(b.id).length;
       return `<div class="card ${un?'':'locked'} ${P.selBrawler===b.id?'sel-brawler':''}" onclick="UI.brawlerDetail('${b.id}')">
-        <div class="portrait" style="background:${b.color}">${un?b.icon:'🔒'}</div>
+        <div class="portrait" style="background:${un?(skinColor(b.id)||b.color):b.color}">${un?b.icon:'🔒'}</div>
         <div class="nm">${b.name}</div>
         <div class="lvl" style="color:${un?rk.color:RARITY[b.rarity].color}">${un?('Ур. '+(P.levels[b.id]||1)+' · '+rk.name):RARITY[b.rarity].name}</div>
-        ${un?`<div class="lvl" style="color:#ffd24e">🏆 ${brawlerTrophies(b.id)} · ⭐ ${starCount}/2</div>`:''}
+        ${un?`<div class="lvl" style="color:#ffd24e">🏆 ${brawlerTrophies(b.id)} · ⭐ ${starCount}/3</div>`:''}
         ${P.selBrawler===b.id?`<div class="lvl" style="color:var(--accent2);font-weight:900">В БОЮ</div>`:''}</div>`;
     }).join('');
   },
@@ -1223,6 +1519,7 @@ const UI={
     const canUp=un&&lvl<10, ppC=UP_PP[lvl-1],coinC=UP_COIN[lvl-1];
     const rk=rankFor(brawlerTrophies(id));
     const owned=ownedStars(id);
+    const dispColor=skinColor(id)||b.color;
     const starsHtml=(b.stars||[]).map((s,i)=>{
       const has=owned.includes(i);
       const eq=P.equippedStar[id]===i;
@@ -1233,9 +1530,28 @@ const UI={
         ${canEquip?`<button class="star-eq-btn ${eq?'on':''}" onclick="UI.equipStar('${id}',${i})">${eq?'Экипирована':'Надеть'}</button>`:''}
       </div>`;
     }).join('');
+    const skinList=SKINS_BY_BRAWLER[id]||[];
+    const skinsHtml=un&&skinList.length?`
+      <p class="note" style="margin-top:10px;text-align:left">🎨 Скины</p>
+      <div class="star-row">
+        <div class="star-ic">🙂</div>
+        <div class="star-info"><div class="star-t">Обычный вид</div><div class="star-d">Стандартная расцветка</div></div>
+        <button class="star-eq-btn ${!P.equippedSkin[id]?'on':''}" onclick="equipSkin('${id}','default')">${!P.equippedSkin[id]?'Надет':'Надеть'}</button>
+      </div>
+      ${skinList.map(s=>{
+        const has=ownedSkins(id).includes(s.id);
+        const eq=P.equippedSkin[id]===s.id;
+        return `<div class="star-row">
+          <div class="star-ic" style="color:${s.color}">●</div>
+          <div class="star-info"><div class="star-t">${s.name}</div><div class="star-d">${has?'Куплен':'💠 '+s.cost.gems}</div></div>
+          ${has?`<button class="star-eq-btn ${eq?'on':''}" onclick="equipSkin('${id}','${s.id}')">${eq?'Надет':'Надеть'}</button>`
+               :`<button class="star-eq-btn" onclick="buySkin('${id}','${s.id}')">Купить</button>`}
+        </div>`;
+      }).join('')}
+    `:'';
     const el=document.getElementById('modal-brawler-content');
     el.innerHTML=`
-      <div class="detail-portrait" style="background:${b.color}">${un?b.icon:'🔒'}</div>
+      <div class="detail-portrait" style="background:${un?dispColor:b.color}">${un?b.icon:'🔒'}</div>
       <div class="rarity-tag" style="background:${RARITY[b.rarity].color}">${RARITY[b.rarity].name}</div>
       <h3>${b.name}</h3>
       <p class="note">${b.desc}</p>
@@ -1247,6 +1563,7 @@ const UI={
       <div class="statrow"><span>👟 Скорость</span><b>${b.spd}</b></div>
       <p class="note" style="margin-top:10px;text-align:left">⭐ Звёздные силы ${lvl<10?'(откроются на 10 уровне, выбиваются из ящиков уже сейчас)':''}</p>
       ${starsHtml}
+      ${skinsHtml}
       ${canUp?`<button class="big-btn" style="font-size:15px;padding:12px;margin-top:8px" onclick="UI.upgrade('${id}')">Улучшить — ⚡${ppC} + 🪙${coinC}</button>`:''}
       <button class="big-btn" style="font-size:15px;padding:12px;background:linear-gradient(180deg,#5adb7c,#2c8a4b);${P.selBrawler===id?'opacity:.55;pointer-events:none':''}" onclick="UI.selectBrawler('${id}')">${P.selBrawler===id?'✓ Выбран для боя':'Выбрать для боя'}</button>
       `:`<p class="note">Выпадает из ящиков или открывается на трофейном пути.</p>`}
@@ -1337,17 +1654,20 @@ const UI={
     document.getElementById('admin-curr').innerHTML=this.currHtml();
   },
   renderProfile(){
+    ensureSeason();
     const unlockedCount=BRAWLERS.filter(b=>P.unlocked[b.id]).length;
     const starsCount=BRAWLERS.reduce((a,b)=>a+ownedStars(b.id).length,0);
-    const totalStars=BRAWLERS.length*2;
+    const totalStars=BRAWLERS.length*3;
     const games=P.gamesPlayed||0,wins=P.wins||0,losses=P.losses||0;
     const winrate=games?Math.round(wins/games*100):0;
     const daysSince=Math.max(0,Math.floor((Date.now()-(P.createdAt||Date.now()))/86400000));
+    const daysLeftSeason=Math.max(0,SEASON_LEN_DAYS-Math.floor((Date.now()-P.season.startedAt)/86400000));
     const el=document.getElementById('profile-content');
     el.innerHTML=`
       <div class="profile-avatar-big" onclick="openAvatarModal()">${P.avatar||'🙂'}</div>
       <div class="profile-nick-row"><h3>${P.nick||'Игрок'}</h3><button onclick="askNick()">✏️ Ник</button></div>
       <p class="note">Играет ${daysSince} ${daysSince===1?'день':'дней'}</p>
+      <button class="menu-btn" onclick="openSeasonModal()"><span class="mi" style="background:#8c2f5e">📅</span>Сезон ${P.season.num} · ${P.season.points} очков · ${daysLeftSeason} дн. осталось</button>
       <div class="profile-stats">
         <div class="profile-stat"><div class="ps-val">🏆 ${P.trophies||0}</div><div class="ps-lbl">Кубков всего</div></div>
         <div class="profile-stat"><div class="ps-val">${games}</div><div class="ps-lbl">Боёв сыграно</div></div>
@@ -1370,7 +1690,71 @@ const UI={
       }).join('')}
       <button class="menu-btn" onclick="UI.show('scr-settings')"><span class="mi" style="background:#555d78">⚙️</span>Настройки</button>`;
   },
-  clanStub(){toast('Кланы скоро появятся!')},
+  renderChallenges(){
+    ensureDailyChallenges();
+    const el=document.getElementById('challenges-content');
+    const now=Date.now();
+    const nextReset=(Math.floor(now/86400000)+1)*86400000;
+    const hrsLeft=Math.max(0,Math.ceil((nextReset-now)/3600000));
+    el.innerHTML=`<p class="note">Обновятся через ${hrsLeft} ч.</p>`+
+      P.challenges.map(c=>{
+        const pct=Math.min(100,Math.round(c.progress/c.target*100));
+        return `<div class="ach-item ${c.claimed?'done':''}">
+          <div class="ach-ic">${challengeIcon(c)}</div>
+          <div class="ach-info"><div class="ach-t">${challengeDesc(c)}</div>
+          <div class="ach-d">${Math.min(c.progress,c.target)}/${c.target} · Награда: ${rewardLabel(c.reward)}</div>
+          <div class="ach-bar"><div class="ach-bar-in" style="width:${pct}%"></div></div></div>
+          ${c.done&&!c.claimed?`<button class="star-eq-btn on" onclick="claimChallenge('${c.id}')">Забрать</button>`:
+            c.claimed?`<span style="font-size:20px">✅</span>`:''}
+        </div>`;
+      }).join('');
+  },
+  renderClan(){
+    const el=document.getElementById('clan-content');
+    if(!P.clan){
+      el.innerHTML=`
+        <p class="note">У тебя пока нет клана. Создай свой — испытания и награды копятся локально, без интернета.</p>
+        <input type="text" id="clan-name-input" maxlength="16" placeholder="Название клана"
+          style="width:100%;box-sizing:border-box;background:#1b1e30;color:#fff;border:1px solid rgba(255,255,255,.15);
+          border-radius:10px;padding:12px;font-size:15px;font-weight:800;text-align:center;margin:10px 0">
+        <p class="note">Выбери эмблему</p>
+        <div id="clan-emblem-pick" style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:12px">
+          ${CLAN_EMBLEMS.map((e,i)=>`<button class="avatar-opt ${i===0?'sel':''}" data-emblem="${e}" onclick="UI.pickClanEmblem('${e}',this)">${e}</button>`).join('')}
+        </div>
+        <button class="big-btn" onclick="UI.doCreateClan()">Создать клан</button>`;
+      this._pickedEmblem=CLAN_EMBLEMS[0];
+      return;
+    }
+    ensureClanWeek();
+    const c=P.clan.challenge;
+    const pct=c?Math.min(100,Math.round(c.progress/c.target*100)):0;
+    const kindLbl={dealDamage:'Нанести урона всем кланом',winAny:'Одержать побед',playGames:'Сыграть боёв'};
+    el.innerHTML=`
+      <div style="text-align:center">
+        <div class="profile-avatar-big" style="cursor:default">${P.clan.emblem}</div>
+        <h3>${P.clan.name}</h3>
+        <p class="note">Клановые очки: ${P.clan.points||0}</p>
+      </div>
+      ${c?`<div class="ach-item">
+        <div class="ach-ic">🎯</div>
+        <div class="ach-info"><div class="ach-t">Недельное испытание: ${kindLbl[c.kind]}</div>
+        <div class="ach-d">${Math.min(c.progress,c.target)}/${c.target}</div>
+        <div class="ach-bar"><div class="ach-bar-in" style="width:${pct}%"></div></div></div>
+        ${c.progress>=c.target&&!P.clan.weekClaimed?`<button class="star-eq-btn on" onclick="claimClanReward()">Забрать</button>`:
+          P.clan.weekClaimed?`<span style="font-size:20px">✅</span>`:''}
+      </div>`:''}
+      <p class="note" style="margin-top:8px">Награда за неделю: 🎁 2 больших ящика</p>
+      <button class="menu-btn" style="margin-top:14px" onclick="leaveClan()"><span class="mi" style="background:#b3382f">🚪</span>Покинуть клан</button>`;
+  },
+  pickClanEmblem(e,btn){
+    this._pickedEmblem=e;
+    document.querySelectorAll('#clan-emblem-pick .avatar-opt').forEach(b=>b.classList.remove('sel'));
+    btn.classList.add('sel');
+  },
+  doCreateClan(){
+    const name=document.getElementById('clan-name-input').value;
+    createClan(name,this._pickedEmblem||CLAN_EMBLEMS[0]);
+  },
 };
 function openAvatarModal(){
   document.getElementById('avatar-grid').innerHTML=AVATAR_OPTIONS.map(a=>
@@ -1496,6 +1880,7 @@ function openBox(kind){
   P.pityBoxes=(P.pityBoxes||0)+1;
   P.pityStars=(P.pityStars||0)+1;
   P.totalBoxesOpened=(P.totalBoxesOpened||0)+1;
+  updateChallengeProgress('openBoxes',1);
   const count=boxItemCount(kind);
   // прокручиваем все предметы заранее
   boxQueue=[];
@@ -1827,7 +2212,7 @@ class Unit{
     this.botDiff=botDiff||1;
     this.ai={state:'objective',target:null,dodgeT:0,dodgeDir:1,repathT:0,wx:x,wy:y,strafe:Math.random()>.5?1:-1,thinkT:rnd(0,0.3)};
     this.hitFlash=0;this.lastShotT=0;this.moveAng=0;this.moving=false;
-    this.hue=def.color;
+    this.hue=(isPlayer&&skinColor(def.id))||def.color;
     this.nick=isPlayer?(P.nick||'Игрок'):pick(BOT_NAMES);
     // звёздная сила (только у игрока; открыта с 10 уровня и должна быть добыта из ящиков)
     this.starReloadMul=1;this.starSpdMul=1;this.starRegenBonus=0;this.starLifestealPct=0;
@@ -1868,6 +2253,7 @@ class Unit{
     if(src&&src.team!==undefined&&src!==this){
       if(owner&&owner.chargeSuper)owner.chargeSuper(dmg);
       if(owner&&owner.starLifestealPct)owner.heal(dmg*owner.starLifestealPct);
+      if(owner&&owner.isPlayer&&G.playerDmgThisBattle!==undefined)G.playerDmgThisBattle+=dmg;
     }
     AUDIO.hit();
     // феникс: раз за бой не умирает, а возрождается со взрывом
@@ -1886,6 +2272,7 @@ class Unit{
     this.dead=true;this.deathAt=G.time;AUDIO.death();
     burst(this.x,this.y,this.hue,16);
     if(this.pet){this.pet.dead=true;this.pet=null;}
+    if(this.isPlayer&&G.playerDied!==undefined)G.playerDied=true;
     // воин тени: невидимость после убийства
     if(src){const owner=src.ownerUnit||src;if(owner&&owner.def&&owner.def.atk&&owner.def.atk.shadowStep&&!owner.dead)owner.invisT=Math.max(owner.invisT||0,1.5);}
     G.mode.onDeath(this,src);
@@ -2517,7 +2904,7 @@ function startBattle(){
     map,mode:null,units:[],projs:[],fx:[],areas:[],pickups:[],pets:[],turrets:[],
     time:0,timeLimit:modeId==='showdown'?100:120,started:false,over:false,
     cam:{x:map.W*T/2,y:map.H*T/2},player:null,playerRank:10,
-    dmgToSafe:[0,0],
+    dmgToSafe:[0,0],playerDmgThisBattle:0,playerDied:false,
   };
   G.mode=makeMode(modeId);
   const diff=currentBotDiff();
@@ -3094,6 +3481,21 @@ function endBattle(result,quit){
     if(win)P.mmr=clamp((P.mmr||0)+1,-10,10);
     else if(!draw)P.mmr=clamp((P.mmr||0)-1,-10,10);
   }
+  // ежедневные испытания, клан, сезонные очки
+  if(!quit){
+    updateChallengeProgress('playGames',1);
+    updateClanProgress('playGames',1);
+    updateChallengeProgress('dealDamage',G.playerDmgThisBattle||0);
+    updateClanProgress('dealDamage',G.playerDmgThisBattle||0);
+    if(win){
+      updateChallengeProgress('winAny',1);
+      updateChallengeProgress('winMode',1,G.mode.id);
+      updateClanProgress('winAny',1);
+      if(!G.playerDied)updateChallengeProgress('noDeathWin',1);
+    }
+  }
+  if(trophyDelta>0){P.season=P.season||{num:1,startedAt:Date.now(),points:0,claimedRewards:[]};P.season.points+=trophyDelta;}
+  checkSeasonRoad();
   saveP();checkTrophyRoad();
   if(win)AUDIO.win();else if(!draw)AUDIO.lose();
   setTimeout(()=>{
