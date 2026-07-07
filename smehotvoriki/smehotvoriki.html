@@ -110,7 +110,10 @@
   #modal-portraits{display:flex;justify-content:center;gap:16px;}
   #modal-portraits canvas{background:#EFE0BC;border:3px solid var(--ink);border-radius:12px;}
   #modal-speaker{font-weight:bold;color:var(--terracotta);font-size:13px;}
-  #modal-text{font-size:13px;line-height:1.35;min-height:40px;}
+  #modal-text{font-size:13px;line-height:1.35;min-height:40px;opacity:0;transition:opacity .3s ease;}
+  #modal-text.visible{opacity:1;}
+  #modal-speaker{opacity:0;transition:opacity .3s ease;}
+  #modal-speaker.visible{opacity:1;}
   #modalNextBtn{align-self:flex-end;}
 
   /* ---------- CAMP ---------- */
@@ -157,17 +160,34 @@
     color:#E8483A; text-shadow:0 1px 2px rgba(0,0,0,.6); animation:floatUp .9s ease-out forwards; white-space:nowrap;}
   .floating-dmg.heal{color:#5E9142;}
   .floating-dmg.miss{color:#DCC793;font-size:11px;font-style:italic;}
+  .floating-dmg.crit{color:#F2A93C;font-size:19px;text-shadow:0 0 6px rgba(242,169,60,.8),0 1px 2px rgba(0,0,0,.6);}
   @keyframes floatUp{
     0%{opacity:1; transform:translate(-50%,0) scale(1);}
     15%{transform:translate(-50%,-6px) scale(1.15);}
     100%{opacity:0; transform:translate(-50%,-42px) scale(1);}
   }
+  @keyframes critShake{
+    0%,100%{transform:translateX(0) rotate(0);}
+    20%{transform:translateX(-4px) rotate(-4deg);}
+    40%{transform:translateX(4px) rotate(4deg);}
+    60%{transform:translateX(-3px) rotate(-3deg);}
+    80%{transform:translateX(3px) rotate(3deg);}
+  }
+  .sprite.crit-shake{animation:critShake 0.4s ease;}
   #enemyTurnBanner{position:absolute;top:8px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:35;
     background:rgba(58,42,26,.85);color:#F3E9D2;font-size:12px;font-weight:bold;
     padding:5px 14px;border-radius:10px;border:2px solid var(--gold);
     opacity:0;pointer-events:none;transition:opacity .3s ease, transform .3s ease;}
   #enemyTurnBanner.show{opacity:1;transform:translateX(-50%) translateY(0);animation:pulseBanner 1s ease-in-out infinite;}
   @keyframes pulseBanner{ 0%,100%{opacity:1;} 50%{opacity:.6;} }
+
+  /* ---------- ДОСТИЖЕНИЯ (toast-уведомление) ---------- */
+  .achievement-toast{position:absolute;top:14px;left:50%;transform:translateX(-50%) translateY(-24px);
+    background:rgba(30,22,14,.96);border:2px solid var(--gold);border-radius:10px;padding:8px 18px;
+    color:#F3E9D2;font-size:12px;text-align:center;z-index:200;opacity:0;
+    transition:opacity .35s ease, transform .35s ease;white-space:nowrap;}
+  .achievement-toast b{display:block;color:#F2C230;font-size:12px;}
+  .achievement-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
   /* ---------- ПОДСКАЗКИ СПОСОБНОСТЕЙ ---------- */
   #abilityTooltip{position:absolute;z-index:60;display:none;max-width:220px;
@@ -195,6 +215,16 @@
   /* ---------- RESULT ---------- */
   #result-box{margin:auto;text-align:center;}
   #result-box .stars{font-size:26px;margin:10px 0;}
+
+  /* ---------- ПРОФИЛЬ ---------- */
+  .stat-card{background:var(--panel);border:1px solid var(--ink);border-radius:8px;padding:6px 10px;font-size:11px;text-align:center;min-width:80px;}
+  .stat-card b{display:block;font-size:16px;color:var(--terracotta);}
+  .ach-card{display:flex;align-items:center;gap:8px;background:var(--panel);border:2px solid var(--ink);
+    border-radius:10px;padding:6px 10px;margin-bottom:6px;}
+  .ach-card.locked{opacity:.45;}
+  .ach-card .ach-icon{font-size:20px;}
+  .ach-card .ach-info b{display:block;font-size:12px;}
+  .ach-card .ach-info span{font-size:10px;opacity:.8;}
 </style>
 </head>
 <body>
@@ -219,6 +249,7 @@
       <div id="regionLabel">Регион</div>
       <div class="hud-right">
         <button class="btn small secondary" id="musicToggleBtn">🔊 Музыка</button>
+        <button class="btn small secondary" id="profileBtn" title="Профиль">📊</button>
         <button class="btn small secondary" id="campBtn">🏕 Лагерь</button>
         <button class="btn small secondary" id="resetBtn">🔄 Заново</button>
       </div>
@@ -293,6 +324,14 @@
       <div id="resultRewards" style="font-size:12px;margin-bottom:16px;"></div>
       <button class="btn" id="resultContinueBtn">Продолжить</button>
     </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="screen" id="screen-profile">
+    <div class="topbar"><button class="btn small secondary" id="profileBackBtn">◂ Назад</button><h2 style="margin:0;">📊 Профиль</h2></div>
+    <div id="profileStats" class="res-row"></div>
+    <h3 style="font-size:13px;margin-top:6px;">Достижения</h3>
+    <div id="profileAchievements"></div>
   </div>
 
   <!-- MODAL DIALOG (диалоги вместо узлов-историй) -->
@@ -634,6 +673,7 @@ const sndHeal = ()=>beep(660,0.18,'sine',0.05);
 const sndUI = ()=>beep(520,0.05,'triangle',0.04);
 const sndVictory = ()=>{ beep(520,0.1); setTimeout(()=>beep(700,0.15),110); setTimeout(()=>beep(920,0.22),240); };
 const sndDefeat = ()=>{ beep(220,0.3,'sawtooth',0.06); setTimeout(()=>beep(160,0.4,'sawtooth',0.06),160); };
+const sndCrit = ()=>{ beep(180,0.15,'square',0.09); setTimeout(()=>beep(90,0.12,'sawtooth',0.08),40); };
 
 /* ---------- ФОНОВАЯ МУЗЫКА (простые 8-битные лупы через осцилляторы) ---------- */
 const REGION_MUSIC = {
@@ -693,8 +733,8 @@ function playRegionMusic(regionId){
 function toggleMusic(){
   musicState.enabled = !musicState.enabled;
   $('musicToggleBtn').textContent = musicState.enabled ? '🔊 Музыка' : '🔇 Музыка';
-  if(musicState.enabled){ playRegionMusic(REGIONS[state.regionIndex].id); }
-  else { stopRegionMusic(300); }
+  if(musicState.enabled){ playRegionMusic(REGIONS[state.regionIndex].id); playAmbient(REGIONS[state.regionIndex].id); }
+  else { stopRegionMusic(300); stopAmbient(300); }
   try{ localStorage.setItem('smehotvoriki_music_pref', musicState.enabled?'1':'0'); }catch(e){}
 }
 $('musicToggleBtn').onclick = ()=>{ sndUI(); toggleMusic(); };
@@ -702,6 +742,92 @@ try{
   const pref = localStorage.getItem('smehotvoriki_music_pref');
   if(pref==='0'){ musicState.enabled = false; $('musicToggleBtn').textContent = '🔇 Музыка'; }
 }catch(e){}
+
+/* ---------- ЗВУКИ ОКРУЖЕНИЯ (ветер/птицы/капли — процедурный шум через Web Audio) ---------- */
+const REGION_AMBIENT = {
+  forest:    { windFreq:900,  windGain:0.018, chirp:true },
+  mountains: { windFreq:500,  windGain:0.032 },
+  desert:    { windFreq:1300, windGain:0.014 },
+  swamp:     { windFreq:600,  windGain:0.014, drip:true },
+  ice:       { windFreq:1600, windGain:0.020, crackle:true },
+  castle:    { windFreq:150,  windGain:0.030 },
+  island:    { windFreq:450,  windGain:0.028, chirp:true, waves:true }
+};
+let noiseBufferCache = null;
+function getNoiseBuffer(ctx){
+  if(noiseBufferCache) return noiseBufferCache;
+  const bufferSize = ctx.sampleRate * 2;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++){ data[i] = Math.random()*2-1; }
+  noiseBufferCache = buffer;
+  return buffer;
+}
+const ambientState = { source:null, gainNode:null, eventTimer:null, currentRegion:null };
+function stopAmbient(fadeMs){
+  const ctx = ensureAudio();
+  if(ambientState.gainNode && ctx){
+    const g = ambientState.gainNode;
+    g.gain.cancelScheduledValues(ctx.currentTime);
+    g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + (fadeMs||400)/1000);
+    const src = ambientState.source;
+    setTimeout(()=>{ try{ src.stop(); }catch(e){} }, (fadeMs||400)+80);
+  }
+  if(ambientState.eventTimer){ clearTimeout(ambientState.eventTimer); ambientState.eventTimer=null; }
+  ambientState.currentRegion = null;
+}
+function playAmbient(regionId){
+  if(!musicState.enabled) return;
+  if(ambientState.currentRegion === regionId) return;
+  const ctx = ensureAudio(); if(!ctx) return;
+  stopAmbient(300);
+  const cfg = REGION_AMBIENT[regionId];
+  if(!cfg) return;
+  ambientState.currentRegion = regionId;
+
+  const noiseSource = ctx.createBufferSource();
+  noiseSource.buffer = getNoiseBuffer(ctx);
+  noiseSource.loop = true;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = cfg.windFreq;
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = 0.0001;
+  noiseSource.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  noiseSource.start();
+  gainNode.gain.linearRampToValueAtTime(cfg.windGain, ctx.currentTime + 1.4);
+  ambientState.source = noiseSource;
+  ambientState.gainNode = gainNode;
+
+  function scheduleEvent(fn, minDelay, maxDelay){
+    if(ambientState.currentRegion !== regionId) return;
+    const delay = minDelay + Math.random()*(maxDelay-minDelay);
+    ambientState.eventTimer = setTimeout(()=>{
+      if(ambientState.currentRegion !== regionId) return;
+      fn();
+      scheduleEvent(fn, minDelay, maxDelay);
+    }, delay);
+  }
+  if(cfg.chirp){
+    scheduleEvent(()=>{
+      const freq = 1800 + Math.random()*1200;
+      beep(freq, 0.08, 'sine', 0.025);
+      setTimeout(()=>beep(freq*1.2, 0.06, 'sine', 0.02), 90);
+    }, 1500, 4500);
+  }
+  if(cfg.drip){
+    scheduleEvent(()=> beep(700+Math.random()*300, 0.05, 'sine', 0.022), 900, 3100);
+  }
+  if(cfg.crackle){
+    scheduleEvent(()=> beep(200+Math.random()*100, 0.04, 'sawtooth', 0.022), 2000, 5500);
+  }
+  if(cfg.waves){
+    scheduleEvent(()=> beep(120+Math.random()*40, 0.35, 'sine', 0.03), 2200, 4200);
+  }
+}
 
 /* =========================================================
    3. ДАННЫЕ: ГЕРОИ / ВРАГИ
@@ -721,7 +847,7 @@ const HERO_DEFS = {
       {key:'wall', name:'Панцирная стена', type:'ally', shieldDur:2, rage:15, desc:'-40% урона союзнику на 2 хода'},
       {key:'shieldbash', name:'Удар крышкой', type:'single', dmg:45, rage:20, status:'provoke', statusDur:1, desc:'45 урона + провокация'}
     ],
-    passive:'Старая закалка (-20% крит. урона)', ultra:'shieldbash'
+    passive:'Старая закалка (-20% крит. урона)', critResist:0.2, ultra:'shieldbash'
   },
   pryg: {
     id:'pryg', name:'Прыг Пружинкин', cls:'Скаут', maxHp:100,
@@ -987,7 +1113,7 @@ const STORIES = {
 
 /* ---------- РЕЦЕПТЫ / ТОВАРЫ ---------- */
 const RECIPES = [
-  {id:'sword', name:'Меч «Хихишка»', cost:{ore:3,wood:2}, effect:'+15 урона', apply:h=>h.bonusDmg=(h.bonusDmg||0)+15},
+  {id:'sword', name:'Меч «Хихишка»', cost:{ore:3,wood:2}, effect:'+15 урона, +5% крит. шанс', apply:h=>{ h.bonusDmg=(h.bonusDmg||0)+15; h.critChance=(h.critChance||0)+0.05; }},
   {id:'shield', name:'Щит «Стойкий Смешок»', cost:{ore:4,dust:1}, effect:'+20 брони', apply:h=>h.armor=(h.armor||0)+20},
   {id:'potion', name:'Зелье Бодрости', cost:{dust:2,wood:1}, effect:'+30 к макс. HP (и лечит на столько же)', apply:h=>{ h.preHeal=(h.preHeal||0)+30; if(h.currentHp!==undefined) h.currentHp+=30; }},
   {id:'cloak', name:'Плащ Ловкости', cost:{silk:3,dust:1}, effect:'+10% уклонения', apply:h=>h.dodge=(h.dodge||0)+0.10},
@@ -999,6 +1125,38 @@ const SHOP_ITEMS = [
   {id:'dust5', name:'5× Кристальная пыльца', price:35, give:{dust:5}},
   {id:'silk5', name:'5× Шёлк Радости', price:25, give:{silk:5}}
 ];
+
+/* ---------- ДОСТИЖЕНИЯ ---------- */
+const ACHIEVEMENTS = [
+  {id:'first_win', name:'Первая победа', desc:'Выиграйте свой первый бой', check: s=> s.stats.battlesWon>=1},
+  {id:'first_boss', name:'Первый босс', desc:'Победите любого босса региона', check: s=> s.stats.bossesDefeated>=1},
+  {id:'full_squad', name:'Вся банда в сборе', desc:'Разблокируйте всех 5 героев', check: s=> s.unlocked.length>=5},
+  {id:'ten_wins', name:'Опытный боец', desc:'Выиграйте 10 боёв', check: s=> s.stats.battlesWon>=10},
+  {id:'hundred_kills', name:'Гроза Смехолании', desc:'Победите 100 врагов', check: s=> s.stats.enemiesDefeated>=100},
+  {id:'level_10', name:'Ветеран', desc:'Доведите любого героя до 10 уровня', check: s=> Object.values(s.heroStates).some(h=>(h.level||1)>=10)},
+  {id:'crafter', name:'Мастер-ремесленник', desc:'Скрафтите 5 предметов в кузнице', check: s=> s.stats.itemsCrafted>=5},
+  {id:'all_bosses', name:'Хранитель Хохотуна', desc:'Победите всех 6 боссов игры', check: s=> s.stats.bossesDefeated>=6}
+];
+function checkAchievements(){
+  ACHIEVEMENTS.forEach(ach=>{
+    if(!state.achievements[ach.id] && ach.check(state)){
+      state.achievements[ach.id] = true;
+      showAchievementToast(ach);
+    }
+  });
+  saveGame();
+}
+function showAchievementToast(ach){
+  const el = document.createElement('div');
+  el.className = 'achievement-toast';
+  el.innerHTML = `<b>🏆 Достижение получено!</b><div>${ach.name}</div>`;
+  const appEl = $('app');
+  if(!appEl) return;
+  appEl.appendChild(el);
+  requestAnimationFrame(()=> el.classList.add('show'));
+  setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=> el.remove(), 400); }, 3200);
+  sndVictory();
+}
 
 /* =========================================================
    4. СОСТОЯНИЕ + СОХРАНЕНИЕ
@@ -1013,7 +1171,9 @@ function freshState(){
     progress: {},
     regionIndex: 0,
     currentNodeIndex: 0,
-    heroStates: {}
+    heroStates: {},
+    stats: { battlesWon:0, battlesLost:0, enemiesDefeated:0, bossesDefeated:0, levelUps:0, itemsCrafted:0 },
+    achievements: {}
   };
   Object.keys(HERO_DEFS).forEach(id=>s.heroStates[id] = {});
   return s;
@@ -1026,7 +1186,7 @@ function saveGame(){
     const dump = {
       gold:state.gold, resources:state.resources, unlocked:state.unlocked, squad:state.squad,
       progress:state.progress, regionIndex:state.regionIndex, currentNodeIndex:state.currentNodeIndex,
-      heroStates:state.heroStates
+      heroStates:state.heroStates, stats:state.stats, achievements:state.achievements
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(dump));
   }catch(e){ /* игнорируем ошибки хранилища */ }
@@ -1036,6 +1196,8 @@ function loadGame(){
     const raw = localStorage.getItem(SAVE_KEY);
     if(!raw) return false;
     Object.assign(state, JSON.parse(raw));
+    if(!state.stats) state.stats = { battlesWon:0, battlesLost:0, enemiesDefeated:0, bossesDefeated:0, levelUps:0, itemsCrafted:0 };
+    if(!state.achievements) state.achievements = {};
     return true;
   }catch(e){ return false; }
 }
@@ -1070,8 +1232,14 @@ function renderModalPortraits(storyKey){
 }
 function renderModalLine(){
   const line = modalLines[modalIdx];
-  $('modal-speaker').textContent = line.who;
-  $('modal-text').textContent = line.text;
+  const speakerEl = $('modal-speaker'), textEl = $('modal-text');
+  speakerEl.classList.remove('visible');
+  textEl.classList.remove('visible');
+  setTimeout(()=>{
+    speakerEl.textContent = line.who;
+    textEl.textContent = line.text;
+    requestAnimationFrame(()=>{ speakerEl.classList.add('visible'); textEl.classList.add('visible'); });
+  }, 120);
   $('modalNextBtn').textContent = modalIdx<modalLines.length-1 ? 'Далее ▸' : 'Продолжить ▸';
 }
 $('modalNextBtn').onclick = ()=>{
@@ -1084,6 +1252,7 @@ $('modalNextBtn').onclick = ()=>{
       state.unlocked.push(heroToUnlock);
       if(state.squad.length<3) state.squad.push(heroToUnlock);
       saveGame();
+      checkAchievements();
     }
     const cb = modalOnComplete; modalOnComplete=null;
     if(cb) cb();
@@ -1181,6 +1350,7 @@ function renderMap(){
   renderPanorama();
   renderNodesOverlay();
   playRegionMusic(REGIONS[state.regionIndex].id);
+  playAmbient(REGIONS[state.regionIndex].id);
   saveGame();
 }
 function renderSquadBar(){
@@ -1284,6 +1454,33 @@ function finalizeNodeCompletion(node){
    7. ЛАГЕРЬ (кузница / лавка / отдых)
    ========================================================= */
 function startCamp(){ showScreen('screen-camp'); renderCamp(); }
+function startProfile(){ showScreen('screen-profile'); renderProfile(); }
+function renderProfile(){
+  const st = state.stats;
+  const statsWrap = $('profileStats');
+  statsWrap.innerHTML = `
+    <div class="stat-card"><b>${st.battlesWon}</b>Боёв выиграно</div>
+    <div class="stat-card"><b>${st.battlesLost}</b>Боёв проиграно</div>
+    <div class="stat-card"><b>${st.enemiesDefeated}</b>Врагов побеждено</div>
+    <div class="stat-card"><b>${st.bossesDefeated}</b>Боссов повержено</div>
+    <div class="stat-card"><b>${st.levelUps}</b>Уровней получено</div>
+    <div class="stat-card"><b>${st.itemsCrafted}</b>Предметов скрафчено</div>
+  `;
+  const achWrap = $('profileAchievements');
+  achWrap.innerHTML = '';
+  ACHIEVEMENTS.forEach(ach=>{
+    const unlocked = !!state.achievements[ach.id];
+    const card = document.createElement('div');
+    card.className = 'ach-card'+(unlocked?'':' locked');
+    card.innerHTML = `
+      <div class="ach-icon">${unlocked?'🏆':'❔'}</div>
+      <div class="ach-info"><b>${unlocked?ach.name:'???'}</b><span>${unlocked?ach.desc:'Ещё не открыто'}</span></div>
+    `;
+    achWrap.appendChild(card);
+  });
+}
+$('profileBtn').onclick = ()=>{ sndUI(); startProfile(); };
+$('profileBackBtn').onclick = ()=>{ sndUI(); showScreen('screen-map'); renderMap(); };
 function renderCamp(){
   const wrap = $('campSquadPreview'); wrap.innerHTML='';
   state.unlocked.forEach(id=>{
@@ -1343,6 +1540,7 @@ function makeHeroUnit(id){
     armor: bonus.armor||0, bonusDmg: bonus.bonusDmg||0, bonusAtk: bonus.bonusAtk||0,
     dodge: (def.dodge||0) + (bonus.dodge||0),
     rageBonus: bonus.rageBonus||0,
+    critChance: bonus.critChance||0, critResist: def.critResist||0,
     level: bonus.level||1, xp: bonus.xp||0,
     statuses: [], acted:false, attackAnim:false, hitFlash:false, animSeed: Math.random()*10
   };
@@ -1622,12 +1820,21 @@ function spawnFloatingNumber(unitId, text, cls){
     setTimeout(()=> el.remove(), 900);
   }catch(e){ /* визуальный эффект необязателен, ошибки игнорируем */ }
 }
+function triggerCritShake(unitId){
+  try{
+    const canvas = document.querySelector(`canvas.sprite-canvas[data-unitid="${unitId}"]`);
+    const spriteDiv = canvas && canvas.parentElement;
+    if(!spriteDiv) return;
+    spriteDiv.classList.add('crit-shake');
+    setTimeout(()=> spriteDiv.classList.remove('crit-shake'), 400);
+  }catch(e){ /* эффект необязателен */ }
+}
 function applyHeal(target, amount){
   target.hp = clamp(target.hp + amount, 0, target.maxHp);
   spawnFloatingNumber(target.id, '+'+amount, 'heal');
   return amount;
 }
-function applyDamage(target, amount){
+function applyDamage(target, amount, critChanceBonus){
   if(target.isEnemy && state.battle && state.battle.counterBonus) amount *= state.battle.counterBonus;
   if(target.armor) amount *= (1 - clamp(target.armor,0,80)/100);
   const defending = target.statuses.find(s=>s.type==='defend');
@@ -1637,10 +1844,23 @@ function applyDamage(target, amount){
     spawnFloatingNumber(target.id, 'Уворот!', 'miss');
     return 0;
   }
+  const critChance = 0.10 + (critChanceBonus||0);
+  const isCrit = Math.random() < critChance;
+  if(isCrit){
+    const critMult = 1.8 - (target.critResist||0);
+    amount *= critMult;
+  }
   amount = Math.max(amount>0?1:0, Math.round(amount));
   target.hp = clamp(target.hp - amount, 0, target.maxHp);
   if(amount>0){ target.statuses = target.statuses.filter(s=>s.type!=='sleep'); }
-  spawnFloatingNumber(target.id, '-'+amount, '');
+  if(isCrit && amount>0){
+    spawnFloatingNumber(target.id, '-'+amount+' КРИТ!', 'crit');
+    triggerCritShake(target.id);
+    sndCrit();
+    logMsg(`💥 Критический удар по ${target.def.name}!`);
+  } else {
+    spawnFloatingNumber(target.id, '-'+amount, '');
+  }
   return amount;
 }
 function maybeApplyStatus(target, type, dur, chance, extra){
@@ -1663,7 +1883,7 @@ function resolveAbility(targetUnit){
 
   if(ab.type==='single'){
     const dmg = ab.dmg + (hero.bonusDmg||0) + (hero.bonusAtk||0);
-    const d = applyDamage(targetUnit, dmg);
+    const d = applyDamage(targetUnit, dmg, hero.critChance);
     hitList.push(targetUnit); anyDamage = true;
     logMsg(`${hero.def.name} применяет «${ab.name}» на ${targetUnit.def.name}: ${d} урона.`);
     if(ab.status){ maybeApplyStatus(targetUnit, ab.status, ab.statusDur); }
@@ -1678,7 +1898,7 @@ function resolveAbility(targetUnit){
   } else if(ab.type==='all_enemies'){
     enemiesAlive().forEach(e=>{
       const dmg = ab.dmg + (hero.bonusDmg||0) + (hero.bonusAtk||0);
-      if(dmg>0){ const d = applyDamage(e, dmg); hitList.push(e); anyDamage=true; logMsg(`«${ab.name}» задевает ${e.def.name}: ${d} урона.`); }
+      if(dmg>0){ const d = applyDamage(e, dmg, hero.critChance); hitList.push(e); anyDamage=true; logMsg(`«${ab.name}» задевает ${e.def.name}: ${d} урона.`); }
       if(ab.status){ maybeApplyStatus(e, ab.status, ab.statusDur, ab.statusChance!==undefined?ab.statusChance:1); }
     });
   } else if(ab.type==='all_enemies_debuff'){
@@ -1697,7 +1917,7 @@ function resolveAbility(targetUnit){
       if(pool.length===0) break;
       const t = pool[rnd(pool.length)];
       const dmg = ab.dmg + (hero.bonusDmg||0) + (hero.bonusAtk||0);
-      const d = applyDamage(t, dmg);
+      const d = applyDamage(t, dmg, hero.critChance);
       hitList.push(t); anyDamage = true;
       logMsg(`${hero.def.name} стреляет в ${t.def.name}: ${d} урона.`);
     }
@@ -1902,6 +2122,7 @@ function persistSquadHp(node){
 }
 function finishBattle(won){
   const node = currentNodes()[state.currentNodeIndex];
+  const enemiesDefeatedCount = state.battle.enemies.filter(e=>e.hp<=0).length;
   persistSquadHp(node);
   const stars = won ? (Math.random()<0.5?3:2) : 0;
   if(won){
@@ -1914,8 +2135,11 @@ function finishBattle(won){
     const xpGain = 10 + (state.regionIndex*3) + (node.enemies.length*2);
     let levelUpNames = [];
     state.battle.allies.forEach(a=>{
-      if(a.hp>0){ if(gainXp(a.id, xpGain)) levelUpNames.push(a.def.name); }
+      if(a.hp>0){ if(gainXp(a.id, xpGain)){ levelUpNames.push(a.def.name); state.stats.levelUps++; } }
     });
+    state.stats.battlesWon++;
+    state.stats.enemiesDefeated += enemiesDefeatedCount;
+    if(node.type==='boss') state.stats.bossesDefeated++;
     $('resultTitle').textContent = node.type==='boss' ? '🏆 Босс повержен!' : 'Победа!';
     $('resultStars').textContent = '⭐'.repeat(stars);
     let rewardsHtml = `+${goldGain} золота · +${woodGain} древесины · +${oreGain} руды · +${dustGain} пыльцы · +${silkGain} шёлка · +${xpGain} опыта`;
@@ -1923,12 +2147,15 @@ function finishBattle(won){
     $('resultRewards').innerHTML = rewardsHtml;
   } else {
     sndDefeat();
+    state.stats.battlesLost++;
+    state.stats.enemiesDefeated += enemiesDefeatedCount;
     $('resultTitle').textContent = 'Поражение...';
     $('resultStars').textContent = '';
     $('resultRewards').textContent = 'Отряд отступает зализывать раны. Загляните в лагерь, чтобы отдохнуть перед новой попыткой.';
   }
   state.battle = null;
   saveGame();
+  checkAchievements();
   showScreen('screen-result');
   $('resultContinueBtn').onclick = ()=>{
     sndUI();
@@ -1998,7 +2225,9 @@ function renderForge(){
       sndUI();
       Object.entries(rec.cost).forEach(([k,v])=> state.resources[k]-=v);
       rec.apply(state.heroStates[forgeSelectedHero]);
+      state.stats.itemsCrafted++;
       renderForge(); saveGame();
+      checkAchievements();
     };
     card.appendChild(btn); list.appendChild(card);
   });
@@ -2010,6 +2239,7 @@ function renderForge(){
     if(bonus.preHeal) parts.push(`+${bonus.preHeal} HP`);
     if(bonus.dodge) parts.push(`+${Math.round(bonus.dodge*100)}% уклон.`);
     if(bonus.rageBonus) parts.push(`+${Math.round(bonus.rageBonus*100)}% ярости`);
+    if(bonus.critChance) parts.push(`+${Math.round(bonus.critChance*100)}% крит. шанс`);
     if(parts.length){
       const chip = document.createElement('div'); chip.className='res-chip';
       chip.textContent = `${HERO_DEFS[id].name}: ${parts.join(', ')}`;
