@@ -49,7 +49,7 @@
             'background:#000;border:1px solid #500;padding:10px;text-align:left;white-space:pre-wrap;">' +
             detail + '</pre>' +
           '<div style="font-size:11px;color:#8cf;max-width:640px;">' +
-            'Please screenshot this and send it — it tells us exactly what broke.' +
+            'Please screenshot this AND send byte-blaster-log.txt (next to the game .exe) — together they tell us exactly what broke.' +
           '</div>' +
           '<button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#204;' +
             'color:#fff;border:2px solid #f4a;cursor:pointer;font-family:monospace;font-size:12px;">RELOAD</button>';
@@ -58,20 +58,29 @@
     }
     window.addEventListener('error', function (e) {
       console.error('[fatal]', e.message, e.filename, e.lineno + ':' + e.colno, e.error && e.error.stack);
-      showFatalError(
-        'A script error occurred while the game was loading or running.',
-        (e.message || 'Unknown error') + '\n' + (e.filename || '') + ':' + e.lineno + ':' + e.colno +
-        (e.error && e.error.stack ? '\n\n' + e.error.stack : '')
-      );
+      var detail = (e.message || 'Unknown error') + '\n' + (e.filename || '') + ':' + e.lineno + ':' + e.colno +
+        (e.error && e.error.stack ? '\n\n' + e.error.stack : '');
+      try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[fatal error] ' + detail); } catch (e3) {}
+      showFatalError('A script error occurred while the game was loading or running.', detail);
     });
     window.addEventListener('unhandledrejection', function (e) {
       console.error('[fatal] unhandled promise rejection:', e.reason);
-      showFatalError(
-        'An async operation failed while the game was loading or running.',
-        String(e.reason && e.reason.stack ? e.reason.stack : e.reason)
-      );
+      var detail = String(e.reason && e.reason.stack ? e.reason.stack : e.reason);
+      try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[fatal rejection] ' + detail); } catch (e3) {}
+      showFatalError('An async operation failed while the game was loading or running.', detail);
     });
   })();
+  // ── Boot checkpoints ────────────────────────────────────────────────────
+  // The renderer crashes NATIVELY (access violation) ~1s into startup, which
+  // is invisible to error handlers — but a checkpoint call made just BEFORE
+  // the crash still reaches the log file (it's synchronous IPC), so the LAST
+  // line in byte-blaster-log.txt pinpoints exactly which script/stage never
+  // finished. Placed after each <script> tag further down this file.
+  window.__chk = function (label) {
+    try { console.log('[checkpoint]', label); } catch (e) {}
+    try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[checkpoint] ' + label); } catch (e) {}
+  };
+  window.__chk('inline error-handler script done');
 </script>
 </head>
 <body>
@@ -257,14 +266,23 @@
 </div>
 
 <script src="assets/audiofiles.js"></script>
+<script>window.__chk('after audiofiles.js');</script>
 <script src="assets/game.js"></script>
+<script>window.__chk('after game.js');</script>
 <script src="assets/i18n-new.js"></script>
+<script>window.__chk('after i18n-new.js');</script>
 <script src="assets/settings.js"></script>
+<script>window.__chk('after settings.js');</script>
 <script src="assets/worldmap.js"></script>
+<script>window.__chk('after worldmap.js');</script>
 <script src="assets/achievements.js"></script>
+<script>window.__chk('after achievements.js');</script>
 <script src="assets/saveslots.js"></script>
+<script>window.__chk('after saveslots.js');</script>
 <script src="assets/bugfixes.js"></script>
+<script>window.__chk('after bugfixes.js');</script>
 <script src="assets/cinematics.js"></script>
+<script>window.__chk('after cinematics.js');</script>
 
 <!-- ══════════════════════════════════════════════════════════════
      BYTE BLASTER — NETWORK MULTIPLAYER MODULE
@@ -404,9 +422,11 @@
 </div><!-- /#stage -->
 
 <script src="assets/network.js"></script>
+<script>window.__chk('after network.js');</script>
 
 <!-- Touch / mobile virtual gamepad (phones & tablets, web + Android build) -->
 <script src="assets/touch.js"></script>
+<script>window.__chk('after touch.js');</script>
 
 <!-- Stamp the build version into the main-menu corner tag. -->
 <script>
@@ -429,6 +449,7 @@
 
   function step(label) {
     done++;
+    if (window.__chk) window.__chk('boot step ' + done + '/' + total + (label ? ' (' + label + ')' : ''));
     if (bar) bar.style.width = Math.min(100, Math.round(done / total * 100)) + '%';
     if (msg && label) msg.textContent = label;
     if (done >= total) finish();
@@ -436,10 +457,14 @@
   function finish() {
     if (hidden) return;
     hidden = true;
+    if (window.__chk) window.__chk('boot finish() — hiding boot screen, starting menu/game');
     if (bar) bar.style.width = '100%';
     if (msg) msg.textContent = 'READY';
     boot.style.opacity = '0';
-    setTimeout(function () { if (boot && boot.parentNode) boot.parentNode.removeChild(boot); }, 500);
+    setTimeout(function () {
+      if (boot && boot.parentNode) boot.parentNode.removeChild(boot);
+      if (window.__chk) window.__chk('boot screen removed from DOM — menu should now be the visible paint');
+    }, 500);
   }
 
   // 1) All page resources loaded.

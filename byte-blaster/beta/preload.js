@@ -91,6 +91,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Quit the app (Exit button).
   quit: () => ipcRenderer.invoke('app:quit'),
 
+  // Forward a renderer-side error/message into the main process's file log
+  // (see main.js's `log()`) so a fatal renderer error ends up in the SAME
+  // byte-blaster-log.txt as startup/window events — one file to check, not
+  // "open DevTools AND find the log file".
+  // Synchronous on purpose: this is used for crash-diagnosis checkpoints, so
+  // it must be guaranteed to reach the main process (and get flushed to the
+  // log file) BEFORE the very next line of renderer code runs — an async
+  // send() could still be in flight if that next line is what crashes.
+  log: (msg) => ipcRenderer.sendSync('renderer-log', msg),
+
   // Relaunch the app (apply a startup-only setting like V-Sync immediately).
   relaunch: () => ipcRenderer.invoke('app:relaunch'),
 
