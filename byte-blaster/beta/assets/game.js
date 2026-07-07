@@ -57,7 +57,7 @@
 // to them is mirrored back into the active slot blob (bbSlot0/1/2). This runs
 // before loadAdv()/loadAdvH()/loadRecords() so the active slot is authoritative.
 (function(){
-  const CANON={progress:'bbAdv3',progressHardcore:'bbAdvH',achievements:'bbAchievements',achievementStats:'bbAchStats',records:'bbRecords',cutscenes:'bbCsFired',csWorlds:'bbCsWorlds'};
+  const CANON={progress:'bbAdv3',progressHardcore:'bbAdvH',achievements:'bbAchievements',achievementStats:'bbAchStats',records:'bbRecords',cutscenes:'bbCsFired',csWorlds:'bbCsWorlds',rainbow:'bbRainbow'};
   const CANON_KEYS=new Set(Object.values(CANON));
   const slotKey=i=>'bbSlot'+i;
   let _muting=false; // suppress snapshotting while we write canonical FROM a slot
@@ -82,6 +82,7 @@
     try{if(typeof loadAdvH==='function')loadAdvH();}catch(e){}
     try{if(typeof loadRecords==='function')loadRecords();}catch(e){}
     try{if(typeof loadCsFired==='function')loadCsFired();}catch(e){}
+    try{if(typeof loadRainbow==='function')loadRainbow();}catch(e){}
     try{if(window.Achievements&&window.Achievements.reload)window.Achievements.reload();}catch(e){}
     try{if(window.WorldMap&&window.WorldMap.refresh)window.WorldMap.refresh();}catch(e){}
   }
@@ -129,6 +130,7 @@
 })();
 
 const CV=document.getElementById('c'),ctx=CV.getContext('2d'),W=800,H=420;
+if(window.__chk)window.__chk('game.js: main canvas context created, CV='+(CV?'found':'MISSING'));
 const G=0.46,JV=-11.0,MXY=17,PSP=4.4,BSP=9,EBS=3.2;
 
 // ── HiDPI / crisp rendering ─────────────────────────────────────────────────
@@ -314,6 +316,12 @@ const THEMES=[
   {id:9,name:'FINAL FORTRESS',icon:'🔱',range:'91–100', mc:'#f44',
    bg:'#0c0000',bg2:'#180000',grid:'#f22',grd:['#280808','#140404'],gE:'#f44',
    pN:['#200808','#3c1010','#f44'],pM:['#241000','#401800','#f84'],pC:['#1c0414','#340824','#f0c'],clr:'#ff4444'},
+  // Secret 11th world — unlocked only after all 10 Rainbow Shards are found
+  // (see rainbowCount() in this file / WorldMap's gate). A corrupted fragment
+  // of GRID that ARCHON tried to erase rather than delete outright.
+  {id:10,name:'PRISM ANOMALY',icon:'🌈',range:'101–110',mc:'#f0f',
+   bg:'#0a0018',bg2:'#140028',grid:'#f0f',grd:['#2a0840','#180430'],gE:'#f8f',
+   pN:['#200840','#3c1060','#f0f'],pM:['#402008','#602c10','#ff8'],pC:['#083030','#105050','#0ff'],clr:'#ff44ff'},
 ];
 let CT=THEMES[0];
 
@@ -811,6 +819,12 @@ const EC={
   sp_spiker: {w:28,h:28,spd:1.2,hp:1,col:'#8844cc',glow:'#b0f',moveType:'spiked', score:150},
   tx_splitter:{w:30,h:30,spd:0.9,hp:2,col:'#557700',glow:'#cf0',moveType:'split',  score:180},
   ff_armored:{w:36,h:36,spd:0.7,hp:4,col:'#440000',glow:'#f44',moveType:'armored',score:300},
+  // ── World 10 PRISM ANOMALY (secret) ─────────────
+  pr_shard:  {w:26,h:28,spd:1.5,hp:2,col:'#cc22cc',glow:'#f0f',moveType:'walk',  score:200},
+  pr_guard:  {w:34,h:34,spd:0.7,hp:3,col:'#2266cc',glow:'#0ff',moveType:'shield',score:300},
+  pr_wisp:   {w:24,h:24,spd:1.9,hp:1,col:'#ffcc22',glow:'#ff8',moveType:'orbit', score:180},
+  pr_beam:   {w:24,h:30,spd:0.3,hp:2,col:'#22cc88',glow:'#8f8',moveType:'shoot', score:220},
+  pr_glitch: {w:28,h:28,spd:1.3,hp:2,col:'#cc2266',glow:'#f4c',moveType:'charge',score:250},
 };
 
 // 5-enemy pools per world [walk1, tank, flier, shooter, special]
@@ -825,9 +839,10 @@ const WORLD_POOLS=[
   ['tx_slug',  'tx_blob',  'tx_fly',    'tx_venom',  'tx_mutant' ], // 7 Toxic Zone
   ['st_gust',  'st_titan', 'st_bolt',   'st_rod',    'st_cyclone'], // 8 Storm Peaks
   ['ff_guard', 'ff_demon', 'ff_eye',    'ff_sentinel','ff_wraith' ], // 9 Final Fortress
+  ['pr_shard', 'pr_guard', 'pr_wisp',   'pr_beam',   'pr_glitch' ], // 10 Prism Anomaly (secret)
 ];
 
-function worldIdx(n){return Math.min(Math.floor(((n||1)-1)/10),9);}
+function worldIdx(n){return Math.min(Math.floor(((n||1)-1)/10),10);}
 function ePool(n){
   const wi=worldIdx(n),pool=WORLD_POOLS[wi];
   const lv=(n-1)%10+1; // 1-10 within world
@@ -904,6 +919,20 @@ let hazards=[];            // Hazards: spikes, lasers, etc.
 //    generator, updater and renderer all share the same top-level bindings. ──
 let dataShards=[];         // collectible secret data-shards (mechanic 7)
 let dataShardsTotal=0,dataShardsGot=0,shardBonusGiven=false;
+// ── Rainbow Shards (secret collectible: 1 per world, 10 total) ─────────────
+// Collecting all 10 unlocks the secret 11th world (see WorldMap / THEMES[10]).
+// Fixed per-world level (1-9, never the boss level) so it's the same level on
+// every replay, not re-randomized each attempt — still feels "hidden" since
+// the player has no way to know which level ahead of time.
+const RAINBOW_LEVEL_IN_WORLD=[4,7,2,8,5,1,9,3,6,2];
+let rainbowItem=null;            // the current level's rainbow shard entity, or null
+let rainbowCollected={};         // {worldIndex: true} — persisted, see loadRainbow()/markRainbowCollected()
+function loadRainbow(){
+  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=s?JSON.parse(s):{};}catch(e){rainbowCollected={};}
+}
+function saveRainbow(){try{localStorage.setItem('bbRainbow',JSON.stringify(rainbowCollected));}catch(e){}}
+function rainbowCount(){return Object.keys(rainbowCollected).filter(k=>rainbowCollected[k]).length;}
+function markRainbowCollected(worldIdx){rainbowCollected[worldIdx]=true;saveRainbow();}
 let jumpPads=[];           // Jump pads
 let conveyors=[];          // Conveyor belts
 let buttons=[];            // Buttons
@@ -1075,7 +1104,7 @@ function loadRecords(){
 }
 function saveRecords(){try{localStorage.setItem('bbRecords',JSON.stringify(bestRecords));}catch(e){}}
 function recordScore(mode,sc){sc=sc|0;if(mode!=='infinite'&&mode!=='adventure')return;if(sc>(bestRecords[mode]||0)){bestRecords[mode]=sc;saveRecords();}}
-loadAdv();loadAdvH();loadRecords();loadCsFired();
+loadAdv();loadAdvH();loadRecords();loadCsFired();loadRainbow();
 
 // ════════════════════════════════════════════════
 //  PARTICLES
@@ -1084,6 +1113,10 @@ loadAdv();loadAdvH();loadRecords();loadCsFired();
 // Engine fallback cap (used when settings haven't loaded yet). Settings.js sets
 // window.GFX_MAX_PARTICLES based on graphics quality; we read it dynamically.
 const MAX_PARTICLES = 80;
+// Boss levels: fixed camera advance speed (px/frame @ 60fps) — see resolveP()
+// and update()'s camera block. ~1.0 covers a typical corridor+arena in well
+// under a minute, leaving plenty of time to fight without feeling rushed.
+const BOSS_CAM_SPEED = 1.0;
 function _maxP(){ return window.GFX_MAX_PARTICLES || MAX_PARTICLES; }
 // ── Particle object pool ─────────────────────────────────────────────────────
 // `particles` used to grow via push() and shrink via splice() in updateParticles,
@@ -1151,6 +1184,10 @@ function hurtHit(p,e){
 function resolveP(p){
   p.onGnd=false;
   p.x+=p.vx;if(!exitAnim)p.x=Math.max(0,Math.min(p.x,worldW-p.w));
+  // Boss auto-scroll camera: once it's moving (or has stopped at the arena's
+  // far edge), its right edge is a hard wall — the player can keep up with it
+  // but never push past what's already on screen.
+  if(boss)p.x=Math.min(p.x,camX+W-p.w);
   for(const b of blocks){
     if(!b.solid)continue;
     if(aabb(p,b)){if(p.vx>=0)p.x=b.x-p.w;else p.x=b.x+b.w;p.vx=0;}
@@ -1281,7 +1318,7 @@ function genLevel(diff,rng,advN){
   pBullets=[];eBullets=[];powerups=[];_initParticlePool();decors=[];fireBalls=[];iceBalls=[];checkpoints=[];flagDone=false;exitAnim=false;exitTimer=0;
   _decorCacheInvalidate();
   hazards=[];jumpPads=[];conveyors=[];buttons=[];doors=[];spotlights=[];mazeKeys=[];mazeKeysCollected=0;
-  dataShards=[];dataShardsTotal=0;dataShardsGot=0;shardBonusGiven=false;
+  dataShards=[];dataShardsTotal=0;dataShardsGot=0;shardBonusGiven=false;rainbowItem=null;
   _cpSafeZone=null;
   player2=null; // will be recreated after genLevel if twoPlayer
   const GY=H-40,BS=28,PLH=14;
@@ -1455,7 +1492,7 @@ function genLevel(diff,rng,advN){
   camX=0;
 
   if(isBossLevel(advN||level)){
-    const worldId=Math.min(Math.floor(((advN||level)-1)/10),9);
+    const worldId=Math.min(Math.floor(((advN||level)-1)/10),10);
     const cfg=BOSS_CFG[worldId];
     // Corridor: open run-up → boss arena (no physical gate pillars — visual gate drawn by drawBossApproach)
     const corrStart=worldW;
@@ -2455,6 +2492,12 @@ const BOSS_CFG=[
   {name:'ARCHON',hint:'PHASE 1: SHOOT  |  PHASE 2: STOMP WHEN EYE IS LOW  |  PHASE 3: BOTH',
    w:110,h:80,hp:9,mhp:9,col:'#400010',glow:'#f44',
    weaknessType:'archon',arenaW:580},
+
+  // 10: PRISM WRAITH (secret Prism Anomaly, lvl 110) — only reachable after
+  // finding all 10 Rainbow Shards. A corrupted GRID fragment given form.
+  {name:'PRISM WRAITH',hint:'SHOOT THE CORE — it has nothing left to hide behind!',
+   w:70,h:78,hp:12,mhp:12,col:'#2a0840',glow:'#f0f',
+   weaknessType:'bullet',arenaW:540},
 ];
 
 function spawnBoss(worldId, arenaCenter){
@@ -2900,7 +2943,8 @@ function drawBoss(){
   ctx.shadowBlur=0;
 
   // ── Bodies per boss ──────────────────────────
-  if(id==='stomp'){           _drawGuardian(b,bx,by);}
+  if(b.worldId===10){        _drawPrismWraith(b,bx,by);}
+  else if(id==='stomp'){           _drawGuardian(b,bx,by);}
   else if(id==='bullet'){     _drawVineQueen(b,bx,by);}
   else if(id==='window'){     _drawInferno(b,bx,by);}
   else if(id==='phaseStamp'){ _drawIcePhantom(b,bx,by);}
@@ -3221,6 +3265,53 @@ function _drawArchon(b,bx,by){
   ctx.shadowBlur=4;
 }
 
+// PRISM WRAITH — secret 11th-world boss. A "glitched" humanoid silhouette made
+// of shifting rainbow shards, like a corrupted render of a person GRID never
+// finished deleting.
+function _drawPrismWraith(b,bx,by){
+  const cx=bx+b.w/2,cy=by+b.h/2;
+  const hue=(tick*4)%360;
+
+  // Outer prismatic aura
+  const aura=ctx.createRadialGradient(cx,cy,b.h*0.3,cx,cy,b.h*1.1);
+  aura.addColorStop(0,`hsla(${hue},100%,60%,0.35)`);aura.addColorStop(1,'transparent');
+  ctx.fillStyle=aura;ctx.fillRect(bx-b.w*0.6,by-b.h*0.6,b.w*2.2,b.h*2.2);
+
+  // Body: a tall wavering silhouette built from stacked, slightly offset
+  // "glitch" bands — each band a different hue, each with its own tiny jitter.
+  const bands=8;
+  for(let i=0;i<bands;i++){
+    const t=i/bands;
+    const bw=b.w*(0.55+0.35*Math.sin(t*Math.PI));
+    const bh=b.h/bands+2;
+    const by2=by+i*(b.h/bands);
+    const jitter=(Math.sin(b.anim*0.15+i*1.7)*4)*(b.flash>0?2.5:1);
+    ctx.fillStyle=`hsla(${(hue+i*22)%360},100%,60%,0.82)`;
+    ctx.fillRect(cx-bw/2+jitter,by2,bw,bh);
+  }
+
+  // Core — the actual damageable "face", a bright white-hot diamond that
+  // never glitches, so the player always has a clear aim point.
+  const coreY=cy-4+Math.sin(b.anim*0.06)*4;
+  ctx.save();
+  ctx.translate(cx,coreY);ctx.rotate(Math.PI/4+Math.sin(b.anim*0.02)*0.15);
+  const cs=14+Math.sin(b.anim*0.2)*2;
+  ctx.fillStyle=b.flash>0?'#fff':`hsl(${(hue+180)%360},100%,80%)`;
+  ctx.shadowColor='#fff';ctx.shadowBlur=10;
+  ctx.fillRect(-cs/2,-cs/2,cs,cs);
+  ctx.restore();
+  ctx.shadowBlur=0;
+
+  // Fragmenting edges — a few detached shard rectangles drifting off the
+  // silhouette, reinforcing the "still rendering / corrupted" read.
+  for(let i=0;i<5;i++){
+    const a=b.anim*0.02+i*1.3;
+    const dx=Math.cos(a)*(b.w*0.7+i*6),dy=Math.sin(a*0.7)*(b.h*0.4);
+    ctx.fillStyle=`hsla(${(hue+i*40)%360},100%,65%,0.55)`;
+    ctx.fillRect(cx+dx-4,cy+dy-4,8,8);
+  }
+}
+
 // ── Boss HUD ───────────────────────────────────
 function drawBossHUD(){
   if(!boss||!boss.alive)return;
@@ -3323,7 +3414,7 @@ window.refreshDynamicUI=function(){
 //   'defeat' — battered, sparking, waving a little white surrender flag (game over)
 // The loop self-terminates whenever the main overlay is hidden, so it costs
 // nothing during play.
-let _menuBotRAF=0, _menuBotMode='idle';
+let _menuBotRAF=0, _menuBotMode='idle', _menuBotSkip=false;
 function setMenuBotMode(m){ _menuBotMode=m||'idle'; }
 
 // Draw the robot body in a local 24×32 space (origin top-left, feet at y=32).
@@ -3332,7 +3423,11 @@ function _botBody(c,t,dmg){
   const blue =dmg?'#243a55':'#003a88', blue2=dmg?'#2f5170':'#0060aa';
   const dark =dmg?'#101a2a':'#00276a', foot =dmg?'#33506e':'#0055bb';
   const glow =dmg?'#557':'#00ccee';
-  c.shadowBlur=dmg?4:10;c.shadowColor=dmg?'#446':'#00ccff';
+  // Ambient body glow via sprite-based bloom() instead of ctx.shadowBlur — see
+  // _menuBotTick's comment: shadowBlur + rotate/scale, run every frame forever
+  // while the menu is open, is a fragile combination on some software render
+  // paths. bloom() itself no-ops cleanly if GFX.glow is 0.
+  if(typeof bloom==='function')bloom(12,16,20,dmg?'#446':'#00ccff',dmg?0.35:0.55);
   // Legs / feet
   c.fillStyle=dark;c.fillRect(2,17,9,15);c.fillRect(13,17,9,15);
   c.fillStyle=foot;c.fillRect(1,29,11,5);c.fillRect(12,29,11,5);
@@ -3341,7 +3436,6 @@ function _botBody(c,t,dmg){
   c.fillStyle=blue2;c.fillRect(5,12,14,7);
   // Head
   c.fillStyle=dmg?'#33486a':'#003e88';c.fillRect(3,0,18,16);
-  c.shadowBlur=0;
   // Visor + eyes (blink in idle)
   c.fillStyle=glow;c.fillRect(5,3,14,8);
   const blink=(!dmg && (t%3.4)>3.2);            // brief blink every ~3.4s
@@ -3362,6 +3456,26 @@ function _botBody(c,t,dmg){
 }
 
 function _menuBotTick(){
+  if(window.__chk){
+    window.__menuBotFrames=(window.__menuBotFrames||0)+1;
+    if(window.__menuBotFrames%30===0){
+      window.__chk('_menuBotTick frame '+window.__menuBotFrames);
+      // Confirm (or rule out) a memory leak with real numbers instead of guessing.
+      try{
+        if(performance.memory){
+          window.__chk('  heap: '+Math.round(performance.memory.usedJSHeapSize/1048576)+'MB / '+Math.round(performance.memory.totalJSHeapSize/1048576)+'MB');
+        }
+      }catch(e){}
+    }
+  }
+  // Decorative idle animation only — doesn't need full display refresh rate.
+  // Running it continuously at 60fps forever (this loop never stops while the
+  // main menu is open) puts sustained pressure on software/SwiftShader
+  // rendering that appears to exhaust the GPU process over time on some
+  // systems. Halving it to ~30fps looks just as smooth for a slow idle sway
+  // and roughly halves that sustained cost.
+  _menuBotSkip=!_menuBotSkip;
+  if(_menuBotSkip){_menuBotRAF=requestAnimationFrame(_menuBotTick);return;}
   const cv=document.getElementById('menuBot');
   if(!cv||!$main||$main.style.display==='none'){_menuBotRAF=0;return;}
   const c=cv.getContext('2d'),w=cv.width,h=cv.height;
@@ -3379,9 +3493,13 @@ function _menuBotTick(){
   const topLocal=defeat?-27:-7;                  // highest local-y the art reaches
   const S=Math.min(w/26,(baseY-topMargin)/(32-topLocal));
   const padY=baseY+Math.round(4*S);              // glow pad just under the feet
-  // Soft neon ground pad (red-tinted + weaker when defeated)
+  // Soft neon ground pad (red-tinted + weaker when defeated).
+  // Uses bloom() (sprite-based glow, see boss/player) instead of native
+  // ctx.shadowBlur — shadowBlur combined with rotate/scale run continuously in
+  // a loop is a known-fragile combination on some software/SwiftShader
+  // rendering paths (this loop runs forever while the main menu is open).
   c.save();c.globalAlpha=defeat?.3:.5;c.fillStyle=defeat?'#f55':'#0ff';
-  c.shadowColor=defeat?'#f55':'#0ff';c.shadowBlur=defeat?12:22;
+  bloom(w/2,padY,14*S,defeat?'#f55':'#0ff',defeat?0.35:0.55);
   c.beginPath();c.ellipse(w/2,padY,12*S,2.5*S,0,0,Math.PI*2);c.fill();c.restore();
 
   if(defeat){
@@ -3396,8 +3514,11 @@ function _menuBotTick(){
       c.beginPath();c.arc(px,py,pr,0,Math.PI*2);c.fill();
     }
     // Occasional spark flicker on the shoulder
-    if(Math.sin(t*9)>0.6){c.globalAlpha=1;c.fillStyle='#ffcf4a';c.shadowColor='#fa0';c.shadowBlur=8;
-      c.beginPath();c.arc(w/2+9*S,baseY-20*S,1.8,0,Math.PI*2);c.fill();}
+    if(Math.sin(t*9)>0.6){
+      c.globalAlpha=1;c.fillStyle='#ffcf4a';
+      bloom(w/2+9*S,baseY-20*S,7,'#fa0',0.7);
+      c.beginPath();c.arc(w/2+9*S,baseY-20*S,1.8,0,Math.PI*2);c.fill();
+    }
     c.restore();
     const slump=Math.sin(t*1.5)*0.5;             // subtle weary sway (degrees-ish)
     c.save();
@@ -3414,8 +3535,9 @@ function _menuBotTick(){
     c.fillStyle='#1a2740';c.fillRect(0,-3,11,6);  // forearm
     // Flag pole
     c.fillStyle='#caa';c.fillRect(11,-28,2,30);
-    // White flag cloth (waving)
-    c.fillStyle='#f6f6fc';c.shadowColor='#fff';c.shadowBlur=7;
+    // White flag cloth (waving) — glow via bloom() drawn before the shape
+    // (bloom() itself doesn't touch fillStyle/shadow state, safe to call here)
+    c.fillStyle='#f6f6fc';
     c.beginPath();
     c.moveTo(13,-28);
     c.lineTo(13+15,-26.5+Math.sin(t*7)*1.8);
@@ -3432,7 +3554,7 @@ function _menuBotTick(){
     c.scale(S,S);c.translate(-12,-32);
     _botBody(c,t,0);
     // Left arm rests
-    c.shadowBlur=0;c.fillStyle='#002a66';c.fillRect(-4,11,7,11);
+    c.fillStyle='#002a66';c.fillRect(-4,11,7,11);
     // Right arm waves hello
     const wv=Math.sin(t*5)*0.6;
     c.save();
@@ -6004,6 +6126,7 @@ function drawHazards(){
 // ════════════════════════════════════════════════════════════════════════
 const SHARD_VALUE=75;        // score per secret data-shard
 const ALL_SHARDS_BONUS=300;  // bonus for collecting every shard in a level
+const RAINBOW_SHARD_VALUE=500; // score for the secret rainbow shard (1-per-world, 10 total)
 // Per-world thematic hazard (mechanic 10). Worlds without an entry rely on the
 // universal saw/pendulum hazards. world: 2=Lava 3=Ice 7=Toxic 8=Storm.
 const WORLD_HAZARD={2:'geyser',3:'icicle',7:'toxin',8:'lightning'};
@@ -6107,6 +6230,29 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
   }
   dataShardsTotal=dataShards.length;
 
+  // —— Secret Rainbow Shard: exactly one hidden level per world (see
+  // RAINBOW_LEVEL_IN_WORLD). Collecting all 10 across the campaign unlocks
+  // the secret 11th world — see WorldMap's rainbowCount() gate.
+  {
+    const _advN=lvl||0;
+    const _worldIdx=Math.floor((_advN-1)/10);
+    const _levelInWorld=_advN-_worldIdx*10;
+    if(_advN>0&&_worldIdx>=0&&_worldIdx<RAINBOW_LEVEL_IN_WORLD.length
+       &&_levelInWorld===RAINBOW_LEVEL_IN_WORLD[_worldIdx]&&!rainbowCollected[_worldIdx]){
+      // Reuse a leftover shard spot if one's free, otherwise float it above a
+      // random ground node — either way it never overlaps the 3 regular shards.
+      let rs=spots[want];
+      if(!rs){
+        const gn=groundNodes.length?groundNodes:nodes.filter(n=>n.kind==='ground');
+        if(gn.length){const n=gn[Math.floor(rng()*gn.length)];rs={x:Math.round(n.x+n.w*0.5-9),y:Math.max(40,n.y-170-rng()*30)};}
+      }
+      if(rs){
+        if(rs.y<6)rs.y=6;
+        rainbowItem={worldIdx:_worldIdx,x:rs.x,y:rs.y,w:18,h:18,got:false,phase:rng()*Math.PI*2};
+      }
+    }
+  }
+
   // —— Mechanic 7b: a hidden bonus room (coins + power-up on a secret ledge) —
   if(groundNodes.length){
     const host=groundNodes[Math.floor(rng()*groundNodes.length)];
@@ -6201,6 +6347,28 @@ function updateDataShards(){
       }
       break;
     }
+  }
+}
+function updateRainbowItem(){
+  if(!rainbowItem||rainbowItem.got)return;
+  rainbowItem.phase+=0.05;
+  const ps=(typeof activePlayers==='function')?activePlayers():(player?[player]:[]);
+  for(const p of ps){
+    if(!p||!aabb(p,rainbowItem))continue;
+    rainbowItem.got=true;
+    markRainbowCollected(rainbowItem.worldIdx);
+    score+=RAINBOW_SHARD_VALUE;
+    if(typeof SFX!=='undefined'&&SFX.achievement)SFX.achievement();
+    const n=rainbowCount();
+    floatTxt(rainbowItem.x+rainbowItem.w/2,rainbowItem.y-6,T('rainbowGot',n),'#fff');
+    burst(rainbowItem.x+rainbowItem.w/2,rainbowItem.y+rainbowItem.h/2,'#fff',26,4.5,5);
+    camShake=Math.max(camShake,10);
+    if(n>=10){
+      // The 10th shard — announce the secret world unlocking right here, since
+      // the player won't see the map again until they exit the level.
+      floatTxt(rainbowItem.x+rainbowItem.w/2,rainbowItem.y-26,T('rainbowAllFound'),'#f0f');
+    }
+    break;
   }
 }
 
@@ -6309,6 +6477,27 @@ function drawDataShards(){
     ctx.moveTo(0,-s);ctx.lineTo(0,s);ctx.moveTo(-s*0.7,0);ctx.lineTo(s*0.7,0);ctx.stroke();
     ctx.restore();
   }
+}
+function drawRainbowItem(){
+  if(!rainbowItem||rainbowItem.got)return;
+  const c=rainbowItem;
+  if(c.x+c.w<camX-40||c.x>camX+W+40)return;
+  const cx=c.x+c.w/2,cy=c.y+c.h/2+Math.sin(c.phase)*4;
+  const hue=(tick*3)%360;
+  ctx.save();
+  if(GFX.glow>0){ctx.globalCompositeOperation='lighter';bloom(cx,cy,c.w*2.2,`hsl(${hue},100%,60%)`,0.6);ctx.globalCompositeOperation='source-over';}
+  ctx.translate(cx,cy);ctx.rotate(c.phase*0.7);
+  const s=c.w/2;
+  const g=ctx.createLinearGradient(-s,-s,s,s);
+  g.addColorStop(0,`hsl(${hue},100%,75%)`);
+  g.addColorStop(0.5,`hsl(${(hue+90)%360},100%,60%)`);
+  g.addColorStop(1,`hsl(${(hue+180)%360},100%,55%)`);
+  ctx.fillStyle=g;ctx.beginPath();
+  ctx.moveTo(0,-s);ctx.lineTo(s*0.75,-s*0.2);ctx.lineTo(s*0.5,s);ctx.lineTo(-s*0.5,s);ctx.lineTo(-s*0.75,-s*0.2);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.stroke();
+  ctx.restore();
+  // A faint upward sparkle trail so it reads as special from a distance.
+  if(tick%6===0)burst(cx,cy,`hsl(${hue},100%,70%)`,1,0.6,1.5);
 }
 function drawMazeKeys(){
   const vLeft=camX-40,vRight=camX+W+40;
@@ -7721,6 +7910,61 @@ ctx.fillStyle='#220006';ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(0,-e.h*.5);c
 ctx.fillStyle='#ff0055';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(-6,-e.h*.15,4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(6,-e.h*.15,4,0,Math.PI*2);ctx.fill();// Zigzag energy trail
 ctx.strokeStyle='#f0a';ctx.lineWidth=2;ctx.shadowBlur=0;ctx.beginPath();for(let zi=0;zi<5;zi++){const zx=-e.w*.3+zi*e.w*.15+Math.sin(e.a+zi*1.5)*6;const zy=e.h*.3+zi*5;if(zi===0)ctx.moveTo(zx,zy);else ctx.lineTo(zx,zy);}ctx.stroke();ctx.globalAlpha=1;ctx.restore();}
 
+function d_pr_shard(e){
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);
+  const hue=(tick*5+e.x)%360;
+  const glitch=Math.sin(e.a*0.5)*2;
+  ctx.fillStyle=`hsl(${hue},90%,55%)`;ctx.fillRect(-e.w/2+glitch,-e.h/2,e.w,e.h);
+  ctx.fillStyle=`hsl(${(hue+120)%360},90%,65%)`;ctx.fillRect(-e.w/2-glitch,-e.h*0.15,e.w,e.h*0.3);
+  ctx.fillStyle='#fff';ctx.shadowBlur=0;ctx.fillRect(-4,-e.h*0.1,3,3);ctx.fillRect(3,-e.h*0.1,3,3);
+  ctx.restore();
+}
+function d_pr_guard(e){
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);
+  const hue=(tick*3)%360;
+  ctx.fillStyle=`hsl(${hue},70%,35%)`;ctx.fillRect(-e.w/2,-e.h/2,e.w,e.h);
+  ctx.fillStyle=`hsl(${(hue+60)%360},90%,60%)`;ctx.fillRect(-e.w/2+4,-e.h/2+4,e.w-8,e.h-8);
+  ctx.fillStyle='#fff';ctx.shadowBlur=0;ctx.fillRect(-6,-4,4,4);ctx.fillRect(2,-4,4,4);
+  _shieldRing(e,`hsl(${(hue+180)%360},100%,65%)`);
+  ctx.restore();
+}
+function d_pr_wisp(e){
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);
+  const hue=(tick*8+e.a*40)%360;
+  ctx.globalAlpha=0.85;ctx.fillStyle=`hsl(${hue},100%,65%)`;ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(0,0,e.w/2,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(0,0,e.w/5,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+function d_pr_beam(e){
+  const f=(nearestPlayer(e.x).x>e.x)?1:-1;
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);
+  const hue=(tick*4)%360;
+  ctx.fillStyle=`hsl(${hue},80%,30%)`;ctx.fillRect(3,0,e.w-6,e.h);
+  ctx.fillStyle=`hsl(${(hue+90)%360},90%,55%)`;ctx.fillRect(5,3,e.w-10,e.h*.5);
+  ctx.fillStyle='#fff';ctx.shadowBlur=0;ctx.fillRect(5,5,5,4);ctx.fillRect(e.w-10,5,5,4);
+  if(e.sCD<35){
+    ctx.globalAlpha=.5*(1-e.sCD/35);ctx.strokeStyle=`hsl(${(hue+180)%360},100%,70%)`;ctx.lineWidth=1;
+    ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(e.w+2,e.h*.43);ctx.lineTo(e.w+70,e.h*.43);ctx.stroke();
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+function d_pr_glitch(e){
+  const f=e.vx>=0?1:-1;
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);
+  const hue=(tick*6)%360;
+  const lk=e.onGnd?Math.sin(e.a*3)*3:0;
+  ctx.fillStyle=`hsl(${hue},80%,40%)`;ctx.fillRect(2,e.h-14,9,14+lk);ctx.fillRect(e.w-11,e.h-14,9,14-lk);
+  ctx.fillStyle=`hsl(${(hue+40)%360},90%,55%)`;ctx.fillRect(3,e.h-22,e.w-6,10);
+  ctx.fillStyle=`hsl(${(hue+80)%360},95%,65%)`;ctx.shadowBlur=0;ctx.fillRect(4,0,e.w-8,14);
+  if(e.charging){
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(e.w,e.h/2);ctx.lineTo(e.w+12,e.h/2-6);ctx.lineTo(e.w+12,e.h/2+6);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();
+}
+
 const DRAW_E={
   cy_glitch:d_cy_glitch,cy_tank:d_cy_tank,cy_probe:d_cy_probe,cy_sniper:d_cy_sniper,cy_rusher:d_cy_rusher,
   jg_vine:d_jg_vine,jg_beast:d_jg_beast,jg_spore:d_jg_spore,jg_pitcher:d_jg_pitcher,jg_creeper:d_jg_creeper,
@@ -7732,6 +7976,7 @@ const DRAW_E={
   tx_slug:d_tx_slug,tx_blob:d_tx_blob,tx_fly:d_tx_fly,tx_venom:d_tx_venom,tx_mutant:d_tx_mutant,
   st_gust:d_st_gust,st_titan:d_st_titan,st_bolt:d_st_bolt,st_rod:d_st_rod,st_cyclone:d_st_cyclone,
   ff_guard:d_ff_guard,ff_demon:d_ff_demon,ff_eye:d_ff_eye,ff_sentinel:d_ff_sentinel,ff_wraith:d_ff_wraith,
+  pr_shard:d_pr_shard,pr_guard:d_pr_guard,pr_wisp:d_pr_wisp,pr_beam:d_pr_beam,pr_glitch:d_pr_glitch,
 };
 // Convert hex+alpha safely
 // Safe colour-with-alpha helper that works for both hex (#rrggbb) and hsl(...) strings.
@@ -8184,7 +8429,7 @@ function draw(){
   drawBG();drawGrid();drawWatermark();
   drawDecors();
   ctx.save();ctx.translate(-camX+sx,sy+camYOffset);
-  drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawDataShards();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
+  drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawDataShards();drawRainbowItem();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
   drawBoss();
   drawEnemies();drawFireIceBalls();drawBullets();drawPlayer();drawParticles();
   ctx.restore();
@@ -8212,15 +8457,32 @@ function draw(){
 function update(){
   tick++;
   if(gState==='playing'){
-    updatePlatforms();updateSpotlights();updateMazeKeys();updateHazards();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateDataShards();updateTimer();updateExit();
+    updatePlatforms();updateSpotlights();updateMazeKeys();updateHazards();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateDataShards();updateRainbowItem();updateTimer();updateExit();
     // Camera tracks average of alive players — runs in the main loop so it keeps
     // Network: each client tracks only their own player.
     // Local: camera tracks average of all active players.
-    const aps = window.netActive ? (player ? [player] : []) : activePlayers();
-    if(aps.length){
-      const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
-      camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
+    // Boss levels: the camera auto-scrolls left→right on its own instead of
+    // following the player — a slow, unstoppable advance toward the arena.
+    // Falling behind its left edge is fatal; reaching the arena's far edge
+    // turns the camera into a hard wall the player can't push past.
+    const _bossAutoScroll = !!boss;
+    if(_bossAutoScroll){
+      const _camMax=Math.max(0,worldW-W);
+      if(camX<_camMax){
+        camX+=BOSS_CAM_SPEED;
+        if(camX>_camMax)camX=_camMax;
+      }
       window.camY=0;
+      // Anyone who falls off the left edge of the camera is left behind for good.
+      if(player&&!player.respawning&&player.x+player.w<camX-4)doHurtPlayer(true);
+      if(twoPlayer&&player2&&!player2.respawning&&player2.x+player2.w<camX-4)doHurtPlayer2(true);
+    } else {
+      const aps = window.netActive ? (player ? [player] : []) : activePlayers();
+      if(aps.length){
+        const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
+        camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
+        window.camY=0;
+      }
     }
     camShake*=.82;
   } else if(gState==='levelclear'||gState==='paused'){
@@ -10308,4 +10570,5 @@ for(let i=0;i<110;i++){const s=document.createElement('div');s.className='star';
 
 // ── INIT ─────────────────────────────────────────
 CT=THEMES[0];showMain();
+if(window.__chk)window.__chk('game.js: bottom of file reached, showMain() called');
 

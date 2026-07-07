@@ -24,6 +24,9 @@
     {id:7, name:'TOXIC ZONE',    icon:'☣',  accent:'#cf0', dark:'#1a2200', mid:'#2a3300', range:[71,80]},
     {id:8, name:'STORM PEAKS',   icon:'⚡', accent:'#88f', dark:'#0a0a1a', mid:'#15152a', range:[81,90]},
     {id:9, name:'FINAL FORTRESS', icon:'🔱', accent:'#f44', dark:'#2a0000', mid:'#440000', range:[91,100]},
+    // Secret 11th world — see drawWorldLockOverlay()'s cousin, the rainbow gate
+    // in loadProgress(). Only reachable after finding all 10 Rainbow Shards.
+    {id:10, name:'PRISM ANOMALY', icon:'🌈', accent:'#f0f', dark:'#1a0030', mid:'#300050', range:[101,110], secret:true},
   ];
   const LEVELS_PER_WORLD = 10;
 
@@ -50,6 +53,7 @@
     {cx: 620, cy: 160, spread: 135},  // World 7
     {cx: 420, cy: 240, spread: 140},  // World 8
     {cx: 280, cy: 380, spread: 150},  // World 9: final
+    {cx: 700, cy: 450, spread: 140},  // World 10 (secret) — placeholder, actual on-screen layout comes from layoutLevels()
   ];
 
   // Each world lays its 10 levels out in a DIFFERENT shape so no two worlds
@@ -118,7 +122,7 @@
     return { lx: lx + jx * 0.07, ly: ly + jy * 0.07 };
   }
 
-  for (let w = 0; w < 10; w++) {
+  for (let w = 0; w < 11; w++) {
     const world = WORLDS[w];
     const pos = worldPositions[w];
     const [start, end] = world.range;
@@ -324,6 +328,7 @@
         <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / 100</div>
         <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / 300</div>
         <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / 300</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
         <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
         <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
       </div>
@@ -509,6 +514,7 @@
     { sky:['#0a1200','#1a2200','#2a3300'], ground:'pipes',   weather:'bubble', weatherCol:'#cf0' }, // Toxic Zone
     { sky:['#050510','#0a0a1a','#15152a'], ground:'clouds',  weather:'bolt',   weatherCol:'#88f' }, // Storm Peaks
     { sky:['#140000','#2a0000','#440000'], ground:'walls',   weather:'rune',   weatherCol:'#f44' }, // Final Fortress
+    { sky:['#1a0030','#300050','#500070'], ground:'rift',    weather:'prism',  weatherCol:'#f0f' }, // Prism Anomaly (secret)
   ];
 
   function _mapEnvMode(){
@@ -654,6 +660,25 @@
         for (let x = 0; x < W; x += 44) ctx.strokeRect(x+2, GY+2, 40, H-GY-4);
         break;
       }
+      case 'rift': { // Prism Anomaly — a jagged rainbow crack tearing through the ground
+        ctx.globalAlpha = 0.85; ctx.fillStyle = '#0a0014';
+        ctx.fillRect(0, GY, W, H-GY);
+        const midY = GY + (H-GY)*0.4;
+        ctx.beginPath(); ctx.moveTo(0, midY);
+        for (let x = 0; x <= W; x += 24) ctx.lineTo(x, midY + Math.sin(x*0.05+t)*10);
+        ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+        const g = ctx.createLinearGradient(0, midY, 0, H);
+        g.addColorStop(0, '#ff00ff'); g.addColorStop(0.5, '#00ffff'); g.addColorStop(1, '#1a0030');
+        ctx.globalAlpha = 0.35; ctx.fillStyle = g; ctx.fill();
+        // Floating glitch fragments along the rift
+        for (let i = 0; i < 8; i++) {
+          const x = (i*(W/8))+((Math.sin(t*0.7+i)*10)), y = midY-10+Math.sin(t*1.3+i)*14;
+          ctx.globalAlpha = 0.5+Math.sin(t*2+i)*0.3;
+          ctx.fillStyle = `hsl(${(i*45+t*30)%360},100%,65%)`;
+          ctx.fillRect(x-4,y-4,8,8);
+        }
+        break;
+      }
       case 'none': default: break; // Space Station — clean starfield, no ground
     }
     ctx.restore();
@@ -720,6 +745,13 @@
           ctx.globalAlpha = a; ctx.strokeStyle = col; ctx.lineWidth = 1;
           ctx.strokeRect(-sz,-sz,sz*2,sz*2);
           ctx.restore();
+          continue;
+        case 'prism':
+          x = (i*211)%W; y = (i*163 + Math.sin(t*0.5+i)*20)%H;
+          a = 0.4+Math.sin(t*2.5+i)*0.3; sz = 2+((i*3)%3);
+          ctx.globalAlpha = Math.max(0,a);
+          ctx.fillStyle = `hsl(${(i*37+t*40)%360},100%,65%)`;
+          ctx.beginPath(); ctx.arc(x,y,sz,0,Math.PI*2); ctx.fill();
           continue;
         default: continue;
       }
@@ -1241,7 +1273,13 @@
   // player was standing in the world we're leaving, jump to the first level
   // of the new world (or its own current level, if already visited).
   function setActiveWorld(w) {
-    w = ((w % WORLDS.length) + WORLDS.length) % WORLDS.length; // wrap around
+    // The secret 11th world doesn't even appear in the arrow cycle until all
+    // 10 Rainbow Shards are found — it should be invisible, not just locked,
+    // per the design: worlds 0-9 can be browsed ahead with a lock overlay,
+    // but Prism Anomaly doesn't exist on the map at all until then.
+    const rainbowDone = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
+    const cycleLen = rainbowDone ? WORLDS.length : WORLDS.length - 1;
+    w = ((w % cycleLen) + cycleLen) % cycleLen;
     if (w === MAP_STATE.activeWorld) return;
     MAP_STATE.activeWorld = w;
     MAP_STATE.walk = null;
@@ -1282,7 +1320,9 @@
     const anyUnlockedInWorld = LEVELS.some(l => l.worldId === MAP_STATE.activeWorld && l.unlocked);
     const arrL = document.getElementById('mapArrowLeft'), arrR = document.getElementById('mapArrowRight');
     if (arrL) arrL.style.opacity = MAP_STATE.activeWorld > 0 ? '1' : '0.25';
-    if (arrR) arrR.style.opacity = MAP_STATE.activeWorld < WORLDS.length - 1 ? '1' : '0.25';
+    const _rainbowDone = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
+    const _cycleLen = _rainbowDone ? WORLDS.length : WORLDS.length - 1;
+    if (arrR) arrR.style.opacity = MAP_STATE.activeWorld < _cycleLen - 1 ? '1' : '0.25';
     if (!anyUnlockedInWorld && arrL) { /* still browsable, just visually locked via node state */ }
 
     document.getElementById('mapClearedCount').textContent = clearedCount;
@@ -1296,6 +1336,13 @@
     if (shardsEl) {
       const shardsCount = window.totalShards ? window.totalShards(MAP_STATE.hard) : 0;
       shardsEl.textContent = shardsCount;
+    }
+
+    // Rainbow Shards — secret collectible, 1 per world, 10 total. Not affected
+    // by Hardcore/Normal mode (found once, shared across both, like achievements).
+    const rainbowEl = document.getElementById('mapRainbowCount');
+    if (rainbowEl) {
+      rainbowEl.textContent = (typeof rainbowCount === 'function') ? rainbowCount() : 0;
     }
 
     // Total campaign score (sum of every level's best score).
@@ -1548,6 +1595,24 @@
       }
     } catch (e) {
       console.error('Failed to load progress:', e);
+    }
+
+    // Secret 11th world (Prism Anomaly, levels 101-110): only unlockable by
+    // finding all 10 Rainbow Shards — never by ordinary sequential progress,
+    // even though `data.max` marches straight through 100→101 once the main
+    // story is cleared. If the player is CURRENTLY standing in it (they must
+    // have unlocked it in a past session) but somehow no longer qualifies
+    // (e.g. after a slot switch to a fresh profile), bounce them back to World 1.
+    const rainbowDone = (typeof rainbowCount === 'function') ? rainbowCount() >= 10
+      : (typeof window.rainbowCount === 'function' ? window.rainbowCount() >= 10 : false);
+    for (const level of LEVELS) {
+      if (level.worldId === 10 && !rainbowDone) level.unlocked = false;
+    }
+    if (!rainbowDone && MAP_STATE.activeWorld === 10) {
+      MAP_STATE.activeWorld = 0;
+      MAP_STATE.currentLevelId = 'L1';
+      MAP_STATE.playerX = LEVELS[0].x;
+      MAP_STATE.playerY = LEVELS[0].y;
     }
   }
 
