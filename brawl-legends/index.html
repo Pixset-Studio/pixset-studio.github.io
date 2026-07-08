@@ -45,6 +45,9 @@ button{font-family:inherit;border:none;cursor:pointer}
 .card{background:var(--panel);border-radius:14px;padding:10px;text-align:center;box-shadow:0 3px 0 rgba(0,0,0,.3);position:relative;overflow:hidden}
 .card:active{transform:scale(.97)}
 .card .portrait{width:100%;aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:42px;margin-bottom:6px;position:relative}
+.mono{font-family:system-ui,sans-serif;font-weight:900;color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.45);letter-spacing:0}
+#reveal-icon .mono{width:80px !important;height:80px !important;line-height:80px !important;font-size:40px !important}
+.si-ic .mono{width:30px !important;height:30px !important;line-height:30px !important;font-size:16px !important}
 .card .nm{font-size:12px;font-weight:800;line-height:1.2}
 .card .lvl{font-size:11px;color:var(--muted);margin-top:2px}
 .card.locked{filter:grayscale(1);opacity:.55}
@@ -154,11 +157,12 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 #reveal-name{font-size:24px;font-weight:900;text-shadow:0 2px 8px rgba(0,0,0,.6)}
 #reveal-count{font-size:17px;font-weight:800;color:#ffd24e;text-shadow:0 2px 6px rgba(0,0,0,.6)}
 #box-summary{margin-top:10px;max-height:220px;overflow-y:auto;touch-action:pan-y;width:100%;max-width:340px}
-#box-summary-list{display:flex;flex-direction:column;gap:6px}
-.summary-item{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.35);border-radius:10px;padding:7px 12px;text-align:left}
-.summary-item .si-ic{font-size:20px;flex-shrink:0}
-.summary-item .si-txt{font-size:13px;font-weight:700;color:#fff}
-.summary-item .si-sub{font-size:11px;color:var(--muted)}
+#box-summary-list{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.summary-item{background:var(--panel);border-radius:14px;padding:12px 14px;text-align:center;min-width:78px;
+  box-shadow:0 4px 0 rgba(0,0,0,.35);animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+.summary-item .si-ic{font-size:30px}
+.summary-item .si-txt{font-size:12px;font-weight:800;color:#fff;margin-top:4px}
+.summary-item .si-sub{font-size:10px;color:var(--muted)}
 #box-anim.shake{animation:shake .4s infinite}
 @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg) scale(1.05)}75%{transform:rotate(8deg) scale(1.05)}}
 #box-rewards{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:20px;min-height:100px}
@@ -267,7 +271,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
       <div class="avatar" id="main-avatar" onclick="event.stopPropagation();UI.show('scr-profile')" title="Профиль">🙂</div>
       <div class="trophy-pill-wrap">
         <div class="player-nick" id="main-nick">Игрок</div>
-        <div class="trophy-pill">🏆 <span id="main-trophies">0</span></div>
+        <div class="trophy-pill"><span id="main-trophy-icon"></span> <span id="main-trophies">0</span></div>
         <div class="progress-outer mini"><div class="progress-inner" id="main-road-bar" style="width:0%"></div></div>
       </div>
     </div>
@@ -275,13 +279,13 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <button class="icon-btn" onclick="UI.show('scr-settings')" title="Настройки">☰</button>
   </div>
   <div class="side-rail side-rail-left">
-    <button class="rail-btn" onclick="UI.show('scr-brawlers')"><span class="ri" style="background:#b3382f">🥊</span>Бойцы</button>
-    <button class="rail-btn" onclick="UI.show('scr-shop')"><span class="ri" style="background:#2c8a4b">🛒</span>Магазин</button>
-    <button class="rail-btn" onclick="UI.show('scr-boxes')"><span class="ri" style="background:#b97d12">📦</span>Ящики</button>
+    <button class="rail-btn" onclick="UI.show('scr-brawlers')"><span class="ri" style="background:#b3382f"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="11" r="7" fill="#fff"/><rect x="10" y="16" width="4" height="6" rx="2" fill="#fff"/><circle cx="9" cy="9" r="1.4" fill="#b3382f"/><circle cx="15" cy="9" r="1.4" fill="#b3382f"/></svg></span>Бойцы</button>
+    <button class="rail-btn" onclick="UI.show('scr-shop')"><span class="ri" style="background:#2c8a4b"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 6h16l-2 9H7L4 6z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><circle cx="9" cy="20" r="1.5" fill="#fff"/><circle cx="16" cy="20" r="1.5" fill="#fff"/><path d="M4 6L3 3H1" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>Магазин</button>
+    <button class="rail-btn" onclick="UI.show('scr-boxes')"><span class="ri" style="background:#b97d12"><svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="9" width="18" height="12" rx="1.5" fill="#fff"/><polygon points="3,9 12,4 21,9" fill="#ffe9c2"/><line x1="12" y1="9" x2="12" y2="21" stroke="#b97d12" stroke-width="1.4"/></svg></span>Ящики</button>
   </div>
   <div class="side-rail side-rail-right">
-    <button class="rail-btn" onclick="UI.show('scr-clan')"><span class="ri" style="background:#2f6fb3">🛡️</span>Клан</button>
-    <button class="rail-btn" onclick="UI.show('scr-challenges')"><span class="ri" style="background:#c98a3d">🎯</span>Испытания</button>
+    <button class="rail-btn" onclick="UI.show('scr-clan')"><span class="ri" style="background:#2f6fb3"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" fill="#fff"/></svg></span>Клан</button>
+    <button class="rail-btn" onclick="UI.show('scr-challenges')"><span class="ri" style="background:#c98a3d"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="1.6" fill="#fff"/></svg></span>Испытания</button>
   </div>
   <div class="hero">
     <button id="btn-fullscreen" title="Полный экран">⛶</button>
@@ -289,7 +293,7 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <div class="hero-brawler-wrap" id="hero-brawler" onclick="UI.show('scr-brawlers')"></div>
   </div>
   <div class="mode-pill" id="mode-pill" onclick="UI.show('scr-battle')"></div>
-  <button class="play-corner" onclick="startBattle()"><span class="pi">⚔️</span>В БОЙ</button>
+  <button class="play-corner" onclick="startBattle()"><span class="pi"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M6 18L17 7l1.5-3.5L15 5 4 16z" fill="#3a2a00" stroke="#3a2a00" stroke-width="1"/><path d="M6 18l2 2M4 16l2 2" stroke="#3a2a00" stroke-width="2" stroke-linecap="round"/></svg></span>В БОЙ</button>
 </div>
 
 <!-- ============ NICKNAME MODAL (первый вход) ============ -->
@@ -446,10 +450,10 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
     <div class="currbar" id="admin-curr"></div>
     <p class="note">Быстрая выдача</p>
     <div class="grid2">
-      <button class="menu-btn" onclick="adminGive('coins',1000)">🪙 +1000 монет</button>
-      <button class="menu-btn" onclick="adminGive('gems',100)">💠 +100 кристаллов</button>
-      <button class="menu-btn" onclick="adminGive('pp',500)">⚡ +500 очков силы</button>
-      <button class="menu-btn" onclick="adminGive('trophies',100)">🏆 +100 трофеев</button>
+      <button class="menu-btn" onclick="adminGive('coins',1000)"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" fill="#f5c542" stroke="#a97a00" stroke-width="1.6"/><circle cx="9" cy="9" r="2.6" fill="#ffe9a8" opacity=".8"/></svg> +1000 монет</button>
+      <button class="menu-btn" onclick="adminGive('gems',100)"><svg viewBox="0 0 24 24" width="16" height="16"><polygon points="12,2 20,9 12,22 4,9" fill="#4fc3f7" stroke="#1c6a94" stroke-width="1.4"/><polygon points="12,2 20,9 4,9" fill="#bff2ff"/></svg> +100 кристаллов</button>
+      <button class="menu-btn" onclick="adminGive('pp',500)"><svg viewBox="0 0 24 24" width="16" height="16"><polygon points="13,1 4,14 11,14 9,23 20,9 13,9" fill="#b388ff" stroke="#5a2d99" stroke-width="1.2"/></svg> +500 очков силы</button>
+      <button class="menu-btn" onclick="adminGive('trophies',100)"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M7 3h10v4a5 5 0 0 1-10 0V3z" fill="#f5c542" stroke="#a97a00" stroke-width="1.2"/><rect x="10" y="12" width="4" height="4" fill="#d69a00"/><rect x="8" y="18" width="8" height="2.5" rx="1" fill="#a97a00"/></svg> +100 трофеев</button>
       <button class="menu-btn" onclick="adminGive('boxbig',5)">🎁 +5 больших ящиков</button>
       <button class="menu-btn" onclick="adminGive('boxmega',3)">💎 +3 мега-ящика</button>
       <button class="menu-btn" onclick="adminGive('boxomega',2)">🌟 +2 омега-ящика</button>
@@ -517,6 +521,30 @@ body.no-touch #btn-attack,body.no-touch #btn-super{opacity:.35}
 
 /* ---------------- УТИЛИТЫ ---------------- */
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+
+/* ---------------- ВЕКТОРНЫЕ ИКОНКИ (вместо эмодзи) ---------------- */
+const ICONS={
+  coin:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><circle cx="12" cy="12" r="10" fill="#f5c542" stroke="#a97a00" stroke-width="1.6"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="#a97a00" stroke-width="1" opacity=".5"/><circle cx="9" cy="9" r="2.6" fill="#ffe9a8" opacity=".8"/></svg>',
+  gem:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><polygon points="12,2 20,9 12,22 4,9" fill="#4fc3f7" stroke="#1c6a94" stroke-width="1.4"/><polygon points="12,2 20,9 4,9" fill="#bff2ff"/></svg>',
+  power:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><polygon points="13,1 4,14 11,14 9,23 20,9 13,9" fill="#b388ff" stroke="#5a2d99" stroke-width="1.2"/></svg>',
+  trophy:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><path d="M7 3h10v4a5 5 0 0 1-10 0V3z" fill="#f5c542" stroke="#a97a00" stroke-width="1.2"/><rect x="10" y="12" width="4" height="4" fill="#d69a00"/><rect x="8" y="18" width="8" height="2.5" rx="1" fill="#a97a00"/><path d="M7 4H3.5v2a3.5 3.5 0 0 0 3.5 3.5" fill="none" stroke="#a97a00" stroke-width="1.3"/><path d="M17 4h3.5v2a3.5 3.5 0 0 1-3.5 3.5" fill="none" stroke="#a97a00" stroke-width="1.3"/></svg>',
+  boxSmall:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><rect x="3" y="9" width="18" height="12" rx="1.5" fill="#c98a3d" stroke="#7a4f1e" stroke-width="1.2"/><polygon points="3,9 12,4 21,9" fill="#e0a95c" stroke="#7a4f1e" stroke-width="1.2"/><line x1="12" y1="9" x2="12" y2="21" stroke="#7a4f1e" stroke-width="1.2"/></svg>',
+  boxBig:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><rect x="2" y="8" width="20" height="13" rx="1.5" fill="#d68f3a" stroke="#7a4f1e" stroke-width="1.3"/><polygon points="2,8 12,3 22,8" fill="#f0b25a" stroke="#7a4f1e" stroke-width="1.3"/><rect x="10" y="8" width="4" height="13" fill="#7a4f1e"/><rect x="2" y="12" width="20" height="3" fill="#7a4f1e" opacity=".5"/></svg>',
+  boxMega:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><rect x="2" y="8" width="20" height="13" rx="1.5" fill="#4fc3f7" stroke="#1c6a94" stroke-width="1.3"/><polygon points="2,8 12,3 22,8" fill="#8fdcff" stroke="#1c6a94" stroke-width="1.3"/><polygon points="12,10 15,14 12,18 9,14" fill="#fff" opacity=".85"/></svg>',
+  boxOmega:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><rect x="2" y="8" width="20" height="13" rx="1.5" fill="#c66bff" stroke="#6a2f99" stroke-width="1.3"/><polygon points="2,8 12,3 22,8" fill="#e3a8ff" stroke="#6a2f99" stroke-width="1.3"/><polygon points="12,9.5 14,13 17.5,13.5 15,16 15.7,19.5 12,17.7 8.3,19.5 9,16 6.5,13.5 10,13" fill="#fff" opacity=".9"/></svg>',
+  star:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><polygon points="12,2 14.7,9 22,9.3 16.2,14 18.2,21 12,17 5.8,21 7.8,14 2,9.3 9.3,9" fill="#ffd24e" stroke="#a97a00" stroke-width="1"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><rect x="5" y="11" width="14" height="10" rx="2" fill="#8a94ad" stroke="#555d78" stroke-width="1.3"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#555d78" stroke-width="1.6"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><circle cx="12" cy="12" r="10" fill="#5adb7c" stroke="#2c8a4b" stroke-width="1.2"/><path d="M7 12.5l3 3 7-7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  skull:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><path d="M12 2a8 8 0 0 0-8 8c0 3 1.5 5 3 6.5V19h2v2h2v-2h2v2h2v-2h1.5v-2.5c1.5-1.5 3-3.5 3-6.5a8 8 0 0 0-8-8z" fill="#e8e8e8" stroke="#555" stroke-width="1"/><circle cx="9" cy="10" r="1.8" fill="#333"/><circle cx="15" cy="10" r="1.8" fill="#333"/><path d="M11 12l1 2 1-2" fill="none" stroke="#333" stroke-width="1"/></svg>',
+  moneybag:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><path d="M9 4h6l2 4c2 1.5 3 3.5 3 6a8 8 0 0 1-16 0c0-2.5 1-4.5 3-6l2-4z" fill="#f5c542" stroke="#a97a00" stroke-width="1.2"/><text x="12" y="16" font-size="7" text-anchor="middle" fill="#a97a00" font-weight="900">$</text></svg>',
+  ball:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em"><circle cx="12" cy="12" r="10" fill="#fff" stroke="#333" stroke-width="1.2"/><polygon points="12,8 15,10.3 14,14 10,14 9,10.3" fill="#333"/></svg>',
+};
+function icon(name){return ICONS[name]||'';}
+function brawlerLetter(b){return (b.name||'?').trim().charAt(0).toUpperCase();}
+function brawlerMonogramBadge(b,size){
+  size=size||64;
+  return `<div class="mono" style="width:${size}px;height:${size}px;line-height:${size}px;border-radius:50%;background:${b.color};font-size:${Math.round(size*0.5)}px;display:inline-block;text-align:center">${brawlerLetter(b)}</div>`;
+}
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const rndi=(a,b)=>Math.floor(rnd(a,b+1));
 const dist2=(ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy};
@@ -1087,11 +1115,11 @@ const BOT_NAMES=['Ash','Nova','Rex','Vika','Grom','Luna','Zorro','Kira','Max','D
 
 /* ---------------- ДАННЫЕ: РЕЖИМЫ ---------------- */
 const MODES=[
- {id:'gemgrab', name:'Захват кристаллов',icon:'💎',desc:'3v3. Собери 10 кристаллов и удержи их 8 секунд.'},
- {id:'showdown',name:'Королевская битва',icon:'💀',desc:'10 бойцов. Ядовитый туман сужается. Выживи!'},
- {id:'heist',   name:'Ограбление',icon:'💰',desc:'3v3. Разрушь вражеский сейф раньше противника.'},
- {id:'bounty',  name:'Охота за головами',icon:'⭐',desc:'3v3. Собери больше звёзд за убийства.'},
- {id:'brawlball',name:'Броул-бол',icon:'⚽',desc:'3v3. Забей 2 гола в ворота соперника.'},
+ {id:'gemgrab', name:'Захват кристаллов',icon:'gem',desc:'3v3. Собери 10 кристаллов и удержи их 8 секунд.'},
+ {id:'showdown',name:'Королевская битва',icon:'skull',desc:'10 бойцов. Ядовитый туман сужается. Выживи!'},
+ {id:'heist',   name:'Ограбление',icon:'moneybag',desc:'3v3. Разрушь вражеский сейф раньше противника.'},
+ {id:'bounty',  name:'Охота за головами',icon:'star',desc:'3v3. Собери больше звёзд за убийства.'},
+ {id:'brawlball',name:'Броул-бол',icon:'ball',desc:'3v3. Забей 2 гола в ворота соперника.'},
 ];
 
 /* ---------------- ЕЖЕДНЕВНЫЕ ИСПЫТАНИЯ ---------------- */
@@ -1125,12 +1153,12 @@ function genChallengeReward(){
   return{box:1};
 }
 function rewardLabel(r){
-  if(r.coins)return '🪙 '+r.coins;
-  if(r.pp)return '⚡ '+r.pp;
-  if(r.gems)return '💠 '+r.gems;
-  if(r.box)return '📦 '+r.box;
-  if(r.big)return '🎁 '+r.big;
-  if(r.omega)return '🌟 '+r.omega;
+  if(r.coins)return icon('coin')+' '+r.coins;
+  if(r.pp)return icon('power')+' '+r.pp;
+  if(r.gems)return icon('gem')+' '+r.gems;
+  if(r.box)return icon('boxSmall')+' '+r.box;
+  if(r.big)return icon('boxBig')+' '+r.big;
+  if(r.omega)return icon('boxOmega')+' '+r.omega;
   return '';
 }
 function ensureDailyChallenges(){
@@ -1356,10 +1384,10 @@ function openRoadModal(){
     const claimed=P.claimedRoad.includes(i);
     const reached=P.trophies>=m.t;
     const cls=claimed?'claimed':(reached?'ready':'');
-    const ic=claimed?'✅':(reached?'🎁':'🔒');
+    const ic=claimed?icon('check'):(reached?icon('boxBig'):icon('lock'));
     return `<div class="road-item ${cls}">
       <div class="road-ic">${ic}</div>
-      <div class="road-info"><div class="road-t">🏆 ${m.t}</div><div class="road-l">${m.label}</div></div>
+      <div class="road-info"><div class="road-t">${icon('trophy')} ${m.t}</div><div class="road-l">${m.label}</div></div>
     </div>`;
   }).join('');
   document.getElementById('modal-road').classList.add('show');
@@ -1439,21 +1467,22 @@ const UI={
     if(id==='scr-clan')this.renderClan();
   },
   currHtml(){
-    return `<div class="curr"><span class="ic">🏆</span>${P.trophies}</div>
-      <div class="curr"><span class="ic">🪙</span>${P.coins}</div>
-      <div class="curr"><span class="ic">💠</span>${P.gems}</div>
-      <div class="curr"><span class="ic">⚡</span>${P.pp}</div>`;
+    return `<div class="curr"><span class="ic">${icon('trophy')}</span>${P.trophies}</div>
+      <div class="curr"><span class="ic">${icon('coin')}</span>${P.coins}</div>
+      <div class="curr"><span class="ic">${icon('gem')}</span>${P.gems}</div>
+      <div class="curr"><span class="ic">${icon('power')}</span>${P.pp}</div>`;
   },
   miniCurrHtml(){
-    return `<div class="curr"><span class="ic">🪙</span>${P.coins}</div>
-      <div class="curr"><span class="ic">💠</span>${P.gems}</div>
-      <div class="curr"><span class="ic">⚡</span>${P.pp}</div>`;
+    return `<div class="curr"><span class="ic">${icon('coin')}</span>${P.coins}</div>
+      <div class="curr"><span class="ic">${icon('gem')}</span>${P.gems}</div>
+      <div class="curr"><span class="ic">${icon('power')}</span>${P.pp}</div>`;
   },
   renderMain(){
     document.getElementById('main-curr').innerHTML=this.miniCurrHtml();
     document.getElementById('main-trophies').textContent=P.trophies;
     document.getElementById('main-nick').textContent=P.nick||'Игрок';
     document.getElementById('main-avatar').textContent=P.avatar||'🙂';
+    document.getElementById('main-trophy-icon').innerHTML=icon('trophy');
     checkTrophyRoad();
     const next=TROPHY_ROAD.find((m,i)=>!P.claimedRoad.includes(i));
     const bar=document.getElementById('main-road-bar');
@@ -1465,17 +1494,17 @@ const UI={
     const b=BRAWLER_BY_ID[P.selBrawler];
     const rk=rankFor(brawlerTrophies(b.id));
     document.getElementById('hero-brawler').innerHTML=
-      `<div class="hero-brawler-big" style="background:${skinColor(b.id)||b.color}">${b.icon}</div>
+      `<div class="hero-brawler-big" style="background:${skinColor(b.id)||b.color}"><span class="mono">${brawlerLetter(b)}</span></div>
        <div class="hero-brawler-name">${b.name}</div>
        <div class="hero-brawler-lvl">Ур. ${P.levels[b.id]||1} · <span style="color:${rk.color}">${rk.name}</span></div>`;
     const md=MODES.find(m=>m.id===P.selMode)||MODES[0];
     document.getElementById('mode-pill').innerHTML=
-      `<span class="mp-ic">${md.icon}</span><span class="mp-txt">${md.name}</span><span class="mp-arrow">›</span>`;
+      `<span class="mp-ic">${icon(md.icon)}</span><span class="mp-txt">${md.name}</span><span class="mp-arrow">›</span>`;
   },
   renderBattle(){
     const ml=document.getElementById('mode-list');
     ml.innerHTML=MODES.map(m=>`<div class="mode-card ${P.selMode===m.id?'sel':''}" onclick="UI.selectMode('${m.id}')">
-      <div class="ic">${m.icon}</div><div class="nm">${m.name}</div><div class="ds">${m.desc}</div></div>`).join('');
+      <div class="ic">${icon(m.icon)}</div><div class="nm">${m.name}</div><div class="ds">${m.desc}</div></div>`).join('');
   },
   selectMode(id){
     P.selMode=id;saveP();
@@ -1507,10 +1536,10 @@ const UI={
       const rk=rankFor(brawlerTrophies(b.id));
       const starCount=ownedStars(b.id).length;
       return `<div class="card ${un?'':'locked'} ${P.selBrawler===b.id?'sel-brawler':''}" onclick="UI.brawlerDetail('${b.id}')">
-        <div class="portrait" style="background:${un?(skinColor(b.id)||b.color):b.color}">${un?b.icon:'🔒'}</div>
+        <div class="portrait" style="background:${un?(skinColor(b.id)||b.color):b.color}">${un?`<span class="mono">${brawlerLetter(b)}</span>`:icon('lock')}</div>
         <div class="nm">${b.name}</div>
         <div class="lvl" style="color:${un?rk.color:RARITY[b.rarity].color}">${un?('Ур. '+(P.levels[b.id]||1)+' · '+rk.name):RARITY[b.rarity].name}</div>
-        ${un?`<div class="lvl" style="color:#ffd24e">🏆 ${brawlerTrophies(b.id)} · ⭐ ${starCount}/3</div>`:''}
+        ${un?`<div class="lvl" style="color:#ffd24e">${icon('trophy')} ${brawlerTrophies(b.id)} · ${icon('star')} ${starCount}/3</div>`:''}
         ${P.selBrawler===b.id?`<div class="lvl" style="color:var(--accent2);font-weight:900">В БОЮ</div>`:''}</div>`;
     }).join('');
   },
@@ -1543,7 +1572,7 @@ const UI={
         const eq=P.equippedSkin[id]===s.id;
         return `<div class="star-row">
           <div class="star-ic" style="color:${s.color}">●</div>
-          <div class="star-info"><div class="star-t">${s.name}</div><div class="star-d">${has?'Куплен':'💠 '+s.cost.gems}</div></div>
+          <div class="star-info"><div class="star-t">${s.name}</div><div class="star-d">${has?'Куплен':icon('gem')+' '+s.cost.gems}</div></div>
           ${has?`<button class="star-eq-btn ${eq?'on':''}" onclick="equipSkin('${id}','${s.id}')">${eq?'Надет':'Надеть'}</button>`
                :`<button class="star-eq-btn" onclick="buySkin('${id}','${s.id}')">Купить</button>`}
         </div>`;
@@ -1551,20 +1580,20 @@ const UI={
     `:'';
     const el=document.getElementById('modal-brawler-content');
     el.innerHTML=`
-      <div class="detail-portrait" style="background:${un?dispColor:b.color}">${un?b.icon:'🔒'}</div>
+      <div class="detail-portrait" style="background:${un?dispColor:b.color}">${un?`<span class="mono">${brawlerLetter(b)}</span>`:icon('lock')}</div>
       <div class="rarity-tag" style="background:${RARITY[b.rarity].color}">${RARITY[b.rarity].name}</div>
       <h3>${b.name}</h3>
       <p class="note">${b.desc}</p>
       ${un?`
       <div class="statrow"><span>Уровень</span><b>${lvl}${lvl>=10?' (МАКС)':''}</b></div>
-      <div class="statrow"><span>🏆 Трофеи бойца</span><b style="color:${rk.color}">${brawlerTrophies(id)} · ${rk.name}</b></div>
+      <div class="statrow"><span>${icon('trophy')} Трофеи бойца</span><b style="color:${rk.color}">${brawlerTrophies(id)} · ${rk.name}</b></div>
       <div class="statrow"><span>❤️ Здоровье</span><b>${Math.round(b.hp*m)}</b></div>
       <div class="statrow"><span>⚔️ Урон атаки</span><b>${Math.round(b.atk.dmg*m)}</b></div>
       <div class="statrow"><span>👟 Скорость</span><b>${b.spd}</b></div>
       <p class="note" style="margin-top:10px;text-align:left">⭐ Звёздные силы ${lvl<10?'(откроются на 10 уровне, выбиваются из ящиков уже сейчас)':''}</p>
       ${starsHtml}
       ${skinsHtml}
-      ${canUp?`<button class="big-btn" style="font-size:15px;padding:12px;margin-top:8px" onclick="UI.upgrade('${id}')">Улучшить — ⚡${ppC} + 🪙${coinC}</button>`:''}
+      ${canUp?`<button class="big-btn" style="font-size:15px;padding:12px;margin-top:8px" onclick="UI.upgrade('${id}')">Улучшить — ${icon('power')}${ppC} + ${icon('coin')}${coinC}</button>`:''}
       <button class="big-btn" style="font-size:15px;padding:12px;background:linear-gradient(180deg,#5adb7c,#2c8a4b);${P.selBrawler===id?'opacity:.55;pointer-events:none':''}" onclick="UI.selectBrawler('${id}')">${P.selBrawler===id?'✓ Выбран для боя':'Выбрать для боя'}</button>
       `:`<p class="note">Выпадает из ящиков или открывается на трофейном пути.</p>`}
       <button class="menu-btn" style="justify-content:center" onclick="document.getElementById('modal-brawler').classList.remove('active')">Закрыть</button>`;
@@ -1597,20 +1626,20 @@ const UI={
     const day=Math.floor(Date.now()/86400000);
     if(P.dailySeed!==day){P.dailySeed=day;P.dailyBought=[];saveP();}
     const deals=[
-      {id:'d0',icon:'📦',t:'Ящик дня',d:'Скидка 50%!',cost:{coins:50},give:{box:1}},
-      {id:'d1',icon:'⚡',t:'Очки силы ×30',d:'Ежедневное предложение',cost:{coins:60},give:{pp:30}},
+      {id:'d0',icon:icon('boxSmall'),t:'Ящик дня',d:'Скидка 50%!',cost:{coins:50},give:{box:1}},
+      {id:'d1',icon:icon('power'),t:'Очки силы ×30',d:'Ежедневное предложение',cost:{coins:60},give:{pp:30}},
     ];
     const items=[
-      {id:'s0',icon:'📦',t:'Ящик',d:'Монеты, очки силы, шанс бойца',cost:{coins:100},give:{box:1}},
-      {id:'s1',icon:'🎁',t:'Большой ящик',d:'= 3 обычных ящика',cost:{gems:30},give:{big:1}},
-      {id:'s2',icon:'💎',t:'Мега-ящик',d:'= 10 обычных ящиков',cost:{gems:80},give:{mega:1}},
-      {id:'s2b',icon:'🌟',t:'Омега-ящик',d:'10-15 предметов, гарантирован боец!',cost:{gems:150},give:{omega:1}},
-      {id:'s3',icon:'🪙',t:'Монеты ×150',d:'Обмен кристаллов',cost:{gems:20},give:{coins:150}},
-      {id:'s4',icon:'⚡',t:'Очки силы ×50',d:'Обмен кристаллов',cost:{gems:18},give:{pp:50}},
+      {id:'s0',icon:icon('boxSmall'),t:'Ящик',d:'Монеты, очки силы, шанс бойца',cost:{coins:100},give:{box:1}},
+      {id:'s1',icon:icon('boxBig'),t:'Большой ящик',d:'= 3 обычных ящика',cost:{gems:30},give:{big:1}},
+      {id:'s2',icon:icon('boxMega'),t:'Мега-ящик',d:'= 10 обычных ящиков',cost:{gems:80},give:{mega:1}},
+      {id:'s2b',icon:icon('boxOmega'),t:'Омега-ящик',d:'10-15 предметов, гарантирован боец!',cost:{gems:150},give:{omega:1}},
+      {id:'s3',icon:icon('coin'),t:'Монеты ×150',d:'Обмен кристаллов',cost:{gems:20},give:{coins:150}},
+      {id:'s4',icon:icon('power'),t:'Очки силы ×50',d:'Обмен кристаллов',cost:{gems:18},give:{pp:50}},
     ];
     const row=(it,daily)=>{
       const bought=daily&&P.dailyBought.includes(it.id);
-      const cc=it.cost.coins?`🪙${it.cost.coins}`:`💠${it.cost.gems}`;
+      const cc=it.cost.coins?`${icon('coin')}${it.cost.coins}`:`${icon('gem')}${it.cost.gems}`;
       const afford=it.cost.coins?P.coins>=it.cost.coins:P.gems>=it.cost.gems;
       return `<div class="shop-item"><div class="si">${it.icon}</div>
         <div class="sm"><div class="t">${it.t}</div><div class="d">${it.d}</div></div>
@@ -1634,10 +1663,10 @@ const UI={
   renderBoxes(){
     document.getElementById('boxes-curr').innerHTML=this.currHtml();
     const defs=[
-      {k:'box',  icon:'📦',t:'Ящик',       d:'1-3 предмета'},
-      {k:'big',  icon:'🎁',t:'Большой ящик', d:'3-5 предметов'},
-      {k:'mega', icon:'💎',t:'Мега-ящик',    d:'5-10 предметов'},
-      {k:'omega',icon:'🌟',t:'Омега-ящик',   d:'10-15 предметов · гарантирован боец!'},
+      {k:'box',  icon:icon('boxSmall'),t:'Ящик',       d:'1-3 предмета'},
+      {k:'big',  icon:icon('boxBig'),t:'Большой ящик', d:'3-5 предметов'},
+      {k:'mega', icon:icon('boxMega'),t:'Мега-ящик',    d:'5-10 предметов'},
+      {k:'omega',icon:icon('boxOmega'),t:'Омега-ящик',   d:'10-15 предметов · гарантирован боец!'},
     ];
     document.getElementById('boxes-list').innerHTML=defs.map(d=>`
       <div class="shop-item"><div class="si">${d.icon}</div>
@@ -1669,14 +1698,14 @@ const UI={
       <p class="note">Играет ${daysSince} ${daysSince===1?'день':'дней'}</p>
       <button class="menu-btn" onclick="openSeasonModal()"><span class="mi" style="background:#8c2f5e">📅</span>Сезон ${P.season.num} · ${P.season.points} очков · ${daysLeftSeason} дн. осталось</button>
       <div class="profile-stats">
-        <div class="profile-stat"><div class="ps-val">🏆 ${P.trophies||0}</div><div class="ps-lbl">Кубков всего</div></div>
+        <div class="profile-stat"><div class="ps-val">${icon('trophy')} ${P.trophies||0}</div><div class="ps-lbl">Кубков всего</div></div>
         <div class="profile-stat"><div class="ps-val">${games}</div><div class="ps-lbl">Боёв сыграно</div></div>
         <div class="profile-stat"><div class="ps-val">${wins} / ${losses}</div><div class="ps-lbl">Победы / поражения</div></div>
         <div class="profile-stat"><div class="ps-val">${winrate}%</div><div class="ps-lbl">Процент побед</div></div>
         <div class="profile-stat"><div class="ps-val">${unlockedCount} / ${BRAWLERS.length}</div><div class="ps-lbl">Бойцов открыто</div></div>
         <div class="profile-stat"><div class="ps-val">${starsCount} / ${totalStars}</div><div class="ps-lbl">Звёздных сил</div></div>
         <div class="profile-stat"><div class="ps-val">${P.totalBoxesOpened||0}</div><div class="ps-lbl">Ящиков открыто</div></div>
-        <div class="profile-stat"><div class="ps-val">🪙 ${P.coins||0}</div><div class="ps-lbl">Монет на счету</div></div>
+        <div class="profile-stat"><div class="ps-val">${icon('coin')} ${P.coins||0}</div><div class="ps-lbl">Монет на счету</div></div>
       </div>
       <p class="note" style="text-align:left;font-weight:900;color:#fff;font-size:15px;margin-top:16px">Достижения</p>
       ${ACHIEVEMENTS.map(a=>{
@@ -1789,9 +1818,9 @@ function pickWeightedBrawler(list){
 }
 function rollFillerReward(){
   const roll=Math.random();
-  if(roll<0.45){const c=rndi(20,90);P.coins+=c;return{icon:'🪙',name:'Монеты',txt:'+'+c,kind:'coins'};}
-  if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:'⚡',name:'Очки силы',txt:'+'+p,kind:'pp'};}
-  const g=rndi(2,6);P.gems+=g;return{icon:'💠',name:'Кристаллы',txt:'+'+g,kind:'gems'};
+  if(roll<0.45){const c=rndi(20,90);P.coins+=c;return{icon:icon('coin'),name:'Монеты',txt:'+'+c,kind:'coins'};}
+  if(roll<0.9){const p=rndi(8,35);P.pp+=p;return{icon:icon('power'),name:'Очки силы',txt:'+'+p,kind:'pp'};}
+  const g=rndi(2,6);P.gems+=g;return{icon:icon('gem'),name:'Кристаллы',txt:'+'+g,kind:'gems'};
 }
 function currentBrawlerChance(){
   return clamp(0.01+(P.pityBoxes||0)*0.001+(P.totalBoxesOpened||0)*0.0001,0.01,0.10);
@@ -1805,7 +1834,7 @@ function rollBoxItem(guaranteed){
   if(locked.length&&Math.random()<chance){
     const b=pickWeightedBrawler(locked);
     P.unlocked[b.id]=1;P.levels[b.id]=1;P.pityBoxes=0;
-    return {icon:b.icon,name:b.name,txt:'Новый боец!',rar:b.rarity,kind:'brawler'};
+    return {icon:brawlerMonogramBadge(b,72),name:b.name,txt:'Новый боец!',rar:b.rarity,kind:'brawler'};
   }
   // звёздные силы выбиваются отдельно (в гарантированном слоте омега-ящика - в приоритете)
   const starCandidates=ownedBrawlersMissingStar();
@@ -1815,10 +1844,10 @@ function rollBoxItem(guaranteed){
     P.starPowers[pickC.brawler.id]=P.starPowers[pickC.brawler.id]||[];
     P.starPowers[pickC.brawler.id].push(pickC.idx);
     P.pityStars=0;
-    return {icon:'⭐',name:pickC.brawler.stars[pickC.idx].name,txt:pickC.brawler.name,rar:pickC.brawler.rarity,kind:'star'};
+    return {icon:icon('star'),name:pickC.brawler.stars[pickC.idx].name,txt:pickC.brawler.name,rar:pickC.brawler.rarity,kind:'star'};
   }
   if(guaranteed){ // всё уже собрано - выдаём крупный бонус вместо гарантии
-    const g=rndi(30,60);P.gems+=g;return{icon:'💠',name:'Кристаллы',txt:'+'+g+' (всё уже собрано)',kind:'gems'};
+    const g=rndi(30,60);P.gems+=g;return{icon:icon('gem'),name:'Кристаллы',txt:'+'+g+' (всё уже собрано)',kind:'gems'};
   }
   return rollFillerReward();
 }
@@ -1891,11 +1920,11 @@ function openBox(kind){
   saveP();
   boxIdx=-1;boxFinished=false;boxOpening=false;
   const titleMap={box:'Ящик',big:'Большой ящик',mega:'Мега-ящик',omega:'Омега-ящик'};
-  const iconMap={box:'📦',big:'🎁',mega:'💎',omega:'🌟'};
+  const iconMap={box:icon('boxSmall'),big:icon('boxBig'),mega:icon('boxMega'),omega:icon('boxOmega')};
   UI.show('scr-box-open');
   document.getElementById('box-open-title').textContent=titleMap[kind];
   const anim=document.getElementById('box-anim');
-  anim.textContent=iconMap[kind];
+  anim.innerHTML=iconMap[kind];
   anim.style.display='block';anim.classList.add('shake');
   document.getElementById('box-hint').style.display='block';
   document.getElementById('reveal-wrap').style.display='none';
@@ -1923,7 +1952,7 @@ function boxAdvance(){
   anim.style.display='none';
   const res=boxQueue[boxIdx];
   document.getElementById('scr-box-open').style.background=itemBg(res);
-  document.getElementById('reveal-icon').textContent=res.icon;
+  document.getElementById('reveal-icon').innerHTML=res.icon;
   document.getElementById('reveal-name').textContent=res.name;
   document.getElementById('reveal-count').textContent=res.txt;
   wrap.style.display='flex';wrap.classList.remove('pop');void wrap.offsetWidth;wrap.classList.add('pop');
@@ -1938,7 +1967,8 @@ function boxAdvance(){
     const list=document.getElementById('box-summary-list');
     list.innerHTML=boxQueue.map(it=>`<div class="summary-item">
       <div class="si-ic">${it.icon}</div>
-      <div><div class="si-txt">${it.name}</div><div class="si-sub">${it.txt}</div></div></div>`).join('');
+      <div class="si-txt">${it.name}</div>
+      <div class="si-sub">${it.txt}</div></div>`).join('');
     document.getElementById('box-summary').style.display='block';
   }
 }
@@ -3321,11 +3351,12 @@ function render(){
     ctx.stroke();
     // "лицо" — рисуем персонажа, а не эмодзи
     drawUnitFace(un);
-    // маленький значок способности (для узнаваемости бойца)
-    ctx.font='11px serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(20,23,38,.55)';
+    // маленький значок-монограмма (для узнаваемости бойца, без эмодзи)
+    ctx.font='bold 10px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(20,23,38,.7)';
     ctx.beginPath();ctx.arc(un.x+un.r*0.62,un.y+un.r*0.62,8,0,Math.PI*2);ctx.fill();
-    ctx.fillText(un.def.icon,un.x+un.r*0.62,un.y+un.r*0.63);
+    ctx.fillStyle='#fff';
+    ctx.fillText(brawlerLetter(un.def),un.x+un.r*0.62,un.y+un.r*0.63);
     // щит/заморозка
     if(un.shield>0){ctx.strokeStyle='rgba(120,200,255,.8)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(un.x,un.y,un.r+5,0,Math.PI*2);ctx.stroke();}
     if(un.stunT>0){ctx.font='13px serif';ctx.fillText('💫',un.x,un.y-un.r-24);}
@@ -3502,10 +3533,10 @@ function endBattle(result,quit){
     document.getElementById('res-title').textContent=title;
     document.getElementById('res-title').style.color=win?'var(--accent)':draw?'var(--accent2)':'var(--danger)';
     const rw=[];
-    rw.push(`<div class="reward-item"><div class="ri">🏆</div><div class="rt">${trophyDelta>=0?'+':''}${trophyDelta}</div></div>`);
-    if(coins)rw.push(`<div class="reward-item"><div class="ri">🪙</div><div class="rt">+${coins}</div></div>`);
-    if(pp)rw.push(`<div class="reward-item"><div class="ri">⚡</div><div class="rt">+${pp}</div></div>`);
-    if(gotGems)rw.push(`<div class="reward-item"><div class="ri">💠</div><div class="rt">+${gotGems}</div></div>`);
+    rw.push(`<div class="reward-item"><div class="ri">${icon('trophy')}</div><div class="rt">${trophyDelta>=0?'+':''}${trophyDelta}</div></div>`);
+    if(coins)rw.push(`<div class="reward-item"><div class="ri">${icon('coin')}</div><div class="rt">+${coins}</div></div>`);
+    if(pp)rw.push(`<div class="reward-item"><div class="ri">${icon('power')}</div><div class="rt">+${pp}</div></div>`);
+    if(gotGems)rw.push(`<div class="reward-item"><div class="ri">${icon('gem')}</div><div class="rt">+${gotGems}</div></div>`);
     if(gotBox)rw.push(`<div class="reward-item"><div class="ri">📦</div><div class="rt">Ящик!</div></div>`);
     if(!gotBox&&win)rw.push(`<div class="reward-item"><div class="ri">📦</div><div class="rt">${P.winStreakBox}/3 побед</div></div>`);
     document.getElementById('res-rewards').innerHTML=rw.join('');
