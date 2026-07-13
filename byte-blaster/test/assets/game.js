@@ -651,7 +651,7 @@ function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('
 function showBossIntro(b){
   const ov=document.getElementById('bossIntroOv');
   // Boss pre-fight dialogue — play cutscene then show card
-  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
+  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),10);
   const bossDialogId='boss_pre_'+wi;
   function _showCard(){
     document.getElementById('bossIntroName').textContent='⚔ '+bossName(b)+' ⚔';
@@ -2571,7 +2571,7 @@ function _bossPlayerContact(){
   if(p.inv>0||p.respawning)return;
   if(!aabb(p,b))return;
   const bCX=b.x+b.w/2;
-  const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.35;
+  const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
   if(stomped){
     const wt=b.weaknessType;
     if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
@@ -2754,7 +2754,12 @@ function updateBoss(){
   // ── Shooting behaviour ────────────────────────
   if(b.shootCD>0)b.shootCD--;
   const dist=Math.abs(pCX-bCX);
-  if(b.shootCD<=0&&dist<500){
+  // Shoot range must cover the boss's own arena — several bosses (GUARDIAN-X,
+  // INFERNO CORE, ICE QUEEN, NEXUS SENTINEL, ARCHON, PRISM WRAITH...) have
+  // arenaW > 500, so a flat "dist<500" could silently never trigger while the
+  // player stood at the far end of a wide arena. Scale it to the arena instead.
+  const shootRange=Math.max(500,b.arenaW-20);
+  if(b.shootCD<=0&&dist<shootRange){
     const wt=b.weaknessType;
     if(wt==='stomp'||wt==='stompOnly'){
       if(b.anim%180<3){bossShoot(bCX,b.y+b.h*.3,pCX,p.y+p.h/2);b.shootCD=130;}
@@ -2783,7 +2788,7 @@ function updateBoss(){
   if(p.inv<=0&&!p.respawning){
     if(aabb(p,b)){
       // Stomp from above?
-      const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.35;
+      const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
       if(stomped){
         const wt=b.weaknessType;
         // bosses that CAN be stomped
@@ -2922,7 +2927,7 @@ function killBoss(){
   floatTxt(b.x+b.w/2,b.y,T('bossDefeated'),CT.clr);
   score+=2000+(advMode?advLevel:level)*150*(hardMode?2:1);
   // Post-boss cutscene (after short delay so particles play)
-  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
+  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),10);
   const afterId='w'+wi+'_after';
   const _bossLvSnap=advMode?advLevel:level,_bossAdvSnap=advMode;
   setTimeout(()=>{
@@ -3346,7 +3351,7 @@ function drawBossHUD(){
   ctx.fillStyle='#fff';ctx.font="bold 8px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⚔ '+bossName(b),W/2,by+bh/2);
   // Hint below bar (translated by world index)
   ctx.fillStyle=b.glow;ctx.font="5px 'Press Start 2P',monospace";
-  const _bwi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
+  const _bwi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),10);
   ctx.fillText(T('bossHint'+_bwi),W/2,by+bh+9);
 
   // Special status indicators
@@ -5830,6 +5835,50 @@ function drawBG(){
   } else if(id===9){ // Final Fortress — red sky + falling ash
     ctx.globalAlpha=.12;const hg=ctx.createLinearGradient(0,0,0,H*.5);hg.addColorStop(0,'#660000');hg.addColorStop(1,'transparent');ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.5);
     for(let i=0,an=Math.round(30*bd);i<an;i++){const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);ctx.globalAlpha=.3;ctx.fillStyle='#553333';ctx.fillRect(ax,ay,2,3);}
+  } else if(id===10){ // Prism Anomaly — true rainbow: refracted light rays + drifting prism shards + colour-cycling aurora
+    // 1. Slowly hue-rotating aurora band — the one truly "rainbow" (multi-hue,
+    // not single-tint) atmosphere layer in the game, matching the world's name.
+    ctx.globalAlpha=.16;
+    const auroraH=H*.5;
+    const auroraGrad=ctx.createLinearGradient(0,0,0,auroraH);
+    for(let s=0;s<=6;s++){
+      const hue=(tick*.6+s*60)%360;
+      auroraGrad.addColorStop(s/6,`hsl(${hue},90%,55%)`);
+    }
+    ctx.fillStyle=auroraGrad;ctx.fillRect(0,0,W,auroraH);
+
+    // 2. Refracted light rays fanning from a shifting prism source
+    ctx.globalAlpha=.10;
+    const px0=W*.5+Math.sin(tick*.006)*W*.2, py0=H*.05;
+    for(let r=0;r<9;r++){
+      const hue=(r*40+tick*1.2)%360;
+      const ang=(-0.6+r*0.15)+Math.sin(tick*.004+r)*.02;
+      ctx.strokeStyle=`hsl(${hue},95%,60%)`;ctx.lineWidth=6;
+      ctx.beginPath();ctx.moveTo(px0,py0);
+      ctx.lineTo(px0+Math.cos(ang)*W*.9,py0+Math.sin(ang)*W*.9+H*.6);
+      ctx.stroke();
+    }
+
+    // 3. Drifting prism shard motes — small rotating rainbow diamonds
+    for(let i=0,sn=Math.round(26*bd);i<sn;i++){
+      const sx=(i*151+tick*.5)%W, sy=(i*83+tick*.22)%(H*.85);
+      const hue=(i*23+tick*3)%360;
+      const rot=tick*.02+i;
+      ctx.save();ctx.translate(sx,sy);ctx.rotate(rot);
+      ctx.globalAlpha=.4+Math.sin(tick*.05+i)*.2;
+      ctx.fillStyle=`hsl(${hue},95%,65%)`;
+      ctx.shadowColor=`hsl(${hue},95%,65%)`;ctx.shadowBlur=gl>0?4:0;
+      const sz=2+((i*7)%3);
+      ctx.beginPath();ctx.moveTo(0,-sz);ctx.lineTo(sz,0);ctx.lineTo(0,sz);ctx.lineTo(-sz,0);ctx.closePath();ctx.fill();
+      ctx.shadowBlur=0;ctx.restore();
+    }
+
+    // 4. Faint corrupted grid tears (irregular, unlike the clean Cyber City grid)
+    ctx.globalAlpha=.05;ctx.strokeStyle='#f0f';ctx.lineWidth=1;
+    for(let g=0;g<W;g+=70){
+      const jit=Math.sin(g*.05+tick*.02)*10;
+      ctx.beginPath();ctx.moveTo(g+jit,H*.4);ctx.lineTo(g-jit,H);ctx.stroke();
+    }
   }
 
   ctx.restore();

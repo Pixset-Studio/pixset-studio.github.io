@@ -196,7 +196,15 @@
 
   // Accent colour for a world — overridden to red in Hardcore mode.
   function worldAccent(world) {
-    return MAP_STATE.hard ? '#f44' : world['accent'];
+    if (MAP_STATE.hard) return '#f44';
+    // Prism Anomaly is the one world that should actually read as "rainbow" on
+    // the map (roads, node rings, glow) rather than a single fixed tint like
+    // every other world — cycle its hue instead of returning a flat colour.
+    if (world && world.secret) {
+      const hue = (MAP_STATE.time * 60) % 360;
+      return `hsl(${hue},95%,62%)`;
+    }
+    return world['accent'];
   }
 
   // ═══════════════════════════════════════════════
