@@ -1876,6 +1876,26 @@ function genDecors(rng){
       else if(t===3){const y=GY-55-rng()*120;add({T:'torch',x,y,col:'#ff4400',phase:rng()*Math.PI*2,layer:1});}
       else{const h=90+rng()*140;add({T:'obelisk',x,y:GY-h,w:20,h,col:'#110808',glow:'#f44',layer:1});}
     });
+  }else if(id===10){ //── PRISM ANOMALY (secret) ───
+    // Reuses existing decor shapes (they already accept a `col`) but rolls a
+    // fresh spectrum hue per item instead of one fixed tint — every other
+    // world is monochrome-by-design, but this one is explicitly the
+    // "prismatic" world and should actually look like it, not just purple.
+    const rHue=()=>`hsl(${Math.floor(rng()*360)},85%,${55+Math.floor(rng()*15)}%)`;
+    // Far: drifting prism-orbs + a sparse star field for depth
+    scatter(0,ww,260,110,0,(x)=>{
+      add({T:'starCluster',x,y:20+rng()*160,count:5+Math.floor(rng()*8),spread:35+rng()*50,layer:0});
+    });
+    scatter(150,ww-150,420,180,0,(x)=>{add({T:'planet',x,y:30+rng()*140,r:18+rng()*36,col:rHue(),layer:0});});
+    // Near: crystal shards jutting from the ground, floating debris shards,
+    // corrupted data-pillars — each rolls its own hue.
+    scatter(60,ww-60,150,65,1,(x)=>{
+      const t=Math.floor(rng()*4);
+      if(t===0){const h=20+rng()*70;add({T:'iceSpike',x,y:GY,h,w:9+rng()*15,col:rHue(),layer:1});}
+      else if(t===1){const yy=H-90-rng()*180;add({T:'iceBubble',x,y:yy,r:9+rng()*20,col:rHue(),phase:rng()*Math.PI*2,layer:1});}
+      else if(t===2){const yy=50+rng()*170;add({T:'debris',x,y:yy,r:10+rng()*20,phase:rng()*Math.PI*2,spd:rng()*.015+.006,layer:1});}
+      else{const h=80+rng()*130;add({T:'obelisk',x,y:GY-h,w:18,h,col:'#1a0a30',glow:rHue(),layer:1});}
+    });
   }
 }
 
@@ -2568,7 +2588,7 @@ function bossShoot(bx,by,targetX,targetY){
 function _bossPlayerContact(){
   const b=boss; if(!b||!b.alive)return;
   const p=player; if(!p)return;
-  if(p.inv>0||p.respawning)return;
+  if(p.respawning)return;
   if(!aabb(p,b))return;
   const bCX=b.x+b.w/2;
   const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
@@ -2579,10 +2599,10 @@ function _bossPlayerContact(){
       b._netHitElem=null;                  // a stomp carries no elemental status
       damageBoss(1);                       // redirected to the host on guests
       p.vy=JV*.55;p.jl=Math.max(p.jl,1);
-    } else {
+    } else if(p.inv<=0){
       p.vy=JV*.4;floatTxt(bCX,b.y,T('noEffect'),'#888');SFX.hit();
     }
-  } else {
+  } else if(p.inv<=0){
     enemyHitPlayer();                      // strip power-up / stage-down on the guest
   }
 }
@@ -2785,36 +2805,43 @@ function updateBoss(){
   }
 
   // ── Player collision ──────────────────────────
-  if(p.inv<=0&&!p.respawning){
-    if(aabb(p,b)){
-      // Stomp from above?
-      const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
-      if(stomped){
-        const wt=b.weaknessType;
-        // bosses that CAN be stomped
-        if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
-           (wt==='twoStage'&&!b.shellBroken)||
-           (wt==='archon'&&b.phase===2)||
-           (wt==='archon'&&b.phase===3)){
-          if(wt==='twoStage'&&!b.shellBroken){
-            b.shellHP--;b.flash=20;SFX.stomp();
-            burst(bCX,b.y,'#cf0',10,3,5);
-            floatTxt(bCX,b.y,T('crackLeft',b.shellHP),'#cf0');
-            if(b.shellHP<=0){b.shellBroken=true;SFX.secret();camShake=10;
-              burst(bCX,b.y+b.h/2,'#cf0',24,5,6);floatTxt(bCX,b.y,T('shellBroken'),'#cf0');}
-          } else {
-            damageBoss(1);
-          }
-          p.vy=JV*.55;p.jl=Math.max(p.jl,1);
+  // A stomp is an ATTACK, not something the player's post-hit invulnerability
+  // should block — it previously did (both branches lived under one
+  // `if(p.inv<=0)`), so a single imperfect side-touch granted 90 frames of
+  // total pass-through immunity with the boss. During that window the player
+  // (and the boss, which keeps walking) drift apart, and by the time
+  // invulnerability wore off they'd missed the window — which is exactly what
+  // "the boss is unbeatable, I just pass through it" looks like in practice.
+  // Only taking damage should still respect p.inv/respawning.
+  if(!p.respawning&&aabb(p,b)){
+    // Stomp from above?
+    const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
+    if(stomped){
+      const wt=b.weaknessType;
+      // bosses that CAN be stomped
+      if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
+         (wt==='twoStage'&&!b.shellBroken)||
+         (wt==='archon'&&b.phase===2)||
+         (wt==='archon'&&b.phase===3)){
+        if(wt==='twoStage'&&!b.shellBroken){
+          b.shellHP--;b.flash=20;SFX.stomp();
+          burst(bCX,b.y,'#cf0',10,3,5);
+          floatTxt(bCX,b.y,T('crackLeft',b.shellHP),'#cf0');
+          if(b.shellHP<=0){b.shellBroken=true;SFX.secret();camShake=10;
+            burst(bCX,b.y+b.h/2,'#cf0',24,5,6);floatTxt(bCX,b.y,T('shellBroken'),'#cf0');}
         } else {
-          // Wrong method - stomp blocked
-          p.vy=JV*.4;
-          floatTxt(bCX,b.y,T('noEffect'),'#888');
-          SFX.hit();
+          damageBoss(1);
         }
-      } else if(!stomped){
-        enemyHitPlayer();
+        p.vy=JV*.55;p.jl=Math.max(p.jl,1);
+      } else if(p.inv<=0){
+        // Wrong method - stomp blocked (still counts as a hit, so this part
+        // does respect invulnerability)
+        p.vy=JV*.4;
+        floatTxt(bCX,b.y,T('noEffect'),'#888');
+        SFX.hit();
       }
+    } else if(!stomped&&p.inv<=0){
+      enemyHitPlayer();
     }
   }
 
@@ -5905,12 +5932,26 @@ function drawPlatforms(){
   // Build the type->palette map once per frame instead of per platform (was an
   // object + nested array allocation on every iteration).
   const _platPal={normal:CT.pN,moving:CT.pM,crumble:CT.pC,conveyor:['#2a3a4a','#3a4a5a','#4a5a6a']};
+  const _prism=(CT.id===10); // Prism Anomaly: ground/platforms sweep through the
+  // full spectrum instead of the flat violet gradient every other world uses —
+  // otherwise the level itself still reads as "just purple" even though the
+  // sky/enemies are rainbow.
   for(const pl of platforms){
     if(pl.gone)continue;
     if(pl.x+pl.w<vLeft||pl.x>vRight)continue;
     const alpha=(pl.crm&&pl.crm_on)?Math.max(0,pl.ct/72):1;
     ctx.save();ctx.globalAlpha=alpha;
     if(pl.type==='ground'){
+      if(_prism){
+        const hueA=(pl.x*0.5+tick*1.1)%360,hueB=(hueA+40)%360;
+        const g=ctx.createLinearGradient(0,pl.y,0,pl.y+pl.h);
+        g.addColorStop(0,`hsl(${hueA},85%,32%)`);g.addColorStop(1,`hsl(${hueB},80%,14%)`);
+        ctx.fillStyle=g;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+        ctx.strokeStyle=`hsl(${hueA},95%,72%)`;ctx.lineWidth=2;ctx.shadowBlur=0;
+        ctx.beginPath();ctx.moveTo(pl.x,pl.y);ctx.lineTo(pl.x+pl.w,pl.y);ctx.stroke();
+        ctx.strokeStyle=`hsla(${hueA},90%,70%,0.5)`;ctx.lineWidth=1;
+        for(let gx=pl.x+20;gx<pl.x+pl.w;gx+=20){ctx.beginPath();ctx.moveTo(gx,pl.y);ctx.lineTo(gx,pl.y+pl.h);ctx.stroke();}
+      } else {
       // Vertical gradient is x-invariant, so cache it on the platform and reuse
       // it across frames (and horizontal movement). Invalidate only when the
       // platform's y or the theme changes - mirrors the _skyGrad cache pattern.
@@ -5920,6 +5961,33 @@ function drawPlatforms(){
       ctx.beginPath();ctx.moveTo(pl.x,pl.y);ctx.lineTo(pl.x+pl.w,pl.y);ctx.stroke();
       ctx.strokeStyle=CT.grd[0]+'88';ctx.lineWidth=1;
       for(let gx=pl.x+20;gx<pl.x+pl.w;gx+=20){ctx.beginPath();ctx.moveTo(gx,pl.y);ctx.lineTo(gx,pl.y+pl.h);ctx.stroke();}
+      }
+    } else if(_prism){
+      // Each platform type keeps a distinct hue *band* (so players can still
+      // tell normal/moving/crumble apart at a glance) but every band sweeps
+      // through the spectrum by position+time rather than sitting on one fixed
+      // colour — reads as genuinely prismatic instead of "purple, yellow, cyan".
+      const typeOffset=pl.type==='moving'?120:pl.type==='crumble'?240:0;
+      const hue=(pl.x*0.7+tick*1.6+typeOffset)%360;
+      const g=ctx.createLinearGradient(0,pl.y,0,pl.y+pl.h);
+      g.addColorStop(0,`hsl(${hue},90%,62%)`);g.addColorStop(1,`hsl(${hue},85%,30%)`);
+      ctx.fillStyle=g;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+      ctx.strokeStyle=`hsl(${hue},95%,80%)`;ctx.lineWidth=2;
+      ctx.shadowBlur=0;ctx.strokeRect(pl.x+1,pl.y+1,pl.w-2,pl.h-2);
+      if(pl.type==='conveyor'){
+        const offset=(tick*pl.conveyorSpeed*pl.conveyorDir*2)%30;
+        ctx.save();ctx.beginPath();ctx.rect(pl.x,pl.y,pl.w,pl.h);ctx.clip();
+        ctx.fillStyle='#1a2a3a';
+        for(let rx=pl.x+offset;rx<pl.x+pl.w;rx+=15){if(rx>=pl.x&&rx<=pl.x+pl.w-2){ctx.fillRect(rx,pl.y+1,2,pl.h-2);}}
+        ctx.shadowColor='#ffaa00';ctx.shadowBlur=6;ctx.strokeStyle='#ffaa00';ctx.lineWidth=2;ctx.lineCap='round';
+        for(let cx=pl.x+offset;cx<pl.x+pl.w;cx+=30){
+          if(cx-6<pl.x||cx+6>pl.x+pl.w)continue;
+          const arrowY=pl.y+pl.h/2;
+          if(pl.conveyorDir>0){ctx.beginPath();ctx.moveTo(cx-6,arrowY);ctx.lineTo(cx+6,arrowY);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+6,arrowY);ctx.lineTo(cx+2,arrowY-3);ctx.moveTo(cx+6,arrowY);ctx.lineTo(cx+2,arrowY+3);ctx.stroke();}
+          else{ctx.beginPath();ctx.moveTo(cx+6,arrowY);ctx.lineTo(cx-6,arrowY);ctx.stroke();ctx.beginPath();ctx.moveTo(cx-6,arrowY);ctx.lineTo(cx-2,arrowY-3);ctx.moveTo(cx-6,arrowY);ctx.lineTo(cx-2,arrowY+3);ctx.stroke();}
+        }
+        ctx.shadowBlur=0;ctx.lineCap='butt';ctx.restore();
+      }
     } else {
       const c=_platPal[pl.type]||CT.pN;
       if(!pl._grad||pl._gradY!==pl.y||pl._gradTheme!==CT.id){const g=ctx.createLinearGradient(0,pl.y,0,pl.y+pl.h);g.addColorStop(0,c[1]);g.addColorStop(1,c[0]);pl._grad=g;pl._gradY=pl.y;pl._gradTheme=CT.id;}
@@ -8006,8 +8074,10 @@ function d_pr_shard(e){
   _rLegs(0,0,e.w,e.h,'#3a0a5a',lk);
   _rBody(0,0,e.w,e.h,'#5a14a0','#8020d0');
   _rHead(0,0,e.w,e.h,'#4a0e80','#7018c0','#f0f');
-  // Jagged crystal shard jutting from the skull
-  ctx.fillStyle='#e8a0ff';
+  // Jagged crystal shard jutting from the skull — cycles through the spectrum
+  // (this is "Prism Anomaly": the whole point is refracted rainbow light, not
+  // a single fixed tint like every other world's enemies).
+  ctx.fillStyle=`hsl(${(tick*3+e.x)%360},95%,72%)`;
   ctx.beginPath();ctx.moveTo(e.w*.5,-10);ctx.lineTo(e.w*.62,0);ctx.lineTo(e.w*.5,e.h*.12);ctx.lineTo(e.w*.38,0);ctx.closePath();ctx.fill();
   // Corruption glitch: an occasional 1-frame scanline tear + colour-offset slice
   if(Math.floor(tick/5)%4===0){
@@ -8026,20 +8096,20 @@ function d_pr_guard(e){
   _rHead(0,0,e.w,e.h,'#0d3350','#155a88','#0ff');
   ctx.fillStyle='#0a1a2c';
   ctx.fillRect(3,e.h-14,10,14+lk);ctx.fillRect(e.w-13,e.h-14,10,14-lk);
-  // Faceted crystal crest on top
-  ctx.fillStyle='#8ff';ctx.shadowBlur=0;
+  // Faceted crystal crest on top — cycles through the spectrum
+  ctx.fillStyle=`hsl(${(tick*3+e.x*2)%360},95%,75%)`;ctx.shadowBlur=0;
   ctx.beginPath();ctx.moveTo(e.w*.5,-9);ctx.lineTo(e.w*.58,1);ctx.lineTo(e.w*.42,1);ctx.closePath();ctx.fill();
   _shieldRing(e,'#0ff');
   ctx.restore();
 }
 function d_pr_wisp(e){
   ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);
-  // Trailing prism-shard halo orbiting the core
+  // Trailing prism-shard halo orbiting the core — each shard its own hue
   for(let i=0;i<3;i++){
     const ang=e.a*1.4+i*(Math.PI*2/3);
     const rx=Math.cos(ang)*e.w*.7,ry=Math.sin(ang)*e.w*.5;
     ctx.save();ctx.translate(rx,ry);ctx.rotate(ang);
-    ctx.fillStyle='rgba(255,220,120,0.55)';
+    ctx.fillStyle=`hsla(${(tick*4+i*120)%360},95%,68%,0.65)`;
     ctx.beginPath();ctx.moveTo(0,-4);ctx.lineTo(3,0);ctx.lineTo(0,4);ctx.lineTo(-3,0);ctx.closePath();ctx.fill();
     ctx.restore();
   }
@@ -8057,11 +8127,12 @@ function d_pr_beam(e){
   ctx.fillStyle='#125838';ctx.fillRect(5,3,e.w-10,e.h*.5);
   ctx.fillStyle='#0a1a10';ctx.beginPath();ctx.moveTo(3,e.h*.1);ctx.lineTo(0,e.h*.4);ctx.lineTo(3,e.h*.7);ctx.closePath();ctx.fill();
   ctx.fillStyle='#0a1a10';ctx.beginPath();ctx.moveTo(e.w-3,e.h*.1);ctx.lineTo(e.w,e.h*.4);ctx.lineTo(e.w-3,e.h*.7);ctx.closePath();ctx.fill();
-  // Lens
-  ctx.fillStyle='#8f8';ctx.shadowColor='#8f8';ctx.shadowBlur=8;
+  // Lens — cycles through the spectrum
+  const lensHue=(tick*3+e.x)%360;
+  ctx.fillStyle=`hsl(${lensHue},95%,65%)`;ctx.shadowColor=`hsl(${lensHue},95%,65%)`;ctx.shadowBlur=8;
   ctx.beginPath();ctx.arc(e.w-8,e.h*.32,4,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
   if(e.sCD<35){
-    ctx.globalAlpha=.5*(1-e.sCD/35);ctx.strokeStyle='#8f8';ctx.lineWidth=1;
+    ctx.globalAlpha=.5*(1-e.sCD/35);ctx.strokeStyle=`hsl(${lensHue},95%,65%)`;ctx.lineWidth=1;
     ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(e.w+2,e.h*.32);ctx.lineTo(e.w+70,e.h*.32);ctx.stroke();
     ctx.setLineDash([]);ctx.globalAlpha=1;
   }
@@ -8080,7 +8151,7 @@ function d_pr_glitch(e){
   ctx.fillStyle='#ffb0e0';ctx.fillRect(6,4,4,3);ctx.fillRect(e.w-12,4,4,3); // eyes
   if(glitchOn){
     // Corrupted duplicate slice offset to the side — the "glitch" signature look
-    ctx.globalAlpha=.4;ctx.fillStyle='#0ff';ctx.fillRect(4+gx*2,0,e.w-8,6);
+    ctx.globalAlpha=.4;ctx.fillStyle=`hsl(${(tick*6+e.x)%360},95%,65%)`;ctx.fillRect(4+gx*2,0,e.w-8,6);
     ctx.globalAlpha=1;
   }
   if(e.charging){
