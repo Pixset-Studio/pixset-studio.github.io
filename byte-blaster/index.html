@@ -1,527 +1,190 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>BYTE BLASTER</title>
-
-<!-- App / tab icons (favicon + mobile home-screen). Files live in icons/. -->
-<link rel="icon" href="icons/favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="manifest" href="icons/site.webmanifest">
-
-<!-- Mobile / PWA chrome -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BYTE BLASTER — киберпанк-платформер от Pixset Studio</title>
+<meta name="description" content="Byte Blaster — киберпанк 2D-платформер: 110 уровней, 11 миров, 11 боссов, кооператив до 5 игроков и 49 языков. Играйте прямо в браузере — полная версия или демо.">
 <meta name="theme-color" content="#04040f">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Byte Blaster">
-
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/ui-fix.css">
-<link rel="stylesheet" href="assets/touch.css">
-<script src="assets/version.js"></script>
-<script>
-  // ── Global error catcher ────────────────────────────────────────────────
-  // Without this, ANY uncaught error while the game's scripts load or run
-  // (a typo, a missing function, anything) fails completely silently — the
-  // player just sees a black screen with zero indication of what broke, and
-  // there's no way to know without manually opening DevTools. This shows a
-  // readable on-screen panel with the actual error instead, and always logs
-  // to console so it also shows up in a packaged .exe's log output.
-  (function () {
-    var shown = false;
-    function showFatalError(title, detail) {
-      if (shown) return; // only show the FIRST error — later ones are usually just fallout from the first
-      shown = true;
-      try {
-        var el = document.createElement('div');
-        el.id = 'fatalErrorOverlay';
-        el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0a0208;color:#fff;'
-          + 'font-family:monospace;display:flex;flex-direction:column;align-items:center;'
-          + 'justify-content:center;padding:24px;text-align:center;gap:14px;';
-        el.innerHTML =
-          '<div style="font-size:20px;color:#f55;letter-spacing:2px;">⚠ BYTE BLASTER FAILED TO START</div>' +
-          '<div style="font-size:13px;color:#faa;max-width:640px;">' + title + '</div>' +
-          '<pre style="font-size:11px;color:#999;max-width:800px;max-height:240px;overflow:auto;' +
-            'background:#000;border:1px solid #500;padding:10px;text-align:left;white-space:pre-wrap;">' +
-            detail + '</pre>' +
-          '<div style="font-size:11px;color:#8cf;max-width:640px;">' +
-            'Please screenshot this AND send byte-blaster-log.txt (next to the game .exe) — together they tell us exactly what broke.' +
-          '</div>' +
-          '<button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#204;' +
-            'color:#fff;border:2px solid #f4a;cursor:pointer;font-family:monospace;font-size:12px;">RELOAD</button>';
-        document.body.appendChild(el);
-      } catch (e2) { /* even the fallback failed — nothing more we can do client-side */ }
-    }
-    window.addEventListener('error', function (e) {
-      console.error('[fatal]', e.message, e.filename, e.lineno + ':' + e.colno, e.error && e.error.stack);
-      var detail = (e.message || 'Unknown error') + '\n' + (e.filename || '') + ':' + e.lineno + ':' + e.colno +
-        (e.error && e.error.stack ? '\n\n' + e.error.stack : '');
-      try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[fatal error] ' + detail); } catch (e3) {}
-      showFatalError('A script error occurred while the game was loading or running.', detail);
-    });
-    window.addEventListener('unhandledrejection', function (e) {
-      console.error('[fatal] unhandled promise rejection:', e.reason);
-      var detail = String(e.reason && e.reason.stack ? e.reason.stack : e.reason);
-      try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[fatal rejection] ' + detail); } catch (e3) {}
-      showFatalError('An async operation failed while the game was loading or running.', detail);
-    });
-  })();
-  // ── Boot checkpoints ────────────────────────────────────────────────────
-  // The renderer crashes NATIVELY (access violation) ~1s into startup, which
-  // is invisible to error handlers — but a checkpoint call made just BEFORE
-  // the crash still reaches the log file (it's synchronous IPC), so the LAST
-  // line in byte-blaster-log.txt pinpoints exactly which script/stage never
-  // finished. Placed after each <script> tag further down this file.
-  window.__chk = function (label) {
-    try { console.log('[checkpoint]', label); } catch (e) {}
-    try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[checkpoint] ' + label); } catch (e) {}
-  };
-  window.__chk('inline error-handler script done');
-</script>
-
-<!-- Build edition (full / demo) + the demo gating module. Loaded before every
-     other game script so window.Demo exists for all of them, and AFTER the
-     error catcher above so a failure here is shown rather than silent. -->
-<script src="assets/edition.js"></script>
-<script src="assets/demo.js"></script>
-<script>window.__chk('after demo.js');</script>
-
-<!-- Enemy-inflicted status effects on the player. Loaded before game.js so the
-     hooks in it can call window.Status without a load-order guard. -->
-<script src="assets/status.js"></script>
-<script>window.__chk('after status.js');</script>
-
-<!-- Infinite mode: saved run + continue/new choice. -->
-<script src="assets/infsave.js"></script>
-<script>window.__chk('after infsave.js');</script>
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/byte-blaster/assets/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BYTE BLASTER — киберпанк-платформер">
+<meta property="og:description" content="110 уровней, 11 миров, 11 боссов, кооператив до 5 игроков. Играйте в браузере.">
+<meta property="og:url" content="https://pixset-studio.github.io/byte-blaster/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
 </head>
 <body>
-<!-- Boot/loading screen: covers everything until scripts, fonts and locales are
-     ready, so the player never sees a half-built menu. Removed by the script at
-     the bottom of <body>. Inline-styled so it shows before any CSS/JS parses. -->
-<div id="bootScreen" style="position:fixed;inset:0;z-index:99999;background:#04040f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Press Start 2P',monospace;transition:opacity .45s ease">
-  <div style="font-size:22px;color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff;letter-spacing:5px;text-align:center">⚡ BYTE BLASTER</div>
-  <div style="width:200px;height:8px;background:#0a0a22;border:1px solid #0ff5;border-radius:4px;overflow:hidden">
-    <div id="bootBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0af,#0ff);box-shadow:0 0 12px #0ff;transition:width .3s ease"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/">⚡ BYTE BLASTER</a>
+    <nav class="main">
+      <a href="/byte-blaster/" aria-current="page">ГЛАВНАЯ</a>
+      <a href="/byte-blaster/wiki/">ВИКИ</a>
+      <a href="#play">ИГРАТЬ</a>
+    </nav>
   </div>
-  <div id="bootMsg" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4af;letter-spacing:2px">LOADING…</div>
-</div>
-<div id="stars"></div>
-<div id="stage">
-<div id="ui">
-  <div class="uib"><div class="uil" data-i18n="score">SCORE</div><div class="uiv" id="scoreEl">0</div></div>
-  <div class="uib" id="totalUi" style="display:none"><div class="uil" data-i18n="total">TOTAL</div><div class="uiv" id="totalEl">0</div></div>
-  <div class="uib"><div class="uil" data-i18n="lives">LIVES</div><div class="hearts" id="heartsEl"></div></div>
-  <div class="uib"><div class="uil" data-i18n="level">LEVEL</div><div class="uiv" id="levelEl">1</div></div>
-  <div id="timerUi" class="uib"><div class="uil" data-i18n="time">TIME</div><div id="timerVal">2:00</div></div>
-  <div class="uib" id="modeUI" style="display:none"><div class="uil" data-i18n="mode">MODE</div><div class="uiv" id="modeEl" style="font-size:6px">--</div></div>
-  <div class="uib" id="coinsUi"><div class="uil" data-i18n="coins">COINS</div><div class="uiv" id="coinsEl">0</div></div>
-  <div class="uib" id="keysUi" style="display:none"><div class="uil" data-i18n="keys">KEYS</div><div class="uiv" id="keysEl">0/3</div></div>
-  <div class="uib" id="shardsUi" style="display:none"><div class="uil" data-i18n="crystals">CRYSTALS</div><div class="uiv" id="shardsEl">0/3</div></div>
-  <div id="blasterUi" class="uib"><div class="uil" data-i18n="blaster">BLASTER</div><div id="blasterTrack"><div id="blasterFill"></div></div></div>
-  <div id="fireUi" class="uib bonusUi"><div class="uil" data-i18n="bonusFire">FIRE</div><div class="bonusTrack" id="fireTrack"><div class="bonusFill" id="fireFill"></div></div></div>
-  <div id="iceUi" class="uib bonusUi"><div class="uil" data-i18n="bonusIce">ICE</div><div class="bonusTrack" id="iceTrack"><div class="bonusFill" id="iceFill"></div></div></div>
-  <div id="starUi" class="uib bonusUi"><div class="uil" data-i18n="bonusStar">STAR</div><div class="bonusTrack" id="starTrack"><div class="bonusFill" id="starFill"></div></div></div>
-  <div id="bootsUi" class="uib bonusUi"><div class="uil" data-i18n="bonusBoots">BOOTS</div><div class="bonusTrack" id="bootsTrack"><div class="bonusFill" id="bootsFill"></div></div></div>
-  <!-- Status effect left on the player by an enemy hit (assets/status.js). Its
-       label and colour change with the effect, so the text is set at runtime. -->
-  <div id="statusUi" class="uib bonusUi" style="display:none"><div class="uil" id="statusLbl">—</div><div class="bonusTrack" id="statusTrack"><div class="bonusFill" id="statusFill"></div></div></div>
-  <button id="audioBtn" title="Sound">🔊</button>
+</header>
+
+<main>
+
+<div class="hero wrap">
+  <div class="robot">🤖</div>
+  <h1>BYTE BLASTER</h1>
+  <div class="sub">КИБЕРПАНК НЕОНОВЫЙ ПЛАТФОРМЕР</div>
+  <p class="lead">2147 год. Землёй управляет корпорация NEXUM, а всем, что в ней происходит, — сеть GRID.<br>
+     Ты — <b>UNIT-7</b>, боевой андроид, который отказался выполнить приказ. Тебе нужно пройти десять слоёв защиты и вынести правду наружу.</p>
+  <div class="btns" id="play">
+    <a class="btn primary" href="/byte-blaster/game/full/">▶ ИГРАТЬ<small>полная версия · 110 уровней · 11 миров</small></a>
+    <a class="btn" href="/byte-blaster/game/demo/">◆ ДЕМО<small>первые 10 уровней · без установки</small></a>
+  </div>
+  <p class="dim" style="font-size:14px">Запускается прямо в браузере. Ничего скачивать не нужно.</p>
 </div>
 
-<div id="gameWrap">
-  <canvas id="c" width="800" height="420"></canvas>
-
-  <!-- Level modifier banner (top-center, shown only when a modifier is active) -->
-  <div id="modBanner"></div>
-
-  <!-- Main menu -->
-  <div id="mainOv" class="fov">
-    <canvas id="menuBot" width="132" height="162"></canvas>
-    <h1>⚡ BYTE BLASTER</h1>
-    <div class="ovSub" data-i18n="subtitle">CYBERPUNK NEON PLATFORMER</div>
-    <div class="ovScore" id="mainScore" style="display:none"></div>
-    <button class="ovBtn" id="mainBtn" data-i18n="play">▶ PLAY</button>
-    <!-- Settings button is inserted here at runtime by settings.js, so the
-         final main-menu order is Play / Settings / Exit. -->
-    <button class="ovBtn" id="exitBtn" data-i18n="exit" style="margin-top:8px;">🚪 EXIT</button>
-    <div class="ovLegend">
-      <span data-i18n="legend1">ARROWS / WASD — MOVE &nbsp;|&nbsp; SPACE / UP — JUMP (×2)</span><br>
-      <span data-i18n="legend2">Z / X / CTRL — SHOOT (needs blaster power-up) &nbsp;|&nbsp; ESC — PAUSE</span><br>
-      <span data-i18n="legend3">🟡 HIT GOLD BLOCKS FROM BELOW &nbsp;|&nbsp; STOMP ENEMIES FROM ABOVE</span>
+<section>
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><b>110</b><span>уровней</span></div>
+      <div class="stat"><b>11</b><span>миров</span></div>
+      <div class="stat"><b>11</b><span>боссов</span></div>
+      <div class="stat"><b>5</b><span>игроков в кооперативе</span></div>
+      <div class="stat"><b>49</b><span>языков</span></div>
     </div>
-    <div id="verTag" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:#4af7;letter-spacing:2px;margin-top:6px"></div>
   </div>
+</section>
 
-  <!-- Play type select: Solo vs Online -->
-  <div id="playTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
-    <h2 data-i18n="selectMode" style="font-size:13px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px;margin:0">SELECT MODE</h2>
-    <div style="display:flex;gap:18px">
-      <div class="mCard" id="soloCard" style="cursor:pointer">
-        <div class="mIcon">👤</div>
-        <div class="mTitle" data-i18n="netSolo" style="color:#0ff">SOLO</div>
-        <div class="mDesc" data-i18n-html="netSoloDesc">1–2 players<br>local keyboard<br>adventure &amp; infinite</div>
+<section>
+  <div class="wrap">
+    <h2>ЧТО ЭТО ЗА ИГРА</h2>
+    <p class="lead">Классический платформер в неоновом киберпанке: бегай, прыгай, дави врагов сверху, бей блоки снизу и проходи уровень, пока не кончилось время.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="ico">🗺</div>
+        <h3>Живая карта мира</h3>
+        <p>Не список уровней, а карта: узлы соединены дорогами, робот идёт по ним сам, новые пути открываются по мере прохождения. У каждого мира своё окружение — джунгли, лава, лёд, космос.</p>
       </div>
-      <div class="mCard" id="onlineCard" style="cursor:pointer;border-color:#f0f4">
-        <div class="mIcon">🌐</div>
-        <div class="mTitle" data-i18n="netOnline" style="color:#f0f">ONLINE</div>
-        <div class="mDesc" data-i18n-html="netOnlineDesc">up to 5 players<br>local or global<br>room codes</div>
+      <div class="card">
+        <div class="ico">👾</div>
+        <h3>11 боссов</h3>
+        <p>У каждого своя слабость: одного берёт только прыжок на голову, другого — только выстрел в открытую пасть, третьего нужно сначала лишить трёх щитовых сфер.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🌈</div>
+        <h3>Секретный 11-й мир</h3>
+        <p>Собери 10 радужных осколков — по одному спрятано в каждом мире — и откроется <b>PRISM ANOMALY</b>: уровни 101–110 со своим боссом и отдельной сюжетной линией.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🎮</div>
+        <h3>Вдвоём и по сети</h3>
+        <p>Локально на одной клавиатуре или онлайн до пяти игроков — публичные комнаты, коды для друзей и игра по локальной сети.</p>
+      </div>
+      <div class="card">
+        <div class="ico">☣</div>
+        <h3>Эффекты от врагов</h3>
+        <p>Удар оставляет след того, кто его нанёс: горение ускоряет таймер, обледенение замедляет, ЭМИ отключает бластер и двойной прыжок, коррозия делает робота скользким.</p>
+      </div>
+      <div class="card">
+        <div class="ico">📱</div>
+        <h3>Телефон, планшет, ПК</h3>
+        <p>Сенсорное управление настраивается: стрелки или джойстик, размер кнопок и раскладка перетаскиванием. Качество графики подбирается автоматически.</p>
       </div>
     </div>
-    <button class="mBack" id="playTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
   </div>
+</section>
 
-  <!-- Online type: Local (LAN) vs Server -->
-  <div id="netTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
-    <h2 data-i18n="netMultiplayer" style="font-size:12px;color:#f0f;text-shadow:0 0 14px #f0f;letter-spacing:3px;margin:0">🌐 ONLINE MULTIPLAYER</h2>
-    <div style="display:flex;gap:18px">
-      <div class="mCard" id="createRoomCard" style="cursor:pointer;border-color:#0f84">
-        <div class="mIcon">➕</div>
-        <div class="mTitle" data-i18n="netCreateRoom" style="color:#0f8">CREATE ROOM</div>
-        <div class="mDesc" data-i18n-html="netCreateRoomDesc">open or closed<br>set player limit<br>host a game</div>
-      </div>
-      <div class="mCard" id="findRoomCard" style="cursor:pointer;border-color:#f0f4">
-        <div class="mIcon">🔍</div>
-        <div class="mTitle" data-i18n="netFindRoom" style="color:#f0f">FIND ROOM</div>
-        <div class="mDesc" data-i18n-html="netFindRoomDesc">browse rooms<br>local or server<br>join by code</div>
-      </div>
+<section>
+  <div class="wrap">
+    <h2>ОДИННАДЦАТЬ МИРОВ</h2>
+    <p>Каждый мир — это десять уровней, собственная тема, свой набор врагов и босс в конце.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>#</th><th>Мир</th><th>Уровни</th><th>Босс</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>КИБЕРГОРОД</td><td>1–10</td><td>СТРАЖ-X</td></tr>
+          <tr><td>2</td><td>НЕОНОВЫЕ ДЖУНГЛИ</td><td>11–20</td><td>КОРОЛЕВА ЛОЗ</td></tr>
+          <tr><td>3</td><td>МИР ЛАВЫ</td><td>21–30</td><td>ЯДРО ИНФЕРНО</td></tr>
+          <tr><td>4</td><td>ЛЕДЯНЫЕ ПЕЩЕРЫ</td><td>31–40</td><td>ЛЕДЯНОЙ ПРИЗРАК</td></tr>
+          <tr><td>5</td><td>РУИНЫ ПУСТЫНИ</td><td>41–50</td><td>ПЕСЧАНЫЙ ТИТАН</td></tr>
+          <tr><td>6</td><td>КОСМОСТАНЦИЯ</td><td>51–60</td><td>РОЙ ДРОНОВ</td></tr>
+          <tr><td>7</td><td>ТЁМНЫЙ ЛЕС</td><td>61–70</td><td>ТЕНЕВОЙ ЖНЕЦ</td></tr>
+          <tr><td>8</td><td>ТОКСИЧНАЯ ЗОНА</td><td>71–80</td><td>КОРОЛЬ СЛИЗИ</td></tr>
+          <tr><td>9</td><td>ГРОЗОВЫЕ ПИКИ</td><td>81–90</td><td>ШТОРМОВОЙ ТИТАН</td></tr>
+          <tr><td>10</td><td>ПОСЛЕДНЯЯ КРЕПОСТЬ</td><td>91–100</td><td>АРХОНТ</td></tr>
+          <tr><td>🌈</td><td>PRISM ANOMALY <span class="tag mag">секрет</span></td><td>101–110</td><td>PRISM WRAITH</td></tr>
+        </tbody>
+      </table>
     </div>
-    <button class="mBack" id="netTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
+    <p><a href="/byte-blaster/wiki/#worlds">Подробнее о каждом мире — в вики →</a></p>
   </div>
+</section>
 
-  <!-- Pause -->
-  <div id="pauseOv" class="fov">
-    <h2 data-i18n="paused">⏸ PAUSED</h2>
-    <button class="pBtn" id="resumeBtn" data-i18n="resume">▶ RESUME</button>
-    <button class="pBtn" id="pauseMapBtn" data-i18n="map" style="display:none">🗺 MAP</button>
-    <button class="pBtn" id="pauseMenuBtn" data-i18n="menu">⬅ MENU</button>
-    <div data-i18n="escResume" style="font-family:'Share Tech Mono',monospace;font-size:7px;color:#4af6;margin-top:4px">ESC — RESUME</div>
+<section>
+  <div class="wrap">
+    <h2>РЕЖИМЫ</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>🗺 Приключение</h3>
+        <p>Основной режим: 100 уровней в 10 мирах, таймер на каждый, прогресс сохраняется. Плюс секретные 10 уровней.</p>
+      </div>
+      <div class="card">
+        <h3>💀 Хардкор</h3>
+        <p>Открывается после прохождения обычного режима. У всех врагов +1 hp, таймеры быстрее, очки удваиваются.</p>
+      </div>
+      <div class="card">
+        <h3>∞ Бесконечный</h3>
+        <p>Карты генерируются без конца, сложность растёт. Забег сохраняется, если выйти посреди него.</p>
+      </div>
+      <div class="card">
+        <h3>👥 Два игрока</h3>
+        <p>На одной клавиатуре. У второго игрока — красный робот UNIT-8 и своя ветка реплик.</p>
+      </div>
+    </div>
   </div>
+</section>
 
-  <!-- Mode select -->
-  <div id="modeOv" class="fov">
-    <h2 data-i18n="selectMode">SELECT MODE</h2>
-    <!-- Player count toggle -->
-    <div id="playerToggle">
-      <button class="ptBtn active" id="btn1p" onclick="setPlayers(1)" data-i18n="onePlayer">👤 1 PLAYER</button>
-      <button class="ptBtn" id="btn2p" onclick="setPlayers(2)" data-i18n="twoPlayer">👥 2 PLAYERS</button>
+<section>
+  <div class="wrap">
+    <h2>УПРАВЛЕНИЕ</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Действие</th><th>Клавиатура</th><th>Сенсор</th></tr></thead>
+        <tbody>
+          <tr><td>Движение</td><td>Стрелки или <code>WASD</code></td><td>Стрелки или джойстик на экране</td></tr>
+          <tr><td>Прыжок (двойной)</td><td><code>Пробел</code> или <code>↑</code></td><td>Кнопка ПРЫЖОК</td></tr>
+          <tr><td>Выстрел</td><td><code>Z</code>, <code>X</code> или <code>Ctrl</code></td><td>Кнопка ОГОНЬ</td></tr>
+          <tr><td>Пауза</td><td><code>Esc</code></td><td>Кнопка паузы в углу</td></tr>
+        </tbody>
+      </table>
     </div>
-    <div id="p2hint" data-i18n="p2hint" style="font-family:'Share Tech Mono',monospace;font-size:7px;color:#4af8;display:none;margin-top:-6px">
-      P1: WASD + Z/X shoot &nbsp;|&nbsp; P2: ← → ↑ + . / , shoot
-    </div>
-    <div id="modeCards">
-      <div class="mCard" id="advCard">
-        <div class="mIcon">🗺️</div><div class="mTitle" data-i18n="adventure">ADVENTURE</div>
-        <div class="mDesc" data-i18n-html="advDesc">100 unique levels<br>10 themed worlds<br>timer per level<br>save progress</div>
-      </div>
-      <div class="mCard locked" id="infCard">
-        <div class="mIcon">♾️</div><div class="mTitle" data-i18n="infinite">INFINITE</div>
-        <div class="mDesc">endless maps<br>difficulty scales<br>beat the clock<br>top your score</div>
-      </div>
-    </div>
-    <button class="mBack" id="modeBackBtn" data-i18n="back">← BACK [ESC]</button>
+    <div class="note cy">Бластер нужно сначала найти — без него стрелять нечем. Врагов можно давить прыжком сверху, а жёлтые блоки бить снизу.</div>
   </div>
+</section>
 
-  <!-- Difficulty select overlay (Normal vs Hardcore) -->
-  <div id="diffOv" class="fov" style="background:#04040fee;gap:16px">
-    <h2 data-i18n="selectDiff" style="font-size:13px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px">SELECT DIFFICULTY</h2>
-    <div style="display:flex;gap:18px" id="diffCards">
-      <div class="mCard" id="normalCard">
-        <div class="mIcon">⚔️</div><div class="mTitle" data-i18n="normal" style="color:#0ff">NORMAL</div>
-        <div class="mDesc" id="normDesc">standard enemies<br>3 lives to start<br>save progress</div>
-      </div>
-      <div class="mCard locked" id="hardCard">
-        <div class="mIcon">💀</div><div class="mTitle" data-i18n="hardcore" style="color:#f44">HARDCORE</div>
-        <div class="mDesc" id="hardDesc">complete normal<br>mode first<br>to unlock</div>
-      </div>
+<section>
+  <div class="wrap" style="text-align:center">
+    <h2>ГОТОВ?</h2>
+    <p class="lead">Демо — это первый мир целиком, без установки и регистрации. Полная версия продолжает ровно с того места.</p>
+    <div class="btns">
+      <a class="btn primary" href="/byte-blaster/game/full/">▶ ПОЛНАЯ ВЕРСИЯ<small>110 уровней · кооператив · хардкор</small></a>
+      <a class="btn" href="/byte-blaster/game/demo/">◆ ДЕМО<small>10 уровней · попробовать сейчас</small></a>
     </div>
-    <button class="mBack" onclick="hideDiff()" data-i18n="back">← BACK [ESC]</button>
+    <p style="margin-top:26px"><a class="btn ghost" href="/byte-blaster/wiki/">📖 ОТКРЫТЬ ВИКИ</a></p>
   </div>
+</section>
 
-  <!-- Adventure map -->
-  <div id="mapOv" class="fov">
-    <div id="mapHeader">
-      <h2 data-i18n="advMap">🗺 ADVENTURE MAP</h2>
-      <div id="mapProg">0 / 100</div>
-    <button id="mapBackBtn" data-i18n="back">← BACK [ESC]</button>
-      <div style="font-family:monospace;font-size:8px;color:#ffffff33;margin-top:4px;letter-spacing:1px"> </div>
-    </div>
-    <div id="mapGrid"></div>
-    <div id="mapFoot" data-i18n="mapFoot">CLICK UNLOCKED LEVEL • COMPLETE IN TIME • RESPAWN IN PLACE ON HIT</div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
+    <div><a href="/byte-blaster/wiki/">Вики</a> · <a href="/byte-blaster/wiki/#requirements">Требования</a> · <a href="/byte-blaster/wiki/#faq">FAQ</a></div>
   </div>
-</div>
+</footer>
 
-  <div id="hint" data-i18n="hintBar">ARROWS/WASD — MOVE &nbsp;|&nbsp; SPACE — JUMP &nbsp;|&nbsp; Z/X — SHOOT (blaster) &nbsp;|&nbsp; ESC — PAUSE</div>
-
-<!-- Boss intro overlay -->
-<div id="bossIntroOv" style="display:none;position:fixed;inset:0;background:#000c;z-index:30;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none">
-  <div id="bossIntroName" style="font-family:'Press Start 2P',monospace;font-size:22px;color:#f44;text-shadow:0 0 30px #f44,0 0 60px #f44;letter-spacing:4px;animation:bossShake .1s infinite"></div>
-  <div id="bossIntroHint" style="font-family:'Press Start 2P',monospace;font-size:7px;color:#ff8;text-align:center;max-width:500px;line-height:1.8"></div>
-  <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:#888;margin-top:6px" data-i18n="getReady">GET READY...</div>
-</div>
-
-<!-- Cutscene overlay -->
-<div id="csOv">
-  <div id="csBars"></div>
-  <div id="csMid">
-    <canvas id="csBg"></canvas>
-    <canvas id="csDecor"></canvas>
-    <canvas id="csLeftP" width="200" height="260"></canvas>
-    <canvas id="csRightP" width="200" height="260"></canvas>
-    <div id="csBanner"><div id="csBannerBig"></div><div id="csBannerLine"></div><div id="csBannerSub"></div></div>
-    <div id="csDlg">
-      <div id="csSpk"></div>
-      <div id="csTxt"></div>
-      <div id="csHint" data-i18n="csHint">▶ ПРОБЕЛ / КЛИК — ДАЛЕЕ</div>
-    </div>
-    <div id="csLogTag" data-i18n="classifiedLog">// NEXUM GRID ACCESS LOG</div>
-    <button id="csSkipBtn" onclick="csSkip()" data-i18n="skipBtn">SKIP ▶▶</button>
-  </div>
-  <div id="csBarsBot"></div>
-</div>
-
-<script src="assets/audiofiles.js"></script>
-<script>window.__chk('after audiofiles.js');</script>
-<script src="assets/game.js"></script>
-<script>window.__chk('after game.js');</script>
-<script src="assets/i18n-new.js"></script>
-<script>window.__chk('after i18n-new.js');</script>
-<script src="assets/settings.js"></script>
-<script>window.__chk('after settings.js');</script>
-<script src="assets/worldmap.js"></script>
-<script>window.__chk('after worldmap.js');</script>
-<script src="assets/achievements.js"></script>
-<script>window.__chk('after achievements.js');</script>
-<script src="assets/saveslots.js"></script>
-<script>window.__chk('after saveslots.js');</script>
-<script src="assets/bugfixes.js"></script>
-<script>window.__chk('after bugfixes.js');</script>
-<script src="assets/cinematics.js"></script>
-<script>window.__chk('after cinematics.js');</script>
-<script src="assets/logarchive.js"></script>
-<script>window.__chk('after logarchive.js');</script>
-<script src="assets/profile.js"></script>
-<script>window.__chk('after profile.js');</script>
-
-<!-- ══════════════════════════════════════════════════════════════
-     BYTE BLASTER — NETWORK MULTIPLAYER MODULE
-     Relay server: wss://byte-blaster-server-production.up.railway.app
-     ══════════════════════════════════════════════════════════════ -->
-<link rel="stylesheet" href="assets/network.css">
-
-<!-- Lobby DOM -->
-<div id="netLobby">
-  <h2 id="netLobbyTitle">⚡ ONLINE MULTIPLAYER</h2>
-
-  <!-- Step: connect screen -->
-  <div class="net-panel" id="netConnect">
-    <div class="net-label" data-i18n="netNickname">NICKNAME</div>
-    <input class="net-input" id="netNick" maxlength="16" data-i18n-ph="netNickPlaceholder" placeholder="YOUR NAME" value="PLAYER"/>
-    <div class="net-label" data-i18n="netRobotColour">ROBOT COLOUR</div>
-    <div class="net-color-ring" id="netColorPicker"></div>
-    <!-- ════ CREATE ROOM view ════ -->
-    <div id="netCreateView" style="display:none;flex-direction:column;gap:10px">
-      <div class="net-label" data-i18n="netRoomSource">ROOM SOURCE</div>
-      <div class="net-toggle-row">
-        <button class="net-btn secondary" id="netCreateSrcServerBtn" data-i18n="netServer" style="flex:1;font-size:6px">☁️ SERVER</button>
-        <button class="net-btn secondary" id="netCreateSrcLocalBtn" data-i18n="netLocal" style="flex:1;font-size:6px">📡 LOCAL</button>
-      </div>
-      <div class="net-status net-local-web-hint" style="display:none;color:#4af9"></div>
-      <div class="net-label" data-i18n="netRoomVisibility">ROOM TYPE</div>
-      <div class="net-toggle-row">
-        <button class="net-btn" id="netVisOpenBtn" data-i18n="netOpen" style="flex:1;font-size:6px">🌍 OPEN</button>
-        <button class="net-btn secondary" id="netVisClosedBtn" data-i18n="netClosed" style="flex:1;font-size:6px">🔒 CLOSED</button>
-      </div>
-      <div class="net-status" id="netVisHint" style="color:#4af9">🌍 anyone can find this room</div>
-      <div class="net-label" data-i18n="netPlayerLimit">PLAYER LIMIT</div>
-      <div class="net-toggle-row" id="netMaxRow">
-        <button class="net-btn secondary net-max-btn" data-max="2" style="flex:1">2</button>
-        <button class="net-btn secondary net-max-btn" data-max="3" style="flex:1">3</button>
-        <button class="net-btn secondary net-max-btn" data-max="4" style="flex:1">4</button>
-        <button class="net-btn secondary net-max-btn" data-max="5" style="flex:1">5</button>
-      </div>
-      <button class="net-btn" id="netDoCreateBtn" data-i18n="netCreateBtn" style="margin-top:2px">▶ CREATE ROOM</button>
-    </div>
-
-    <!-- ════ FIND ROOM view ════ -->
-    <div id="netFindView" style="display:none;flex-direction:column;gap:10px">
-      <div class="net-label" data-i18n="netRoomSource">ROOM SOURCE</div>
-      <div class="net-toggle-row">
-        <button class="net-btn secondary" id="netSrcServerBtn" data-i18n="netServer" style="flex:1;font-size:6px">☁️ SERVER</button>
-        <button class="net-btn secondary" id="netSrcLocalBtn" data-i18n="netLocal" style="flex:1;font-size:6px">📡 LOCAL</button>
-      </div>
-      <div class="net-status net-local-web-hint" style="display:none;color:#4af9"></div>
-      <div id="netLanHostRow" style="display:none;flex-direction:column;gap:4px">
-        <div class="net-label" data-i18n="netLanHostLabel">HOST ADDRESS (LAN)</div>
-        <input class="net-input" id="netLanHost" data-i18n-ph="netLanHostPlaceholder" placeholder="192.168.x.x / localhost" value="localhost"/>
-        <div class="net-status" id="netLanIps" style="color:#4af9"></div>
-      </div>
-      <div id="netJoinRow" style="display:flex;flex-direction:column;gap:6px">
-        <div class="net-label" data-i18n="netRoomCodeLabel">ROOM CODE</div>
-        <div style="display:flex;gap:6px">
-          <input class="net-input" id="netCodeInput" maxlength="6" data-i18n-ph="netCodePlaceholder" placeholder="XXXXXX" style="flex:1"/>
-          <button class="net-btn" id="netJoinBtn" data-i18n="netJoinBtn" style="flex:0 0 auto">▶ JOIN</button>
-        </div>
-      </div>
-      <div class="net-label" style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
-        <span id="netRoomsListTitle" data-i18n="netRoomsListTitle">AVAILABLE ROOMS</span>
-        <button class="net-btn secondary" id="netReloadRoomsBtn" data-i18n="netReload" style="font-size:5px;padding:3px 7px">↻ RELOAD</button>
-      </div>
-      <div id="netRoomsList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto"></div>
-    </div>
-    <div class="net-status" id="netConnStatus">connecting to server…</div>
-    <button class="net-btn secondary" id="netBackBtn" data-i18n="netBack" style="margin-top:4px">← BACK</button>
-  </div>
-
-  <!-- Step: room lobby -->
-  <div class="net-panel" id="netRoom" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div class="net-label" data-i18n="netRoomCodeLabel">ROOM CODE</div>
-        <div class="net-code" id="netRoomCode">------</div>
-      </div>
-      <div id="netPing" title="ping">-- ms</div>
-    </div>
-    <div class="net-label" id="netPlayersLabel">PLAYERS (max 5)</div>
-    <div id="netPlayerList"></div>
-    <div class="net-label" data-i18n="netChatLabel" style="margin-top:4px">CHAT</div>
-    <div id="netChat"></div>
-    <input class="net-input" id="netChatInput" maxlength="80" data-i18n-ph="netChatPlaceholder" placeholder="TYPE + ENTER"/>
-    <!-- Level picker (host only) -->
-    <div id="netLevelPicker" style="display:none;flex-direction:column;gap:8px;border-top:1px solid #0ff2;padding-top:10px">
-      <div class="net-label" data-i18n="netGameMode">GAME MODE</div>
-      <div style="display:flex;gap:8px">
-        <button class="net-btn" id="netModeAdv" data-i18n="netModeAdventure" style="flex:1;font-size:6px">🗺 ADVENTURE</button>
-        <button class="net-btn secondary" id="netModeInf" data-i18n="netModeInfinite" style="flex:1;font-size:6px">∞ INFINITE</button>
-      </div>
-      <div id="netLvlRow" style="display:none;flex-direction:column;gap:6px">
-        <div class="net-label" data-i18n="netLevelRange">LEVEL (1–100)</div>
-        <input class="net-input" id="netLvlInput" type="number" min="1" max="110" value="1" style="width:80px"/>
-      </div>
-      <div class="net-status" id="netLevelStatus" style="color:#ff0">⚡ choose a mode</div>
-    </div>
-
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="net-btn" id="netReadyBtn" data-i18n="netReady">✔ READY</button>
-      <button class="net-btn" id="netStartBtn" data-i18n="netStart" style="display:none">▶ START</button>
-      <button class="net-btn danger" id="netLeaveBtn" data-i18n="netLeave">✕ LEAVE</button>
-    </div>
-    <div class="net-status" id="netRoomStatus"></div>
-  </div>
-</div><!-- /#netLobby -->
-
-<!-- Co-op overlays MUST live outside #netLobby: the lobby is display:none once the
-     game starts, and a hidden parent would hide these too (that's why the "waiting
-     for players" screen never appeared mid-game). As body-level siblings they show
-     correctly while the game canvas is up. -->
-  <!-- Loading / countdown overlay -->
-  <div id="netLoading" style="display:none;position:fixed;inset:0;z-index:950;background:#04040ff5;flex-direction:column;align-items:center;justify-content:center;gap:20px;font-family:'Press Start 2P',monospace">
-    <div style="font-size:11px;color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:4px" id="netLoadTitle">LOADING LEVEL</div>
-    <div style="font-size:28px;color:#ff0;text-shadow:0 0 24px #ff0" id="netLoadCount">3</div>
-    <div style="font-size:7px;color:#4af8;letter-spacing:2px" id="netLoadSub">get ready…</div>
-  </div>
-
-  <!-- Connection-lost overlay (shown if the socket drops mid-game) -->
-  <div id="netConnLost" style="display:none;position:fixed;inset:0;z-index:960;background:#0a0208f8;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Press Start 2P',monospace">
-    <div style="font-size:11px;color:#f55;text-shadow:0 0 18px #f00;letter-spacing:3px" id="netConnLostTitle">⚠ CONNECTION LOST</div>
-    <div style="font-size:7px;color:#fa8;letter-spacing:2px" id="netConnLostSub">trying to reconnect…</div>
-    <button class="net-btn danger" id="netConnLostBtn" style="margin-top:6px">← RETURN TO LOBBY</button>
-  </div>
-
-  <!-- Co-op "waiting for the other players to finish" overlay (dims the game). -->
-  <div id="netWaiting" style="display:none;position:fixed;inset:0;z-index:940;background:#04040fcc;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Press Start 2P',monospace">
-    <div style="font-size:10px;color:#0ff;text-shadow:0 0 16px #0ff;letter-spacing:3px" id="netWaitingTitle" data-i18n="netWaitingTitle">✓ LEVEL CLEARED</div>
-    <div style="font-size:9px;color:#ff0;text-shadow:0 0 18px #ff0;letter-spacing:2px" id="netWaitingTxt">WAITING FOR PLAYERS 1/2</div>
-    <div style="font-size:6px;color:#4af8;letter-spacing:2px" id="netWaitingSub" data-i18n="netWaitingSub">the level continues once everyone reaches the flag</div>
-  </div>
-
-  <!-- In-game ping readout (top-right). Shown only during a network game. -->
-  <div id="netGamePing" style="display:none;position:fixed;top:8px;right:10px;z-index:920;font-family:'Press Start 2P',monospace;font-size:8px;color:#0f8;text-shadow:0 0 6px #000,0 0 3px #000;pointer-events:none;letter-spacing:1px">📶 -- ms</div>
-
-</div><!-- /#stage -->
-
-<script src="assets/network.js"></script>
-<script>window.__chk('after network.js');</script>
-
-<!-- Touch / mobile virtual gamepad (phones & tablets, web + Android build) -->
-<script src="assets/touch.js"></script>
-<script>window.__chk('after touch.js');</script>
-
-<!-- Stamp the build version into the main-menu corner tag. -->
-<script>
-(function () {
-  var el = document.getElementById('verTag');
-  if (!el) return;
-  var tag = 'v' + (window.BB_VERSION || '1.0.0');
-  // The demo says so on the main menu, right where the version lives.
-  if (window.Demo && window.Demo.on) { tag = window.Demo.tagVersion(tag); el.style.color = '#f0fa'; }
-  el.textContent = tag;
-})();
-</script>
-
-<!-- Boot/loading screen controller: hide only once everything the player needs is
-     ready — all scripts/resources (window 'load'), web fonts, and the locale data.
-     A hard cap guarantees we never hang on a stuck resource. -->
-<script>
-(function () {
-  var boot = document.getElementById('bootScreen');
-  if (!boot) return;
-  var bar = document.getElementById('bootBar');
-  var msg = document.getElementById('bootMsg');
-  var done = 0, total = 3, hidden = false;
-
-  function step(label) {
-    done++;
-    if (window.__chk) window.__chk('boot step ' + done + '/' + total + (label ? ' (' + label + ')' : ''));
-    if (bar) bar.style.width = Math.min(100, Math.round(done / total * 100)) + '%';
-    if (msg && label) msg.textContent = label;
-    if (done >= total) finish();
-  }
-  function finish() {
-    if (hidden) return;
-    hidden = true;
-    if (window.__chk) window.__chk('boot finish() — hiding boot screen, starting menu/game');
-    if (bar) bar.style.width = '100%';
-    // The boot screen can finish before the locale files load, so fall back to
-    // English rather than printing a raw key.
-    if (msg) msg.textContent = (typeof window.t === 'function') ? window.t('bootReady') : 'READY';
-    boot.style.opacity = '0';
-    setTimeout(function () {
-      if (boot && boot.parentNode) boot.parentNode.removeChild(boot);
-      if (window.__chk) window.__chk('boot screen removed from DOM — menu should now be the visible paint');
-      // Confirm to the main process that we really painted. Two nested frames
-      // so the menu has been through a full compositor cycle, not just laid
-      // out — a renderer that can't produce frames (broken GPU backend) never
-      // gets here, which is exactly the signal main.js needs to fall back to
-      // software rendering on the next launch.
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          try { if ((window.electronAPI || {}) && (window.electronAPI || {}).bootOk) (window.electronAPI || {}).bootOk(); } catch (e) {}
-        });
-      });
-    }, 500);
-  }
-
-  // 1) All page resources loaded.
-  if (document.readyState === 'complete') step();
-  else window.addEventListener('load', function () { step(); }, { once: true });
-
-  // 2) Web fonts ready (resolves on success OR failure, so it never hangs).
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(function () { step(); }).catch(function () { step(); });
-  } else { step(); }
-
-  // 3) Localisation data loaded.
-  if (window.i18nReady) step();
-  else window.addEventListener('bb-i18n-ready', function () { step(); }, { once: true });
-
-  // Safety net: never leave the player stuck behind the loader.
-  setTimeout(finish, 12000);
-})();
-</script>
 </body>
 </html>

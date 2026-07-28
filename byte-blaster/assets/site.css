@@ -1,0 +1,209 @@
+/* BYTE BLASTER — site styles.
+   One stylesheet for every page. Palette and type mirror the game itself:
+   near-black background, cyan/magenta neon, pixel font for headings and a
+   monospace terminal face for body text. */
+
+:root {
+  --bg:      #04040f;
+  --bg-2:    #080818;
+  --panel:   #0a0a20;
+  --line:    #1a1a3a;
+  --cyan:    #0ff;
+  --magenta: #f0f;
+  --green:   #0f8;
+  --orange:  #f80;
+  --red:     #f55;
+  --text:    #c8d4e8;
+  --dim:     #7788a0;
+  --pixel:   'Press Start 2P', 'Courier New', monospace;
+  --mono:    'Share Tech Mono', 'Consolas', monospace;
+  --maxw:    1180px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 16px;
+  line-height: 1.65;
+  /* Faint grid, the same motif the game draws behind its levels. */
+  background-image:
+    linear-gradient(rgba(0,255,255,0.030) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,255,0.030) 1px, transparent 1px);
+  background-size: 44px 44px;
+  overflow-x: hidden;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+section { padding: 62px 0; border-top: 1px solid var(--line); }
+section:first-of-type { border-top: none; }
+
+/* ── Type ────────────────────────────────────────────────────────────────── */
+h1, h2, h3, h4 { font-family: var(--pixel); line-height: 1.5; margin: 0 0 18px; }
+h1 { font-size: clamp(20px, 5vw, 40px); color: var(--cyan); text-shadow: 0 0 18px rgba(0,255,255,.55); letter-spacing: 2px; }
+h2 { font-size: clamp(15px, 3vw, 22px); color: var(--cyan); letter-spacing: 1px; }
+h3 { font-size: clamp(12px, 2.2vw, 15px); color: var(--green); }
+h4 { font-size: 12px; color: var(--orange); }
+p  { margin: 0 0 16px; }
+a  { color: var(--cyan); text-decoration: none; border-bottom: 1px dotted rgba(0,255,255,.4); }
+a:hover { color: #fff; border-bottom-color: #fff; }
+code {
+  font-family: var(--mono); background: #10102a; color: var(--green);
+  padding: 2px 6px; border-radius: 3px; font-size: .92em;
+  border: 1px solid var(--line); word-break: break-word;
+}
+.lead { font-size: clamp(15px, 2.2vw, 19px); color: #dbe6f5; }
+.dim  { color: var(--dim); }
+.tag  {
+  display: inline-block; font-family: var(--pixel); font-size: 8px; letter-spacing: 1px;
+  padding: 5px 9px; border: 1px solid var(--cyan); color: var(--cyan);
+  border-radius: 3px; margin: 0 6px 6px 0; background: rgba(0,255,255,.06);
+}
+.tag.mag { border-color: var(--magenta); color: var(--magenta); background: rgba(255,0,255,.06); }
+.tag.grn { border-color: var(--green);   color: var(--green);   background: rgba(0,255,136,.06); }
+.tag.orn { border-color: var(--orange);  color: var(--orange);  background: rgba(255,136,0,.06); }
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+header.top {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(4,4,15,.92); border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+.top .wrap { display: flex; align-items: center; gap: 18px; height: 62px; }
+.brand {
+  font-family: var(--pixel); font-size: 13px; color: var(--cyan);
+  text-shadow: 0 0 12px rgba(0,255,255,.5); border: none; white-space: nowrap;
+}
+.brand:hover { color: #fff; }
+nav.main { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+nav.main a {
+  font-family: var(--pixel); font-size: 9px; padding: 9px 12px; border: 1px solid var(--line);
+  border-radius: 3px; color: var(--text); background: var(--panel);
+}
+nav.main a:hover, nav.main a[aria-current="page"] { color: var(--cyan); border-color: var(--cyan); }
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.hero { padding: 72px 0 54px; text-align: center; position: relative; overflow: hidden; }
+.hero::before {
+  content: ''; position: absolute; inset: -40% 0 auto; height: 420px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(0,255,255,.16), transparent 62%);
+  pointer-events: none;
+}
+.hero > * { position: relative; }
+.hero .sub {
+  font-family: var(--pixel); font-size: clamp(8px, 1.8vw, 11px);
+  color: var(--magenta); letter-spacing: 3px; margin-bottom: 26px;
+}
+.hero .robot { font-size: clamp(48px, 12vw, 92px); line-height: 1; margin-bottom: 14px; filter: drop-shadow(0 0 22px rgba(0,255,255,.5)); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin: 30px 0 12px; }
+.btn {
+  display: block; min-width: 250px; padding: 18px 26px; border-radius: 5px;
+  font-family: var(--pixel); font-size: 12px; letter-spacing: 1px; text-align: center;
+  border: 2px solid var(--cyan); color: var(--cyan); background: var(--panel);
+  transition: transform .12s, box-shadow .12s, background .12s;
+}
+.btn small { display: block; font-family: var(--mono); font-size: 12px; letter-spacing: 0; margin-top: 9px; color: var(--dim); }
+.btn:hover { transform: translateY(-2px); box-shadow: 0 0 22px rgba(0,255,255,.4); background: #10203a; color: var(--cyan); }
+.btn.primary { border-color: var(--green); color: var(--green); }
+.btn.primary:hover { box-shadow: 0 0 26px rgba(0,255,136,.45); background: #0a2418; }
+.btn.ghost { border-color: var(--line); color: var(--text); min-width: 0; padding: 13px 20px; font-size: 10px; }
+.btn.ghost:hover { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 18px rgba(255,0,255,.28); }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: linear-gradient(160deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--line); border-radius: 6px; padding: 22px;
+}
+.card:hover { border-color: rgba(0,255,255,.4); }
+.card .ico { font-size: 30px; line-height: 1; margin-bottom: 12px; }
+.card p:last-child { margin-bottom: 0; }
+
+.stats { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.stat { text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 18px 10px; background: var(--panel); }
+.stat b { display: block; font-family: var(--pixel); font-size: clamp(16px, 3.4vw, 26px); color: var(--cyan); margin-bottom: 8px; }
+.stat span { font-size: 13px; color: var(--dim); }
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.tw { overflow-x: auto; margin: 0 0 22px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 14px; }
+th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: #0c0c22; color: var(--cyan); font-family: var(--pixel); font-size: 9px; letter-spacing: 1px; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(0,255,255,.04); }
+
+/* ── Wiki layout ─────────────────────────────────────────────────────────── */
+.wiki { display: grid; grid-template-columns: 250px 1fr; gap: 34px; align-items: start; padding: 34px 0 70px; }
+.toc { position: sticky; top: 78px; max-height: calc(100vh - 96px); overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 16px; }
+.toc h4 { margin-bottom: 12px; }
+.toc a { display: block; padding: 7px 9px; border: none; border-radius: 3px; color: var(--text); font-size: 14px; }
+.toc a:hover, .toc a.active { background: rgba(0,255,255,.10); color: var(--cyan); }
+.toc input {
+  width: 100%; padding: 9px 10px; margin-bottom: 12px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 3px; color: var(--text); font-family: var(--mono); font-size: 14px;
+}
+.toc input:focus { outline: none; border-color: var(--cyan); }
+.wiki article section { padding: 0 0 44px; border: none; }
+.wiki article section:first-child { padding-top: 0; }
+.wiki article h2 { padding-top: 14px; border-top: 1px solid var(--line); }
+.wiki article section:first-child h2 { border-top: none; padding-top: 0; }
+
+details { border: 1px solid var(--line); border-radius: 6px; padding: 14px 18px; margin: 0 0 18px; background: var(--panel); }
+details[open] { border-color: rgba(255,0,255,.35); }
+summary { cursor: pointer; font-family: var(--pixel); font-size: 11px; color: var(--magenta); }
+summary:hover { color: #fff; }
+details > *:first-of-type:not(summary) { margin-top: 16px; }
+
+.note {
+  border-left: 3px solid var(--orange); background: rgba(255,136,0,.07);
+  padding: 12px 16px; margin: 0 0 18px; border-radius: 0 4px 4px 0; font-size: 14px;
+}
+.note.cy { border-left-color: var(--cyan); background: rgba(0,255,255,.06); }
+
+ul.clean { list-style: none; padding: 0; margin: 0 0 18px; }
+ul.clean li { padding: 7px 0 7px 24px; position: relative; border-bottom: 1px solid rgba(26,26,58,.6); }
+ul.clean li::before { content: '▸'; position: absolute; left: 4px; color: var(--cyan); }
+ul.clean li:last-child { border-bottom: none; }
+
+/* ── 404 ─────────────────────────────────────────────────────────────────── */
+.err { min-height: 82vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; }
+.err .code { font-family: var(--pixel); font-size: clamp(56px, 18vw, 140px); color: var(--magenta); text-shadow: 0 0 34px rgba(255,0,255,.55); margin-bottom: 8px; }
+.err .glitch { animation: flick 3.2s infinite steps(1); }
+@keyframes flick { 0%,88%,100% { opacity: 1 } 90% { opacity: .35 } 93% { opacity: 1 } 95% { opacity: .55 } }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer.site { border-top: 1px solid var(--line); padding: 34px 0; color: var(--dim); font-size: 14px; }
+footer.site .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .wiki { grid-template-columns: 1fr; gap: 20px; }
+  .toc { position: static; max-height: none; }
+  section { padding: 44px 0; }
+  .hero { padding: 46px 0 36px; }
+  .btn { min-width: 100%; }
+  .top .wrap { height: auto; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+  nav.main { margin-left: 0; width: 100%; }
+  nav.main a { flex: 1 1 auto; text-align: center; }
+  body { font-size: 15px; }
+}
+@media (max-width: 480px) {
+  .wrap { padding: 0 14px; }
+  .card { padding: 16px; }
+  nav.main a { font-size: 8px; padding: 8px 6px; }
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .btn { transition: none; }
+  .err .glitch { animation: none; }
+}

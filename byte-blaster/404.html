@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — СИГНАЛ ПОТЕРЯН · BYTE BLASTER</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#04040f">
+<!-- Absolute paths on purpose: GitHub Pages serves this file for ANY missing
+     URL, including deep ones like /byte-blaster/a/b/c — relative links would
+     resolve against that fake directory and break. -->
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/">⚡ BYTE BLASTER</a>
+    <nav class="main">
+      <a href="/byte-blaster/">ГЛАВНАЯ</a>
+      <a href="/byte-blaster/wiki/">ВИКИ</a>
+      <a href="/byte-blaster/game/full/">ИГРАТЬ</a>
+    </nav>
+  </div>
+</header>
+
+<main class="err wrap">
+  <div class="code glitch">404</div>
+  <h1 style="font-size:clamp(14px,3.6vw,22px)">СИГНАЛ ПОТЕРЯН</h1>
+  <p class="lead" style="max-width:620px">
+    Этого сектора нет в реестре GRID. Либо страницу удалили, либо адрес набран с ошибкой,
+    либо АРХОНТ снова что-то замуровал.
+  </p>
+  <p class="dim" style="font-family:var(--mono);font-size:14px">
+    <code id="badPath">/</code>
+  </p>
+  <div class="btns">
+    <a class="btn primary" href="/byte-blaster/">⬅ НА ГЛАВНУЮ</a>
+    <a class="btn" href="/byte-blaster/wiki/">📖 ОТКРЫТЬ ВИКИ</a>
+  </div>
+  <p style="margin-top:8px"><a class="btn ghost" href="/byte-blaster/game/demo/">◆ ЗАПУСТИТЬ ДЕМО</a></p>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
+    <div><a href="/byte-blaster/">Главная</a> · <a href="/byte-blaster/wiki/">Вики</a></div>
+  </div>
+</footer>
+
+<script>
+  // Show the address that failed — useful when someone reports a broken link.
+  // textContent, never innerHTML: the path comes from the URL bar.
+  var el = document.getElementById('badPath');
+  if (el) el.textContent = location.pathname + location.search;
+</script>
+</body>
+</html>
