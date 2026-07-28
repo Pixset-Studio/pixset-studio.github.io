@@ -127,8 +127,27 @@ const $gamePing    = document.getElementById('netGamePing');
     const vpH = (vv && vv.height) ? vv.height : window.innerHeight;
     const w = inner.offsetWidth, h = inner.offsetHeight;
     if(!w || !h) return;
-    const k = Math.min((vpW * 0.96) / w, (vpH * 0.96) / h, 1);
+    let k = Math.min((vpW * 0.96) / w, (vpH * 0.96) / h, 1);
+    // READABILITY FLOOR. Scaling the whole lobby to fit meant every attempt to
+    // make its buttons thumb-sized simply shrank k by the same factor — the
+    // controls measured 23px tall on a phone no matter what the CSS said. Below
+    // this floor we stop shrinking and let the lobby scroll instead: a control
+    // you can scroll to and actually hit beats one that fits but cannot be hit.
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
+                    (window.gameSettings && window.gameSettings.touchControls === 'on');
+    const FLOOR = isTouch ? 0.62 : 0.4;
+    const floored = k < FLOOR;
+    if (floored) k = FLOOR;
     inner.style.transform = 'scale(' + k + ')';
+    // The overlay clips by default (see network.css). When we refuse to shrink
+    // any further it has to scroll, and the content has to sit at the top so the
+    // first thing on screen is the top of the panel, not its middle.
+    $lobby.style.overflowY = floored ? 'auto' : 'hidden';
+    $lobby.style.justifyContent = floored ? 'flex-start' : 'center';
+    inner.style.transformOrigin = floored ? 'top center' : 'center center';
+    // A scaled box still reserves its UNSCALED height in the scroll container,
+    // leaving a large empty gap. Reserve the visual height instead.
+    inner.style.marginBottom = floored ? (-(h * (1 - k)) + 'px') : '';
   }
   window._netFitLobby = fitLobby;
   // Re-fit on any content/size change (switching connect<->room, player list,
@@ -250,8 +269,14 @@ function connect(){
     if(ws !== sock) return; // stale socket closing — don't touch the live one's UI/state
     stopPing();
     if(_manualClose) return;
-    // Mid-game drop: can't silently rejoin a relay room — surface it.
+    // Mid-game drop: can't silently rejoin a relay room — surface it. Also
+    // drop netActive immediately (not just on the player's explicit "Return
+    // to Lobby" click) — leaving it true with no working connection made
+    // boss/enemy AI permanently think "I'm a guest, the host drives this"
+    // (see updateBoss()'s network guard), i.e. bosses stopped attacking and
+    // stopped colliding with the player until the room was properly left.
     if(window.netActive){
+      window.netActive = false;
       showConnLost();
       return;
     }
@@ -630,7 +655,18 @@ let _netFinished = new Set();
 // players still in the level keep playing and must NOT see it, even though the
 // host broadcasts the X/N progress to everyone.
 let _iFinished = false;
-function _resetFinishState(){ _netFinished = new Set(); _iFinished = false; window._netLevelAdvancing = false; hideNetWaiting(); }
+function _resetFinishState(){
+  _netFinished = new Set(); _iFinished = false; _iEliminated = false;
+  window._netLevelAdvancing = false;
+  _restoreWaitingChrome();
+  hideNetWaiting();
+  // Eliminated players rejoin the next level able to play: without this they
+  // would be permanently dead for the rest of the session, which is not what
+  // "out for this level" means.
+  try { if(typeof lives !== 'undefined' && lives <= 0) lives = 3; } catch(e){}
+  try { if(typeof lives2 !== 'undefined' && lives2 <= 0) lives2 = 3; } catch(e){}
+  try { if(typeof player !== 'undefined' && player) player._netDone = false; } catch(e){}
+}
 
 function showNetWaiting(count, total){
   const ov = document.getElementById('netWaiting');
@@ -658,13 +694,61 @@ window.netReportFinish = function(){
   }
 };
 
+// A player who runs out of lives is OUT FOR THIS LEVEL. They count as
+// "done" for the room's tally — otherwise the survivors stand at the flag
+// waiting for someone who can never reach it — and they come back with fresh
+// lives when the next level starts. This is the whole reason a co-op death
+// cannot use the single-player Game Over screen (see doHurtPlayer in game.js).
+let _iEliminated = false;
+window.netReportEliminated = function(){
+  if(!window.netActive || _iEliminated) return;
+  _iEliminated = true;
+  _iFinished  = true;                 // stop blocking the room
+  if(typeof player !== 'undefined' && player){
+    player._netDone = true; player.vx = 0; player.vy = 0;
+    player.inv = Math.max(player.inv||0, 999999);
+  }
+  if(typeof stopMusic === 'function') stopMusic();
+  showNetEliminated();
+  if(isHost) _hostMarkFinished(myId);
+  else {
+    wsSend({type:'game_event', event:'finish', eliminated:true});
+    showNetWaiting(1, players.length || 1);
+  }
+  if(typeof addChat === 'function') addChat('☠', T('netPlayerEliminated', esc(myNick||'?')));
+};
+// Dim overlay that replaces the Game Over screen while the level plays on.
+function showNetEliminated(){
+  const w = document.getElementById('netWaiting');
+  if(!w) return;
+  const title = document.getElementById('netWaitingTitle');
+  const sub   = document.getElementById('netWaitingSub');
+  if(title){ title.textContent = T('netEliminatedTitle'); title.style.color = '#f44'; title.style.textShadow = '0 0 16px #f44'; }
+  if(sub) sub.textContent = T('netEliminatedSub');
+  w.style.display = 'flex';
+}
+// Put the overlay's own wording back for the ordinary "waiting at the flag" case.
+function _restoreWaitingChrome(){
+  const title = document.getElementById('netWaitingTitle');
+  const sub   = document.getElementById('netWaitingSub');
+  if(title){ title.textContent = T('netWaitingTitle'); title.style.color = ''; title.style.textShadow = ''; }
+  if(sub) sub.textContent = T('netWaitingSub');
+}
+
 function _hostMarkFinished(id){
   if(!isHost) return;
-  _netFinished.add(id);
+  if(!_netFinished.has(id)){
+    _netFinished.add(id);
+    const p = players.find(pl=>pl.id===id);
+    const name = p ? p.nickname : (id===myId ? (myNick||'?') : '?');
+    addChat('★', T('netPlayerFinished', esc(name)));
+    _hostBroadcastProgress(name);
+    return;
+  }
   _hostBroadcastProgress();
 }
 // Broadcast the current X/N progress to everyone and advance if all are done.
-function _hostBroadcastProgress(){
+function _hostBroadcastProgress(finisherName){
   if(!isHost) return;
   const total = players.length || 1;
   const count = Math.min(_netFinished.size, total);
@@ -672,7 +756,7 @@ function _hostBroadcastProgress(){
   // Only show the overlay to ourselves if WE'VE finished (the host may still be
   // playing while other players reach the flag).
   if(_iFinished) showNetWaiting(count, total);
-  if(ws && ws.readyState===1) wsSend({type:'game_event', event:'finish_progress', data:{count, total}});
+  if(ws && ws.readyState===1) wsSend({type:'game_event', event:'finish_progress', data:{count, total, name:finisherName||null}});
   if(count >= total) _hostAdvanceRoom();
 }
 // Everyone finished → host drives the whole room to the next level (or win).
@@ -683,11 +767,15 @@ function _hostAdvanceRoom(){
   const next = adv ? ((typeof advLevel!=='undefined'?advLevel:1)+1)
                    : ((typeof level!=='undefined'?level:1)+1);
   const mode = adv ? 'adventure' : 'infinite';
-  if(adv && next>100){
+  // Room-wide win: right after level 100 (ARCHON, main story) or right after
+  // level 110 (PRISM WRAITH, secret ending). Levels 101-109 must continue
+  // normally — see the matching fix in game.js's _goNext for why.
+  if(adv && (next===101 || next>110)){
     // Final level cleared by the whole room — win for everyone.
     if(ws && ws.readyState===1) wsSend({type:'game_event', event:'won'});
     hideNetWaiting();
-    if(typeof showWin==='function') showWin();
+    if(next>110 && typeof showSecretWin==='function') showSecretWin();
+    else if(typeof showWin==='function') showWin();
     return;
   }
   _netLevel = next; _netMode = mode;
@@ -723,6 +811,7 @@ function showNetCountdown(mode, level, onDone){
 function startNetworkGame(allPlayers){
   $lobby.style.display = 'none';
   window.netActive = true;
+  if(typeof AchTrack!=='undefined')AchTrack.netPlay();
   window._netLevelAdvancing = false;
   window.netPlayers.clear();
   updateGamePing(); // reveal the in-game ping readout
@@ -777,6 +866,46 @@ function startNetworkGame(allPlayers){
 
 let _stateInterval = null;
 let _netTickDiv = 0; // for sending enemies/bullets at lower rate than position
+let _netKeyframeDiv = 0; // counts sync ticks to schedule periodic full-state "keyframes"
+// Per-enemy id → last full state actually sent to guests. Used to compute
+// deltas (see _deltaOf) so unchanged fields aren't re-sent every tick.
+let _lastSentEnemy = new Map();
+let _lastSentBoss = null;       // last full boss state sent (null = none sent yet this "boss session")
+let _lastSentBossAlive = null;  // tri-state: null=unknown yet, true/false=last sent boss-alive flag
+let _lastSyncedEnemiesRef = null; // identity of the `enemies` array we last built caches for (see _stateTick)
+
+// Generic delta encoder for an id-keyed entity: compares `full` against the
+// last state sent for this id and returns an object containing only the
+// fields that changed (always including `id`), or null if nothing changed at
+// all (caller should then omit this entity from the payload entirely). First
+// time an id is seen, the complete object is sent and cached.
+function _deltaOf(id, full, cache){
+  const prev = cache.get(id);
+  if(!prev){ cache.set(id, {...full}); return full; }
+  let out = null;
+  for(const k in full){
+    if(k==='id') continue;
+    if(full[k] !== prev[k]){
+      if(!out) out = {id};
+      out[k] = full[k];
+      prev[k] = full[k];
+    }
+  }
+  return out;
+}
+// Same idea for the single boss object (no id — there's only ever one boss).
+function _bossDeltaOf(full){
+  if(!_lastSentBoss){ _lastSentBoss = {...full}; return full; }
+  let out = null;
+  for(const k in full){
+    if(full[k] !== _lastSentBoss[k]){
+      if(!out) out = {};
+      out[k] = full[k];
+      _lastSentBoss[k] = full[k];
+    }
+  }
+  return out;
+}
 let _lastStateSend = 0;
 // One iteration of the state broadcast. Normally driven by a 20 Hz setInterval,
 // but ALSO callable from the background ticker (game.js) so that when this tab is
@@ -791,6 +920,19 @@ function _stateTick(){
     _lastStateSend = _now;
 
     _netTickDiv++;
+
+    // Enemy ids restart from 1 every new level (see game.js genLevel()), so a
+    // stale delta-cache entry from the PREVIOUS level could wrongly suppress a
+    // field for a same-numbered enemy in the new one. `enemies` is a brand new
+    // array object every genLevel() call, so a reference change is a reliable,
+    // zero-maintenance signal that a (re)generation happened — retries and
+    // checkpoint restarts included, not just moving to a new level number.
+    if(typeof enemies!=='undefined' && enemies!==_lastSyncedEnemiesRef){
+      _lastSyncedEnemiesRef = enemies;
+      _lastSentEnemy.clear();
+      _lastSentBoss = null;
+      _lastSentBossAlive = null;
+    }
 
     // ── Player state (20 Hz) ─────────────────────────────────────────────────
     wsSend({
@@ -812,36 +954,65 @@ function _stateTick(){
     });
 
     // ── Host: sync enemies + boss + bullets every 3 ticks (~7 Hz) ────────────
-    // Enemies are synced by ARRAY INDEX: every client generates an identical
-    // enemy array from the same seed, so enemies[i] is the same enemy on every
-    // client. We only send the small mutable state (position, hp, status flags)
-    // and apply it in order. Guest enemy/boss AI is disabled (host authoritative).
+    // Enemies are synced by stable id (see applyEnemiesSync / hit_enemy in
+    // handleRemoteEvent — NOT array index, which breaks once split-enemy
+    // children make the two clients' arrays diverge in length/order).
+    //
+    // Delta-sync: most enemy fields (hp, alive, frozen, burning, shielded,
+    // type) change rarely — re-sending them every tick for every enemy is
+    // wasted bandwidth/JSON work. We only include a field in the payload when
+    // it differs from what was last sent for that id, and skip an enemy
+    // entirely once nothing about it has changed. A full snapshot (every
+    // field, every enemy) still goes out periodically as a "keyframe" so a
+    // late-joining guest or any missed state self-heals within a couple of
+    // seconds instead of staying wrong until that exact field happens to
+    // change again.
     if(isHost && _netTickDiv % 3 === 0){
+      _netKeyframeDiv++;
+      const forceKeyframe = (_netKeyframeDiv % 20 === 0); // ~ every 3s at 7Hz
+      if(forceKeyframe) _lastSentEnemy.clear();
       if(typeof enemies!=='undefined'){
-        wsSend({
-          type: 'enemies_sync',
-          enemies: enemies.map(e=>({
-            x:   Math.round(e.x),
-            y:   Math.round(e.y),
-            vx:  +(e.vx||0).toFixed(2),
-            hp:  e.hp,
-            al:  e.alive ? 1 : 0,
-            fl:  e.flash|0,
-            fz:  e._frozen ? 1 : 0,
-            bn:  e._burning ? 1 : 0,
-            sh:  e.shielded ? 1 : 0,
-            t:   e.type, // needed so guests can build stubs for host-spawned extras (split enemies)
-          })),
-        });
+        const list = [];
+        for(const e of enemies){
+          const full = {
+            id: e.id,
+            x:  Math.round(e.x), y: Math.round(e.y),
+            vx: +(e.vx||0).toFixed(2),
+            hp: e.hp,
+            al: e.alive ? 1 : 0,
+            fl: e.flash|0,
+            fz: e._frozen ? 1 : 0,
+            bn: e._burning ? 1 : 0,
+            sh: e.shielded ? 1 : 0,
+            t:  e.type, // needed so guests can build stubs for host-spawned extras (split enemies)
+          };
+          const d = _deltaOf(e.id, full, _lastSentEnemy);
+          if(d) list.push(d);
+        }
+        // Only send the message at all if there's something to say — an empty
+        // enemies_sync every 150ms for a level with no state changes (e.g. all
+        // enemies dead/off-screen) is itself wasted traffic.
+        if(list.length) wsSend({type: 'enemies_sync', enemies: list});
       }
       // Boss authoritative state (null when no boss / dead)
       if(typeof boss!=='undefined'){
-        wsSend({
-          type: 'boss_sync',
-          boss: (boss && boss.alive) ? {
-            x:    Math.round(boss.x),
-            y:    Math.round(boss.y),
-            hp:   boss.hp,
+        if(!boss || !boss.alive){
+          // "Boss is gone" is a one-time transition, not a per-tick value — only
+          // send it once (delta against the cached previous null-ness), instead
+          // of an unconditional null every tick even outside boss levels.
+          if(_lastSentBossAlive !== false){
+            wsSend({type: 'boss_sync', boss: null});
+            _lastSentBossAlive = false;
+          }
+        } else {
+          // Boss just (re)appeared (was dead/absent last tick) — force a full
+          // snapshot so the guest's freshly-spawned local boss object gets every
+          // field immediately instead of waiting for fields to individually change.
+          if(_lastSentBossAlive !== true || forceKeyframe) _lastSentBoss = null;
+          _lastSentBossAlive = true;
+          const full = {
+            x: Math.round(boss.x), y: Math.round(boss.y),
+            hp: boss.hp,
             facing: boss.facing,
             phase: boss.phase,
             flash: boss.flash|0,
@@ -851,13 +1022,13 @@ function _stateTick(){
             shieldsDown: !!boss.shieldsDown,
             solid: !!boss.solid,
             windowOpen: !!boss.windowOpen,
-            // Extra gate state guests need to decide if their shots can hurt the
-            // boss (see _bossBulletContact()'s canHit logic in game.js).
             descending: !!boss.descending,
             shellBroken: !!boss.shellBroken,
             stunTimer: boss.stunTimer|0,
-          } : null,
-        });
+          };
+          const toSend = _bossDeltaOf(full);
+          if(toSend) wsSend({type: 'boss_sync', boss: toSend});
+        }
       }
       // Player bullets (host) — guests render these as ghost bullets
       if(typeof pBullets!=='undefined'){
@@ -948,38 +1119,49 @@ function interpolateGhosts(){
   }
 }
 
-// Non-host: receive authoritative enemy state from host (index-based).
-// Both clients generate an identical enemy array from the shared seed, so
-// enemies[i] is the same enemy everywhere — we just copy host state in order.
+// Non-host: receive authoritative enemy state from host (ID-based).
+// Both clients generate an identical initial enemy array from the shared seed
+// (same ids in the same order), but the array can grow independently on each
+// side afterwards (e.g. split-enemy children only spawn host-side — see
+// hurtE()'s split branch and the guest hurtE redirect below). Matching by the
+// enemy's own `id` instead of its array index keeps sync correct even while
+// the two arrays temporarily differ in length or ordering.
 function applyEnemiesSync(list){
   if(!list||isHost) return;
   if(typeof enemies==='undefined'||!enemies) return;
+  const byId=new Map();
+  for(const e of enemies){ if(e && e.id!=null) byId.set(e.id, e); }
   for(let i=0;i<list.length;i++){
     const ne=list[i];
-    let e=enemies[i];
+    let e=byId.get(ne.id);
     if(!e){
-      // Host has more enemies than us (e.g. split-enemy children spawned host-side).
-      // Build a drawable stub from the enemy config so it renders + can be hit.
+      // Host knows about an enemy we don't have locally yet (e.g. a split-enemy
+      // child spawned host-side after our last sync). Build a drawable stub from
+      // the enemy config so it renders + can be hit; it keeps the host's id.
       const cfg=(typeof EC!=='undefined')?EC[ne.t]:null;
-      e={type:ne.t, moveType:cfg?cfg.moveType:'walk',
+      e={id:ne.id, type:ne.t, moveType:cfg?cfg.moveType:'walk',
          col:cfg?cfg.col:'#f4a', glow:cfg?cfg.glow:'#f4a',
          w:cfg?cfg.w:24, h:cfg?cfg.h:24,
          vy:0, onGnd:false, a:0, fpH:0, fAmp:0, orbitAngle:0,
          px:ne.x, py:ne.y};
-      enemies[i]=e;
+      enemies.push(e);
+      byId.set(ne.id, e);
     }
-    e.x  = ne.x;
-    e.y  = ne.y;
-    e.vx = ne.vx;
-    e.hp = ne.hp;
-    e.alive    = !!ne.al;
-    e.flash    = ne.fl|0;
-    e._frozen  = !!ne.fz;
-    e._burning = !!ne.bn;
-    e.shielded = !!ne.sh;
+    // Delta-sync: a message may only contain the FEW fields that actually
+    // changed since the last one (see _deltaOf in _stateTick) — apply only
+    // the fields that are present, leaving everything else exactly as it was.
+    // A full snapshot (all fields present) applies exactly the same way, so
+    // this code doesn't need to know which kind of message it received.
+    if(ne.x!==undefined)  e.x  = ne.x;
+    if(ne.y!==undefined)  e.y  = ne.y;
+    if(ne.vx!==undefined) e.vx = ne.vx;
+    if(ne.hp!==undefined) e.hp = ne.hp;
+    if(ne.al!==undefined) e.alive    = !!ne.al;
+    if(ne.fl!==undefined) e.flash    = ne.fl|0;
+    if(ne.fz!==undefined) e._frozen  = !!ne.fz;
+    if(ne.bn!==undefined) e._burning = !!ne.bn;
+    if(ne.sh!==undefined) e.shielded = !!ne.sh;
   }
-  // Host array shrank below ours? (shouldn't normally happen) trim extras.
-  if(enemies.length>list.length) enemies.length=list.length;
 }
 
 // Non-host: receive authoritative boss state from host.
@@ -1009,19 +1191,22 @@ function applyBossSync(b){
     return;
   }
   if(!boss) return; // guest hasn't spawned boss locally yet; wait until it does
-  boss.x      = b.x;
-  boss.y      = b.y;
-  boss.hp     = b.hp;
-  boss.facing = b.facing;
-  boss.phase  = b.phase;
-  boss.flash  = b.flash|0;
-  boss.anim   = b.anim|0;
-  boss.shieldsDown = !!b.shieldsDown;
-  boss.solid  = !!b.solid;
-  boss.windowOpen = !!b.windowOpen;
-  boss.descending = !!b.descending;
-  boss.shellBroken = !!b.shellBroken;
-  boss.stunTimer = b.stunTimer|0;
+  // Delta-sync: only present fields are applied (see _bossDeltaOf in
+  // _stateTick) — a full snapshot (right after the boss spawns, or every
+  // periodic keyframe) has every field, a delta only has what changed.
+  if(b.x!==undefined)      boss.x      = b.x;
+  if(b.y!==undefined)      boss.y      = b.y;
+  if(b.hp!==undefined)     boss.hp     = b.hp;
+  if(b.facing!==undefined) boss.facing = b.facing;
+  if(b.phase!==undefined)  boss.phase  = b.phase;
+  if(b.flash!==undefined)  boss.flash  = b.flash|0;
+  if(b.anim!==undefined)   boss.anim   = b.anim|0;
+  if(b.shieldsDown!==undefined) boss.shieldsDown = !!b.shieldsDown;
+  if(b.solid!==undefined)       boss.solid       = !!b.solid;
+  if(b.windowOpen!==undefined)  boss.windowOpen  = !!b.windowOpen;
+  if(b.descending!==undefined)  boss.descending  = !!b.descending;
+  if(b.shellBroken!==undefined) boss.shellBroken = !!b.shellBroken;
+  if(b.stunTimer!==undefined)   boss.stunTimer   = b.stunTimer|0;
   if(b.orbs && Array.isArray(boss.orbs)){
     for(let i=0;i<boss.orbs.length&&i<b.orbs.length;i++) boss.orbs[i].alive = !!b.orbs[i];
   }
@@ -1074,6 +1259,12 @@ function handleRemoteEvent(msg){
   // ── A player reached the flag → add them to the finish tally. The room only
   //    advances once EVERYONE has finished (see _hostMarkFinished). Host only.
   if(isHost && msg.event === 'finish'){
+    // `eliminated` distinguishes "ran out of lives" from "reached the flag";
+    // both release the room, but only one of them is an achievement.
+    if(msg.eliminated){
+      const p = players.find(pl=>pl.id===msg.id);
+      addChat('☠', T('netPlayerEliminated', esc(p ? p.nickname : '?')));
+    }
     _hostMarkFinished(msg.id);
   }
   // Host broadcasts X/N progress to everyone, but only players who themselves
@@ -1081,20 +1272,23 @@ function handleRemoteEvent(msg){
   // in the level keep playing without it.
   if(msg.event === 'finish_progress' && msg.data){
     if(_iFinished) showNetWaiting(msg.data.count|0, msg.data.total|0);
+    if(!isHost && msg.data.name) addChat('★', T('netPlayerFinished', esc(msg.data.name)));
   }
   // Final level cleared by the whole room → win for everyone.
   if(msg.event === 'won'){
     hideNetWaiting();
-    if(typeof showWin === 'function') showWin();
+    const _wasSecret=(typeof advLevel!=='undefined' && advLevel>=110);
+    if(_wasSecret && typeof showSecretWin==='function') showSecretWin();
+    else if(typeof showWin === 'function') showWin();
   }
   // ── Host-authoritative damage from a guest's attack ──────────────────────
   // Guests can't kill enemies locally (host owns hp). They report the hit and
   // the host applies it via hurtE/damageBoss; the result syncs back to all.
   if(isHost && msg.event === 'hit_enemy' && msg.data){
     const d = msg.data;
-    if(typeof enemies!=='undefined' && enemies[d.idx] && enemies[d.idx].alive){
-      const e = enemies[d.idx];
-      if(typeof hurtE==='function') hurtE(e, d.dmg||1, !!d.stomp);
+    const e = (typeof enemies!=='undefined' && enemies) ? enemies.find(en=>en && en.id===d.id) : null;
+    if(e && e.alive){
+      if(typeof hurtE==='function') hurtE(e, d.dmg||1, !!d.stomp, !!d.pc);
       // Apply elemental status the same way local bullets do
       if(e.alive && d.elem==='fire'){ if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;} }
       if(e.alive && d.elem==='ice'){  if(!e._frozen){e._frozen=true;e._freezeT=90;e._origSpd=e.spd||1;} e.vx=0; }
@@ -1122,10 +1316,13 @@ function handleRemoteEvent(msg){
   }
 }
 
-// Guest helper: report a hit on enemy index `idx` to the host.
-window.netReportEnemyHit = function(idx, dmg, stomp, elem){
+// Guest helper: report a hit on enemy `id` (stable identity, not array index) to the host.
+window.netReportEnemyHit = function(id, dmg, stomp, elem, pierce){
   if(!window.netActive || isHost) return;
-  wsSend({type:'game_event', event:'hit_enemy', data:{idx:idx|0, dmg:dmg||1, stomp:!!stomp, elem:elem||null}});
+  // `pc` = pierce: damage a shield was never meant to stop (star mode, ice
+  // shatter, burn tick). Without it the host would block a guest's star kill.
+  wsSend({type:'game_event', event:'hit_enemy',
+          data:{id:id, dmg:dmg||1, stomp:!!stomp, elem:elem||null, pc:!!pierce}});
 };
 window.netReportBossHit = function(dmg, elem){
   if(!window.netActive || isHost) return;
@@ -1354,7 +1551,8 @@ document.getElementById('netModeInf').onclick = () => {
 };
 
 document.getElementById('netLvlInput').oninput = () => {
-  const n = Math.min(100, Math.max(1, parseInt(document.getElementById('netLvlInput').value)||1));
+  const _max = (typeof window.advTotalLevels === 'function') ? window.advTotalLevels() : 100;
+  const n = Math.min(_max, Math.max(1, parseInt(document.getElementById('netLvlInput').value)||1));
   _netLevel = n;
   wsSend({type:'select_level', mode:'adventure', level:n, seed:Date.now()});
 };
@@ -1606,20 +1804,22 @@ setTimeout(() => {
   // hit flash / particles) still comes back through enemies_sync.
   if(typeof hurtE === 'function'){
     const _origHurtE = hurtE;
-    window.hurtE = function(e, dmg, stomped){
+    // NOTE: this wrapper must forward EVERY argument. It used to take only
+    // (e, dmg, stomped) and drop the rest, which silently swallowed hurtE()'s
+    // `pierce` flag — so star-mode kills and ice shatters were blocked by
+    // enemy shields even in single player, because the wrapper is installed
+    // unconditionally 300 ms after load.
+    window.hurtE = function(e, dmg, stomped, pierce){
       if(window.netActive && !isHost){
-        if(typeof enemies!=='undefined' && e){
-          const idx = enemies.indexOf(e);
-          if(idx>=0){
-            // Determine element from the in-flight bullet context isn't available
-            // here, so pass null; fire/ice status is applied host-side on its own
-            // bullet collisions. Stomp/plain shots are the common case.
-            window.netReportEnemyHit(idx, dmg, stomped, e._netHitElem||null);
-          }
+        if(e && e.id!=null){
+          // Determine element from the in-flight bullet context isn't available
+          // here, so pass null; fire/ice status is applied host-side on its own
+          // bullet collisions. Stomp/plain shots are the common case.
+          window.netReportEnemyHit(e.id, dmg, stomped, e._netHitElem||null, pierce);
         }
         return; // host is authoritative — no local hp change
       }
-      return _origHurtE(e, dmg, stomped);
+      return _origHurtE(e, dmg, stomped, pierce);
     };
   }
   if(typeof damageBoss === 'function'){

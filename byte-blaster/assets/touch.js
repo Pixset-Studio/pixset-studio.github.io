@@ -609,6 +609,7 @@
     joyMove(e);
   }
   function joyMove(e) {
+    if (!joyEl || joyEl.style.display === 'none') return;
     if (joyPointer === null || e.pointerId !== joyPointer || !joyEl) return;
     e.preventDefault();
     var r = joyEl.getBoundingClientRect();

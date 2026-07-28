@@ -23,6 +23,81 @@
 <link rel="stylesheet" href="assets/ui-fix.css">
 <link rel="stylesheet" href="assets/touch.css">
 <script src="assets/version.js"></script>
+<script>
+  // ── Global error catcher ────────────────────────────────────────────────
+  // Without this, ANY uncaught error while the game's scripts load or run
+  // (a typo, a missing function, anything) fails completely silently — the
+  // player just sees a black screen with zero indication of what broke, and
+  // there's no way to know without manually opening DevTools. This shows a
+  // readable on-screen panel with the actual error instead, and always logs
+  // to console so it also shows up in a packaged .exe's log output.
+  (function () {
+    var shown = false;
+    function showFatalError(title, detail) {
+      if (shown) return; // only show the FIRST error — later ones are usually just fallout from the first
+      shown = true;
+      try {
+        var el = document.createElement('div');
+        el.id = 'fatalErrorOverlay';
+        el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0a0208;color:#fff;'
+          + 'font-family:monospace;display:flex;flex-direction:column;align-items:center;'
+          + 'justify-content:center;padding:24px;text-align:center;gap:14px;';
+        el.innerHTML =
+          '<div style="font-size:20px;color:#f55;letter-spacing:2px;">⚠ BYTE BLASTER FAILED TO START</div>' +
+          '<div style="font-size:13px;color:#faa;max-width:640px;">' + title + '</div>' +
+          '<pre style="font-size:11px;color:#999;max-width:800px;max-height:240px;overflow:auto;' +
+            'background:#000;border:1px solid #500;padding:10px;text-align:left;white-space:pre-wrap;">' +
+            detail + '</pre>' +
+          '<div style="font-size:11px;color:#8cf;max-width:640px;">' +
+            'Please screenshot this AND send byte-blaster-log.txt (next to the game .exe) — together they tell us exactly what broke.' +
+          '</div>' +
+          '<button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#204;' +
+            'color:#fff;border:2px solid #f4a;cursor:pointer;font-family:monospace;font-size:12px;">RELOAD</button>';
+        document.body.appendChild(el);
+      } catch (e2) { /* even the fallback failed — nothing more we can do client-side */ }
+    }
+    window.addEventListener('error', function (e) {
+      console.error('[fatal]', e.message, e.filename, e.lineno + ':' + e.colno, e.error && e.error.stack);
+      var detail = (e.message || 'Unknown error') + '\n' + (e.filename || '') + ':' + e.lineno + ':' + e.colno +
+        (e.error && e.error.stack ? '\n\n' + e.error.stack : '');
+      try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[fatal error] ' + detail); } catch (e3) {}
+      showFatalError('A script error occurred while the game was loading or running.', detail);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      console.error('[fatal] unhandled promise rejection:', e.reason);
+      var detail = String(e.reason && e.reason.stack ? e.reason.stack : e.reason);
+      try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[fatal rejection] ' + detail); } catch (e3) {}
+      showFatalError('An async operation failed while the game was loading or running.', detail);
+    });
+  })();
+  // ── Boot checkpoints ────────────────────────────────────────────────────
+  // The renderer crashes NATIVELY (access violation) ~1s into startup, which
+  // is invisible to error handlers — but a checkpoint call made just BEFORE
+  // the crash still reaches the log file (it's synchronous IPC), so the LAST
+  // line in byte-blaster-log.txt pinpoints exactly which script/stage never
+  // finished. Placed after each <script> tag further down this file.
+  window.__chk = function (label) {
+    try { console.log('[checkpoint]', label); } catch (e) {}
+    try { if ((window.electronAPI || {}) && (window.electronAPI || {}).log) (window.electronAPI || {}).log('[checkpoint] ' + label); } catch (e) {}
+  };
+  window.__chk('inline error-handler script done');
+</script>
+
+<!-- Build edition (full / demo) + the demo gating module. Loaded before every
+     other game script so window.Demo exists for all of them, and AFTER the
+     error catcher above so a failure here is shown rather than silent. -->
+<script src="assets/edition.js"></script>
+<script src="assets/demo.js"></script>
+<script>window.__chk('after demo.js');</script>
+
+<!-- Enemy-inflicted status effects on the player. Loaded before game.js so the
+     hooks in it can call window.Status without a load-order guard. -->
+<script src="assets/status.js"></script>
+<script>window.__chk('after status.js');</script>
+
+<!-- Infinite mode: saved run + continue/new choice. -->
+<script src="assets/infsave.js"></script>
+<script>window.__chk('after infsave.js');</script>
 </head>
 <body>
 <!-- Boot/loading screen: covers everything until scripts, fonts and locales are
@@ -52,6 +127,9 @@
   <div id="iceUi" class="uib bonusUi"><div class="uil" data-i18n="bonusIce">ICE</div><div class="bonusTrack" id="iceTrack"><div class="bonusFill" id="iceFill"></div></div></div>
   <div id="starUi" class="uib bonusUi"><div class="uil" data-i18n="bonusStar">STAR</div><div class="bonusTrack" id="starTrack"><div class="bonusFill" id="starFill"></div></div></div>
   <div id="bootsUi" class="uib bonusUi"><div class="uil" data-i18n="bonusBoots">BOOTS</div><div class="bonusTrack" id="bootsTrack"><div class="bonusFill" id="bootsFill"></div></div></div>
+  <!-- Status effect left on the player by an enemy hit (assets/status.js). Its
+       label and colour change with the effect, so the text is set at runtime. -->
+  <div id="statusUi" class="uib bonusUi" style="display:none"><div class="uil" id="statusLbl">—</div><div class="bonusTrack" id="statusTrack"><div class="bonusFill" id="statusFill"></div></div></div>
   <button id="audioBtn" title="Sound">🔊</button>
 </div>
 
@@ -207,14 +285,27 @@
 </div>
 
 <script src="assets/audiofiles.js"></script>
+<script>window.__chk('after audiofiles.js');</script>
 <script src="assets/game.js"></script>
+<script>window.__chk('after game.js');</script>
 <script src="assets/i18n-new.js"></script>
+<script>window.__chk('after i18n-new.js');</script>
 <script src="assets/settings.js"></script>
+<script>window.__chk('after settings.js');</script>
 <script src="assets/worldmap.js"></script>
+<script>window.__chk('after worldmap.js');</script>
 <script src="assets/achievements.js"></script>
+<script>window.__chk('after achievements.js');</script>
 <script src="assets/saveslots.js"></script>
+<script>window.__chk('after saveslots.js');</script>
 <script src="assets/bugfixes.js"></script>
+<script>window.__chk('after bugfixes.js');</script>
 <script src="assets/cinematics.js"></script>
+<script>window.__chk('after cinematics.js');</script>
+<script src="assets/logarchive.js"></script>
+<script>window.__chk('after logarchive.js');</script>
+<script src="assets/profile.js"></script>
+<script>window.__chk('after profile.js');</script>
 
 <!-- ══════════════════════════════════════════════════════════════
      BYTE BLASTER — NETWORK MULTIPLAYER MODULE
@@ -309,7 +400,7 @@
       </div>
       <div id="netLvlRow" style="display:none;flex-direction:column;gap:6px">
         <div class="net-label" data-i18n="netLevelRange">LEVEL (1–100)</div>
-        <input class="net-input" id="netLvlInput" type="number" min="1" max="100" value="1" style="width:80px"/>
+        <input class="net-input" id="netLvlInput" type="number" min="1" max="110" value="1" style="width:80px"/>
       </div>
       <div class="net-status" id="netLevelStatus" style="color:#ff0">⚡ choose a mode</div>
     </div>
@@ -354,15 +445,21 @@
 </div><!-- /#stage -->
 
 <script src="assets/network.js"></script>
+<script>window.__chk('after network.js');</script>
 
 <!-- Touch / mobile virtual gamepad (phones & tablets, web + Android build) -->
 <script src="assets/touch.js"></script>
+<script>window.__chk('after touch.js');</script>
 
 <!-- Stamp the build version into the main-menu corner tag. -->
 <script>
 (function () {
   var el = document.getElementById('verTag');
-  if (el) el.textContent = 'v' + (window.BB_VERSION || '1.0.0');
+  if (!el) return;
+  var tag = 'v' + (window.BB_VERSION || '1.0.0');
+  // The demo says so on the main menu, right where the version lives.
+  if (window.Demo && window.Demo.on) { tag = window.Demo.tagVersion(tag); el.style.color = '#f0fa'; }
+  el.textContent = tag;
 })();
 </script>
 
@@ -379,6 +476,7 @@
 
   function step(label) {
     done++;
+    if (window.__chk) window.__chk('boot step ' + done + '/' + total + (label ? ' (' + label + ')' : ''));
     if (bar) bar.style.width = Math.min(100, Math.round(done / total * 100)) + '%';
     if (msg && label) msg.textContent = label;
     if (done >= total) finish();
@@ -386,10 +484,26 @@
   function finish() {
     if (hidden) return;
     hidden = true;
+    if (window.__chk) window.__chk('boot finish() — hiding boot screen, starting menu/game');
     if (bar) bar.style.width = '100%';
-    if (msg) msg.textContent = 'READY';
+    // The boot screen can finish before the locale files load, so fall back to
+    // English rather than printing a raw key.
+    if (msg) msg.textContent = (typeof window.t === 'function') ? window.t('bootReady') : 'READY';
     boot.style.opacity = '0';
-    setTimeout(function () { if (boot && boot.parentNode) boot.parentNode.removeChild(boot); }, 500);
+    setTimeout(function () {
+      if (boot && boot.parentNode) boot.parentNode.removeChild(boot);
+      if (window.__chk) window.__chk('boot screen removed from DOM — menu should now be the visible paint');
+      // Confirm to the main process that we really painted. Two nested frames
+      // so the menu has been through a full compositor cycle, not just laid
+      // out — a renderer that can't produce frames (broken GPU backend) never
+      // gets here, which is exactly the signal main.js needs to fall back to
+      // software rendering on the next launch.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          try { if ((window.electronAPI || {}) && (window.electronAPI || {}).bootOk) (window.electronAPI || {}).bootOk(); } catch (e) {}
+        });
+      });
+    }, 500);
   }
 
   // 1) All page resources loaded.

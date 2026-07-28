@@ -63,8 +63,9 @@
     resolution: '1600x900',
     customResolution: '1600x900',
     gameScale: 0,            // 0 = auto-fit to window (preserve aspect ratio)
+    mobileZoom: 0,           // phone/tablet world magnification: 0 = auto by screen width, else 1.0–2.5
     showFPS: false,
-    fpsLimit: 0,
+    fpsLimit: 'auto',        // 'auto' = detect the screen's refresh rate on first run (60Hz→60fps, 90Hz→90fps…), or a number, or 0 = unlimited
     adaptiveQuality: 'auto', // auto-lower gfx under sustained low FPS: 'auto' | 'on' | 'off'
     vsync: true,             // V-Sync (applied at startup; off = uncapped FPS)
     graphicsQuality: 'auto', // preset name, 'auto' (detect on first run) or 'custom'
@@ -72,6 +73,9 @@
     // pre-fills these; the player can then change any of them (→ 'custom').
     gfx: { glow:1.0, particleMul:1.0, bgDetail:1.0, trails:1.0, bossFx:1.0, decorMul:1.0, renderScale:2.0 },
     windowMode: 'windowed',
+    mapEnvironment: 'themed', // world-map backdrop: 'themed' (per-world) | 'space' (classic orbit-in-space)
+    bossAutoScrollCamera: false, // boss fights: camera auto-scrolls left→right instead of following the player. Off by default.
+    enemyEffects: 'on',          // enemies leave a status effect (burn/chill/emp/corrode) on a hit. See assets/status.js.
     language: 'auto',        // 'auto' = detect from system on first run
     cutscenes: true,         // story dialogue cutscenes on/off
     // Audio settings
@@ -355,6 +359,14 @@
         const ty = Math.max(0, (vpH - sh * k) / 2);
         stage.style.width = sw + 'px';
         stage.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')';
+        // Re-run the backing-store sizing NOW that the stage transform is known.
+        // layoutCanvas() above already called it, but at that moment the canvas
+        // still measured its full unscaled width, so the game sized its backing
+        // store for a canvas far larger than the one the phone actually shows
+        // (in portrait: 1600x840 painted to display 1081x567 — more than double
+        // the pixels, every frame). This second call costs nothing and is the
+        // single biggest mobile performance win available here.
+        if (typeof window.applyRenderResolution === 'function') window.applyRenderResolution();
         return;
       }
 
@@ -453,7 +465,7 @@
     if (elapsed >= 1000) {
       fps = Math.round((frameCount * 1000) / elapsed);
       if (fpsCounter) {
-        const limit = window.gameSettings.fpsLimit || 0;
+        const limit = (typeof window.gameSettings.fpsLimit === 'number') ? window.gameSettings.fpsLimit : 0;
         const displayText = limit > 0 ? `FPS: ${fps} / ${limit}` : `FPS: ${fps}`;
         fpsCounter.textContent = displayText;
         
@@ -476,8 +488,8 @@
 
   // FPS Limiter
   function shouldSkipFrame() {
-    const limit = window.gameSettings.fpsLimit || 0;
-    if (limit <= 0) return false; // No limit
+    const limit = (typeof window.gameSettings.fpsLimit === 'number') ? window.gameSettings.fpsLimit : 0;
+    if (limit <= 0) return false; // No limit (also covers 'auto' before detection resolves)
     
     const now = performance.now();
     const targetFrameTime = 1000 / limit;
@@ -491,16 +503,54 @@
     return false;
   }
 
+  // ── Screen refresh-rate detection ───────────────────────────────────────
+  // There's no direct "get monitor Hz" browser API, so we sample real
+  // requestAnimationFrame intervals (rAF is vsync-paced) over ~40 frames,
+  // take the median (robust against one-off hitches), and snap to the
+  // nearest common refresh rate. Used to seed fpsLimit on first run so a
+  // 90/120/144Hz screen isn't capped at a stale default — it plays at its
+  // own native rate, and a 60Hz screen correctly gets 60.
+  function detectRefreshRate(callback) {
+    const samples = [];
+    let last = null;
+    const COMMON_HZ = [30, 60, 75, 90, 120, 144, 165, 180, 240];
+    function tick(t) {
+      if (last !== null) samples.push(t - last);
+      last = t;
+      if (samples.length < 40) {
+        requestAnimationFrame(tick);
+      } else {
+        samples.sort((a, b) => a - b);
+        const median = samples[Math.floor(samples.length / 2)];
+        const hz = median > 0 ? Math.round(1000 / median) : 60;
+        let best = 60, bestDiff = Infinity;
+        for (const c of COMMON_HZ) { const d = Math.abs(c - hz); if (d < bestDiff) { bestDiff = d; best = c; } }
+        callback(best);
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
   // ── Adaptive quality controller ───────────────────────────────────────────
   // Optional (gameSettings.adaptiveQuality). When active it watches the real
   // frame rate and, if it stays below target for a couple of seconds, steps the
   // cheap-to-retune gfx levers (particles, glow, background/decor density) down a
   // notch — and steps them back up once the frame rate recovers and holds. This
   // is the "runs even on a microwave" safety net on top of the one-shot
-  // first-run tier detection. renderScale + trails are deliberately left alone so
-  // the picture never visibly re-resolves underneath the player.
-  const _AQ_MAX = 3;
-  const _AQ_FACTORS = [1.0, 0.7, 0.45, 0.25];
+  // first-run tier detection.
+  //
+  // renderScale used to be excluded on the grounds that the picture should never
+  // visibly re-resolve under the player. But it is by far the biggest lever
+  // there is — it is a straight multiplier on how many pixels get painted, so
+  // going from 1.5 to 1.0 cuts the fill rate to 44% — and on a device that is
+  // already dropping frames after every other lever has been exhausted, a
+  // slightly softer image is a much better trade than a slideshow. It is
+  // therefore applied only at the DEEPEST adaptive step, after particles, glow,
+  // background detail and decor density have all been cut.
+  const _AQ_MAX = 4;
+  const _AQ_FACTORS = [1.0, 0.7, 0.45, 0.25, 0.25];
+  // Ceiling on the backing-store scale per adaptive step (null = leave alone).
+  const _AQ_RENDER_SCALE = [null, null, null, null, 1.0];
   let _aqLevel = 0, _aqFrames = 0, _aqWinStart = performance.now();
   let _aqLowStreak = 0, _aqHighStreak = 0;
 
@@ -529,6 +579,8 @@
       bossFx:      base.bossFx * f,
       decorMul:    base.decorMul * f,
     });
+    const rsCap = _AQ_RENDER_SCALE[_aqLevel];
+    if (rsCap != null) g.renderScale = Math.min(base.renderScale || 2, rsCap);
     window.GFX_MAX_PARTICLES = Math.max(20, Math.round(160 * g.particleMul));
     if (typeof window.applyGfxValues === 'function') window.applyGfxValues(g);
   }
@@ -553,7 +605,8 @@
     const measured = (_aqFrames * 1000) / dt;
     _aqFrames = 0; _aqWinStart = now;
     // Target tracks any FPS cap the player set; otherwise assume a 60 Hz display.
-    const cap = (window.gameSettings.fpsLimit || 0) > 0 ? window.gameSettings.fpsLimit : 60;
+    const fl = window.gameSettings.fpsLimit;
+    const cap = (typeof fl === 'number' && fl > 0) ? fl : 60;
     const low = cap * 0.75, good = cap * 0.92;
     if (measured < low)      { _aqLowStreak++;  _aqHighStreak = 0; }
     else if (measured > good){ _aqHighStreak++; _aqLowStreak = 0; }
@@ -600,6 +653,19 @@
       settings.language = sys;
       saveSettings(settings);
     }
+    // FPS limit: 'auto' on first run → detect the screen's actual refresh rate
+    // (60Hz→60fps, 90Hz→90fps, 120Hz→120fps…) instead of defaulting to
+    // unlimited. Async (needs a couple dozen real frames to measure), so the
+    // limiter just behaves as "unlimited" for that brief moment — see
+    // shouldSkipFrame()'s explicit `typeof === 'number'` guard.
+    if (settings.fpsLimit === 'auto') {
+      detectRefreshRate(function (hz) {
+        settings.fpsLimit = hz;
+        saveSettings(settings);
+        const fpsLimitSelect = document.getElementById('fpsLimitSelect');
+        if (fpsLimitSelect) fpsLimitSelect.value = String(hz);
+      });
+    }
     if (typeof window.setLanguage === 'function') window.setLanguage(settings.language);
     applyGfxSettings();
     applyWindowMode(settings.windowMode || 'windowed');
@@ -645,7 +711,28 @@
 
         <!-- DISPLAY TAB -->
         <div class="setPanel" data-panel="display">
-          <div style="margin-bottom: 20px;">
+          <!-- PHONE / TABLET ONLY. Replaces the window-resolution control, which
+               does nothing without a window. Magnifies the game world so it is
+               not physically tiny on a small screen; resolution itself is picked
+               automatically from the device. Shown/hidden by _syncDisplayRows(). -->
+          <div id="mobileZoomRow" style="display: none; margin-bottom: 20px;">
+            <label data-i18n="mobileZoom" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Game Magnification:</label>
+            <select id="mobileZoomSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="0" data-i18n="zoomAuto">Auto (by screen size)</option>
+              <option value="1">1.0x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="1.75">1.75x</option>
+              <option value="2">2.0x</option>
+              <option value="custom" data-i18n="zoomCustom">Custom...</option>
+            </select>
+            <div id="zoomCustomDiv" style="display: none; margin-top: 10px;">
+              <input type="number" id="zoomCustomInput" step="0.05" min="1" max="2.5" placeholder="1.0 – 2.5" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
+            </div>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="zoomNote">* Bigger picture, less of the level visible at once. Resolution is set automatically.</div>
+          </div>
+
+          <div id="windowResRow" style="margin-bottom: 20px;">
             <label data-i18n="windowRes" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Window Resolution:</label>
             <select id="resolutionSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="1280x720">1280 x 720</option>
@@ -662,7 +749,7 @@
             <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="resNote">* Changes window size</div>
           </div>
 
-          <div style="margin-bottom: 20px;">
+          <div id="gameScaleRow" style="margin-bottom: 20px;">
             <label data-i18n="gameScale" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Game Scale:</label>
             <select id="scaleSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="0" data-i18n="scaleAuto">Auto-Fit (Recommended)</option>
@@ -682,6 +769,31 @@
               <option value="fullscreen" data-i18n="fullscreen">⛶ Fullscreen</option>
               <option value="frameless" data-i18n="borderless">▣ Borderless</option>
             </select>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="mapEnvironment" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">World Map Environment:</label>
+            <select id="mapEnvSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="themed" data-i18n="mapEnvThemed">🌍 Normal (per-world)</option>
+              <option value="space" data-i18n="mapEnvSpace">🛸 Space (classic)</option>
+            </select>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="mapEnvNote">* Normal gives each world its own map backdrop (jungle, lava, ice…). Space keeps the original orbit-in-space look for every world.</div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+              <input type="checkbox" id="bossCamCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="bossAutoCam">Boss Fight Auto-Scroll Camera</span>
+            </label>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="bossAutoCamNote">* On = camera advances on its own during boss fights (falling behind is fatal). Off = camera follows you as normal.</div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+              <input type="checkbox" id="enemyFxCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="enemyEffects">Enemy Status Effects</span>
+            </label>
+            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="enemyEffectsNote">* On = a hit also leaves you burning, chilled, EMP-fried or corroded for a few seconds. Effects never deal extra damage, and the matching power-up makes you immune.</div>
           </div>
 
           <div style="margin-bottom: 20px;">
@@ -773,9 +885,11 @@
           <div style="margin-bottom: 20px;">
             <label data-i18n="fpsLimit" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">FPS Limit:</label>
             <select id="fpsLimitSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="auto" data-i18n="fpsAuto">🖥 Auto (match screen Hz)</option>
               <option value="0" data-i18n="fpsNoLimit">No Limit (Unlimited)</option>
               <option value="30">30 FPS</option>
               <option value="60">60 FPS</option>
+              <option value="90">90 FPS</option>
               <option value="120">120 FPS</option>
               <option value="144">144 FPS</option>
               <option value="custom" data-i18n="fpsCustom">Custom...</option>
@@ -1005,6 +1119,43 @@
       };
     });
 
+    // Which Display-tab controls make sense on this device. A phone or tablet
+    // has no window to resize, so "Window Resolution" and "Game Scale" are
+    // replaced by "Game Magnification" — the control that actually addresses
+    // "the game is tiny on my screen".
+    function _syncDisplayRows() {
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
+                      (window.gameSettings && window.gameSettings.touchControls === 'on');
+      const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+      show('mobileZoomRow', isTouch);
+      show('windowResRow', !isTouch);
+      show('gameScaleRow', !isTouch);
+      if (!isTouch) return;
+      const sel = document.getElementById('mobileZoomSelect');
+      const div = document.getElementById('zoomCustomDiv');
+      const inp = document.getElementById('zoomCustomInput');
+      if (!sel) return;
+      const v = window.gameSettings.mobileZoom;
+      const presets = ['0', '1', '1.25', '1.5', '1.75', '2'];
+      const asStr = (v === 0 || v == null) ? '0' : String(+v);
+      if (presets.indexOf(asStr) >= 0) {
+        sel.value = asStr;
+        if (div) div.style.display = 'none';
+      } else {
+        sel.value = 'custom';
+        if (div) div.style.display = 'block';
+        if (inp) inp.value = asStr;
+      }
+      sel.onchange = () => {
+        if (div) div.style.display = sel.value === 'custom' ? 'block' : 'none';
+        if (sel.value === 'custom' && inp && !inp.value) inp.value = '1.5';
+      };
+    }
+    // Must run on every open, not just when the panel is built: the player can
+    // switch Touch Controls to "always on" mid-session, and the panel is only
+    // constructed once.
+    window._syncDisplayRows = _syncDisplayRows;
+
     // Load current settings into form
     const resSelect = document.getElementById('resolutionSelect');
     const scaleSelect = document.getElementById('scaleSelect');
@@ -1016,15 +1167,23 @@
 
     resSelect.value = window.gameSettings.resolution;
     scaleSelect.value = window.gameSettings.gameScale.toString();
+
+    // Display tab: phones/tablets get magnification, desktops get window size.
+    // Window resolution and Game Scale both act on a window, so on a device that
+    // has none they are dead controls — hidden rather than left to confuse.
+    _syncDisplayRows();
     fpsCheck.checked = window.gameSettings.showFPS;
     const vsyncCheck = document.getElementById('vsyncCheckbox');
     if (vsyncCheck) vsyncCheck.checked = window.gameSettings.vsync !== false;
     // FPS limit: if the saved value isn't one of the presets, treat it as Custom.
     const fpsCustomDiv = document.getElementById('fpsCustomDiv');
     const fpsCustomInput = document.getElementById('fpsCustomInput');
-    const fpsVal = (window.gameSettings.fpsLimit || 0);
-    const fpsPresets = ['0', '30', '60', '120', '144'];
-    if (fpsPresets.includes(String(fpsVal))) {
+    const fpsVal = window.gameSettings.fpsLimit;
+    const fpsPresets = ['0', '30', '60', '90', '120', '144'];
+    if (fpsVal === 'auto') {
+      fpsLimitSelect.value = 'auto';
+      if (fpsCustomDiv) fpsCustomDiv.style.display = 'none';
+    } else if (fpsPresets.includes(String(fpsVal))) {
       fpsLimitSelect.value = String(fpsVal);
       if (fpsCustomDiv) fpsCustomDiv.style.display = 'none';
     } else {
@@ -1037,6 +1196,7 @@
     };
     const graphicsSelect = document.getElementById('graphicsSelect');
     const windowModeSelect = document.getElementById('windowModeSelect');
+    const mapEnvSelect = document.getElementById('mapEnvSelect');
 
     // ── Per-parameter graphics sliders ──────────────────────────────────────
     // Each row maps a gfx key to its slider; UI value is a percentage that maps
@@ -1079,6 +1239,11 @@
       };
     }
     if (windowModeSelect) windowModeSelect.value = window.gameSettings.windowMode || 'windowed';
+    if (mapEnvSelect) mapEnvSelect.value = window.gameSettings.mapEnvironment || 'themed';
+    const bossCamCheckbox = document.getElementById('bossCamCheckbox');
+    if (bossCamCheckbox) bossCamCheckbox.checked = !!window.gameSettings.bossAutoScrollCamera;
+    const enemyFxCheckbox = document.getElementById('enemyFxCheckbox');
+    if (enemyFxCheckbox) enemyFxCheckbox.checked = window.gameSettings.enemyEffects !== 'off';
 
     // Audio sliders
     const masterVolumeSlider = document.getElementById('masterVolumeSlider');
@@ -1331,13 +1496,33 @@
       }
       
       window.gameSettings.gameScale = parseFloat(scaleSelect.value);
+      // Mobile magnification: a preset, Auto (0), or a clamped custom value.
+      const zoomSel = document.getElementById('mobileZoomSelect');
+      if (zoomSel) {
+        if (zoomSel.value === 'custom') {
+          const zi = document.getElementById('zoomCustomInput');
+          let cz = parseFloat(zi && zi.value);
+          if (isNaN(cz)) cz = 0;                    // unreadable input → Auto
+          else cz = Math.max(1, Math.min(cz, 2.5)); // same bounds the renderer enforces
+          window.gameSettings.mobileZoom = cz;
+        } else {
+          window.gameSettings.mobileZoom = parseFloat(zoomSel.value) || 0;
+        }
+      }
       window.gameSettings.showFPS = fpsCheck.checked;
-      // FPS limit: a preset, or a clamped custom value (10–1000) when "Custom" chosen.
+      // FPS limit: a preset, 'auto' (detect screen Hz), or a clamped custom
+      // value (10–1000) when "Custom" chosen.
       if (fpsLimitSelect.value === 'custom') {
         let cf = parseInt(fpsCustomInput && fpsCustomInput.value, 10);
         if (isNaN(cf) || cf <= 0) cf = 0;
         else cf = Math.max(10, Math.min(cf, 1000));
         window.gameSettings.fpsLimit = cf;
+      } else if (fpsLimitSelect.value === 'auto') {
+        window.gameSettings.fpsLimit = 'auto';
+        detectRefreshRate(function (hz) {
+          window.gameSettings.fpsLimit = hz;
+          saveSettings(window.gameSettings);
+        });
       } else {
         window.gameSettings.fpsLimit = parseInt(fpsLimitSelect.value, 10) || 0;
       }
@@ -1364,6 +1549,27 @@
       const vsyncChanged = (window.gameSettings.vsync !== false) !== prevVsync;
       const wmSel = document.getElementById('windowModeSelect');
       if (wmSel) { window.gameSettings.windowMode = wmSel.value; }
+      const mapEnvSel = document.getElementById('mapEnvSelect');
+      if (mapEnvSel) {
+        window.gameSettings.mapEnvironment = mapEnvSel.value;
+        // Live-apply: if the world map is open right now, redraw with the new
+        // environment immediately instead of waiting for the next time it opens.
+        if (window.WorldMap && typeof window.WorldMap.refresh === 'function') window.WorldMap.refresh();
+      }
+      const bossCamSel = document.getElementById('bossCamCheckbox');
+      if (bossCamSel) { window.gameSettings.bossAutoScrollCamera = bossCamSel.checked; }
+      const enemyFxSel = document.getElementById('enemyFxCheckbox');
+      if (enemyFxSel) {
+        window.gameSettings.enemyEffects = enemyFxSel.checked ? 'on' : 'off';
+        // Turning it off mid-run must clear whatever is already on the players,
+        // otherwise the effect sticks until its timer happens to expire.
+        // `player`/`player2` are script-level `let`s in game.js, so they are
+        // reachable by bare name but NOT as window properties.
+        if (!enemyFxSel.checked && window.Status) {
+          try { if (player) window.Status.clear(player); } catch (e) {}
+          try { if (player2) window.Status.clear(player2); } catch (e) {}
+        }
+      }
       const langSel = document.getElementById('languageSelect');
       if (langSel) { window.gameSettings.language = langSel.value; }
 
@@ -1404,7 +1610,12 @@
       // Play sound if available
       if (window.SFX && window.SFX.menu) window.SFX.menu();
 
-      // V-Sync only takes effect at startup (command-line switch). Offer a restart.
+      // V-Sync only takes effect at startup (command-line switch) and only exists
+      // as an Electron feature (GPU vsync/frame-rate-limit switches). In the plain
+      // browser build there's nothing to relaunch, so only prompt when the
+      // Electron bridge is actually present — otherwise the setting is saved
+      // silently with no restart prompt (there's no separate "apply" step needed
+      // in-browser since there's no browser-side vsync toggle to apply).
       if (vsyncChanged && window.electronAPI && typeof window.electronAPI.relaunch === 'function') {
         const msg = (typeof window.t === 'function' && window.t('vsyncRestart') !== 'vsyncRestart')
           ? window.t('vsyncRestart')
@@ -1440,6 +1651,7 @@
       // Re-sync the control bindings so unsaved edits from a previous open
       // (closed via Cancel) don't linger.
       if (typeof window._syncControlsForm === 'function') window._syncControlsForm();
+      if (typeof window._syncDisplayRows === 'function') window._syncDisplayRows();
       if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();
       overlay.style.display = 'flex';
     }

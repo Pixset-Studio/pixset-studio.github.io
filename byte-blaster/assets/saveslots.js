@@ -9,6 +9,10 @@
   'use strict';
 
   const T = (k, ...a) => (typeof window.t === 'function' ? window.t(k, ...a) : k);
+  // Denominator for a slot's "levels done" line. The main story is 100 levels;
+  // once the secret Prism Anomaly world (101–110) has been reached, a slot can
+  // legitimately show more than 100 done — which used to read as "102/100".
+  const _slotTotal = (done) => (done > 100 ? 110 : 100);
   const sfx = () => { if (window.SFX && window.SFX.menu) window.SFX.menu(); };
   let overlay = null;
 
@@ -85,8 +89,8 @@
       const updated = s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : '';
       body = `
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#9cf;line-height:2;text-align:left;margin:6px 2px 14px;">
-          <div>${T('slotLevels', s.done)}</div>
-          <div>${T('slotHardcore', s.doneH)}</div>
+          <div>${T('slotLevels', s.done, _slotTotal(s.done))}</div>
+          <div>${T('slotHardcore', s.doneH, _slotTotal(s.doneH))}</div>
           <div>${T('slotAch', s.ach)}</div>
           <div>${T('slotBest', s.best)}</div>
           ${updated ? `<div style="color:#456;font-size:8px;margin-top:4px;">${updated}</div>` : ''}

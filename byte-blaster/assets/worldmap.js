@@ -24,7 +24,11 @@
     {id:7, name:'TOXIC ZONE',    icon:'☣',  accent:'#cf0', dark:'#1a2200', mid:'#2a3300', range:[71,80]},
     {id:8, name:'STORM PEAKS',   icon:'⚡', accent:'#88f', dark:'#0a0a1a', mid:'#15152a', range:[81,90]},
     {id:9, name:'FINAL FORTRESS', icon:'🔱', accent:'#f44', dark:'#2a0000', mid:'#440000', range:[91,100]},
+    // Secret 11th world — see drawWorldLockOverlay()'s cousin, the rainbow gate
+    // in loadProgress(). Only reachable after finding all 10 Rainbow Shards.
+    {id:10, name:'PRISM ANOMALY', icon:'🌈', accent:'#f0f', dark:'#1a0030', mid:'#300050', range:[101,110], secret:true},
   ];
+  const LEVELS_PER_WORLD = 10;
 
   // Localized world name (falls back to the English constant). Uses the shared
   // helper from index.html so the map matches the in-game watermark.
@@ -49,6 +53,7 @@
     {cx: 620, cy: 160, spread: 135},  // World 7
     {cx: 420, cy: 240, spread: 140},  // World 8
     {cx: 280, cy: 380, spread: 150},  // World 9: final
+    {cx: 700, cy: 450, spread: 140},  // World 10 (secret) — placeholder, actual on-screen layout comes from layoutLevels()
   ];
 
   // Each world lays its 10 levels out in a DIFFERENT shape so no two worlds
@@ -117,7 +122,7 @@
     return { lx: lx + jx * 0.07, ly: ly + jy * 0.07 };
   }
 
-  for (let w = 0; w < 10; w++) {
+  for (let w = 0; w < 11; w++) {
     const world = WORLDS[w];
     const pos = worldPositions[w];
     const [start, end] = world.range;
@@ -175,6 +180,7 @@
 
   const MAP_STATE = {
     currentLevelId: 'L1',
+    activeWorld: 0,     // which world (0-9) is currently displayed — map now shows ONE world at a time
     playerX: LEVELS[0].x,
     playerY: LEVELS[0].y,
     playerMoving: false,
@@ -190,7 +196,15 @@
 
   // Accent colour for a world — overridden to red in Hardcore mode.
   function worldAccent(world) {
-    return MAP_STATE.hard ? '#f44' : world['accent'];
+    if (MAP_STATE.hard) return '#f44';
+    // Prism Anomaly is the one world that should actually read as "rainbow" on
+    // the map (roads, node rings, glow) rather than a single fixed tint like
+    // every other world — cycle its hue instead of returning a flat colour.
+    if (world && world.secret) {
+      const hue = (MAP_STATE.time * 60) % 360;
+      return `hsl(${hue},95%,62%)`;
+    }
+    return world['accent'];
   }
 
   // ═══════════════════════════════════════════════
@@ -211,20 +225,25 @@
   const nodeBaseR = level => (level.type === 'boss' ? 22 : 16);
   const nodeR = level => nodeBaseR(level) * nodeScale;
 
-  // Recompute every node's on-screen position from its base coords. The playable
-  // field size scales with the screen (resolution → canvas size) AND the Game
-  // Scale setting; nodes are then relaxed so none overlap and clamped so none
-  // leave the field. Called whenever the canvas is sized or the map is opened.
+  // Lay out the 10 levels of the ACTIVE world in a circle ("orbit") around the
+  // centre of the safe field, instead of the old scheme that crammed all 100
+  // levels across 10 clusters into one screen. Levels 1..10 sit clockwise
+  // starting at the top so the reading order matches the road direction; the
+  // boss (level 10 of the world) lands back near the top, next to level 1,
+  // which reads naturally as "the loop closes".
   function layoutLevels() {
-    const dataW = (BASE_MAXX - BASE_MINX) || 1;
-    const dataH = (BASE_MAXY - BASE_MINY) || 1;
-
-    // HUD-safe margins: clear the top-left info stack and the bottom panel/hints.
-    // Measured from the ACTUAL on-screen chrome (which fitHud() scales to the
-    // screen) so level nodes never slip under a panel on small phones. Falls back
-    // to fixed insets before the overlay/panels exist. Capped at ~40% per side so
-    // the playable field can never collapse to nothing.
-    let PAD_L = 22, PAD_R = 22, PAD_T = 150, PAD_B = 160;
+    // HUD-safe margins: clear the top title/arrows and the bottom info panel.
+    // Measured from the ACTUAL on-screen chrome (scaled by fitHud()) so nodes
+    // never slip under a panel on small phones. Falls back to fixed insets
+    // before the overlay/panels exist.
+    let PAD_L = 60, PAD_R = 60, PAD_T = 170, PAD_B = 160;
+    let ARROW_L = 0, ARROW_R = 0;   // hard floors: the world-switch buttons
+    // Panels that sit on the vertical centre line, where nodes 1 (top) and 6
+    // (bottom) live. Used for a final correction after the ring is sized: the
+    // proportional squeeze can otherwise slide the bottom node under the level
+    // panel on a very short screen.
+    let centreTop = 0, centreBot = Infinity;
+    let mapRects = null;
     if (mapOverlay) {
       const rectOf = sel => {
         const el = mapOverlay.querySelector(sel);
@@ -232,107 +251,161 @@
         const r = el.getBoundingClientRect();
         return (r.width && r.height) ? r : null;
       };
-      // Top band: below the tallest of the title/stats panel and ACHIEVEMENTS.
+      mapRects = rectOf;
       let topB = 0;
-      [rectOf('#mapHudTL'), rectOf('#mapAchBtn')].forEach(r => { if (r) topB = Math.max(topB, r.bottom); });
-      if (topB > 0) PAD_T = clampN(topB + 16, 90, mapH * 0.4);
-      // Bottom band: above the zone tag / BACK button / keyboard hint AND the
-      // always-visible level-info panel ("LEVEL N"), so no node hides under them.
+      [rectOf('#mapHudTL'), rectOf('#mapAchBtn'), rectOf('#mapWorldTitle')].forEach(r => { if (r) topB = Math.max(topB, r.bottom); });
+      if (topB > 0) PAD_T = clampN(topB + 16, 90, mapH * 0.42);
       let botTop = mapH;
       ['#mapZoneTag', '#mapBackTouch', '#mapKbdHint', '#mapLevelPanel'].forEach(sel => {
         const r = rectOf(sel); if (r) botTop = Math.min(botTop, r.top);
       });
       const measuredB = botTop < mapH ? (mapH - botTop) : 0;
       PAD_B = clampN(Math.max(measuredB + 16, 150), 110, mapH * 0.46);
+      // Keep clear of the left/right arrow buttons too. Their edges double as
+      // the floor the squeeze below must not cross.
+      const arrL = rectOf('#mapArrowLeft'), arrR = rectOf('#mapArrowRight');
+      if (arrL) { ARROW_L = arrL.right + 6; PAD_L = clampN(arrL.right + 14, 60, mapW * 0.28); }
+      if (arrR) { ARROW_R = (mapW - arrR.left) + 6; PAD_R = clampN((mapW - arrR.left) + 14, 60, mapW * 0.28); }
     }
-    const safeX = PAD_L, safeY = PAD_T;
-    const safeW = Math.max(220, mapW - PAD_L - PAD_R);
-    const safeH = Math.max(200, mapH - PAD_T - PAD_B);
+    // When the chrome asks for more room than the screen has, SHRINK the
+    // paddings proportionally. The previous code clamped the field to a minimum
+    // size instead (`Math.max(200, …)`), which does not create space — it just
+    // makes the ring bigger than the gap it has to fit into, and the nodes end
+    // up under the panels or off-screen. A short landscape phone hits this on
+    // every open.
+    // `hardA`/`hardB` are floors the squeeze may not cross — they mark buttons
+    // the ring must never sit on top of (the world arrows). Panels that only
+    // display text can be encroached on; a tappable control cannot, or the node
+    // and the arrow fight over the same touch.
+    const squeeze = (padA, padB, total, minBand, hardA, hardB) => {
+      const band = total - padA - padB;
+      if (band >= minBand) return [padA, padB];
+      const room = (padA - (hardA || 0)) + (padB - (hardB || 0));
+      if (room <= 0) return [padA, padB];
+      // Never eat more than 60% of the squeezable margin: panels stay reachable.
+      const cut = Math.min(minBand - band, room * 0.6);
+      return [padA - cut * ((padA - (hardA || 0)) / room),
+              padB - cut * ((padB - (hardB || 0)) / room)];
+    };
+    [PAD_T, PAD_B] = squeeze(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5), 0, 0);
+    [PAD_L, PAD_R] = squeeze(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6), ARROW_L, ARROW_R);
 
-    // Game Scale widens/narrows the field; resolution already set the safe box.
+    const safeX = PAD_L, safeY = PAD_T;
+    const safeW = Math.max(120, mapW - PAD_L - PAD_R);
+    const safeH = Math.max(90, mapH - PAD_T - PAD_B);
+    const cx = safeX + safeW / 2, cy = safeY + safeH / 2;
+
+    // Game Scale widens/narrows the ring radius.
     const gs = (window.gameSettings && window.gameSettings.gameScale) || 0;
     const factor = gs > 0 ? clampN(gs / 3, 0.45, 1) : 1.0;
-    const fieldW = safeW * factor, fieldH = safeH * factor;
-    const fieldX = safeX + (safeW - fieldW) / 2, fieldY = safeY + (safeH - fieldH) / 2;
 
-    // Size nodes from the available area so all 100 ALWAYS fit without overlap:
-    // a smaller field (lower resolution / Game Scale) yields smaller nodes, a
-    // larger field yields bigger ones — overlap is impossible either way.
-    const cell = Math.sqrt((fieldW * fieldH) / LEVELS.length);
-    // Bigger nodes that fill more of the screen: the old cap (26) left the PC
-    // map looking tiny with lots of empty space. A higher multiplier + cap make
-    // the level nodes chunky like the phone build while relaxation (below) still
-    // guarantees all 100 fit without overlap.
-    const rTarget = clampN(cell * 0.40, 9, 34);
+    // ELLIPTICAL orbit. A circle sized by the SHORTER axis threw away the whole
+    // width of a 20:9 phone in landscape: ten nodes crammed into a small ring in
+    // the middle with empty space either side, every node too small to tap.
+    // Using both axes spreads the ring across the space that actually exists.
+    // The ratio cap keeps it reading as a ring rather than a flat slit.
+    let rx = safeW / 2 * 0.86 * factor;
+    let ry = safeH / 2 * 0.86 * factor;
+    // How far it may stretch depends on how starved of height we are, so a
+    // desktop keeps the round ring it always had (ratio 1) and only a cramped
+    // screen — a phone in landscape, where safeH falls to ~150px — earns the
+    // wide one. Interpolated rather than switched, so resizing a window doesn't
+    // make the ring jump at a threshold.
+    const RATIO_MAX = clampN(1 + (420 - Math.min(safeH, safeW)) / 220, 1, 2.2);
+    if (rx > ry * RATIO_MAX) rx = ry * RATIO_MAX;
+    if (ry > rx * RATIO_MAX) ry = rx * RATIO_MAX;
+
+    const isTouchMap = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
+                       (window.gameSettings && window.gameSettings.touchControls === 'on');
+    // Space the nodes evenly BY ARC LENGTH, not by angle. Equal angles on an
+    // ellipse bunch the nodes up at the ends of the long axis — on a phone that
+    // put nodes 3-4 and 8-9 only 45px apart while the side ones sat 90px apart,
+    // so they overlapped AND had to be shrunk to compensate. Even arc spacing
+    // fixes both: the tightest gap becomes perimeter/10, which on the same phone
+    // is 74px instead of 45 — nodes end up 1.6× bigger and evenly placed.
+    // Walked numerically because an ellipse has no closed-form arc length.
+    const ARC_STEPS = 720;
+    const arcTable = (a, b) => {
+      const cum = [0];
+      let px = a * Math.cos(-Math.PI / 2), py = b * Math.sin(-Math.PI / 2);
+      for (let i = 1; i <= ARC_STEPS; i++) {
+        const t = -Math.PI / 2 + (i / ARC_STEPS) * Math.PI * 2;
+        const x = a * Math.cos(t), y = b * Math.sin(t);
+        cum.push(cum[i - 1] + Math.hypot(x - px, y - py));
+        px = x; py = y;
+      }
+      return cum;
+    };
+    // Angles for the 10 nodes, first one at the top, going clockwise.
+    const arcAngles = (a, b, n) => {
+      const cum = arcTable(a, b), total = cum[ARC_STEPS], out = [];
+      let j = 0;
+      for (let k = 0; k < n; k++) {
+        const want = (k / n) * total;
+        while (j < ARC_STEPS && cum[j + 1] < want) j++;
+        out.push(-Math.PI / 2 + (j / ARC_STEPS) * Math.PI * 2);
+      }
+      return out;
+    };
+    const minGap = (a, b) => arcTable(a, b)[ARC_STEPS] / LEVELS_PER_WORLD;
+    // Node radius, then fit the ring inside the screen for THAT radius, then
+    // recompute the radius for the (possibly smaller) ring. Two passes settle it.
+    // The top and bottom nodes sit on the vertical centre line, so a centred
+    // panel there (world title above, level panel below) would swallow them.
+    // Measure only the panels that actually cross x = cx.
+    if (mapRects) {
+      for (const sel of ['#mapWorldTitle', '#mapHudTL', '#mapAchBtn']) {
+        const r = mapRects(sel);
+        if (r && r.left - 4 < cx && r.right + 4 > cx) centreTop = Math.max(centreTop, r.bottom);
+      }
+      for (const sel of ['#mapLevelPanel', '#mapZoneTag', '#mapBackTouch', '#mapKbdHint']) {
+        const r = mapRects(sel);
+        if (r && r.left - 4 < cx && r.right + 4 > cx) centreBot = Math.min(centreBot, r.top);
+      }
+    }
+    // Size the nodes, shrink the ring to fit them, then re-size the nodes for
+    // the smaller ring. Three passes settle it. Every constraint lives INSIDE
+    // the loop: applying one of them afterwards (as the panel correction used to
+    // be) leaves the other axis stale — that is how a 640×300 screen ended up
+    // with a 142×36 ring, far past the ratio cap, and overlapping nodes again.
+    let rTarget = 16;
+    for (let pass = 0; pass < 3; pass++) {
+      // The worst pair is the boss (22/16 = 1.375× a normal node) next to a
+      // normal one, so their radii sum to 2.375 × rTarget. Leave ~8% of the gap
+      // as breathing room: rTarget ≤ gap × 0.92 / 2.375.
+      const rSafe = minGap(rx, ry) * 0.387;
+      // Touch wants a bigger node, but never big enough to overlap: the floor
+      // yields to rSafe rather than overriding it.
+      rTarget = clampN(rSafe, Math.min(isTouchMap ? 15 : 10, rSafe), 34);
+      // Hard guarantee: no node may leave the canvas, whatever the paddings did.
+      rx = Math.min(rx, Math.max(36, Math.min(cx, mapW - cx) - rTarget - 6));
+      ry = Math.min(ry, Math.max(28, Math.min(cy, mapH - cy) - rTarget - 6));
+      // …and none may hide under a centred panel.
+      const upRoom = cy - centreTop - rTarget - 4;
+      const dnRoom = (centreBot === Infinity ? mapH : centreBot) - cy - rTarget - 4;
+      ry = Math.min(ry, Math.max(28, Math.min(upRoom, dnRoom)));
+      // Re-apply the ratio cap: the two clamps above only ever shrink one axis,
+      // so without this the ring degenerates into a flat slit.
+      if (rx > ry * RATIO_MAX) rx = ry * RATIO_MAX;
+    }
     nodeScale = rTarget / 16; // 16 = base normal-node radius
-    const maxR = 22 * nodeScale;
 
-    const innerX = fieldX + maxR, innerY = fieldY + maxR;
-    const innerW = Math.max(1, fieldW - maxR * 2), innerH = Math.max(1, fieldH - maxR * 2);
-    const scale = Math.min(innerW / dataW, innerH / dataH);
-    const offX = innerX + (innerW - dataW * scale) / 2;
-    const offY = innerY + (innerH - dataH * scale) / 2;
-
-    for (const l of LEVELS) {
-      l.x = offX + (l.bx - BASE_MINX) * scale;
-      l.y = offY + (l.by - BASE_MINY) * scale;
+    const w = MAP_STATE.activeWorld;
+    const startIdx = w * LEVELS_PER_WORLD;
+    const angles = arcAngles(rx, ry, LEVELS_PER_WORLD);
+    for (let i = 0; i < LEVELS_PER_WORLD; i++) {
+      const level = LEVELS[startIdx + i];
+      // Start at the top and go clockwise, evenly spaced along the ring.
+      const a = angles[i];
+      level.x = Math.round(cx + Math.cos(a) * rx);
+      level.y = Math.round(cy + Math.sin(a) * ry);
     }
-    // worldRender centres are derived from the FINAL node positions further down
-    // (after relaxation) — see the centroid pass below.
-
-    // Relaxation: push apart any pair closer than their combined radii + gap,
-    // re-clamping into the field each pass so nodes never leave the screen.
-    const gap = 10 * nodeScale;
-    const loX = fieldX + maxR, hiX = fieldX + fieldW - maxR;
-    const loY = fieldY + maxR, hiY = fieldY + fieldH - maxR;
-    for (let it = 0; it < 60; it++) {
-      let moved = false;
-      for (let a = 0; a < LEVELS.length; a++) {
-        for (let b = a + 1; b < LEVELS.length; b++) {
-          const la = LEVELS[a], lb = LEVELS[b];
-          let dx = lb.x - la.x, dy = lb.y - la.y;
-          let d = Math.hypot(dx, dy);
-          const need = nodeR(la) + nodeR(lb) + gap;
-          if (d > 0.0001 && d < need) {
-            const push = (need - d) / 2, ux = dx / d, uy = dy / d;
-            la.x -= ux * push; la.y -= uy * push;
-            lb.x += ux * push; lb.y += uy * push;
-            moved = true;
-          } else if (d <= 0.0001) {
-            la.x -= 0.5; lb.x += 0.5; moved = true; // separate coincident nodes
-          }
-        }
-      }
-      for (const l of LEVELS) { l.x = clampN(l.x, loX, hiX); l.y = clampN(l.y, loY, hiY); }
-      if (!moved) break;
-    }
-    for (const l of LEVELS) { l.x = Math.round(l.x); l.y = Math.round(l.y); }
-
-    // Re-derive each world's on-screen centre + spread from where its 10 nodes
-    // ACTUALLY ended up after relaxation. Relaxation can shove nodes well away
-    // from the pre-relaxation cluster centre — most visibly on very wide/short
-    // phone screens, where the node field spreads across the full width while
-    // the old centres stayed bunched, so the world labels/zone glows (anchored
-    // to those centres) drifted into a clump in the middle (the phone-vs-PC bug).
-    // A centroid of the final node positions keeps labels locked on their cluster
-    // on every aspect ratio.
-    for (let w = 0; w < worldRender.length; w++) {
-      let sx = 0, sy = 0, n = 0;
-      for (const l of LEVELS) { if (l.worldId === w) { sx += l.x; sy += l.y; n++; } }
-      if (!n) continue;
-      const cx = sx / n, cy = sy / n;
-      let maxD = 0;
-      for (const l of LEVELS) {
-        if (l.worldId === w) { const d = Math.hypot(l.x - cx, l.y - cy); if (d > maxD) maxD = d; }
-      }
-      worldRender[w].cx = cx;
-      worldRender[w].cy = cy;
-      worldRender[w].spread = Math.max(40, maxD); // cluster radius drives glow + label offset
-    }
+    worldRender[w].cx = cx; worldRender[w].cy = cy;
+    worldRender[w].spread = rx; worldRender[w].spreadY = ry;
 
     // Keep the idle robot on its current node after a relayout/resize.
     const cur = LEVELS.find(l => l.id === MAP_STATE.currentLevelId);
-    if (cur && !MAP_STATE.walk) { MAP_STATE.playerX = cur.x; MAP_STATE.playerY = cur.y; }
+    if (cur && cur.worldId === w && !MAP_STATE.walk) { MAP_STATE.playerX = cur.x; MAP_STATE.playerY = cur.y; }
   }
 
   function createMapCanvas() {
@@ -374,17 +447,28 @@
     // HUD overlay. Each corner panel is independently anchored so fitHud() can
     // scale it toward its own corner on small screens (no overlap on phones).
     const hud = document.createElement('div');
+    // This wrapper exists only to hold the fixed-position corner panels; it must
+    // not be a layout box of its own. Left as a default block it took part in
+    // layout and was measured 133px past the right edge of a 375px screen.
+    hud.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
     hud.innerHTML = `
       <div id="mapHudTL" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: top left; pointer-events: none; z-index: 10; background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
         <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
         <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / 100</div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / 300</div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / 300</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
         <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
         <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
       </div>
-      <button id="mapAchBtn" data-i18n="achievements" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">🏆 ACHIEVEMENTS</button>
+      <div id="mapWorldTitle" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); transform-origin: top center; z-index: 10; pointer-events: none; text-align: center;">
+        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: 20px; letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
+        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
+      </div>
+      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
+      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
+      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
       <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer;">← BACK</button>
       <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
       <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
@@ -411,7 +495,9 @@
     if (achBtn) {
       achBtn.onclick = () => {
         if (window.SFX && window.SFX.menu) window.SFX.menu();
-        if (window.Achievements && window.Achievements.showMenu) window.Achievements.showMenu();
+        // Achievements are one tab of the profile now, not their own screen.
+        if (window.Profile && window.Profile.show) window.Profile.show('overview');
+        else if (window.Achievements && window.Achievements.showMenu) window.Achievements.showMenu();
       };
       achBtn.onmouseenter = () => { achBtn.style.boxShadow = '0 0 14px #0ff'; achBtn.style.transform = 'scale(1.04)'; };
       achBtn.onmouseleave = () => { achBtn.style.boxShadow = 'none'; achBtn.style.transform = 'scale(1)'; };
@@ -428,6 +514,12 @@
         else if (window.SFX && window.SFX.back) window.SFX.back();
       };
     }
+    // World-switch arrows — browse any of the 10 worlds (locked ones show
+    // greyed/locked level nodes, matching the existing per-level lock visuals).
+    const arrL = mapOverlay.querySelector('#mapArrowLeft');
+    const arrR = mapOverlay.querySelector('#mapArrowRight');
+    if (arrL) arrL.onclick = () => setActiveWorld(MAP_STATE.activeWorld - 1);
+    if (arrR) arrR.onclick = () => setActiveWorld(MAP_STATE.activeWorld + 1);
     // Translate the freshly-built HUD (the achievements label uses data-i18n).
     if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
 
@@ -439,13 +531,28 @@
   function resizeMapCanvas() {
     // Fill the window in LOGICAL (CSS) pixels — the layout math below works in
     // this space, identical on PC and phone, so the map looks the same on both.
-    mapW = Math.max(640, window.innerWidth);
-    mapH = Math.max(480, window.innerHeight);
+    //
+    // These floors used to be 640×480, and that was THE reason the map looked
+    // broken on a real phone but fine in an emulator. A 2400×1080 phone at
+    // dpr 2.75 reports a CSS viewport of 873×393 — shorter than the 480 floor —
+    // so the canvas was built 873×480, the overlay centred it, and it hung 43px
+    // off the top and 44px off the bottom. Every node position was then computed
+    // for a height that does not exist on screen, which is exactly the "levels
+    // slide off the map" report. An emulator at dpr 1 reports 2400×1080, clears
+    // the floor, and shows nothing wrong. The canvas must match the viewport.
+    mapW = Math.max(240, window.innerWidth);
+    mapH = Math.max(160, window.innerHeight);
     // High-DPI: render the backing store at device resolution and scale the
     // context back to CSS pixels. This is THE fix for the phone map looking
     // blurry/zoomed (oversized labels) vs the crisp PC map — on a 2.5–3× phone
     // the canvas was previously drawn at ~960px and stretched across the screen.
-    mapDpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+    // Cap by the active graphics tier as well: a phone that had to drop to a
+    // low tier for the game itself gains nothing from a 3× map backing store
+    // (2401x1081 = 2.6M pixels measured on a 20:9 phone). Text stays crisp
+    // because the cap never goes below 1.5×.
+    const tierCap = (window.gameSettings && window.gameSettings.gfx &&
+                     window.gameSettings.gfx.renderScale) || 3;
+    mapDpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), Math.max(1.5, tierCap));
     mapCanvas.width = Math.round(mapW * mapDpr);
     mapCanvas.height = Math.round(mapH * mapDpr);
     mapCanvas.style.width = mapW + 'px';
@@ -518,6 +625,13 @@
     // Floor: keep the chrome readable. Higher on touch so the info panels never
     // collapse to an illegible smear like they did before.
     k = Math.max(isTouch ? 0.5 : 0.34, k);
+    // ...but FITTING ON SCREEN outranks readability. On a 375px phone the floor
+    // held the top-left panel at a size 133px wider than the screen, so the
+    // title ran off the right edge entirely. Re-apply the hard width/height
+    // limits after the floor: a small panel beats an invisible one.
+    const hardW = tlEl && tlEl.offsetWidth ? (vw * 0.96) / tlEl.offsetWidth : 1;
+    const hardH = tlEl && tlEl.offsetHeight ? (vh * 0.52) / tlEl.offsetHeight : 1;
+    k = Math.min(k, hardW, hardH, 1);
     panels.forEach(el => { el.style.transform = k < 1 ? 'scale(' + k + ')' : ''; });
     if (lvl) lvl.style.transform = 'translateX(-50%)' + (k < 1 ? ' scale(' + k + ')' : '');
     // The two control buttons (ACHIEVEMENTS, BACK) get their own gentler floor so
@@ -529,6 +643,25 @@
       if (el && el.style.display !== 'none') el.style.transform = kBtn < 1 ? 'scale(' + kBtn + ')' : '';
     });
 
+    // The centre world title sits between the stats panel (top-left) and the
+    // profile button (top-right). On a narrow screen those three claim more
+    // width than exists and the title ends up printed straight through both —
+    // see the 375px capture. When they would collide, drop the title below the
+    // side panels instead of overlapping them.
+    const titleEl = mapOverlay.querySelector('#mapWorldTitle');
+    if (titleEl) {
+      const tlR = tlEl ? tlEl.getBoundingClientRect() : null;
+      const acR = achEl0 ? achEl0.getBoundingClientRect() : null;
+      titleEl.style.top = '';
+      const tR = titleEl.getBoundingClientRect();
+      const hits = (r) => r && !(tR.right < r.left - 6 || tR.left > r.right + 6) &&
+                          !(tR.bottom < r.top || tR.top > r.bottom);
+      if (hits(tlR) || hits(acR)) {
+        const below = Math.max(tlR ? tlR.bottom : 0, acR ? acR.bottom : 0);
+        titleEl.style.top = (below + 8) + 'px';
+      }
+    }
+
     // Panels are now sized for this screen — re-lay the level nodes so they keep
     // clear of the (possibly scaled) chrome. Done here so every fitHud() caller,
     // including the post-open settle timers, gets a correct field.
@@ -539,22 +672,289 @@
   //  DRAWING FUNCTIONS
   // ═══════════════════════════════════════════════
 
+  // Per-world map backdrop. "Space" (the original look — orbit motes, starfield,
+  // nebula) is kept as an alternate style via Settings → World Map Environment;
+  // by default each world now gets its own themed sky + ground silhouette +
+  // weather particles so Neon Jungle doesn't look like a space station.
+  const WORLD_ENV = [
+    { sky:['#001a2a','#04304a','#0a4a5a'], ground:'skyline', weather:'spark',  weatherCol:'#0ff' }, // Cyber City
+    { sky:['#001a0a','#0a3315','#145522'], ground:'vines',   weather:'leaf',   weatherCol:'#7f8' }, // Neon Jungle
+    { sky:['#1a0400','#441100','#7a2200'], ground:'rocks',   weather:'ember',  weatherCol:'#f80' }, // Lava World
+    { sky:['#001028','#002a55','#0a4a7a'], ground:'icicles', weather:'snow',   weatherCol:'#cff' }, // Ice Caves
+    { sky:['#1a1000','#442800','#6a3f0a'], ground:'dunes',   weather:'sand',   weatherCol:'#eb8' }, // Desert Ruins
+    { sky:['#050014','#1a0033','#2a0055'], ground:'none',    weather:'star',   weatherCol:'#fff' }, // Space Station
+    { sky:['#000c04','#001a0a','#0a2a12'], ground:'trees',   weather:'spore',  weatherCol:'#4f8' }, // Dark Forest
+    { sky:['#0a1200','#1a2200','#2a3300'], ground:'pipes',   weather:'bubble', weatherCol:'#cf0' }, // Toxic Zone
+    { sky:['#050510','#0a0a1a','#15152a'], ground:'clouds',  weather:'bolt',   weatherCol:'#88f' }, // Storm Peaks
+    { sky:['#140000','#2a0000','#440000'], ground:'walls',   weather:'rune',   weatherCol:'#f44' }, // Final Fortress
+    { sky:['#1a0030','#300050','#500070'], ground:'rift',    weather:'prism',  weatherCol:'#f0f' }, // Prism Anomaly (secret)
+  ];
+
+  function _mapEnvMode(){
+    return (window.gameSettings && window.gameSettings.mapEnvironment === 'space') ? 'space' : 'themed';
+  }
+
   function drawBackground() {
+    if (_mapEnvMode() === 'space') _drawSpaceBackground();
+    else _drawThemedBackground();
+  }
+
+  // ── Themed mode: unique sky + horizon silhouette + weather per world ───────
+  function _drawThemedBackground() {
     const ctx = mapCtx;
     const W = mapW, H = mapH, t = MAP_STATE.time;
+    const world = WORLDS[MAP_STATE.activeWorld];
+    const env = WORLD_ENV[MAP_STATE.activeWorld];
 
-    // Sky gradient
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, env.sky[0]);
+    sky.addColorStop(0.55, env.sky[1]);
+    sky.addColorStop(1, env.sky[2]);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    // Soft accent-tinted glow washes — keeps some atmospheric depth without
+    // committing to the "space nebula" look specifically.
+    const NEB = [{ x:0.2, y:0.25, r:0.28 }, { x:0.8, y:0.2, r:0.26 }, { x:0.5, y:0.9, r:0.36 }];
+    ctx.save();
+    for (let i = 0; i < NEB.length; i++) {
+      const n = NEB[i], cx = n.x*W, cy = n.y*H, rr = n.r*Math.min(W,H)*(1+Math.sin(t*0.2+i)*0.05);
+      const g = ctx.createRadialGradient(cx,cy,0,cx,cy,rr);
+      g.addColorStop(0, world.mid); g.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 0.18; ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    _drawEnvGround(ctx, env.ground, world, W, H, t);
+    _drawEnvWeather(ctx, env.weather, env.weatherCol, W, H, t);
+  }
+
+  // Horizon silhouette along the lower part of the screen — gives each world a
+  // distinct sense of place at a glance, drawn cheaply (a handful of shapes).
+  function _drawEnvGround(ctx, type, world, W, H, t) {
+    const GY = H * 0.86; // horizon line
+    ctx.save();
+    switch (type) {
+      case 'skyline': { // Cyber City — neon building silhouettes
+        for (let i = 0; i < 9; i++) {
+          const bw = 40 + (i*53)%50, bh = 60 + (i*97)%140;
+          const bx = (i * (W/9)) + (i*23)%20;
+          ctx.globalAlpha = 0.85; ctx.fillStyle = '#010a14';
+          ctx.fillRect(bx, GY-bh, bw, bh+H*0.14);
+          // lit windows
+          for (let wy = GY-bh+8; wy < GY-10; wy += 14) {
+            for (let wx = bx+6; wx < bx+bw-6; wx += 12) {
+              if ((Math.floor(wx+wy+i)) % 4 !== 0) continue;
+              ctx.globalAlpha = 0.5 + Math.sin(t*0.8+wx*0.1)*0.2;
+              ctx.fillStyle = world.accent;
+              ctx.fillRect(wx, wy, 4, 5);
+            }
+          }
+        }
+        break;
+      }
+      case 'vines': { // Neon Jungle — hanging canopy + undergrowth
+        ctx.globalAlpha = 0.8; ctx.fillStyle = '#03170a';
+        ctx.fillRect(0, GY, W, H-GY);
+        for (let i = 0; i < 14; i++) {
+          const x = (i*97)%W, len = 30+(i*53)%70;
+          ctx.strokeStyle = '#0a4a1a'; ctx.lineWidth = 5; ctx.globalAlpha = 0.7;
+          ctx.beginPath(); ctx.moveTo(x,0); ctx.quadraticCurveTo(x+Math.sin(t*0.5+i)*10, len/2, x, len); ctx.stroke();
+          ctx.fillStyle = world.accent; ctx.globalAlpha = 0.35;
+          ctx.beginPath(); ctx.arc(x, len, 6, 0, Math.PI*2); ctx.fill();
+        }
+        break;
+      }
+      case 'rocks': { // Lava World — volcanic peaks with glowing cracks
+        ctx.beginPath(); ctx.moveTo(0,H);
+        for (let x = 0; x <= W; x += W/10) { ctx.lineTo(x, GY - (Math.sin(x*0.01+2)*40+40)); }
+        ctx.lineTo(W,H); ctx.closePath();
+        ctx.fillStyle = '#150400'; ctx.globalAlpha = 0.9; ctx.fill();
+        for (let i = 0; i < 6; i++) {
+          const x = (i*167)%W, glow = 0.5+Math.sin(t*1.2+i)*0.4;
+          ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 2; ctx.globalAlpha = Math.max(0.15,glow);
+          ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x+10, GY+10); ctx.lineTo(x-6, GY-6); ctx.stroke();
+        }
+        break;
+      }
+      case 'icicles': { // Ice Caves — stalactites/stalagmites frame
+        ctx.fillStyle = '#dff'; ctx.globalAlpha = 0.22;
+        for (let i = 0; i < 10; i++) {
+          const x = (i*(W/10)), w = 24+(i*17)%20, len = 20+(i*31)%50;
+          ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x+w,0); ctx.lineTo(x+w/2,len); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x,H); ctx.lineTo(x+w,H); ctx.lineTo(x+w/2,H-len*0.8); ctx.closePath(); ctx.fill();
+        }
+        break;
+      }
+      case 'dunes': { // Desert Ruins — layered sand dunes
+        const layers = [{c:'#3a2408', y:0.72},{c:'#2a1a04', y:0.82},{c:'#1a1002', y:0.94}];
+        for (const L of layers) {
+          ctx.beginPath(); ctx.moveTo(0,H);
+          for (let x = 0; x <= W; x += 8) ctx.lineTo(x, H*L.y + Math.sin(x*0.006+L.y*10)*18);
+          ctx.lineTo(W,H); ctx.closePath();
+          ctx.globalAlpha = 0.85; ctx.fillStyle = L.c; ctx.fill();
+        }
+        break;
+      }
+      case 'trees': { // Dark Forest — trunk silhouettes
+        ctx.globalAlpha = 0.85; ctx.fillStyle = '#010601';
+        for (let i = 0; i < 12; i++) {
+          const x = (i*83)%W, tw = 8+(i*13)%10, th = 90+(i*37)%110;
+          ctx.fillRect(x, GY-th, tw, th+H*0.14);
+          ctx.beginPath(); ctx.ellipse(x+tw/2, GY-th, tw*2.4, tw*3, 0, 0, Math.PI*2); ctx.fill();
+        }
+        break;
+      }
+      case 'pipes': { // Toxic Zone — industrial pipe/tank silhouettes
+        ctx.globalAlpha = 0.85; ctx.fillStyle = '#141a02';
+        for (let i = 0; i < 8; i++) {
+          const x = (i*(W/8))+10, w = 20+(i*11)%14, h = 70+(i*29)%90;
+          ctx.fillRect(x, GY-h, w, h+H*0.14);
+          ctx.fillStyle = world.accent; ctx.globalAlpha = 0.4+Math.sin(t+i)*0.2;
+          ctx.beginPath(); ctx.arc(x+w/2, GY-h+10, 4, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#141a02'; ctx.globalAlpha = 0.85;
+        }
+        break;
+      }
+      case 'clouds': { // Storm Peaks — puffy storm clouds
+        ctx.fillStyle = '#1a1a2a'; ctx.globalAlpha = 0.6;
+        for (let i = 0; i < 6; i++) {
+          const cx = (i*(W/6))+((t*6+i*40)%W*0)+30, cy = H*0.18+(i%2)*30;
+          for (let k = 0; k < 4; k++) ctx.beginPath(), ctx.arc(cx+k*22, cy+Math.sin(k)*8, 22, 0, Math.PI*2), ctx.fill();
+        }
+        break;
+      }
+      case 'walls': { // Final Fortress — dark blocky ramparts
+        ctx.globalAlpha = 0.9; ctx.fillStyle = '#0a0000';
+        ctx.fillRect(0, GY, W, H-GY);
+        for (let x = 0; x < W; x += 44) ctx.fillRect(x, GY-24, 26, 24);
+        ctx.strokeStyle = world.accent; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 44) ctx.strokeRect(x+2, GY+2, 40, H-GY-4);
+        break;
+      }
+      case 'rift': { // Prism Anomaly — a jagged rainbow crack tearing through the ground
+        ctx.globalAlpha = 0.85; ctx.fillStyle = '#0a0014';
+        ctx.fillRect(0, GY, W, H-GY);
+        const midY = GY + (H-GY)*0.4;
+        ctx.beginPath(); ctx.moveTo(0, midY);
+        for (let x = 0; x <= W; x += 24) ctx.lineTo(x, midY + Math.sin(x*0.05+t)*10);
+        ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+        const g = ctx.createLinearGradient(0, midY, 0, H);
+        g.addColorStop(0, '#ff00ff'); g.addColorStop(0.5, '#00ffff'); g.addColorStop(1, '#1a0030');
+        ctx.globalAlpha = 0.35; ctx.fillStyle = g; ctx.fill();
+        // Floating glitch fragments along the rift
+        for (let i = 0; i < 8; i++) {
+          const x = (i*(W/8))+((Math.sin(t*0.7+i)*10)), y = midY-10+Math.sin(t*1.3+i)*14;
+          ctx.globalAlpha = 0.5+Math.sin(t*2+i)*0.3;
+          ctx.fillStyle = `hsl(${(i*45+t*30)%360},100%,65%)`;
+          ctx.fillRect(x-4,y-4,8,8);
+        }
+        break;
+      }
+      case 'none': default: break; // Space Station — clean starfield, no ground
+    }
+    ctx.restore();
+  }
+
+  // Ambient weather/atmosphere particles — the "living air" layer on top of the
+  // ground silhouette. Deterministic positions (index-based), animated by time.
+  function _drawEnvWeather(ctx, type, col, W, H, t) {
+    if (type === 'none') return;
+    const n = Math.min(70, Math.round((W*H)/9000));
+    ctx.save();
+    ctx.fillStyle = col;
+    for (let i = 0; i < n; i++) {
+      let x, y, a = 0.5, sz = 2;
+      switch (type) {
+        case 'spark':
+          x = (i*137.5)%W; y = (i*97.3)%H;
+          a = Math.random() < 0.02 ? 1 : 0.15+Math.sin(t*3+i)*0.15;
+          break;
+        case 'leaf':
+          x = ((i*211 + t*10) % (W+40)) - 20;
+          y = ((i*151 + t*22 + Math.sin(t*0.6+i)*30) % H);
+          a = 0.5; sz = 3;
+          break;
+        case 'ember':
+          x = (i*173)%W;
+          y = H - ((t*30 + i*61) % H);
+          a = 0.7*(1 - y/H); sz = 1.6;
+          break;
+        case 'snow':
+          x = ((i*191 + Math.sin(t*0.4+i)*20) % W + W) % W;
+          y = (i*137 + t*18) % H;
+          a = 0.6; sz = 1.8;
+          break;
+        case 'sand':
+          x = ((i*181 + t*40) % (W+30)) - 15;
+          y = H*0.6 + ((i*89) % (H*0.4));
+          a = 0.35; sz = 1.4;
+          break;
+        case 'star':
+          x = (i*149.3)%W; y = (i*97.7)%H;
+          a = 0.22 + Math.sin(t*0.6+i)*0.22; sz = i%11===0?2:1;
+          break;
+        case 'spore':
+          x = (i*163)%W;
+          y = H - ((t*12 + i*71) % H);
+          a = 0.45+Math.sin(t*2+i)*0.25; sz = 1.6;
+          break;
+        case 'bubble':
+          x = (i*179)%W;
+          y = H - ((t*22 + i*53) % H);
+          a = 0.4; sz = 2+((i*7)%3);
+          break;
+        case 'bolt':
+          if (i > 2) continue; // just a couple of occasional bolts
+          if (Math.sin(t*2+i*7) < 0.93) continue;
+          ctx.globalAlpha = 0.8; ctx.strokeStyle = col; ctx.lineWidth = 2;
+          { const bx = (i*W/3)+W/6; ctx.beginPath(); ctx.moveTo(bx,0); ctx.lineTo(bx-10,H*0.3); ctx.lineTo(bx+8,H*0.32); ctx.lineTo(bx-6,H*0.6); ctx.stroke(); }
+          continue;
+        case 'rune':
+          x = (i*197)%W; y = (i*127)%H;
+          a = 0.3+Math.sin(t*1.5+i)*0.2; sz = 3;
+          ctx.save(); ctx.translate(x,y); ctx.rotate(t*0.3+i);
+          ctx.globalAlpha = a; ctx.strokeStyle = col; ctx.lineWidth = 1;
+          ctx.strokeRect(-sz,-sz,sz*2,sz*2);
+          ctx.restore();
+          continue;
+        case 'prism':
+          x = (i*211)%W; y = (i*163 + Math.sin(t*0.5+i)*20)%H;
+          a = 0.4+Math.sin(t*2.5+i)*0.3; sz = 2+((i*3)%3);
+          ctx.globalAlpha = Math.max(0,a);
+          ctx.fillStyle = `hsl(${(i*37+t*40)%360},100%,65%)`;
+          ctx.beginPath(); ctx.arc(x,y,sz,0,Math.PI*2); ctx.fill();
+          continue;
+        default: continue;
+      }
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.beginPath(); ctx.arc(x, y, sz, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── Space mode: the original look (kept as an alternate style) ─────────────
+  function _drawSpaceBackground() {
+    const ctx = mapCtx;
+    const W = mapW, H = mapH, t = MAP_STATE.time;
+    const world = WORLDS[MAP_STATE.activeWorld];
+
+    // Sky gradient — tinted toward the active world's own palette so each
+    // world visually feels like a different place, not just a different ring
+    // of icons on the same generic backdrop.
     const sky = ctx.createLinearGradient(0, 0, W * 0.5, H);
-    sky.addColorStop(0, '#06101e');
+    sky.addColorStop(0, world.dark);
     sky.addColorStop(0.5, '#020c1a');
     sky.addColorStop(1, '#010912');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
-    // Nebula washes — large soft colour blobs that fill the empty space.
+    // Nebula washes — large soft colour blobs that fill the empty space,
+    // tinted with the world's accent + mid colours instead of a fixed palette.
     const NEB = [
-      { x: 0.18, y: 0.24, r: 0.30, c: '#0a2a55' }, { x: 0.80, y: 0.20, r: 0.30, c: '#2a0a55' },
-      { x: 0.62, y: 0.80, r: 0.34, c: '#0a3355' }, { x: 0.16, y: 0.76, r: 0.27, c: '#3a0a44' },
+      { x: 0.18, y: 0.24, r: 0.30, c: world.mid }, { x: 0.80, y: 0.20, r: 0.30, c: world.dark },
+      { x: 0.62, y: 0.80, r: 0.34, c: world.mid }, { x: 0.16, y: 0.76, r: 0.27, c: world.dark },
       { x: 0.50, y: 0.45, r: 0.40, c: '#06243f' },
     ];
     ctx.save();
@@ -604,128 +1004,70 @@
     ctx.restore();
   }
 
-  function drawWorldZones() {
+  function drawActiveWorldZone() {
     const ctx = mapCtx;
-
     const t = MAP_STATE.time;
-    // Draw world zone backgrounds
-    for (const world of WORLDS) {
-      const pos = worldRender[world.id];
-      const accent = worldAccent(world);
-      const R = Math.max(60, pos.spread); // keep a sensible minimum footprint
+    const world = WORLDS[MAP_STATE.activeWorld];
+    const pos = worldRender[world.id];
+    const accent = worldAccent(world);
+    // The ring is an ellipse (see layoutLevels) — drawing the glow and the orbit
+    // line as a circle would leave them visibly detached from the nodes on a
+    // wide phone screen.
+    const RX = Math.max(60, pos.spread);
+    const RY = Math.max(60, pos.spreadY != null ? pos.spreadY : pos.spread);
+    const R = Math.max(RX, RY);
 
-      // Zone glow — larger & a touch brighter so each cluster reads clearly.
-      const gradient = ctx.createRadialGradient(pos.cx, pos.cy, 0, pos.cx, pos.cy, R * 1.5);
-      gradient.addColorStop(0, world.mid + 'aa');
-      gradient.addColorStop(0.55, world.dark + '55');
-      gradient.addColorStop(1, 'transparent');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(pos.cx - R * 1.5, pos.cy - R * 1.5, R * 3, R * 3);
+    // Zone glow behind the whole ring.
+    const gradient = ctx.createRadialGradient(pos.cx, pos.cy, 0, pos.cx, pos.cy, R * 1.5);
+    gradient.addColorStop(0, world.mid + 'aa');
+    gradient.addColorStop(0.55, world.dark + '55');
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(pos.cx - R * 1.5, pos.cy - R * 1.5, R * 3, R * 3);
 
-      // Dashed boundary ring around the zone.
-      ctx.save();
-      ctx.globalAlpha = 0.20; ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 7]);
-      ctx.beginPath(); ctx.arc(pos.cx, pos.cy, R * 1.18, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
+    // Dashed boundary ring (the "orbit" path itself).
+    ctx.save();
+    ctx.globalAlpha = 0.28; ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 7]);
+    ctx.beginPath(); ctx.ellipse(pos.cx, pos.cy, RX, RY, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
 
-      // Orbiting motes around the cluster.
-      ctx.save();
-      for (let i = 0; i < 10; i++) {
-        const angle = (i / 10) * Math.PI * 2 + t * 0.2 + world.id * 0.5;
-        const radius = R * 1.05 + Math.sin(t * 0.4 + i) * 8;
-        const dx = pos.cx + Math.cos(angle) * radius;
-        const dy = pos.cy + Math.sin(angle) * radius;
-        const pulse = Math.sin(t * 0.6 + i * 0.8) * 0.5 + 0.5;
-        ctx.globalAlpha = 0.18 + pulse * 0.12;
-        ctx.fillStyle = accent;
-        ctx.beginPath();
-        ctx.arc(dx, dy, 1.5 + pulse * 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // World icon — a clearly visible watermark behind the cluster.
-      const iconPulse = Math.sin(t * 0.4 + world.id * 0.7) * 0.15 + 0.85;
-      ctx.globalAlpha = 0.13 * iconPulse;
-      ctx.font = `${Math.max(34, R * 0.7)}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+    // Orbiting motes for atmosphere.
+    ctx.save();
+    for (let i = 0; i < 14; i++) {
+      const angle = (i / 14) * Math.PI * 2 + t * 0.2;
+      const radius = R * 1.1 + Math.sin(t * 0.4 + i) * 8;
+      const dx = pos.cx + Math.cos(angle) * radius;
+      const dy = pos.cy + Math.sin(angle) * radius;
+      const pulse = Math.sin(t * 0.6 + i * 0.8) * 0.5 + 0.5;
+      ctx.globalAlpha = 0.18 + pulse * 0.12;
       ctx.fillStyle = accent;
-      ctx.fillText(world.icon, pos.cx, pos.cy);
-      ctx.restore();
-
+      ctx.beginPath();
+      ctx.arc(dx, dy, 1.5 + pulse * 1.2, 0, Math.PI * 2);
+      ctx.fill();
     }
-  }
 
-  // World NAME labels are drawn in a SEPARATE pass, on top of the paths and
-  // level nodes, so they're never hidden behind a dense cluster. Each label is
-  // nudged to the least-crowded side of its cluster and clamped on-screen.
-  function drawWorldLabels() {
-    const ctx = mapCtx;
-    const placed = []; // rects already taken, to avoid label-on-label overlap
-    for (const world of WORLDS) {
-      const pos = worldRender[world.id];
-      const accent = worldAccent(world);
-      const R = Math.max(60, pos.spread);
-      const label = wName(world);
-
-      // Slightly smaller labels on dense/zoomed-out maps so plates don't collide.
-      const fs = clampN(Math.round(11 * nodeScale), 12, 20);
-      ctx.font = `bold ${fs}px "Share Tech Mono", monospace`;
-      const tw = ctx.measureText(label).width;
-      const halfW = tw / 2 + 7, halfH = fs / 2 + 4;
-
-      // Many candidate anchors around the cluster (cardinals + diagonals at two
-      // distances). Pick the one that overlaps already-placed labels the LEAST
-      // (area of intersection), not just the first non-overlapping one — so when
-      // everything is cramped we still spread out instead of stacking.
-      const off = R * 1.15 + fs;
-      const ring = (m) => [
-        { x: pos.cx,           y: pos.cy - off * m }, { x: pos.cx,           y: pos.cy + off * m },
-        { x: pos.cx - off * m, y: pos.cy           }, { x: pos.cx + off * m, y: pos.cy           },
-        { x: pos.cx - off * m, y: pos.cy - off * m }, { x: pos.cx + off * m, y: pos.cy - off * m },
-        { x: pos.cx - off * m, y: pos.cy + off * m }, { x: pos.cx + off * m, y: pos.cy + off * m },
-      ];
-      const cands = [...ring(1), ...ring(1.55)];
-      let best = null, bestPen = Infinity;
-      for (const c of cands) {
-        c.x = clampN(c.x, halfW + 4, mapW - halfW - 4);
-        c.y = clampN(c.y, halfH + 56, mapH - halfH - 56);
-        let pen = 0;
-        for (const p of placed) {
-          const ox = (p.hw + halfW) - Math.abs(p.x - c.x);
-          const oy = (p.hh + halfH) - Math.abs(p.y - c.y);
-          if (ox > 0 && oy > 0) pen += ox * oy;     // overlap area
-        }
-        if (pen < bestPen) { bestPen = pen; best = c; if (pen === 0) break; }
-      }
-      placed.push({ x: best.x, y: best.y, hw: halfW, hh: halfH });
-
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      // Dark plate for contrast (no glow on the plate).
-      ctx.globalAlpha = 0.72; ctx.fillStyle = 'rgba(0,0,0,0.75)';
-      ctx.fillRect(best.x - halfW, best.y - halfH, halfW * 2, halfH * 2);
-      ctx.globalAlpha = 0.35; ctx.strokeStyle = accent; ctx.lineWidth = 1;
-      ctx.strokeRect(best.x - halfW, best.y - halfH, halfW * 2, halfH * 2);
-      // Glowing text.
-      ctx.globalAlpha = 1; ctx.fillStyle = accent;
-      ctx.shadowBlur = 10; ctx.shadowColor = accent;
-      ctx.font = `bold ${fs}px "Share Tech Mono", monospace`;
-      ctx.fillText(label, best.x, best.y);
-      ctx.restore();
-    }
+    // World icon watermark, big and centred behind the ring.
+    const iconPulse = Math.sin(t * 0.4 + world.id * 0.7) * 0.15 + 0.85;
+    ctx.globalAlpha = 0.16 * iconPulse;
+    ctx.font = `${Math.max(48, R * 0.9)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = accent;
+    ctx.fillText(world.icon, pos.cx, pos.cy);
+    ctx.restore();
   }
 
   function drawPaths() {
     const ctx = mapCtx;
+    const activeWorld = MAP_STATE.activeWorld;
 
     for (const [fromId, toId] of PATHS) {
       const from = LEVELS.find(l => l.id === fromId);
       const to = LEVELS.find(l => l.id === toId);
       if (!from || !to) continue;
+      if (from.worldId !== activeWorld || to.worldId !== activeWorld) continue; // only this world's ring
 
       const world = WORLDS[from.worldId];
       const unlocked = from.unlocked && to.unlocked;
@@ -962,26 +1304,97 @@
     }
   }
 
+  function worldUnlocked(w) {
+    const first = LEVELS[w * LEVELS_PER_WORLD];
+    return !!(first && first.unlocked);
+  }
+
   function render() {
     drawBackground();
-    drawWorldZones();
+    drawActiveWorldZone();
+
+    const w = MAP_STATE.activeWorld;
+    const locked = !worldUnlocked(w);
+
     drawPaths();
 
-    // Draw all nodes except current
-    for (const level of LEVELS) {
-      if (level.id !== MAP_STATE.currentLevelId) {
-        drawLevelNode(level);
-      }
+    const startIdx = w * LEVELS_PER_WORLD;
+    // Draw all nodes of the active world except current
+    for (let i = 0; i < LEVELS_PER_WORLD; i++) {
+      const level = LEVELS[startIdx + i];
+      if (level.id !== MAP_STATE.currentLevelId) drawLevelNode(level);
     }
 
-    // Draw current node on top
+    // Draw current node on top (only if it belongs to the world on screen)
     const current = LEVELS.find(l => l.id === MAP_STATE.currentLevelId);
-    if (current) drawLevelNode(current);
+    if (current && current.worldId === w) drawLevelNode(current);
 
-    drawPlayer();
+    // The robot only ever stands on a world the player has actually reached —
+    // browsing ahead to a locked world previews its layout, but empty, with a
+    // big lock over it (see drawWorldLockOverlay), never the player's avatar.
+    if (!locked) drawPlayer();
+    else drawWorldLockOverlay(w);
+  }
 
-    // World name labels last, so they're never hidden behind nodes/paths.
-    drawWorldLabels();
+  // Big padlock + caption over a world the player hasn't reached yet. Levels
+  // still render underneath (dimmed/locked, same as any individual locked
+  // level) so browsing ahead previews the shape of what's coming.
+  function drawWorldLockOverlay(w) {
+    const ctx = mapCtx;
+    const cx = mapW / 2, cy = mapH / 2;
+    const pulse = Math.sin(MAP_STATE.time * 1.4) * 0.08 + 0.92;
+
+    // Dim everything behind the lock so it reads clearly as inaccessible.
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, mapW, mapH);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, cy - 10);
+    ctx.scale(pulse, pulse);
+
+    // Padlock body
+    ctx.fillStyle = '#0a0a0a';
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 3;
+    const bw = 56, bh = 46;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(-bw/2, -bh/2 + 14, bw, bh, 6) : ctx.rect(-bw/2, -bh/2 + 14, bw, bh);
+    ctx.fill(); ctx.stroke();
+
+    // Shackle
+    ctx.beginPath();
+    ctx.arc(0, -6, 20, Math.PI, 0, false);
+    ctx.stroke();
+
+    // Keyhole
+    ctx.fillStyle = '#888';
+    ctx.beginPath(); ctx.arc(0, 32, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillRect(-2, 32, 4, 10);
+
+    // Soft red glow ring behind the lock — reads as "blocked" at a glance.
+    ctx.globalAlpha = 0.25 + Math.sin(MAP_STATE.time*1.4)*0.06;
+    const g = ctx.createRadialGradient(0, 14, 0, 0, 14, 70);
+    g.addColorStop(0, '#f44'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 14, 70, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Caption
+    const tt = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f44';
+    ctx.font = "bold 15px 'Press Start 2P', monospace";
+    ctx.shadowColor = '#f44'; ctx.shadowBlur = 10;
+    ctx.fillText(tt('mapWorldLockedTitle', 'WORLD LOCKED'), cx, cy + 62);
+    ctx.shadowBlur = 0;
+    ctx.font = "10px 'Share Tech Mono', monospace";
+    ctx.fillStyle = '#ccc';
+    ctx.fillText(tt('mapWorldLockedHint', 'Complete the previous world to unlock it'), cx, cy + 84);
+    ctx.restore();
   }
 
   // ═══════════════════════════════════════════════
@@ -1031,24 +1444,103 @@
     if (u >= 1) MAP_STATE.walk = null;
   }
 
+  // Switch which world's ring is on screen. Any of the 10 worlds can be
+  // browsed (locked ones show their nodes greyed/locked, same as any locked
+  // level today) — this lets the player scout ahead, which reads as
+  // exploration rather than a hard wall. The map cursor follows: if the
+  // player was standing in the world we're leaving, jump to the first level
+  // of the new world (or its own current level, if already visited).
+  function setActiveWorld(w) {
+    // The secret 11th world doesn't even appear in the arrow cycle until all
+    // 10 Rainbow Shards are found — it should be invisible, not just locked,
+    // per the design: worlds 0-9 can be browsed ahead with a lock overlay,
+    // but Prism Anomaly doesn't exist on the map at all until then.
+    const rainbowDone = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
+    let cycleLen = rainbowDone ? WORLDS.length : WORLDS.length - 1;
+    // Demo build: only the worlds the demo actually contains are in the cycle,
+    // so the arrows can't browse ahead into content that isn't shipped.
+    if (window.Demo && window.Demo.on) cycleLen = window.Demo.worldCount(cycleLen);
+    w = ((w % cycleLen) + cycleLen) % cycleLen;
+    if (w === MAP_STATE.activeWorld) return;
+    MAP_STATE.activeWorld = w;
+    MAP_STATE.walk = null;
+    const startIdx = w * LEVELS_PER_WORLD;
+    const stillInWorld = LEVELS.find(l => l.id === MAP_STATE.currentLevelId && l.worldId === w);
+    const target = stillInWorld || LEVELS[startIdx];
+    MAP_STATE.currentLevelId = target.id;
+    layoutLevels(); // recompute the ring for the new world before we snap the robot to it
+    MAP_STATE.playerX = target.x;
+    MAP_STATE.playerY = target.y;
+    if (window.SFX && window.SFX.menu) window.SFX.menu();
+    updateDOM();
+  }
+
   function updateDOM() {
     const current = LEVELS.find(l => l.id === MAP_STATE.currentLevelId);
     if (!current) return;
 
+    const activeW = WORLDS[MAP_STATE.activeWorld];
     const world = WORLDS[current.worldId];
     const clearedCount = LEVELS.filter(l => l.completed).length;
 
+    // Big top title: WORLD N + localized name, always reflecting whichever
+    // world's ring is on screen (not necessarily the cursor's world, if the
+    // player is browsing ahead with the arrows).
+    const numEl = document.getElementById('mapWorldTitleNum');
+    const nameEl = document.getElementById('mapWorldTitleName');
+    if (numEl) {
+      const tt0 = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
+      numEl.textContent = `${tt0('mapWorldLabel','WORLD')} ${activeW.id + 1}`;
+      numEl.style.color = worldAccent(activeW);
+      numEl.style.textShadow = `0 0 14px ${worldAccent(activeW)}`;
+    }
+    if (nameEl) {
+      nameEl.textContent = wName(activeW);
+      nameEl.style.color = worldAccent(activeW);
+    }
+    const anyUnlockedInWorld = LEVELS.some(l => l.worldId === MAP_STATE.activeWorld && l.unlocked);
+    const arrL = document.getElementById('mapArrowLeft'), arrR = document.getElementById('mapArrowRight');
+    if (arrL) arrL.style.opacity = MAP_STATE.activeWorld > 0 ? '1' : '0.25';
+    const _rainbowDone = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
+    let _cycleLen = _rainbowDone ? WORLDS.length : WORLDS.length - 1;
+    if (window.Demo && window.Demo.on) _cycleLen = window.Demo.worldCount(_cycleLen);
+    if (arrR) arrR.style.opacity = MAP_STATE.activeWorld < _cycleLen - 1 ? '1' : '0.25';
+    if (!anyUnlockedInWorld && arrL) { /* still browsable, just visually locked via node state */ }
+
     document.getElementById('mapClearedCount').textContent = clearedCount;
 
-    // Update star count (total earned across all 100 levels)
+    // Update star count (total earned across all unlocked levels)
     const starsCount = window.totalStars ? window.totalStars(MAP_STATE.hard) : 0;
     document.getElementById('mapStarsCount').textContent = starsCount;
 
-    // Update crystal (data-shard) count — total collected across all 100 levels.
+    // Update crystal (data-shard) count — total collected across all unlocked levels.
     const shardsEl = document.getElementById('mapShardsCount');
     if (shardsEl) {
       const shardsCount = window.totalShards ? window.totalShards(MAP_STATE.hard) : 0;
       shardsEl.textContent = shardsCount;
+    }
+
+    // The secret 11th world (10 extra levels, 30 extra possible stars/crystals)
+    // only counts toward the displayed totals once it's actually unlocked —
+    // otherwise the HUD would advertise a max the player can't yet see.
+    const _rbDoneForMax = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
+    // Demo build: the denominators are the demo's own totals (3 stars and 3
+    // crystals per level), not the full game's — advertising 100 levels the
+    // player can't reach would be a lie on the HUD.
+    const _demo = window.Demo && window.Demo.on;
+    const _maxLv = _demo ? window.Demo.levels : (_rbDoneForMax ? 110 : 100);
+    const clearedMaxEl = document.getElementById('mapClearedMax');
+    if (clearedMaxEl) clearedMaxEl.textContent = String(_maxLv);
+    const starsMaxEl = document.getElementById('mapStarsMax');
+    if (starsMaxEl) starsMaxEl.textContent = String(_maxLv * 3);
+    const shardsMaxEl = document.getElementById('mapShardsMax');
+    if (shardsMaxEl) shardsMaxEl.textContent = String(_maxLv * 3);
+
+    // Rainbow Shards — secret collectible, 1 per world, 10 total. Not affected
+    // by Hardcore/Normal mode (found once, shared across both, like achievements).
+    const rainbowEl = document.getElementById('mapRainbowCount');
+    if (rainbowEl) {
+      rainbowEl.textContent = (typeof rainbowCount === 'function') ? rainbowCount() : 0;
     }
 
     // Total campaign score (sum of every level's best score).
@@ -1165,7 +1657,7 @@
     let bestScore = -Infinity;
 
     for (const lv of LEVELS) {
-      if (lv.id === current.id || !lv.unlocked) continue;
+      if (lv.id === current.id || !lv.unlocked || lv.worldId !== MAP_STATE.activeWorld) continue;
       const vx = lv.x - current.x, vy = lv.y - current.y;
       const proj = dx * vx + dy * vy;          // travel along the desired axis
       if (proj <= 0) continue;                 // candidate must lie in that direction
@@ -1261,6 +1753,7 @@
       level.unlocked = (level.num === 1);
     }
     MAP_STATE.currentLevelId = 'L1';
+    MAP_STATE.activeWorld = 0;
     MAP_STATE.playerX = LEVELS[0].x;
     MAP_STATE.playerY = LEVELS[0].y;
     MAP_STATE.walk = null; // cancel any in-progress walk animation
@@ -1292,6 +1785,7 @@
           const currentLevel = LEVELS.find(l => l.num === maxUnlocked);
           if (currentLevel) {
             MAP_STATE.currentLevelId = currentLevel.id;
+            MAP_STATE.activeWorld = currentLevel.worldId;
             MAP_STATE.playerX = currentLevel.x;
             MAP_STATE.playerY = currentLevel.y;
           }
@@ -1299,6 +1793,58 @@
       }
     } catch (e) {
       console.error('Failed to load progress:', e);
+    }
+
+    // Demo build: everything past the demo's last level stays locked, however
+    // far a save file (possibly carried over from a full build) says the player
+    // got. Done last so it overrides the unlock loops above.
+    if (window.Demo && window.Demo.on) {
+      for (const level of LEVELS) {
+        if (level.num > window.Demo.levels) { level.unlocked = false; level.completed = false; }
+      }
+      if (MAP_STATE.activeWorld >= window.Demo.worldCount(WORLDS.length)) {
+        MAP_STATE.activeWorld = 0;
+        MAP_STATE.currentLevelId = 'L1';
+        MAP_STATE.playerX = LEVELS[0].x;
+        MAP_STATE.playerY = LEVELS[0].y;
+      }
+      const cur = LEVELS.find(l => l.id === MAP_STATE.currentLevelId);
+      if (cur && cur.num > window.Demo.levels) {
+        const last = LEVELS.find(l => l.num === window.Demo.levels);
+        if (last) {
+          MAP_STATE.currentLevelId = last.id;
+          MAP_STATE.activeWorld = last.worldId;
+          MAP_STATE.playerX = last.x;
+          MAP_STATE.playerY = last.y;
+        }
+      }
+      return; // the secret world below can never open in a demo
+    }
+
+    // Secret 11th world (Prism Anomaly, levels 101-110): only unlockable by
+    // finding all 10 Rainbow Shards — never by ordinary sequential progress,
+    // even though `data.max` marches straight through 100→101 once the main
+    // story is cleared. If the player is CURRENTLY standing in it (they must
+    // have unlocked it in a past session) but somehow no longer qualifies
+    // (e.g. after a slot switch to a fresh profile), bounce them back to World 1.
+    const rainbowDone = (typeof rainbowCount === 'function') ? rainbowCount() >= 10
+      : (typeof window.rainbowCount === 'function' ? window.rainbowCount() >= 10 : false);
+    for (const level of LEVELS) {
+      if (level.worldId !== 10) continue;
+      if (!rainbowDone) { level.unlocked = false; continue; }
+      // The entry gate (level 101) opens as soon as all 10 shards are found —
+      // this does NOT depend on advProg.max, which existing save files already
+      // have permanently capped at 100 from before this world existed (their
+      // stored value can't retroactively know about level 101). The rest of
+      // the secret world (102-110) still unlocks the normal sequential way as
+      // advProg.max climbs past 101 while the player actually plays through it.
+      if (level.num === 101) level.unlocked = true;
+    }
+    if (!rainbowDone && MAP_STATE.activeWorld === 10) {
+      MAP_STATE.activeWorld = 0;
+      MAP_STATE.currentLevelId = 'L1';
+      MAP_STATE.playerX = LEVELS[0].x;
+      MAP_STATE.playerY = LEVELS[0].y;
     }
   }
 
@@ -1323,6 +1869,8 @@
       else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') dx = -1;
       else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') dy = -1;
       else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dy = 1;
+      else if (e.key === 'q' || e.key === 'Q' || e.key === '[') { e.preventDefault(); setActiveWorld(MAP_STATE.activeWorld - 1); return; }
+      else if (e.key === 'e' || e.key === 'E' || e.key === ']') { e.preventDefault(); setActiveWorld(MAP_STATE.activeWorld + 1); return; }
       else return;
 
       e.preventDefault();
@@ -1338,8 +1886,10 @@
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
 
-      // Find clicked level
+      // Only the ACTIVE world's 10 nodes are on screen — levels in other worlds
+      // keep stale coordinates from their last layout and must never be hit here.
       for (const level of LEVELS) {
+        if (level.worldId !== MAP_STATE.activeWorld) continue;
         const R = nodeR(level);
         const dist = Math.hypot(mx - level.x, my - level.y);
         if (dist < R + 10) {
@@ -1383,6 +1933,22 @@
     hide: hideWorldMap,
     refresh: refresh,
     markCompleted: markCompleted,
+    // Read-only view of the current ring, for layout diagnostics. The node
+    // positions are the one thing about this screen that cannot be checked from
+    // the DOM (they live on the canvas), and getting them wrong is invisible
+    // until someone opens the map on a phone — so they are worth exposing.
+    debugNodes() {
+      const w = MAP_STATE.activeWorld, start = w * LEVELS_PER_WORLD;
+      const pos = worldRender[w] || {};
+      return {
+        world: w, cx: pos.cx, cy: pos.cy, rx: pos.spread, ry: pos.spreadY,
+        nodeScale,
+        nodes: LEVELS.slice(start, start + LEVELS_PER_WORLD).map(l => ({
+          num: l.num, x: l.x, y: l.y, r: nodeR(l), type: l.type,
+          unlocked: l.unlocked, completed: l.completed,
+        })),
+      };
+    },
   };
 
   console.log('✅ World Map system loaded');

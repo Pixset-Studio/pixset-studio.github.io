@@ -77,6 +77,20 @@
     {id:'achievement_score_100k', name:'High Scorer', nameRu:'Рекордсмен', desc:'Score 100,000 points', descRu:'Набрать 100,000 очков', icon:'🏆', rarity:20},
     {id:'achievement_score_500k', name:'Score Master', nameRu:'Мастер Очков', desc:'Score 500,000 points', descRu:'Набрать 500,000 очков', icon:'🏆', rarity:5},
     {id:'achievement_score_1m', name:'Score Legend', nameRu:'Легенда Очков', desc:'Score 1,000,000 points', descRu:'Набрать 1,000,000 очков', icon:'🏆', rarity:1},
+
+    // Rainbow Shard / Secret World Achievements
+    {id:'achievement_rainbow_1', name:'Glimmer of Truth', nameRu:'Проблеск Истины', desc:'Find your first Rainbow Shard', descRu:'Найти первый Радужный Осколок', icon:'🌈', rarity:20, secret:true},
+    {id:'achievement_rainbow_10', name:'Prism Anomaly', nameRu:'Радужная Аномалия', desc:'Find all 10 Rainbow Shards', descRu:'Найти все 10 Радужных Осколков', icon:'🌈', rarity:2, secret:true},
+    {id:'achievement_world_10', name:'Beyond the Grid', nameRu:'За Пределами Сети', desc:'Complete the secret Prism Anomaly world', descRu:'Пройти секретный мир Радужная Аномалия', icon:'🔮', rarity:1, secret:true},
+    {id:'achievement_boss_prism', name:'Wraith Hunter', nameRu:'Охотник на Призрака', desc:'Defeat PRISM WRAITH', descRu:'Победить ПРИЗМА-ПРИЗРАКА', icon:'👻', rarity:1, secret:true},
+
+    // More Skill / Collection Achievements
+    {id:'achievement_shard_100', name:'Data Miner', nameRu:'Дата-Старатель', desc:'Collect 100 data-shards total', descRu:'Собрать 100 кристаллов данных', icon:'◆', rarity:25},
+    {id:'achievement_shard_300', name:'Data Hoarder', nameRu:'Хранитель Данных', desc:'Collect all 300 data-shards', descRu:'Собрать все 300 кристаллов данных', icon:'◆', rarity:2},
+    {id:'achievement_jump_1000', name:'Never Stop Jumping', nameRu:'Не Переставай Прыгать', desc:'Jump 1000 times', descRu:'Прыгнуть 1000 раз', icon:'🦘', rarity:35},
+    {id:'achievement_freeze_25', name:'Cold Snap', nameRu:'Ледяной Щелчок', desc:'Freeze 25 enemies solid', descRu:'Заморозить 25 врагов', icon:'🧊', rarity:20},
+    {id:'achievement_burn_25', name:'Playing With Fire', nameRu:'Игры с Огнём', desc:'Set 25 enemies ablaze', descRu:'Поджечь 25 врагов', icon:'🔥', rarity:20},
+    {id:'achievement_net_play', name:'Not Alone', nameRu:'Не Один', desc:'Play a networked multiplayer match', descRu:'Сыграть в сетевом мультиплеере', icon:'📡', rarity:15},
   ];
 
   // ═══════════════════════════════════════════════

@@ -57,7 +57,7 @@
 // to them is mirrored back into the active slot blob (bbSlot0/1/2). This runs
 // before loadAdv()/loadAdvH()/loadRecords() so the active slot is authoritative.
 (function(){
-  const CANON={progress:'bbAdv3',progressHardcore:'bbAdvH',achievements:'bbAchievements',achievementStats:'bbAchStats',records:'bbRecords'};
+  const CANON={progress:'bbAdv3',progressHardcore:'bbAdvH',achievements:'bbAchievements',achievementStats:'bbAchStats',records:'bbRecords',cutscenes:'bbCsFired',csWorlds:'bbCsWorlds',rainbow:'bbRainbow'};
   const CANON_KEYS=new Set(Object.values(CANON));
   const slotKey=i=>'bbSlot'+i;
   let _muting=false; // suppress snapshotting while we write canonical FROM a slot
@@ -81,6 +81,8 @@
     try{if(typeof loadAdv==='function')loadAdv();}catch(e){}
     try{if(typeof loadAdvH==='function')loadAdvH();}catch(e){}
     try{if(typeof loadRecords==='function')loadRecords();}catch(e){}
+    try{if(typeof loadCsFired==='function')loadCsFired();}catch(e){}
+    try{if(typeof loadRainbow==='function')loadRainbow();}catch(e){}
     try{if(window.Achievements&&window.Achievements.reload)window.Achievements.reload();}catch(e){}
     try{if(window.WorldMap&&window.WorldMap.refresh)window.WorldMap.refresh();}catch(e){}
   }
@@ -128,6 +130,7 @@
 })();
 
 const CV=document.getElementById('c'),ctx=CV.getContext('2d'),W=800,H=420;
+if(window.__chk)window.__chk('game.js: main canvas context created, CV='+(CV?'found':'MISSING'));
 const G=0.46,JV=-11.0,MXY=17,PSP=4.4,BSP=9,EBS=3.2;
 
 // ── HiDPI / crisp rendering ─────────────────────────────────────────────────
@@ -140,7 +143,17 @@ const G=0.46,JV=-11.0,MXY=17,PSP=4.4,BSP=9,EBS=3.2;
 let _renderScale=1;
 function applyRenderResolution(){
   // Displayed CSS size is set by applyGameScale() (settings.js); fall back to logical size.
-  const cssW=parseFloat(CV.style.width)||CV.clientWidth||W;
+  // IMPORTANT: use the size the canvas ACTUALLY occupies on screen, which is
+  // getBoundingClientRect() — it includes the transform:scale() that fit() puts
+  // on #stage to letterbox the game into the window. style.width is the size
+  // BEFORE that scale, and on a phone the two differ enormously: in portrait the
+  // canvas measured 1188px by style but only 393px on screen, so the game was
+  // rendering a 1600x840 backing store to show 1081x567 device pixels — 119%
+  // of the pixels painted every frame for nothing. Desktop is unaffected
+  // (no scaling there, both numbers agree).
+  let cssW=0;
+  try { cssW=CV.getBoundingClientRect().width; } catch(e){}
+  if(!(cssW>0)) cssW=parseFloat(CV.style.width)||CV.clientWidth||W;
   const dpr=window.devicePixelRatio||1;
   // Backing store keeps the 800:420 aspect. Scale = how many device px per logical px.
   // Capped by the active Graphics Quality tier (GFX.renderScale): lower tiers
@@ -196,6 +209,19 @@ const AchTrack={
   levelClear(worldEnd){ const A=this._A(); if(!A)return;
     if(!_levelDied){ if(A.addStat('noDeathStreak',1)>=10)A.unlock('achievement_no_death_10'); }
     if(worldEnd&&!_worldDied)A.unlock('achievement_no_death_world'); },
+  // ── New tracked events ──────────────────────────────────────────────────
+  rainbow(count){ const A=this._A(); if(!A)return;
+    if(count>=1)A.unlock('achievement_rainbow_1');
+    if(count>=10)A.unlock('achievement_rainbow_10'); },
+  worldClear(worldId){ const A=this._A(); if(!A||worldId!==10)return; A.unlock('achievement_world_10'); },
+  bossPrism(){ const A=this._A(); if(A)A.unlock('achievement_boss_prism'); },
+  shard(){ const A=this._A(); if(!A)return; const c=A.addStat('shardsTotal',1);
+    if(c>=300)A.unlock('achievement_shard_300');
+    if(c>=100)A.unlock('achievement_shard_100'); },
+  jump(){ const A=this._A(); if(!A)return; if(A.addStat('jumps',1)>=1000)A.unlock('achievement_jump_1000'); },
+  freeze(){ const A=this._A(); if(!A)return; if(A.addStat('freezeKills',1)>=25)A.unlock('achievement_freeze_25'); },
+  burn(){ const A=this._A(); if(!A)return; if(A.addStat('burnKills',1)>=25)A.unlock('achievement_burn_25'); },
+  netPlay(){ const A=this._A(); if(A)A.unlock('achievement_net_play'); },
 };
 
 // ── Graphics quality tiers (driven by Settings → Graphics Quality) ─────────
@@ -245,6 +271,47 @@ window.applyGfxTier = function(q){
 // effect dimmed/disabled on lower tiers. Returns 0 on verylow so save()/restore() can be skipped.
 function glow(n){ return (GFX.glow * n) | 0; }
 
+// ── Colour + alpha suffix ──────────────────────────────────────────────────
+// Most theme colours in this file are written as 3-digit shorthand ('#0ff'),
+// and several drawing sites appended a 2-digit alpha to them ("withAlpha(CT.mc,'cc')").
+// That produces '#0ffcc' — a 5-digit value that is NOT a valid CSS colour:
+// canvas silently IGNORES it when assigned to fillStyle/strokeStyle (so the
+// previous colour is used instead), and addColorStop() throws outright, which
+// took down the whole draw() frame — that is what broke the level-clear
+// ── Prism Anomaly recolour ──────────────────────────────────────────────────
+// Turning a sprite rainbow is NOT the same as hue-rotating it. hue-rotate()
+// only spins whatever hue the pixel already had: a dark brown brick becomes a
+// dark shifted brown, and a grey spike (no hue at all) does not change one bit.
+// That is what made the secret world look like a rainbow smeared over the other
+// worlds' art instead of a world made of light.
+//
+// This chain throws the original colour away and rebuilds it:
+//   grayscale(1)  keep only the sprite's light and shade
+//   sepia(1)      lay down one uniform base tone (its hue is ~40°)
+//   saturate(N)   push that tone to a real, vivid colour
+//   hue-rotate()  move it to the hue we actually want
+//   brightness()  lift it back up — grayscale+sepia darkens midtones
+// The result keeps every sprite's shape, shading and readable silhouette while
+// its colour is genuinely ours.
+//
+// Callers must quantise `hue` (20-30° steps): the canvas re-parses a filter
+// whenever the string changes, so repeating strings is what keeps this cheap.
+const _PRISM_SEPIA_HUE=40;
+function prismFilter(hue,sat,bright){
+  const h=(((hue-_PRISM_SEPIA_HUE)%360)+360)%360;
+  return 'grayscale(1) sepia(1) saturate('+(sat||7)+') hue-rotate('+h+'deg) brightness('+(bright||1.15)+')';
+}
+// transition wipe in every world whose main colour is shorthand.
+// This expands shorthand first, so the result is always a valid 8-digit hex.
+function withAlpha(col,aa){
+  if(typeof col!=='string'||col.charAt(0)!=='#')return col;
+  const h=col.slice(1);
+  if(h.length===3)return '#'+h[0]+h[0]+h[1]+h[1]+h[2]+h[2]+aa;
+  if(h.length===6)return col+aa;
+  return col; // already 4/8-digit (has its own alpha) — leave it alone
+}
+window.withAlpha=withAlpha;
+
 // ── Cheap bloom system ─────────────────────────────────────────────────────
 // shadowBlur is by far the most expensive 2D-canvas operation (re-blurs the whole
 // shape every draw). Instead we pre-render a soft radial-gradient "glow blob" once
@@ -282,37 +349,61 @@ function bloom(x,y,radius,col,alpha){
 }
 
 // ── THEMES ──────────────────────────────────────
+// pN / pM / pC are the [shadow, body, edge] colours of normal / moving /
+// crumbling platforms. The EDGE is what the player actually reads as "this is
+// solid ground", so it always stays bright and clearly separated from that
+// world's background; the body stays dark so the level never fights the
+// foreground for attention.
 const THEMES=[
+  // Cyber City used to hand out Mario-grass green platforms (#0f8 edge) in a
+  // cyan-and-neon city, which is what made the whole world look mismatched.
+  // Now: wet dark steel with a cyan neon edge, amber for moving, hot pink for
+  // crumbling — the same palette the skyline signage uses.
   {id:0,name:'CYBER CITY',    icon:'🏙',range:'1–10',   mc:'#0ff',
-   bg:'#04040f',bg2:'#090920',grid:'#4af',grd:['#192a4e','#0a1428'],gE:'#4af',
-   pN:['#0e2e1a','#1c5a30','#0f8'],pM:['#2e1a0e','#5a3010','#f80'],pC:['#3a0e0e','#6a1818','#f44'],clr:'#00ff88'},
+   bg:'#04040f',bg2:'#090920',grid:'#4af',grd:['#132238','#070d18'],gE:'#3cf',
+   pN:['#0b1726','#16334d','#3cf'],pM:['#2a1c06','#4a3410','#fb4'],pC:['#2c0a1c','#4e1030','#f47'],clr:'#33ccff'},
+  // Jungle: deep leaf-shadow green with a bright emerald edge, wet bark for
+  // moving platforms, rotten orange for crumbling.
   {id:1,name:'NEON JUNGLE',   icon:'🌿',range:'11–20',  mc:'#4f8',
-   bg:'#010a01',bg2:'#020c02',grid:'#3f7',grd:['#0a2408','#051004'],gE:'#4f8',
-   pN:['#122008','#234016','#4f8'],pM:['#2a1c00','#3c2c08','#dc8'],pC:['#280606','#401010','#f84'],clr:'#44ff88'},
+   bg:'#010a01',bg2:'#020c02',grid:'#3f7',grd:['#0b2a0c','#041205'],gE:'#5fb',
+   pN:['#0a2410','#12421c','#5fb'],pM:['#2a1c06','#432c0e','#e9a'],pC:['#2a0806','#451210','#f86'],clr:'#44ffaa'},
   {id:2,name:'LAVA WORLD',    icon:'🌋',range:'21–30',  mc:'#f62',
    bg:'#0e0200',bg2:'#180400',grid:'#f42',grd:['#2e0c00','#180600'],gE:'#f62',
    pN:['#2a0a00','#500e00','#f82'],pM:['#280e00','#4a1a00','#faa'],pC:['#1e0408','#340810','#f24'],clr:'#ff6622'},
+  // Ice: translucent blue ice with a near-white rim, so a ledge reads as frozen
+  // rather than as the same murky navy as the cave behind it.
   {id:3,name:'ICE CAVES',     icon:'❄',range:'31–40',  mc:'#8cf',
-   bg:'#020810',bg2:'#041018',grid:'#6af',grd:['#182840','#0c1828'],gE:'#adf',
-   pN:['#102038','#1c3a5e','#8cf'],pM:['#0c1e38','#182e50','#4af'],pC:['#200c30','#381448','#c8f'],clr:'#88ccff'},
+   bg:'#020810',bg2:'#041018',grid:'#6af',grd:['#17324e','#0a1a2c'],gE:'#dff',
+   pN:['#14304c','#20567e','#cfe'],pM:['#0e2440','#1a3c66','#7bf'],pC:['#221038','#3a1a52','#c9f'],clr:'#aaddff'},
   {id:4,name:'DESERT RUINS',  icon:'🏜',range:'41–50',  mc:'#e8a',
    bg:'#100a00',bg2:'#1a1200',grid:'#c84',grd:['#3a2800','#201400'],gE:'#e8a',
    pN:['#2e1c00','#4e3400','#e8a'],pM:['#241800','#3c2800','#fca'],pC:['#2a0e00','#440e00','#f84'],clr:'#eebb66'},
   {id:5,name:'SPACE STATION', icon:'🛸',range:'51–60',  mc:'#a0f',
    bg:'#040010',bg2:'#080020',grid:'#80f',grd:['#180840','#0c0428'],gE:'#b0f',
    pN:['#160834','#2c1060','#a0f'],pM:['#1c0840','#301870','#60f'],pC:['#24082c','#400c50','#e0c'],clr:'#aa00ff'},
+  // Dark Forest is the darkest world in the game, and its platforms used to be
+  // near-black on near-black (#0b4 edge on #061a06 body) — the ledges were
+  // genuinely hard to see. Same mossy bark, but the rim is now a bright
+  // bio-luminescent green so the geometry reads without lightening the mood.
   {id:6,name:'DARK FOREST',   icon:'🌲',range:'61–70',  mc:'#0b4',
-   bg:'#010602',bg2:'#020a02',grid:'#0a3',grd:['#082008','#041004'],gE:'#0c5',
-   pN:['#061a06','#0c2c0c','#0b4'],pM:['#0e1a00','#162a00','#8c4'],pC:['#180a06','#2c1008','#c52'],clr:'#00bb44'},
+   bg:'#010602',bg2:'#020a02',grid:'#0a3',grd:['#0a1f0c','#040e05'],gE:'#3e9',
+   pN:['#08200a','#103a16','#3e9'],pM:['#141e02','#243608','#ad5'],pC:['#1e0c06','#341408','#e73'],clr:'#33ee99'},
   {id:7,name:'TOXIC ZONE',    icon:'☣',range:'71–80',  mc:'#cf0',
    bg:'#060a00',bg2:'#0a0e00',grid:'#ac0',grd:['#162800','#0c1600'],gE:'#df0',
    pN:['#142200','#244000','#cf0'],pM:['#201800','#342800','#fc0'],pC:['#180a00','#2c1000','#f80'],clr:'#ccff00'},
   {id:8,name:'STORM PEAKS',   icon:'⚡',range:'81–90',  mc:'#88f',
    bg:'#080810',bg2:'#0c0c1a',grid:'#66c',grd:['#1c1c28','#101018'],gE:'#88f',
    pN:['#141828','#202840','#66c'],pM:['#181428','#28203c','#44c'],pC:['#24102c','#3c1848','#c4f'],clr:'#8888ff'},
+  // Final Fortress: forged iron plate, lit along the edge like cooling metal.
   {id:9,name:'FINAL FORTRESS',icon:'🔱',range:'91–100', mc:'#f44',
-   bg:'#0c0000',bg2:'#180000',grid:'#f22',grd:['#280808','#140404'],gE:'#f44',
-   pN:['#200808','#3c1010','#f44'],pM:['#241000','#401800','#f84'],pC:['#1c0414','#340824','#f0c'],clr:'#ff4444'},
+   bg:'#0c0000',bg2:'#180000',grid:'#f22',grd:['#241014','#100608'],gE:'#f96',
+   pN:['#1c1014','#38181c','#f96'],pM:['#2a1200','#4a2000','#fb6'],pC:['#22061a','#3e0a2e','#f4b'],clr:'#ff8866'},
+  // Secret 11th world — unlocked only after all 10 Rainbow Shards are found
+  // (see rainbowCount() in this file / WorldMap's gate). A corrupted fragment
+  // of GRID that ARCHON tried to erase rather than delete outright.
+  {id:10,name:'PRISM ANOMALY',icon:'🌈',range:'101–110',mc:'#f0f',
+   bg:'#0a0018',bg2:'#140028',grid:'#f0f',grd:['#2a0840','#180430'],gE:'#f8f',
+   pN:['#200840','#3c1060','#f0f'],pM:['#402008','#602c10','#ff8'],pC:['#083030','#105050','#0ff'],clr:'#ff44ff'},
 ];
 let CT=THEMES[0];
 
@@ -371,6 +462,26 @@ window.applyGameplaySettings=function(){
   const hint=document.getElementById('hint');
   if(hint)hint.style.display=(s.showHints===false)?'none':'';
 };
+let _audioAutoSuspendInit=false;
+// Music/SFX used to keep playing forever in the background — Web Audio
+// contexts are NOT paused automatically when a tab is hidden or the window is
+// minimized, only when the page is actually closed. Suspending the single
+// shared AudioContext on hide (and resuming on show) silences everything
+// (procedural tones AND the baked-sample player, since both route through
+// this same `AC`) with zero per-sound bookkeeping, and playback resumes
+// exactly where it left off.
+function _initAudioAutoSuspend(){
+  if(_audioAutoSuspendInit||!AC)return;
+  _audioAutoSuspendInit=true;
+  const suspend=()=>{ if(AC&&AC.state==='running')AC.suspend().catch(()=>{}); };
+  const resume=()=>{ if(AC&&AC.state==='suspended'&&!document.hidden)AC.resume().catch(()=>{}); };
+  document.addEventListener('visibilitychange',()=>{ document.hidden?suspend():resume(); });
+  // Electron/desktop: minimizing or Alt-Tabbing away doesn't always toggle
+  // document.hidden depending on OS/window manager, so also listen for the
+  // window itself losing/gaining OS focus.
+  window.addEventListener('blur',suspend);
+  window.addEventListener('focus',resume);
+}
 function initAudio(){
   if(AC)return;
   try{
@@ -396,6 +507,7 @@ function initAudio(){
     if(window.AudioFiles&&typeof window.AudioFiles.init==='function'){
       try{window.AudioFiles.init(AC,SG,MUG);}catch(e){}
     }
+    _initAudioAutoSuspend();
   }catch(e){}
 }
 
@@ -470,6 +582,11 @@ const SFX_PROC={
   },
   droneBuzz(){tone(180,'sawtooth',.08,.08);},
   walk(){noise(.03,.06);}, // light footstep
+  // Classic RPG-style dialogue "blip": short, high-pitched, fast-decay pulse
+  // played per revealed character during the cutscene typewriter effect (see
+  // _csShowLine). Slight per-call pitch jitter keeps a whole sentence from
+  // sounding like a single repeated beep.
+  voiceBlip(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);},
 };
 // Public SFX: prefer the baked .mp3 sample, fall back to the procedural voice.
 // Built as a wrapper over SFX_PROC so every existing SFX.xxx() call site is
@@ -603,7 +720,7 @@ function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('
 function showBossIntro(b){
   const ov=document.getElementById('bossIntroOv');
   // Boss pre-fight dialogue — play cutscene then show card
-  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
+  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),10);
   const bossDialogId='boss_pre_'+wi;
   function _showCard(){
     document.getElementById('bossIntroName').textContent='⚔ '+bossName(b)+' ⚔';
@@ -620,7 +737,7 @@ function showBossIntro(b){
   // only the non-blocking card; the simulation keeps running for everyone.
   const preId='w'+wi+'_boss';
   if(!window.netActive&&typeof CSCENES!=='undefined'&&CSCENES[preId]&&!_csFired[preId]){
-    _csFired[preId]=true;
+    markCsFired(preId);
     gState='paused';
     csPlay(preId,wi,function(){gState='playing';_showCard();});
   } else {
@@ -657,6 +774,12 @@ const _CHEATS={
   'GODMODE':   ()=>{godMode=!godMode;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return godMode?'😇 GOD MODE ON — you are immortal':'💀 GOD MODE OFF'},
   'GOD':       ()=>{godMode=!godMode;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return godMode?'😇 GOD MODE ON — you are immortal':'💀 GOD MODE OFF'},
   'LIVES':     ()=>{infiniteLives=!infiniteLives;lives=infiniteLives?99:3;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return infiniteLives?'♾ INFINITE LIVES ON (×99)':'❤ INFINITE LIVES OFF'},
+  'BOSSDEBUG': ()=>{window._bbDebugBoss=!window._bbDebugBoss;return window._bbDebugBoss?'🐞 Boss debug logging ON (check console)':'🐞 Boss debug logging OFF'},
+  'RAINBOW':   ()=>{
+    for(let w=0;w<10;w++) markRainbowCollected(w);
+    if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');
+    return '🌈 All 10 Rainbow Shards collected — Prism Anomaly unlocked!';
+  },
 };
 // Cheat codes sorted longest-first so that a longer code (e.g. HARDUNLOCK, GODMODE)
 // is matched before any shorter code it happens to end with (UNLOCK, GOD).
@@ -783,6 +906,12 @@ const EC={
   sp_spiker: {w:28,h:28,spd:1.2,hp:1,col:'#8844cc',glow:'#b0f',moveType:'spiked', score:150},
   tx_splitter:{w:30,h:30,spd:0.9,hp:2,col:'#557700',glow:'#cf0',moveType:'split',  score:180},
   ff_armored:{w:36,h:36,spd:0.7,hp:4,col:'#440000',glow:'#f44',moveType:'armored',score:300},
+  // ── World 10 PRISM ANOMALY (secret) ─────────────
+  pr_shard:  {w:26,h:28,spd:1.5,hp:2,col:'#cc22cc',glow:'#f0f',moveType:'walk',  score:200},
+  pr_guard:  {w:34,h:34,spd:0.7,hp:3,col:'#2266cc',glow:'#0ff',moveType:'shield',score:300},
+  pr_wisp:   {w:24,h:24,spd:1.9,hp:1,col:'#ffcc22',glow:'#ff8',moveType:'orbit', score:180},
+  pr_beam:   {w:24,h:30,spd:0.3,hp:2,col:'#22cc88',glow:'#8f8',moveType:'shoot', score:220},
+  pr_glitch: {w:28,h:28,spd:1.3,hp:2,col:'#cc2266',glow:'#f4c',moveType:'charge',score:250},
 };
 
 // 5-enemy pools per world [walk1, tank, flier, shooter, special]
@@ -797,9 +926,33 @@ const WORLD_POOLS=[
   ['tx_slug',  'tx_blob',  'tx_fly',    'tx_venom',  'tx_mutant' ], // 7 Toxic Zone
   ['st_gust',  'st_titan', 'st_bolt',   'st_rod',    'st_cyclone'], // 8 Storm Peaks
   ['ff_guard', 'ff_demon', 'ff_eye',    'ff_sentinel','ff_wraith' ], // 9 Final Fortress
+  ['pr_shard', 'pr_guard', 'pr_wisp',   'pr_beam',   'pr_glitch' ], // 10 Prism Anomaly (secret)
 ];
 
-function worldIdx(n){return Math.min(Math.floor(((n||1)-1)/10),9);}
+function worldIdx(n){return Math.min(Math.floor(((n||1)-1)/10),10);}
+// Which world an enemy type belongs to, from its 2-letter prefix. Used by the
+// status-effect system to decide what a given enemy leaves on the player, so a
+// desert scarab can't inflict the Ice Caves' chill just because you met it in
+// infinite mode. Returns -1 for an unknown type.
+const _ENEMY_WORLD={};
+WORLD_POOLS.forEach((pool,wi)=>pool.forEach(t=>{_ENEMY_WORLD[t]=wi;}));
+function worldOfEnemyType(t){const w=_ENEMY_WORLD[t];return w===undefined?-1:w;}
+window.worldOfEnemyType=worldOfEnemyType;
+// Denominator for the "level X / Y" readouts. The main story is 100 levels; the
+// secret Prism Anomaly world adds 101–110, and showing "101/100" there looked
+// like a counter bug.
+function advTotalLevels(){
+  // Demo build: the campaign is the demo's own level count and nothing else —
+  // every "x / 100" readout in the UI has to say "x / 10" instead.
+  if(window.Demo&&window.Demo.on)return window.Demo.levels;
+  if(advLevel>100)return 110;
+  try{ if(typeof rainbowCount==='function'&&rainbowCount()>=10)return 110; }catch(e){}
+  const prog=(typeof hardMode!=='undefined'&&hardMode)?advProgHard:advProg;
+  if(prog&&prog.max>100)return 110;
+  if(prog&&prog.done&&prog.done.some(n=>n>100))return 110;
+  return 100;
+}
+window.advTotalLevels=advTotalLevels;
 function ePool(n){
   const wi=worldIdx(n),pool=WORLD_POOLS[wi];
   const lv=(n-1)%10+1; // 1-10 within world
@@ -839,9 +992,72 @@ let advProg={max:1,done:[]};
 let hardMode=false;                          // Hardcore difficulty active
 let advProgHard={max:1,done:[]};             // Separate hard-mode progress
 var _csFired={};                             // Tracks fired cutscenes (early decl for showBossIntro)
+var _csShownWorlds={};                       // Tracks which world-intro cutscenes have played (early decl, see loadCsFired)
+// Persisted per save-slot (see SaveSlots' CANON map above) so switching slots
+// doesn't carry one profile's "already seen" cutscenes over to another, and a
+// fresh slot always sees every cutscene again.
+function loadCsFired(){
+  try{const s=localStorage.getItem('bbCsFired');_csFired=s?JSON.parse(s):{};}catch(e){_csFired={};}
+  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=s2?JSON.parse(s2):{};}catch(e){_csShownWorlds={};}
+}
+function saveCsFired(){try{localStorage.setItem('bbCsFired',JSON.stringify(_csFired));}catch(e){}}
+function saveCsShownWorlds(){try{localStorage.setItem('bbCsWorlds',JSON.stringify(_csShownWorlds));}catch(e){}}
+// Mark a cutscene id as fired AND persist it immediately — every _csFired[id]=true
+// assignment in this file goes through this helper (see below).
+function markCsFired(id){_csFired[id]=true;saveCsFired();}
+function markCsShownWorld(wi){_csShownWorlds[wi]=true;saveCsShownWorlds();}
 let timeLeft=0,timMax=0,tick=0,camX=0,camShake=0,worldW=0,raf;
+
+// ── Mobile view zoom ─────────────────────────────────────────────────────────
+// A phone shows the same 800×420 logical view as a 27" monitor, so on a 6"
+// screen everything is physically tiny — that is the "игра мелкая" report. This
+// magnifies the world (the player sees LESS of it, but bigger) while the HUD,
+// timer bar and boss bar stay put, because they are drawn outside the zoom.
+//
+// Deliberately mobile-only: on desktop _viewZoom() returns 1 and every line of
+// the zoom path is skipped, so the PC build is untouched.
+let _vzX=W*0.5,_vzY=H*0.6;
+function _viewZoom(){
+  const s=window.gameSettings;
+  if(!s)return 1;
+  const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0||s.touchControls==='on';
+  if(!isTouch)return 1;
+  let z=s.mobileZoom;
+  // 0 / unset = Auto: the smaller the screen, the more magnification it needs.
+  if(!z||isNaN(+z)){
+    const w=window.innerWidth||800;
+    z=w<520?1.45:(w<700?1.30:(w<900?1.18:1.0));
+  }
+  return Math.max(1,Math.min(+z,2.5));
+}
+// Point of the scene that stays in the centre of the screen. Follows the player
+// smoothly and is clamped so the zoom never shows past the edges of the view.
+function _updateViewFocus(z){
+  const halfX=W/(2*z),halfY=H/(2*z);
+  const p=(typeof player!=='undefined'&&player)?player:null;
+  // Bias right of the player so there is still road visible ahead of them.
+  const tx=p?(p.x+p.w/2-camX)+W*0.10:W*0.5;
+  const ty=p?(p.y+p.h/2):H*0.6;
+  const cx=Math.max(halfX,Math.min(tx,W-halfX));
+  const cy=Math.max(halfY,Math.min(ty,H-halfY));
+  // Snap instead of gliding when the target jumps (level start, respawn,
+  // checkpoint) — otherwise the camera visibly flies across the level.
+  if(Math.abs(cx-_vzX)>260||Math.abs(cy-_vzY)>200){_vzX=cx;_vzY=cy;return;}
+  _vzX+=(cx-_vzX)*0.15;_vzY+=(cy-_vzY)*0.15;
+}
+window._viewZoom=_viewZoom;
+// `tick` is a script-level `let`, so it is not a window property and other
+// modules cannot read it by name (and a module with its own `tick` would shadow
+// it). This accessor is the supported way to read the frame counter from
+// assets/*.js siblings — see the NaN gradient bug in status.js.
+window.__bbTick=function(){return tick;};
 let _goNextTimer=0;        // handle for the level-advance timeout (cancellable)
 let player,platforms,blocks,coins,enemies,pBullets,eBullets,powerups,particles,decors;
+// Unique, ever-increasing id for every enemy created (initial level population AND
+// enemies spawned later, e.g. split-enemy children). Network sync uses this id
+// instead of array index so it stays correct even when host and guest enemy
+// arrays temporarily differ in length (see mkEnemy / applyEnemiesSync).
+let _enemyIdSeq=0;
 let fireBalls=[],iceBalls=[];
 let checkpoints=[];        // mid-level checkpoint flags
 let _cpSafeZone=null;      // {x,y,w,h} — area around the checkpoint kept hazard-free
@@ -857,6 +1073,20 @@ let hazards=[];            // Hazards: spikes, lasers, etc.
 //    generator, updater and renderer all share the same top-level bindings. ──
 let dataShards=[];         // collectible secret data-shards (mechanic 7)
 let dataShardsTotal=0,dataShardsGot=0,shardBonusGiven=false;
+// ── Rainbow Shards (secret collectible: 1 per world, 10 total) ─────────────
+// Collecting all 10 unlocks the secret 11th world (see WorldMap / THEMES[10]).
+// Fixed per-world level (1-9, never the boss level) so it's the same level on
+// every replay, not re-randomized each attempt — still feels "hidden" since
+// the player has no way to know which level ahead of time.
+const RAINBOW_LEVEL_IN_WORLD=[4,7,2,8,5,1,9,3,6,2];
+let rainbowItem=null;            // the current level's rainbow shard entity, or null
+let rainbowCollected={};         // {worldIndex: true} — persisted, see loadRainbow()/markRainbowCollected()
+function loadRainbow(){
+  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=s?JSON.parse(s):{};}catch(e){rainbowCollected={};}
+}
+function saveRainbow(){try{localStorage.setItem('bbRainbow',JSON.stringify(rainbowCollected));}catch(e){}}
+function rainbowCount(){return Object.keys(rainbowCollected).filter(k=>rainbowCollected[k]).length;}
+function markRainbowCollected(worldIdx){rainbowCollected[worldIdx]=true;saveRainbow();if(typeof AchTrack!=='undefined')AchTrack.rainbow(rainbowCount());}
 let jumpPads=[];           // Jump pads
 let conveyors=[];          // Conveyor belts
 let buttons=[];            // Buttons
@@ -885,19 +1115,56 @@ function _checkCoinHp(cx,cy,p){
   }
 }
 // Returns array of alive, active players
+// Cached: rebuilding a fresh array every call added GC pressure since this runs
+// inside hot per-enemy loops (nearestPlayer etc). The cache is cheap and
+// self-invalidating — it rebuilds only when the underlying player refs/flags
+// actually change (join/leave, 2P toggle), otherwise it returns the same array.
+let _playerCache=[];
+let _playerCacheP1=null,_playerCacheP2=null,_playerCacheTwo=null;
+// Bumped every time the cache is actually rebuilt. activePlayersAll() below
+// keys off this instead of the array's identity — see the bug note there.
+let _playerCacheVer=0;
 function activePlayers(){
-  const a=[];
-  if(player)a.push(player);
-  if(twoPlayer&&player2)a.push(player2);
-  return a;
+  if(player!==_playerCacheP1||player2!==_playerCacheP2||twoPlayer!==_playerCacheTwo){
+    _playerCache.length=0;
+    if(player)_playerCache.push(player);
+    if(twoPlayer&&player2)_playerCache.push(player2);
+    _playerCacheP1=player;_playerCacheP2=player2;_playerCacheTwo=twoPlayer;
+    _playerCacheVer++;
+  }
+  return _playerCache;
 }
 // Separate function for camera/HUD that includes net ghosts
+let _playerAllCache=[];
+let _playerAllCacheSize=-1,_playerAllCacheVer=-1;
 function activePlayersAll(){
-  const a=activePlayers();
-  if(window.netActive&&window.netPlayers){
-    for(const [,e] of window.netPlayers){ if(e.playerObj)a.push(e.playerObj); }
+  const base=activePlayers();
+  const netCount=(window.netActive&&window.netPlayers)?window.netPlayers.size:0;
+  // Rebuild whenever the local roster changed or the number of network ghosts
+  // changed (join/leave).
+  //
+  // This used to compare the BASE ARRAY'S IDENTITY (`_playerAllCacheBase!==base`)
+  // — but activePlayers() mutates its cache array in place and never replaces
+  // it, so that identity never changes after the first call. The result: this
+  // cache was populated once per session and then frozen, so from the SECOND
+  // level onwards it still held the player object from the first level.
+  //
+  // Everything that targets the player through nearestPlayer() — all boss AI,
+  // boss stomp/contact detection, and every enemy's chase/aim logic — was
+  // therefore acting on a ghost that never moved. The most visible symptom was
+  // that bosses could not be stomped at all after the first boss level of a
+  // session (the contact test ran against the stale object, which was nowhere
+  // near the boss), which made four of the eleven bosses unbeatable.
+  if(_playerAllCacheVer!==_playerCacheVer||_playerAllCacheSize!==netCount){
+    _playerAllCache.length=0;
+    for(const pl of base)_playerAllCache.push(pl);
+    if(window.netActive&&window.netPlayers){
+      for(const [,e] of window.netPlayers){ if(e.playerObj)_playerAllCache.push(e.playerObj); }
+    }
+    _playerAllCacheVer=_playerCacheVer;
+    _playerAllCacheSize=netCount;
   }
-  return a;
+  return _playerAllCache;
 }
 // Returns the player closest to world-x (for AI targeting)
 function nearestPlayer(wx){
@@ -923,9 +1190,29 @@ let bossArenaX=0;      // x coordinate where boss arena begins
 let bossArenaTriggered=false; // has player entered the arena?
 
 function saveAdv(){try{localStorage.setItem('bbAdv3',JSON.stringify(advProg));}catch(e){}}
-function loadAdv(){try{const s=localStorage.getItem('bbAdv3');advProg=s?JSON.parse(s):{max:1,done:[]};}catch(e){advProg={max:1,done:[]};}if(!advProg.stars)advProg.stars={};if(!advProg.scores)advProg.scores={};if(!advProg.shards)advProg.shards={};}
+function loadAdv(){
+  try{
+    const s=localStorage.getItem('bbAdv3');
+    advProg=s?JSON.parse(s):{max:1,done:[]};
+  }catch(e){
+    console.warn('bbAdv3 save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdv3_corrupt for support/recovery.',e);
+    try{ const raw=localStorage.getItem('bbAdv3'); if(raw) localStorage.setItem('bbAdv3_corrupt',raw); }catch(e2){}
+    advProg={max:1,done:[]};
+  }
+  if(!advProg.stars)advProg.stars={};if(!advProg.scores)advProg.scores={};if(!advProg.shards)advProg.shards={};
+}
 function saveAdvH(){try{localStorage.setItem('bbAdvH',JSON.stringify(advProgHard));}catch(e){}}
-function loadAdvH(){try{const s=localStorage.getItem('bbAdvH');advProgHard=s?JSON.parse(s):{max:1,done:[]};}catch(e){advProgHard={max:1,done:[]};}if(!advProgHard.stars)advProgHard.stars={};if(!advProgHard.scores)advProgHard.scores={};if(!advProgHard.shards)advProgHard.shards={};}
+function loadAdvH(){
+  try{
+    const s=localStorage.getItem('bbAdvH');
+    advProgHard=s?JSON.parse(s):{max:1,done:[]};
+  }catch(e){
+    console.warn('bbAdvH save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdvH_corrupt for support/recovery.',e);
+    try{ const raw=localStorage.getItem('bbAdvH'); if(raw) localStorage.setItem('bbAdvH_corrupt',raw); }catch(e2){}
+    advProgHard={max:1,done:[]};
+  }
+  if(!advProgHard.stars)advProgHard.stars={};if(!advProgHard.scores)advProgHard.scores={};if(!advProgHard.shards)advProgHard.shards={};
+}
 
 // ── STAR RATINGS (1–3 per level) ──
 // Stored per progress slot as prog.stars = { "<levelNum>": 1|2|3 }. Only the
@@ -975,10 +1262,33 @@ window.levelScore=levelScore;window.totalScore=totalScore;
 
 // Player records (high scores). Persisted in bbRecords and bundled into save slots.
 let bestRecords={infinite:0,adventure:0};
-function loadRecords(){try{const s=localStorage.getItem('bbRecords');bestRecords=s?Object.assign({infinite:0,adventure:0},JSON.parse(s)):{infinite:0,adventure:0};}catch(e){bestRecords={infinite:0,adventure:0};}}
+// ── Playtime ────────────────────────────────────────────────────────────────
+// Counted in whole seconds of ACTUAL play (gState==='playing'), not wall-clock
+// time with the game sitting in a menu. Persisted every 20s so a crash loses at
+// most that much, and flushed whenever a level ends.
+let playSeconds=0,_playTick=0,_playSaveT=0;
+function loadPlaytime(){try{playSeconds=parseInt(localStorage.getItem('bbPlaytime'),10)||0;}catch(e){playSeconds=0;}}
+function savePlaytime(){try{localStorage.setItem('bbPlaytime',String(playSeconds|0));}catch(e){}}
+function tickPlaytime(){
+  if(gState!=='playing')return;
+  if(++_playTick<60)return;
+  _playTick=0;playSeconds++;
+  if(++_playSaveT>=20){_playSaveT=0;savePlaytime();}
+}
+window.bbPlaytime=()=>playSeconds;
+function loadRecords(){
+  try{
+    const s=localStorage.getItem('bbRecords');
+    bestRecords=s?Object.assign({infinite:0,adventure:0},JSON.parse(s)):{infinite:0,adventure:0};
+  }catch(e){
+    console.warn('bbRecords save is corrupted, falling back to fresh records. Raw value backed up under bbRecords_corrupt for support/recovery.',e);
+    try{ const raw=localStorage.getItem('bbRecords'); if(raw) localStorage.setItem('bbRecords_corrupt',raw); }catch(e2){}
+    bestRecords={infinite:0,adventure:0};
+  }
+}
 function saveRecords(){try{localStorage.setItem('bbRecords',JSON.stringify(bestRecords));}catch(e){}}
 function recordScore(mode,sc){sc=sc|0;if(mode!=='infinite'&&mode!=='adventure')return;if(sc>(bestRecords[mode]||0)){bestRecords[mode]=sc;saveRecords();}}
-loadAdv();loadAdvH();loadRecords();
+loadAdv();loadAdvH();loadRecords();loadPlaytime();loadCsFired();loadRainbow();
 
 // ════════════════════════════════════════════════
 //  PARTICLES
@@ -987,18 +1297,52 @@ loadAdv();loadAdvH();loadRecords();
 // Engine fallback cap (used when settings haven't loaded yet). Settings.js sets
 // window.GFX_MAX_PARTICLES based on graphics quality; we read it dynamically.
 const MAX_PARTICLES = 80;
+// Boss levels: fixed camera advance speed (px/frame @ 60fps) — see resolveP()
+// and update()'s camera block. ~1.0 covers a typical corridor+arena in well
+// under a minute, leaving plenty of time to fight without feeling rushed.
+const BOSS_CAM_SPEED = 1.0;
 function _maxP(){ return window.GFX_MAX_PARTICLES || MAX_PARTICLES; }
+// ── Particle object pool ─────────────────────────────────────────────────────
+// `particles` used to grow via push() and shrink via splice() in updateParticles,
+// which allocates a fresh object every spawn and does an O(n) array shift on
+// every death (expensive with dozens of particles dying the same frame, e.g. a
+// big explosion). Instead we pre-allocate a fixed-size pool once; spawning reuses
+// a dead slot's object in place (no allocation) and death just flips `alive`
+// back to false and returns the index to the free list (O(1), no shifting).
+const PARTICLE_POOL_CAP = 400; // generous ceiling above the highest GFX_MAX_PARTICLES tier
+let _particleFree = [];
+let _particleAliveCount = 0;
+function _initParticlePool(){
+  if(!particles) particles=[]; else particles.length = 0;
+  _particleFree.length = 0;
+  _particleAliveCount = 0;
+  for(let i=0;i<PARTICLE_POOL_CAP;i++){
+    particles.push({alive:false,x:0,y:0,vx:0,vy:0,life:0,decay:0,sz:0,col:null,txt:null});
+    _particleFree.push(i);
+  }
+}
+// Grab a free slot, fill it in place, mark alive. Returns null if the pool is
+// completely full (extremely rare with a 400-slot ceiling — caller just skips).
+function spawnParticle(o){
+  if(!_particleFree.length) return null;
+  const idx=_particleFree.pop();
+  const p=particles[idx];
+  p.alive=true; p.x=o.x; p.y=o.y; p.vx=o.vx; p.vy=o.vy;
+  p.life=o.life; p.decay=o.decay; p.sz=o.sz; p.col=o.col; p.txt=o.txt;
+  _particleAliveCount++;
+  return p;
+}
 function burst(x,y,col,n=10,spd=3.5,sz=4){
   const particlesEnabled=(window.gameSettings&&window.gameSettings.particles!==false);
   if(!particlesEnabled)return;
   const cap = _maxP();
-  if(particles.length >= cap) return;
+  if(_particleAliveCount >= cap) return;
   // Scale particle count by graphics quality tier
   const scaled = Math.max(1, Math.round(n * GFX.particleMul));
-  const add = Math.min(scaled, cap - particles.length);
+  const add = Math.min(scaled, cap - _particleAliveCount);
   for(let i=0;i<add;i++){
     const a=Math.PI*2*i/add+Math.random()*.9,s=spd*(.45+Math.random());
-    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:1,decay:.038+Math.random()*.03,sz,col,txt:null});
+    spawnParticle({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:1,decay:.038+Math.random()*.03,sz,col,txt:null});
   }
 }
 function floatTxt(x,y,t,col){
@@ -1006,8 +1350,8 @@ function floatTxt(x,y,t,col){
   if(!particlesEnabled)return;
   // Floating combat/pickup text can be disabled independently of particles.
   if(window.gameSettings&&window.gameSettings.combatText===false)return;
-  if(particles.length < _maxP())
-    particles.push({x,y,vx:0,vy:-1.5,life:1,decay:.018,sz:0,col,txt:t});
+  if(_particleAliveCount < _maxP())
+    spawnParticle({x,y,vx:0,vy:-1.5,life:1,decay:.018,sz:0,col,txt:t});
 }
 
 // ════════════════════════════════════════════════
@@ -1021,9 +1365,50 @@ function hurtHit(p,e){
   return p.x+m < e.x+e.w-m && p.x+p.w-m > e.x+m &&
          p.y+m < e.y+e.h-m && p.y+p.h-m > e.y+m;
 }
+// ── Player "feel" state ─────────────────────────────────────────────────────
+// Small, cheap reactions that make the robot feel like it has weight and the
+// world feel like it notices him. None of these affect physics or collision —
+// they are read only by drawOnePlayer.
+//   p.landT    — counts down after a landing, drives the squash
+//   p.landPow  — how hard the landing was (0..1)
+//   p.idleT    — frames spent standing still, drives the idle look-around
+//   p.stepT    — distance accumulator for footstep dust
+function _playerLanded(p,impact){
+  // impact is the fall speed at the moment of contact
+  if(impact<3)return;
+  const pow=Math.min(1,(impact-3)/12);
+  p.landT=Math.max(p.landT||0,6+pow*6);
+  p.landPow=pow;
+  if(pow>0.35){
+    SFX.land&&SFX.land();
+    camShake=Math.max(camShake,pow*3.5);
+  }
+  // Dust puff at the feet
+  const n=Math.round((2+pow*5)*(GFX.particleMul||1));
+  for(let i=0;i<n;i++){
+    spawnParticle({x:p.x+p.w/2+(Math.random()-.5)*p.w,y:p.y+p.h-1,
+      vx:(Math.random()-.5)*(1.2+pow*2),vy:-Math.random()*(0.6+pow),
+      life:1,decay:.07,sz:1.5+Math.random()*1.5,col:CT.gE||'#8ac',txt:null});
+  }
+}
+function _playerRunDust(p){
+  if(!p.onGnd||Math.abs(p.vx)<1.6)return;
+  p.stepT=(p.stepT||0)+Math.abs(p.vx);
+  if(p.stepT<26)return;
+  p.stepT=0;
+  if((GFX.particleMul||1)<=0.25&&Math.random()>0.5)return;
+  spawnParticle({x:p.x+p.w/2-Math.sign(p.vx)*6,y:p.y+p.h-1,
+    vx:-Math.sign(p.vx)*(0.5+Math.random()*0.6),vy:-Math.random()*0.5,
+    life:1,decay:.10,sz:1.2+Math.random(),col:CT.gE||'#8ac',txt:null});
+}
 function resolveP(p){
+  const _wasAir=!p.onGnd, _fallV=p.vy;
   p.onGnd=false;
   p.x+=p.vx;if(!exitAnim)p.x=Math.max(0,Math.min(p.x,worldW-p.w));
+  // Boss auto-scroll camera: once it's moving (or has stopped at the arena's
+  // far edge), its right edge is a hard wall — the player can keep up with it
+  // but never push past what's already on screen.
+  if(boss&&window.gameSettings&&window.gameSettings.bossAutoScrollCamera)p.x=Math.min(p.x,camX+W-p.w);
   for(const b of blocks){
     if(!b.solid)continue;
     if(aabb(p,b)){if(p.vx>=0)p.x=b.x-p.w;else p.x=b.x+b.w;p.vx=0;}
@@ -1050,6 +1435,15 @@ function resolveP(p){
       }
     }
   }
+  // Status effect countdown (see assets/status.js) — resolveP runs once per
+  // frame for every active player, which is exactly the tick rate it needs.
+  if(window.Status)Status.tick(p);
+  // Landing / idle / footstep reactions (see _playerLanded above)
+  if(p.onGnd&&_wasAir)_playerLanded(p,_fallV);
+  if(p.landT>0)p.landT--;
+  _playerRunDust(p);
+  if(p.onGnd&&Math.abs(p.vx)<0.2&&!p.respawning)p.idleT=(p.idleT||0)+1;
+  else p.idleT=0;
 }
 function eLand(e){
   e.onGnd=false;e.y+=e.vy;
@@ -1150,10 +1544,11 @@ function genLevel(diff,rng,advN){
   levelArchetype = pickArchetype(advN);
   levelMods = pickModifiers(advN, levelArchetype);
 
-  platforms=[];blocks=[];coins=[];enemies=[];
-  pBullets=[];eBullets=[];powerups=[];particles=[];decors=[];fireBalls=[];iceBalls=[];checkpoints=[];flagDone=false;exitAnim=false;exitTimer=0;
+  platforms=[];blocks=[];coins=[];enemies=[];_enemyIdSeq=0;
+  pBullets=[];eBullets=[];powerups=[];_initParticlePool();decors=[];fireBalls=[];iceBalls=[];checkpoints=[];flagDone=false;exitAnim=false;exitTimer=0;
+  _decorCacheInvalidate();
   hazards=[];jumpPads=[];conveyors=[];buttons=[];doors=[];spotlights=[];mazeKeys=[];mazeKeysCollected=0;
-  dataShards=[];dataShardsTotal=0;dataShardsGot=0;shardBonusGiven=false;
+  dataShards=[];dataShardsTotal=0;dataShardsGot=0;shardBonusGiven=false;rainbowItem=null;
   _cpSafeZone=null;
   player2=null; // will be recreated after genLevel if twoPlayer
   const GY=H-40,BS=28,PLH=14;
@@ -1327,7 +1722,7 @@ function genLevel(diff,rng,advN){
   camX=0;
 
   if(isBossLevel(advN||level)){
-    const worldId=Math.min(Math.floor(((advN||level)-1)/10),9);
+    const worldId=Math.min(Math.floor(((advN||level)-1)/10),10);
     const cfg=BOSS_CFG[worldId];
     // Corridor: open run-up → boss arena (no physical gate pillars — visual gate drawn by drawBossApproach)
     const corrStart=worldW;
@@ -1356,7 +1751,7 @@ function genLevel(diff,rng,advN){
     for(let i=0;i<3;i++){
       const sx=Math.round(corrStart+corridorLen*(0.22+i*0.26));
       const sy=H-40-80-Math.round(rng()*40);
-      dataShards.push({x:sx,y:sy,w:16,h:16,got:false,phase:rng()*Math.PI*2});
+      dataShards.push({id:`${sx}_${sy}`,x:sx,y:sy,w:16,h:16,got:false,phase:rng()*Math.PI*2});
     }
     dataShardsTotal=dataShards.length;
 
@@ -1449,7 +1844,7 @@ function applySpeedrunArchetype(rng){
 
   // Warning message
   setTimeout(()=>{
-    if(player)floatTxt(player.x+player.w/2,player.y-40,'⚡ SPEEDRUN MODE!','#ff0');
+    if(player)floatTxt(player.x+player.w/2,player.y-40,T('modSpeedrunMsg'),'#ff0');
   },1000);
 }
 
@@ -1476,7 +1871,7 @@ function applyStealthArchetype(rng){
   }
 
   setTimeout(()=>{
-    if(player)floatTxt(player.x+player.w/2,player.y-40,'👁 AVOID SPOTLIGHTS!','#f80');
+    if(player)floatTxt(player.x+player.w/2,player.y-40,T('modSpotlightMsg'),'#f80');
   },1000);
 }
 
@@ -1493,7 +1888,7 @@ function mkEnemy(type,x,y,surface,rng){
   const vxInit=cfg.spd>0?cfg.spd*(rng()<.5?1:-1):0;
   // Orbit enemies: keep Y within visible range
   const safeY=cfg.moveType==='orbit'?Math.max(60,Math.min(H-120,y)):y;
-  enemies.push({x,y:safeY,w:cfg.w,h:cfg.h,vx:vxInit,vy:0,px:x,py:safeY,
+  enemies.push({id:++_enemyIdSeq,x,y:safeY,w:cfg.w,h:cfg.h,vx:vxInit,vy:0,px:x,py:safeY,
     type,moveType:cfg.moveType,hp,mhp:hp,col:cfg.col,glow:cfg.glow,alive:true,flash:0,
     a:rng()*Math.PI*2,onGnd:false,
     pMin:surface?surface.x:x-130,pMax:surface?surface.x+surface.w-cfg.w:x+130,
@@ -1693,38 +2088,105 @@ function genDecors(rng){
       else if(t===3){const y=GY-55-rng()*120;add({T:'torch',x,y,col:'#ff4400',phase:rng()*Math.PI*2,layer:1});}
       else{const h=90+rng()*140;add({T:'obelisk',x,y:GY-h,w:20,h,col:'#110808',glow:'#f44',layer:1});}
     });
+  }else if(id===10){ //── PRISM ANOMALY (secret) ───
+    // Every decoration here is native to this world. It used to borrow shapes
+    // from other locations — ice spikes and ice bubbles from the Ice Caves,
+    // obelisks from the Final Fortress, planets/debris/star clusters from the
+    // Space Station — recoloured with a random hue. Recolouring does not make a
+    // stalactite belong to a refraction anomaly, so they are replaced with
+    // shapes built for this world: light itself, splitting.
+    const rHue=()=>Math.floor(rng()*360);
+    // Far: slow refraction rings and hanging light-prisms high in the void
+    scatter(0,ww,300,120,0,(x)=>{
+      add({T:'prismHalo',x,y:30+rng()*150,r:26+rng()*46,hue:rHue(),phase:rng()*Math.PI*2,layer:0});
+    });
+    scatter(120,ww-120,380,160,0,(x)=>{
+      add({T:'prismSpire',x,y:0,h:70+rng()*130,w:14+rng()*20,hue:rHue(),layer:0});
+    });
+    // Near: crystals growing out of the ground, drifting glass panes and
+    // vertical spectrum beams leaking through cracks in reality
+    scatter(60,ww-60,150,65,1,(x)=>{
+      const t=Math.floor(rng()*4);
+      if(t===0){const h=26+rng()*80;add({T:'prismCrystal',x,y:GY,h,w:11+rng()*17,hue:rHue(),layer:1});}
+      else if(t===1){const yy=H-100-rng()*170;add({T:'prismPane',x,y:yy,r:10+rng()*18,hue:rHue(),phase:rng()*Math.PI*2,spd:.006+rng()*.014,layer:1});}
+      else if(t===2){add({T:'prismBeam',x,y:GY,h:80+rng()*150,w:6+rng()*10,hue:rHue(),phase:rng()*Math.PI*2,layer:1});}
+      else{const h=70+rng()*120;add({T:'prismPylon',x,y:GY-h,w:16+rng()*8,h,hue:rHue(),layer:1});}
+    });
   }
 }
 
 // ── Draw decorations with parallax ──────────────
+// ── Decor layer cache (bug #22: "full redraw every frame") ──────────────────
+// drawDecors() used to re-run every building/ruin/tree's full draw code (shape +
+// windows + blinking lights, up to MAX_DECORS items × 2 layers) every single
+// frame, just to shift it a few pixels for parallax. Positions only need a
+// blit-shift each frame; only the actual PIXELS need occasional re-drawing.
+//
+// Each layer gets a modest offscreen "window" canvas (NOT the whole level —
+// Android/Capacitor WebViews commonly cap canvas width around 4096px, so a
+// level-spanning cache is unsafe on the game's own Android target) covering the
+// viewport plus a wide margin. It's refilled — by calling the exact same
+// _drawDecorItem code, unchanged — only when the camera nears its edge or a new
+// level starts, then every frame just gets a single drawImage() blit per layer
+// instead of redrawing every shape. Window-blink/rooftop-light animation still
+// updates correctly each refill (every few seconds at normal movement speed),
+// which is fine since those already only change every 30-50 ticks anyway.
+const DECOR_CACHE_W_MAX = 4000;  // hard ceiling — stays under mobile canvas-size limits
+const DECOR_CACHE_MARGIN = 500;  // refill when the visible window gets within this of a cache edge
+let _decorCache = [null, null];  // per layer: {canvas, cctx, originX, w}
+
+function _decorCacheInvalidate(){ _decorCache = [null, null]; }
+
+function _decorCacheRebuild(layerIdx, centerWorldX){
+  // Cache width scales with the actual viewport (plus margins on both sides)
+  // so it always covers W with room to spare, without over-allocating on a
+  // typical-sized window — capped at DECOR_CACHE_W_MAX for platform safety.
+  const cw = Math.min(DECOR_CACHE_W_MAX, Math.round(W + DECOR_CACHE_MARGIN*4));
+  let dc = _decorCache[layerIdx];
+  if(!dc || dc.w!==cw){
+    const c=document.createElement('canvas'); c.width=cw; c.height=H;
+    dc = _decorCache[layerIdx] = {canvas:c, cctx:c.getContext('2d'), originX:0, w:cw};
+  }
+  const originX = centerWorldX - cw/2;
+  dc.originX = originX;
+  const cctx = dc.cctx;
+  cctx.clearRect(0,0,cw,H);
+  cctx.save();
+  cctx.globalAlpha = layerIdx===0 ? 0.48 : 0.80;
+  cctx.shadowBlur = 0;
+  const GY = H-40;
+  let drawn = 0;
+  const MAX_DECORS = Math.max(6, Math.round(40 * ((typeof GFX==='object'&&GFX&&GFX.decorMul)?GFX.decorMul:1)));
+  for(const d of decors){
+    if(d.layer!==layerIdx) continue;
+    const localX = d.x - originX;
+    if(localX < -300 || localX > cw+300) continue;
+    if(drawn++ > MAX_DECORS) break;
+    cctx.save();
+    _drawDecorItem(cctx, d, localX, GY, layerIdx);
+    cctx.restore();
+  }
+  cctx.restore();
+}
+
 function drawDecors(){
   if(!decors||!decors.length)return;
-  const GY=H-40;
-  // Ограничиваем количество декоров на экране для производительности.
-  // Scaled by the Graphics Quality tier so lower tiers draw fewer background
-  // props (faster, sparser) and higher tiers draw denser scenery.
-  let drawnCount = 0;
-  const MAX_DECORS = Math.max(6, Math.round(40 * ((typeof GFX==='object'&&GFX&&GFX.decorMul)?GFX.decorMul:1)));
 
-  for(const layerIdx of [0,1]){
+  for (const layerIdx of [0,1]) {
     const pFactor = layerIdx===0 ? 0.22 : 0.58;
-    ctx.save();
-    ctx.globalAlpha = layerIdx===0 ? 0.48 : 0.80;
-    // Для дальнего слоя — отключаем shadowBlur полностью
-    ctx.shadowBlur = 0;
+    const viewWorldX = camX*pFactor; // world-x currently at the left edge of the screen, in this layer's space
 
-    for(const d of decors){
-      if(d.layer!==layerIdx)continue;
-      const sx = d.x - camX*pFactor;
-      if(sx<-300||sx>W+300)continue;
-      if(drawnCount++ > MAX_DECORS) break;
-
-      ctx.save();
-      // Передаём флаг — разрешён ли shadowBlur (только ближний слой)
-      _drawDecorItem(ctx, d, sx, GY, layerIdx);
-      ctx.restore();
+    let dc = _decorCache[layerIdx];
+    const needsRebuild = !dc
+      || viewWorldX < dc.originX + DECOR_CACHE_MARGIN
+      || (viewWorldX + W) > dc.originX + dc.w - DECOR_CACHE_MARGIN;
+    if (needsRebuild) {
+      _decorCacheRebuild(layerIdx, viewWorldX + W/2);
+      dc = _decorCache[layerIdx];
     }
-    ctx.restore();
+
+    // One blit per layer — this is the entire per-frame cost now.
+    ctx.drawImage(dc.canvas, dc.originX - viewWorldX, 0);
   }
 }
 
@@ -1752,7 +2214,7 @@ function _drawDecorItem(ctx, d, sx, GY, layerIdx){
         const onCycle=Math.floor(tick/50+seed)%6;
         const lit=onCycle<3;
         const wcol=((d.x*13+wc*7)%2===0)?'#4af':'#ff8';
-        ctx.fillStyle=lit?wcol+'99':'#0a1020aa';
+        ctx.fillStyle=lit?withAlpha(wcol,'99'):'#0a1020aa';
         ctx.fillRect(wx, wr, 8*sc, 10*sc);
       }
     }
@@ -1865,7 +2327,7 @@ function _drawDecorItem(ctx, d, sx, GY, layerIdx){
     ctx.shadowColor=d.top;ctx.shadowBlur=layerIdx===1?14:6;
     ctx.fillStyle=d.top;
     ctx.beginPath();ctx.arc(sx, d.y, d.canopyR, 0, Math.PI*2);ctx.fill();
-    ctx.fillStyle=d.top+'88';
+    ctx.fillStyle=withAlpha(d.top,'88');
     ctx.beginPath();ctx.arc(sx+d.canopyR*.5, d.y+d.canopyR*.35, d.canopyR*.6, 0, Math.PI*2);ctx.fill();
     ctx.shadowBlur=0;break;
   }
@@ -1879,7 +2341,7 @@ function _drawDecorItem(ctx, d, sx, GY, layerIdx){
     ctx.strokeStyle=d.col;ctx.lineWidth=d.w;ctx.beginPath();
     for(let y=0;y<=d.len;y+=10){const vx=sx+Math.sin(y*.14+tick*.012)*7;y===0?ctx.moveTo(vx,y):ctx.lineTo(vx,y);}
     ctx.stroke();
-    ctx.fillStyle=d.col+'cc';
+    ctx.fillStyle=withAlpha(d.col,'cc');
     for(let y=18;y<d.len;y+=28){const lx=sx+Math.sin(y*.14+tick*.012)*7;
       ctx.beginPath();ctx.ellipse(lx+7,y,6,3,.3,0,Math.PI*2);ctx.fill();
       ctx.beginPath();ctx.ellipse(lx-7,y+9,6,3,-.3,0,Math.PI*2);ctx.fill();}
@@ -2008,7 +2470,7 @@ function _drawDecorItem(ctx, d, sx, GY, layerIdx){
   case'column':{
     ctx.fillStyle=d.col;ctx.fillRect(sx-d.w/2, d.y, d.w, d.h);
     ctx.fillStyle=d.cap;ctx.fillRect(sx-d.w/2-4,d.y-8,d.w+8,10);ctx.fillRect(sx-d.w/2-4,d.y+d.h-4,d.w+8,8);
-    ctx.strokeStyle=d.col+'88';ctx.lineWidth=1;for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(sx-d.w/2+i*d.w/4,d.y);ctx.lineTo(sx-d.w/2+i*d.w/4,d.y+d.h);ctx.stroke();}
+    ctx.strokeStyle=withAlpha(d.col,'88');ctx.lineWidth=1;for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(sx-d.w/2+i*d.w/4,d.y);ctx.lineTo(sx-d.w/2+i*d.w/4,d.y+d.h);ctx.stroke();}
     if(d.broken){ctx.strokeStyle='#3a2010';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(sx,d.y+d.h*.2);ctx.lineTo(sx+5,d.y+d.h*.5);ctx.lineTo(sx-2,d.y+d.h*.8);ctx.stroke();}
     break;
   }
@@ -2063,6 +2525,93 @@ function _drawDecorItem(ctx, d, sx, GY, layerIdx){
   case'techPanel':{
     ctx.fillStyle='#0a0a28';ctx.fillRect(sx-d.w/2,d.y,d.w,d.h);ctx.strokeStyle='#2233aa';ctx.lineWidth=1.5;ctx.strokeRect(sx-d.w/2,d.y,d.w,d.h);
     for(let i=0;i<d.lights;i++){const on=Math.floor(tick*.05+d.x*.01+i*1.7)%5>1;const lc=['#0ff','#f0f','#ff0','#0f0','#f44'][i%5];ctx.fillStyle=on?lc:'#111';ctx.shadowColor=lc;ctx.shadowBlur=on?8:0;ctx.beginPath();ctx.arc(sx-d.w/2+7+i*(d.w-8)/d.lights,d.y+d.h/2,3.5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+    break;
+  }
+  // ═══ PRISM ANOMALY ═══════════════════════════
+  // All five are built from the same idea — white light entering something and
+  // leaving as a spectrum — so the world reads as one place rather than a
+  // recoloured tour of the other ten.
+  case'prismHalo':{
+    // A slowly turning refraction ring
+    const a=tick*0.004+d.phase;
+    ctx.save();ctx.translate(sx,d.y+Math.sin(d.phase+tick*.012)*10);ctx.rotate(a);
+    ctx.lineWidth=3;
+    for(let k=0;k<6;k++){
+      ctx.strokeStyle=`hsla(${(d.hue+k*60)%360},95%,62%,0.30)`;
+      ctx.beginPath();ctx.arc(0,0,d.r-k*1.6,k*1.0,k*1.0+1.5);ctx.stroke();
+    }
+    ctx.restore();break;
+  }
+  case'prismSpire':{
+    // A prism hanging point-down from the top of the frame, throwing a fan
+    const g=ctx.createLinearGradient(sx-d.w/2,0,sx+d.w/2,d.h);
+    g.addColorStop(0,`hsla(${d.hue},90%,70%,0.55)`);
+    g.addColorStop(1,`hsla(${(d.hue+90)%360},90%,55%,0.18)`);
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.moveTo(sx-d.w/2,0);ctx.lineTo(sx+d.w/2,0);ctx.lineTo(sx,d.h);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=`hsla(${d.hue},100%,85%,0.45)`;ctx.lineWidth=1;ctx.stroke();
+    // the light it sheds
+    const fg=ctx.createLinearGradient(sx,d.h,sx,d.h+70);
+    fg.addColorStop(0,`hsla(${(d.hue+40)%360},95%,65%,0.20)`);
+    fg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=fg;
+    ctx.beginPath();ctx.moveTo(sx,d.h);ctx.lineTo(sx+18,d.h+70);ctx.lineTo(sx-18,d.h+70);ctx.closePath();ctx.fill();
+    break;
+  }
+  case'prismCrystal':{
+    // Faceted crystal growing out of the ground, spectrum trapped inside
+    const g=ctx.createLinearGradient(sx,GY-d.h,sx,GY);
+    for(let k=0;k<=3;k++)g.addColorStop(k/3,`hsla(${(d.hue+k*45)%360},90%,${58-k*10}%,0.85)`);
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.moveTo(sx-d.w/2,GY);
+    ctx.lineTo(sx-d.w*0.32,GY-d.h*0.72);
+    ctx.lineTo(sx,GY-d.h);
+    ctx.lineTo(sx+d.w*0.32,GY-d.h*0.66);
+    ctx.lineTo(sx+d.w/2,GY);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle=`hsla(${(d.hue+180)%360},100%,82%,0.6)`;ctx.lineWidth=1;ctx.stroke();
+    ctx.strokeStyle=`hsla(${d.hue},100%,90%,0.35)`;
+    ctx.beginPath();ctx.moveTo(sx,GY-d.h);ctx.lineTo(sx,GY);ctx.stroke();
+    break;
+  }
+  case'prismPane':{
+    // A drifting shard of broken glass catching the light
+    const a=tick*d.spd+d.phase;
+    ctx.save();ctx.translate(sx,d.y+Math.sin(d.phase+tick*.02)*16);ctx.rotate(a);
+    const g=ctx.createLinearGradient(-d.r,-d.r,d.r,d.r);
+    g.addColorStop(0,`hsla(${d.hue},95%,72%,0.55)`);
+    g.addColorStop(1,`hsla(${(d.hue+120)%360},95%,60%,0.20)`);
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.moveTo(-d.r,-d.r*0.35);ctx.lineTo(d.r*0.6,-d.r*0.75);ctx.lineTo(d.r,d.r*0.35);ctx.lineTo(-d.r*0.6,d.r*0.75);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=`hsla(${(d.hue+60)%360},100%,88%,0.5)`;ctx.lineWidth=1;ctx.stroke();
+    ctx.restore();break;
+  }
+  case'prismBeam':{
+    // A vertical spectrum leaking up out of a crack in the ground
+    const pulse=0.55+Math.sin(tick*0.03+d.phase)*0.45;
+    const g=ctx.createLinearGradient(sx,GY,sx,GY-d.h);
+    for(let k=0;k<=4;k++)g.addColorStop(k/4,`hsla(${(d.hue+k*70)%360},95%,62%,${(0.30-k*0.06)*pulse})`);
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.moveTo(sx-d.w/2,GY);ctx.lineTo(sx+d.w/2,GY);
+    ctx.lineTo(sx+d.w*1.6,GY-d.h);ctx.lineTo(sx-d.w*1.6,GY-d.h);
+    ctx.closePath();ctx.fill();
+    ctx.fillStyle=`hsla(${d.hue},100%,85%,${0.5*pulse})`;
+    ctx.fillRect(sx-d.w/2,GY-3,d.w,3);
+    break;
+  }
+  case'prismPylon':{
+    // A corrupted data-pillar with spectral bands scrolling through it
+    ctx.fillStyle='#0a0616';ctx.fillRect(sx-d.w/2,d.y,d.w,d.h);
+    ctx.strokeStyle=`hsla(${d.hue},95%,70%,0.55)`;ctx.lineWidth=1;
+    ctx.strokeRect(sx-d.w/2,d.y,d.w,d.h);
+    const bands=Math.max(3,Math.floor(d.h/16));
+    for(let k=0;k<bands;k++){
+      const by=d.y+((k*16+tick*0.6)%(d.h-6));
+      ctx.fillStyle=`hsla(${(d.hue+k*40+tick)%360},95%,62%,0.55)`;
+      ctx.fillRect(sx-d.w/2+2,by,d.w-4,4);
+    }
     break;
   }
   case'debris':{
@@ -2160,11 +2709,36 @@ function _drawDecorItem(ctx, d, sx, GY, layerIdx){
     ctx.fillStyle='#3a3a4a';ctx.globalAlpha*=0.4;ctx.beginPath();ctx.moveTo(sx,GY-d.h);ctx.lineTo(sx+3,GY-d.h*.6);ctx.lineTo(sx-2,GY-d.h*.4);ctx.closePath();ctx.fill();ctx.globalAlpha=(layerIdx?0.80:0.48);break;
   }
   case'lightning':{
-    if(tick%d.interval<5){
-      ctx.strokeStyle='#aaaaff';ctx.lineWidth=2;ctx.shadowColor='#8888ff';ctx.shadowBlur=(useBlur?24:0);ctx.globalAlpha*=0.9;
-      ctx.beginPath();let ly=0,lx=sx;ctx.moveTo(lx,ly);
-      while(ly<GY){ly+=14;lx+=Math.sin(tick*.9+ly)*(20+Math.sin(ly*.1)*8)-5;ctx.lineTo(lx,ly);}
-      ctx.stroke();ctx.lineWidth=1;ctx.globalAlpha*=0.4;ctx.beginPath();ctx.moveTo(lx-22,GY*.4);ctx.lineTo(lx-22+35,GY*.6);ctx.stroke();
+    // Every flash used to start at exactly this decor's x and follow a zigzag
+    // seeded only by `tick`, so the bolt visibly hit the SAME spot forever.
+    // Each strike now gets its own index, and that index drives both where it
+    // lands and how it forks — so no two strikes look or land alike.
+    const phase=tick%d.interval;
+    if(phase<5){
+      const strike=Math.floor(tick/d.interval)+(d.phase|0);
+      const jitter=(_sceneryRnd(strike,1)-0.5)*d.interval*2.2; // wander along the band
+      const seed=_sceneryRnd(strike,2)*100;
+      const reach=GY*(0.62+_sceneryRnd(strike,3)*0.38);        // some bolts stop in the clouds
+      const bx=sx+jitter;
+      ctx.strokeStyle='#aaaaff';ctx.lineWidth=2;ctx.shadowColor='#8888ff';ctx.shadowBlur=(useBlur?24:0);
+      ctx.globalAlpha*=0.9*(1-phase/6);
+      ctx.beginPath();
+      let ly=0,lx=bx,forkAt=null;
+      ctx.moveTo(lx,ly);
+      while(ly<reach){
+        ly+=14;lx+=Math.sin(seed+ly*0.21)*(18+Math.sin(ly*.1)*8);
+        ctx.lineTo(lx,ly);
+        if(forkAt===null&&ly>reach*0.45)forkAt=[lx,ly];
+      }
+      ctx.stroke();
+      if(forkAt){
+        ctx.lineWidth=1;ctx.globalAlpha*=0.45;
+        const dir=_sceneryRnd(strike,4)>0.5?1:-1;
+        ctx.beginPath();ctx.moveTo(forkAt[0],forkAt[1]);
+        ctx.lineTo(forkAt[0]+26*dir,forkAt[1]+26);
+        ctx.lineTo(forkAt[0]+16*dir,forkAt[1]+54);
+        ctx.stroke();
+      }
       ctx.shadowBlur=0;ctx.globalAlpha=(layerIdx?0.80:0.48);
     }break;
   }
@@ -2284,6 +2858,12 @@ const BOSS_CFG=[
   {name:'ARCHON',hint:'PHASE 1: SHOOT  |  PHASE 2: STOMP WHEN EYE IS LOW  |  PHASE 3: BOTH',
    w:110,h:80,hp:9,mhp:9,col:'#400010',glow:'#f44',
    weaknessType:'archon',arenaW:580},
+
+  // 10: PRISM WRAITH (secret Prism Anomaly, lvl 110) — only reachable after
+  // finding all 10 Rainbow Shards. A corrupted GRID fragment given form.
+  {name:'PRISM WRAITH',hint:'SHOOT THE CORE — it has nothing left to hide behind!',
+   w:70,h:78,hp:12,mhp:12,col:'#2a0840',glow:'#f0f',
+   weaknessType:'bullet',arenaW:540},
 ];
 
 function spawnBoss(worldId, arenaCenter){
@@ -2336,10 +2916,10 @@ function bossShoot(bx,by,targetX,targetY){
 function _bossPlayerContact(){
   const b=boss; if(!b||!b.alive)return;
   const p=player; if(!p)return;
-  if(p.inv>0||p.respawning)return;
+  if(p.respawning)return;
   if(!aabb(p,b))return;
   const bCX=b.x+b.w/2;
-  const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.35;
+  const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
   if(stomped){
     const wt=b.weaknessType;
     if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
@@ -2347,10 +2927,10 @@ function _bossPlayerContact(){
       b._netHitElem=null;                  // a stomp carries no elemental status
       damageBoss(1);                       // redirected to the host on guests
       p.vy=JV*.55;p.jl=Math.max(p.jl,1);
-    } else {
+    } else if(p.inv<=0){
       p.vy=JV*.4;floatTxt(bCX,b.y,T('noEffect'),'#888');SFX.hit();
     }
-  } else {
+  } else if(p.inv<=0){
     enemyHitPlayer();                      // strip power-up / stage-down on the guest
   }
 }
@@ -2371,6 +2951,21 @@ function updateBoss(){
     return;
   }
   if(!boss||!boss.alive)return;
+  // Diagnostics for the "player passes through boss / boss doesn't attack"
+  // report — prints once a second so it's cheap, but gives concrete runtime
+  // values (godMode, network flags, invincibility, live contact test) instead
+  // of guessing blind. Safe to remove once the cause is confirmed.
+  if(window._bbDebugBoss && tick%60===0){
+    const _p=nearestPlayer(boss.x+boss.w/2);
+    console.log('[bossDebug]', {
+      godMode, netActive:window.netActive, netIsHost:window.netIsHost,
+      bossAlive:boss.alive, bossWorldId:boss.worldId, weaknessType:boss.weaknessType,
+      playerInv:_p&&_p.inv, playerRespawning:_p&&_p.respawning,
+      aabbOverlap: _p?aabb(_p,boss):null,
+      bossPos:{x:Math.round(boss.x),y:Math.round(boss.y),w:boss.w,h:boss.h},
+      playerPos:_p?{x:Math.round(_p.x),y:Math.round(_p.y),w:_p.w,h:_p.h}:null,
+    });
+  }
   const b=boss,p=nearestPlayer(b.x+b.w/2);
   b.anim++;
   if(b.flash>0)b.flash--;
@@ -2507,7 +3102,12 @@ function updateBoss(){
   // ── Shooting behaviour ────────────────────────
   if(b.shootCD>0)b.shootCD--;
   const dist=Math.abs(pCX-bCX);
-  if(b.shootCD<=0&&dist<500){
+  // Shoot range must cover the boss's own arena — several bosses (GUARDIAN-X,
+  // INFERNO CORE, ICE QUEEN, NEXUS SENTINEL, ARCHON, PRISM WRAITH...) have
+  // arenaW > 500, so a flat "dist<500" could silently never trigger while the
+  // player stood at the far end of a wide arena. Scale it to the arena instead.
+  const shootRange=Math.max(500,b.arenaW-20);
+  if(b.shootCD<=0&&dist<shootRange){
     const wt=b.weaknessType;
     if(wt==='stomp'||wt==='stompOnly'){
       if(b.anim%180<3){bossShoot(bCX,b.y+b.h*.3,pCX,p.y+p.h/2);b.shootCD=130;}
@@ -2533,36 +3133,43 @@ function updateBoss(){
   }
 
   // ── Player collision ──────────────────────────
-  if(p.inv<=0&&!p.respawning){
-    if(aabb(p,b)){
-      // Stomp from above?
-      const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.35;
-      if(stomped){
-        const wt=b.weaknessType;
-        // bosses that CAN be stomped
-        if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
-           (wt==='twoStage'&&!b.shellBroken)||
-           (wt==='archon'&&b.phase===2)||
-           (wt==='archon'&&b.phase===3)){
-          if(wt==='twoStage'&&!b.shellBroken){
-            b.shellHP--;b.flash=20;SFX.stomp();
-            burst(bCX,b.y,'#cf0',10,3,5);
-            floatTxt(bCX,b.y,T('crackLeft',b.shellHP),'#cf0');
-            if(b.shellHP<=0){b.shellBroken=true;SFX.secret();camShake=10;
-              burst(bCX,b.y+b.h/2,'#cf0',24,5,6);floatTxt(bCX,b.y,T('shellBroken'),'#cf0');}
-          } else {
-            damageBoss(1);
-          }
-          p.vy=JV*.55;p.jl=Math.max(p.jl,1);
+  // A stomp is an ATTACK, not something the player's post-hit invulnerability
+  // should block — it previously did (both branches lived under one
+  // `if(p.inv<=0)`), so a single imperfect side-touch granted 90 frames of
+  // total pass-through immunity with the boss. During that window the player
+  // (and the boss, which keeps walking) drift apart, and by the time
+  // invulnerability wore off they'd missed the window — which is exactly what
+  // "the boss is unbeatable, I just pass through it" looks like in practice.
+  // Only taking damage should still respect p.inv/respawning.
+  if(!p.respawning&&aabb(p,b)){
+    // Stomp from above?
+    const stomped=p.vy>0.5&&p.py+p.h<=b.y+b.h*.6; // matches the .6 threshold regular enemy stomps use (hurtE/isStomp) — bosses previously used a much stricter .35, making the "was above" window far narrower than the ~17px/frame max fall speed could reliably land, which felt like passing straight through on any real jump timing
+    if(stomped){
+      const wt=b.weaknessType;
+      // bosses that CAN be stomped
+      if(wt==='stomp'||wt==='stompOnly'||(wt==='phaseStamp'&&b.solid)||
+         (wt==='twoStage'&&!b.shellBroken)||
+         (wt==='archon'&&b.phase===2)||
+         (wt==='archon'&&b.phase===3)){
+        if(wt==='twoStage'&&!b.shellBroken){
+          b.shellHP--;b.flash=20;SFX.stomp();
+          burst(bCX,b.y,'#cf0',10,3,5);
+          floatTxt(bCX,b.y,T('crackLeft',b.shellHP),'#cf0');
+          if(b.shellHP<=0){b.shellBroken=true;SFX.secret();camShake=10;
+            burst(bCX,b.y+b.h/2,'#cf0',24,5,6);floatTxt(bCX,b.y,T('shellBroken'),'#cf0');}
         } else {
-          // Wrong method - stomp blocked
-          p.vy=JV*.4;
-          floatTxt(bCX,b.y,T('noEffect'),'#888');
-          SFX.hit();
+          damageBoss(1);
         }
-      } else if(!stomped){
-        enemyHitPlayer();
+        p.vy=JV*.55;p.jl=Math.max(p.jl,1);
+      } else if(p.inv<=0){
+        // Wrong method - stomp blocked (still counts as a hit, so this part
+        // does respect invulnerability)
+        p.vy=JV*.4;
+        floatTxt(bCX,b.y,T('noEffect'),'#888');
+        SFX.hit();
       }
+    } else if(!stomped&&p.inv<=0){
+      enemyHitPlayer();
     }
   }
 
@@ -2644,10 +3251,10 @@ function _bossBulletContact(){
         if(bl.type==='fire'){
           if(!boss._burning){boss._burning=true;boss._burnT=0;boss._burnTotal=300;}
           else boss._burnTotal=Math.max(boss._burnTotal,120);
-          floatTxt(boss.x+boss.w/2,boss.y-8,'🔥 BURN!','#ff4400');
+          floatTxt(boss.x+boss.w/2,boss.y-8,T('burnTxt'),'#ff4400');
         } else if(bl.type==='ice'){
           boss._slowed=true;boss._slowT=180;
-          floatTxt(boss.x+boss.w/2,boss.y-8,'❄ SLOWED!','#00ffff');
+          floatTxt(boss.x+boss.w/2,boss.y-8,T('slowedTxt'),'#00ffff');
         }
       }
     } else {
@@ -2675,14 +3282,14 @@ function killBoss(){
   floatTxt(b.x+b.w/2,b.y,T('bossDefeated'),CT.clr);
   score+=2000+(advMode?advLevel:level)*150*(hardMode?2:1);
   // Post-boss cutscene (after short delay so particles play)
-  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
+  const wi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),10);
   const afterId='w'+wi+'_after';
   const _bossLvSnap=advMode?advLevel:level,_bossAdvSnap=advMode;
   setTimeout(()=>{
     // Abort if the player left/restarted this level in the meantime
     if(advMode!==_bossAdvSnap||(advMode?advLevel:level)!==_bossLvSnap||gState==='menu'||gState==='gameover')return;
     if(typeof CSCENES!=='undefined'&&CSCENES[afterId]&&!_csFired[afterId]){
-      _csFired[afterId]=true;
+      markCsFired(afterId);
       gState='paused';
       csPlay(afterId,wi,function(){
         gState='playing';startGameMusic();
@@ -2703,10 +3310,19 @@ function drawBoss(){
 
   ctx.save();
   if(b.flash>0&&Math.floor(b.flash/3)%2===0)ctx.globalAlpha=.25;
-  ctx.shadowColor=b.glow;ctx.shadowBlur=4;
+  // Ambient body glow — used to be a whole-body ctx.shadowBlur left set across
+  // every shape each of the ~10 boss draw functions below fills (big ellipses/
+  // rects, unlike a player's small limbs, so this was the priciest shadowBlur
+  // user in the game). A single sprite-based bloom() behind the boss gives the
+  // same "boss glows" read for a flat, one-time cost; bodies now draw crisp and
+  // each boss function's own small local accent blurs (eyes, cracks, etc.) are
+  // untouched.
+  bloom(bx+b.w/2,by+b.h/2,Math.max(b.w,b.h)*0.85,b.glow,0.5);
+  ctx.shadowBlur=0;
 
   // ── Bodies per boss ──────────────────────────
-  if(id==='stomp'){           _drawGuardian(b,bx,by);}
+  if(b.worldId===10){        _drawPrismWraith(b,bx,by);}
+  else if(id==='stomp'){           _drawGuardian(b,bx,by);}
   else if(id==='bullet'){     _drawVineQueen(b,bx,by);}
   else if(id==='window'){     _drawInferno(b,bx,by);}
   else if(id==='phaseStamp'){ _drawIcePhantom(b,bx,by);}
@@ -3027,6 +3643,53 @@ function _drawArchon(b,bx,by){
   ctx.shadowBlur=4;
 }
 
+// PRISM WRAITH — secret 11th-world boss. A "glitched" humanoid silhouette made
+// of shifting rainbow shards, like a corrupted render of a person GRID never
+// finished deleting.
+function _drawPrismWraith(b,bx,by){
+  const cx=bx+b.w/2,cy=by+b.h/2;
+  const hue=(tick*4)%360;
+
+  // Outer prismatic aura
+  const aura=ctx.createRadialGradient(cx,cy,b.h*0.3,cx,cy,b.h*1.1);
+  aura.addColorStop(0,`hsla(${hue},100%,60%,0.35)`);aura.addColorStop(1,'transparent');
+  ctx.fillStyle=aura;ctx.fillRect(bx-b.w*0.6,by-b.h*0.6,b.w*2.2,b.h*2.2);
+
+  // Body: a tall wavering silhouette built from stacked, slightly offset
+  // "glitch" bands — each band a different hue, each with its own tiny jitter.
+  const bands=8;
+  for(let i=0;i<bands;i++){
+    const t=i/bands;
+    const bw=b.w*(0.55+0.35*Math.sin(t*Math.PI));
+    const bh=b.h/bands+2;
+    const by2=by+i*(b.h/bands);
+    const jitter=(Math.sin(b.anim*0.15+i*1.7)*4)*(b.flash>0?2.5:1);
+    ctx.fillStyle=`hsla(${(hue+i*22)%360},100%,60%,0.82)`;
+    ctx.fillRect(cx-bw/2+jitter,by2,bw,bh);
+  }
+
+  // Core — the actual damageable "face", a bright white-hot diamond that
+  // never glitches, so the player always has a clear aim point.
+  const coreY=cy-4+Math.sin(b.anim*0.06)*4;
+  ctx.save();
+  ctx.translate(cx,coreY);ctx.rotate(Math.PI/4+Math.sin(b.anim*0.02)*0.15);
+  const cs=14+Math.sin(b.anim*0.2)*2;
+  ctx.fillStyle=b.flash>0?'#fff':`hsl(${(hue+180)%360},100%,80%)`;
+  ctx.shadowColor='#fff';ctx.shadowBlur=10;
+  ctx.fillRect(-cs/2,-cs/2,cs,cs);
+  ctx.restore();
+  ctx.shadowBlur=0;
+
+  // Fragmenting edges — a few detached shard rectangles drifting off the
+  // silhouette, reinforcing the "still rendering / corrupted" read.
+  for(let i=0;i<5;i++){
+    const a=b.anim*0.02+i*1.3;
+    const dx=Math.cos(a)*(b.w*0.7+i*6),dy=Math.sin(a*0.7)*(b.h*0.4);
+    ctx.fillStyle=`hsla(${(hue+i*40)%360},100%,65%,0.55)`;
+    ctx.fillRect(cx+dx-4,cy+dy-4,8,8);
+  }
+}
+
 // ── Boss HUD ───────────────────────────────────
 function drawBossHUD(){
   if(!boss||!boss.alive)return;
@@ -3035,15 +3698,33 @@ function drawBossHUD(){
   // Background
   ctx.fillStyle='#0a0a1a';ctx.fillRect(bx-2,by-2,bw+4,bh+4);
   ctx.strokeStyle=b.glow;ctx.lineWidth=2;ctx.shadowColor=b.glow;ctx.shadowBlur=10;ctx.strokeRect(bx-2,by-2,bw+4,bh+4);ctx.shadowBlur=0;
-  // HP fill
+  // HP fill. Was one flat rectangle of solid green, which is why the bar read as
+  // an unstyled placeholder: now a vertical gradient, a lighter "just lost" ghost
+  // segment that lags behind real damage, and one tick per hit point so the
+  // player can actually count how much of the fight is left.
   const pct=Math.max(0,b.hp/b.mhp);
   const hcol=pct>.5?'#0f8':pct>.25?'#f80':'#f44';
-  ctx.fillStyle=hcol;ctx.shadowColor=hcol;ctx.shadowBlur=8;ctx.fillRect(bx,by,bw*pct,bh);ctx.shadowBlur=0;
-  // Name
-  ctx.fillStyle='#fff';ctx.font="bold 8px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⚔ '+bossName(b),W/2,by+bh/2);
+  b._hpGhost=(b._hpGhost==null)?pct:(b._hpGhost>pct?Math.max(pct,b._hpGhost-0.012):pct);
+  if(b._hpGhost>pct){
+    ctx.fillStyle='#ffffff';ctx.globalAlpha=.35;
+    ctx.fillRect(bx+bw*pct,by,bw*(b._hpGhost-pct),bh);ctx.globalAlpha=1;
+  }
+  const hg=ctx.createLinearGradient(0,by,0,by+bh);
+  hg.addColorStop(0,'#ffffff');hg.addColorStop(0.18,hcol);hg.addColorStop(1,hcol);
+  ctx.fillStyle=hg;ctx.shadowColor=hcol;ctx.shadowBlur=8;ctx.fillRect(bx,by,bw*pct,bh);ctx.shadowBlur=0;
+  // Per-HP tick marks (skipped when the boss has too many to stay readable).
+  if(b.mhp>1&&b.mhp<=24){
+    ctx.globalAlpha=.30;ctx.fillStyle='#000';
+    for(let i=1;i<b.mhp;i++)ctx.fillRect(bx+bw*(i/b.mhp),by,1,bh);
+    ctx.globalAlpha=1;
+  }
+  // Name — dark outline so it stays readable over both the filled and empty half
+  ctx.font="bold 8px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.lineWidth=3;ctx.strokeStyle='#0a0a1a';ctx.strokeText('⚔ '+bossName(b),W/2,by+bh/2);
+  ctx.fillStyle='#fff';ctx.fillText('⚔ '+bossName(b),W/2,by+bh/2);
   // Hint below bar (translated by world index)
   ctx.fillStyle=b.glow;ctx.font="5px 'Press Start 2P',monospace";
-  const _bwi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),9);
+  const _bwi=Math.min(Math.floor(((advMode?advLevel:level)-1)/10),10);
   ctx.fillText(T('bossHint'+_bwi),W/2,by+bh+9);
 
   // Special status indicators
@@ -3108,6 +3789,13 @@ function hideAll(){
   ['playTypeOv','netTypeOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   document.getElementById('ui').style.display='none';
   if(typeof hideModBanner==='function')hideModBanner();
+  // The world map lives in its own overlay built by worldmap.js, so it is not in
+  // the list above. Without this, any path that opens a screen while the map is
+  // up leaves the map painted on top of it (the map's normal "start level"
+  // button hides itself first, but nothing else did).
+  if(window.WorldMap&&typeof window.WorldMap.hide==='function'){
+    try{window.WorldMap.hide();}catch(e){}
+  }
 }
 
 // Called by i18n.setLanguage() — re-render whichever dynamic screen is showing
@@ -3120,6 +3808,12 @@ window.refreshDynamicUI=function(){
     else if(navScr==='map'){ if(typeof hardMode!=='undefined'&&hardMode){buildMapH&&buildMapH();}else{buildMap&&buildMap();} }
     // Re-apply network/lobby text in the new language (no-op if module not loaded)
     if(typeof window.netApplyLang==='function') window.netApplyLang();
+    // The version tag carries the localised "DEMO" word in the demo build, and
+    // it is stamped before the locales finish loading — restamp it here.
+    if(window.Demo&&window.Demo.on){
+      const vt=document.getElementById('verTag');
+      if(vt)vt.textContent=window.Demo.tagVersion('v'+(window.BB_VERSION||'1.0.0'));
+    }
   }catch(e){}
 };
 
@@ -3129,7 +3823,7 @@ window.refreshDynamicUI=function(){
 //   'defeat' — battered, sparking, waving a little white surrender flag (game over)
 // The loop self-terminates whenever the main overlay is hidden, so it costs
 // nothing during play.
-let _menuBotRAF=0, _menuBotMode='idle';
+let _menuBotRAF=0, _menuBotMode='idle', _menuBotSkip=false;
 function setMenuBotMode(m){ _menuBotMode=m||'idle'; }
 
 // Draw the robot body in a local 24×32 space (origin top-left, feet at y=32).
@@ -3138,7 +3832,11 @@ function _botBody(c,t,dmg){
   const blue =dmg?'#243a55':'#003a88', blue2=dmg?'#2f5170':'#0060aa';
   const dark =dmg?'#101a2a':'#00276a', foot =dmg?'#33506e':'#0055bb';
   const glow =dmg?'#557':'#00ccee';
-  c.shadowBlur=dmg?4:10;c.shadowColor=dmg?'#446':'#00ccff';
+  // Ambient body glow via sprite-based bloom() instead of ctx.shadowBlur — see
+  // _menuBotTick's comment: shadowBlur + rotate/scale, run every frame forever
+  // while the menu is open, is a fragile combination on some software render
+  // paths. bloom() itself no-ops cleanly if GFX.glow is 0.
+  if(typeof bloom==='function')bloom(12,16,20,dmg?'#446':'#00ccff',dmg?0.35:0.55);
   // Legs / feet
   c.fillStyle=dark;c.fillRect(2,17,9,15);c.fillRect(13,17,9,15);
   c.fillStyle=foot;c.fillRect(1,29,11,5);c.fillRect(12,29,11,5);
@@ -3147,7 +3845,6 @@ function _botBody(c,t,dmg){
   c.fillStyle=blue2;c.fillRect(5,12,14,7);
   // Head
   c.fillStyle=dmg?'#33486a':'#003e88';c.fillRect(3,0,18,16);
-  c.shadowBlur=0;
   // Visor + eyes (blink in idle)
   c.fillStyle=glow;c.fillRect(5,3,14,8);
   const blink=(!dmg && (t%3.4)>3.2);            // brief blink every ~3.4s
@@ -3168,6 +3865,30 @@ function _botBody(c,t,dmg){
 }
 
 function _menuBotTick(){
+  // Heap/frame tracing for the menu idle loop. This used to run unconditionally:
+  // window.__chk goes through SYNCHRONOUS IPC to the main process, which then
+  // does a synchronous file append — so simply sitting on the main menu blocked
+  // the renderer twice a second and grew the log file without bound. It is a
+  // leak-hunting tool, so it is opt-in now: set window.__bbTraceMenu = true.
+  if(window.__bbTraceMenu&&window.__chk){
+    window.__menuBotFrames=(window.__menuBotFrames||0)+1;
+    if(window.__menuBotFrames%30===0){
+      window.__chk('_menuBotTick frame '+window.__menuBotFrames);
+      try{
+        if(performance.memory){
+          window.__chk('  heap: '+Math.round(performance.memory.usedJSHeapSize/1048576)+'MB / '+Math.round(performance.memory.totalJSHeapSize/1048576)+'MB');
+        }
+      }catch(e){}
+    }
+  }
+  // Decorative idle animation only — doesn't need full display refresh rate.
+  // Running it continuously at 60fps forever (this loop never stops while the
+  // main menu is open) puts sustained pressure on software/SwiftShader
+  // rendering that appears to exhaust the GPU process over time on some
+  // systems. Halving it to ~30fps looks just as smooth for a slow idle sway
+  // and roughly halves that sustained cost.
+  _menuBotSkip=!_menuBotSkip;
+  if(_menuBotSkip){_menuBotRAF=requestAnimationFrame(_menuBotTick);return;}
   const cv=document.getElementById('menuBot');
   if(!cv||!$main||$main.style.display==='none'){_menuBotRAF=0;return;}
   const c=cv.getContext('2d'),w=cv.width,h=cv.height;
@@ -3185,9 +3906,13 @@ function _menuBotTick(){
   const topLocal=defeat?-27:-7;                  // highest local-y the art reaches
   const S=Math.min(w/26,(baseY-topMargin)/(32-topLocal));
   const padY=baseY+Math.round(4*S);              // glow pad just under the feet
-  // Soft neon ground pad (red-tinted + weaker when defeated)
+  // Soft neon ground pad (red-tinted + weaker when defeated).
+  // Uses bloom() (sprite-based glow, see boss/player) instead of native
+  // ctx.shadowBlur — shadowBlur combined with rotate/scale run continuously in
+  // a loop is a known-fragile combination on some software/SwiftShader
+  // rendering paths (this loop runs forever while the main menu is open).
   c.save();c.globalAlpha=defeat?.3:.5;c.fillStyle=defeat?'#f55':'#0ff';
-  c.shadowColor=defeat?'#f55':'#0ff';c.shadowBlur=defeat?12:22;
+  bloom(w/2,padY,14*S,defeat?'#f55':'#0ff',defeat?0.35:0.55);
   c.beginPath();c.ellipse(w/2,padY,12*S,2.5*S,0,0,Math.PI*2);c.fill();c.restore();
 
   if(defeat){
@@ -3202,8 +3927,11 @@ function _menuBotTick(){
       c.beginPath();c.arc(px,py,pr,0,Math.PI*2);c.fill();
     }
     // Occasional spark flicker on the shoulder
-    if(Math.sin(t*9)>0.6){c.globalAlpha=1;c.fillStyle='#ffcf4a';c.shadowColor='#fa0';c.shadowBlur=8;
-      c.beginPath();c.arc(w/2+9*S,baseY-20*S,1.8,0,Math.PI*2);c.fill();}
+    if(Math.sin(t*9)>0.6){
+      c.globalAlpha=1;c.fillStyle='#ffcf4a';
+      bloom(w/2+9*S,baseY-20*S,7,'#fa0',0.7);
+      c.beginPath();c.arc(w/2+9*S,baseY-20*S,1.8,0,Math.PI*2);c.fill();
+    }
     c.restore();
     const slump=Math.sin(t*1.5)*0.5;             // subtle weary sway (degrees-ish)
     c.save();
@@ -3220,8 +3948,9 @@ function _menuBotTick(){
     c.fillStyle='#1a2740';c.fillRect(0,-3,11,6);  // forearm
     // Flag pole
     c.fillStyle='#caa';c.fillRect(11,-28,2,30);
-    // White flag cloth (waving)
-    c.fillStyle='#f6f6fc';c.shadowColor='#fff';c.shadowBlur=7;
+    // White flag cloth (waving) — glow via bloom() drawn before the shape
+    // (bloom() itself doesn't touch fillStyle/shadow state, safe to call here)
+    c.fillStyle='#f6f6fc';
     c.beginPath();
     c.moveTo(13,-28);
     c.lineTo(13+15,-26.5+Math.sin(t*7)*1.8);
@@ -3238,7 +3967,7 @@ function _menuBotTick(){
     c.scale(S,S);c.translate(-12,-32);
     _botBody(c,t,0);
     // Left arm rests
-    c.shadowBlur=0;c.fillStyle='#002a66';c.fillRect(-4,11,7,11);
+    c.fillStyle='#002a66';c.fillRect(-4,11,7,11);
     // Right arm waves hello
     const wv=Math.sin(t*5)*0.6;
     c.save();
@@ -3274,6 +4003,21 @@ function showMode(){
   const inf=document.getElementById('infCard');
   const infDesc=inf.querySelector('.mDesc');
   const infIcon=inf.querySelector('.mIcon');
+  // Demo build: INFINITE is not part of it, and local 2-player is off — say so
+  // on the cards themselves instead of leaving dead controls on screen.
+  const demo=window.Demo&&window.Demo.on;
+  if(demo){
+    window.Demo.lockCard(inf,'demoLockedInfinite');
+    const advD=document.querySelector('#advCard .mDesc');
+    if(advD)advD.innerHTML=T('demoAdvDesc',window.Demo.levels);
+    twoPlayer=false;window.bbTwoPlayer=false;
+    const b1=document.getElementById('btn1p'),b2=document.getElementById('btn2p');
+    if(b1)b1.classList.add('active');
+    if(b2){b2.classList.remove('active');b2.classList.add('locked');b2.textContent=T('demoLocked2P');}
+    const p2hd=document.getElementById('p2hint');if(p2hd)p2hd.style.display='none';
+    $mode.style.display='flex';
+    return;
+  }
   if(allDone){
     inf.classList.remove('locked');infIcon.textContent='♾️';
     infDesc.innerHTML=T('infDescUnlocked');
@@ -3308,6 +4052,14 @@ function showDiff(){
   const allDone=advProg.done.length>=100;
   const hc=document.getElementById('hardCard');
   const hd=document.getElementById('hardDesc');
+  // Demo build: HARDCORE stays locked no matter what — it unlocks by clearing
+  // the whole campaign, which the demo doesn't contain.
+  if(window.Demo&&window.Demo.on){
+    window.Demo.lockCard(hc,'demoLockedHard');
+    document.getElementById('normDesc').innerHTML=T('normDescProg',advProg.done.length,advTotalLevels());
+    document.getElementById('diffOv').style.display='flex';
+    return;
+  }
   if(allDone){
     hc.classList.remove('locked');
     hd.innerHTML=T('hardDescUnlocked');
@@ -3318,7 +4070,7 @@ function showDiff(){
   }
   // Normal progress
   const nd=document.getElementById('normDesc');
-  nd.innerHTML=T('normDescProg',advProg.done.length);
+  nd.innerHTML=T('normDescProg',advProg.done.length,advTotalLevels());
   document.getElementById('diffOv').style.display='flex';
 }
 function hideDiff(){SFX.back();showMode();}
@@ -3342,10 +4094,10 @@ function showMapH(){
 function buildMapH(){
   const g=document.getElementById('mapGrid');g.innerHTML='';
   const prog=advProgHard;
-  document.getElementById('mapProg').textContent=T('mapProgHard',prog.done.length);
+  document.getElementById('mapProg').textContent=T('mapProgHard',prog.done.length,advTotalLevels());
   for(let ti=0;ti<10;ti++){
     const TH=THEMES[ti];
-    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=TH.bg+'77';
+    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color='#f44';
     lbl.innerHTML='<span style="font-size:11px">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
@@ -3387,13 +4139,25 @@ function doResume(){if(gState!=='paused')return;gState='playing';navScr='game';S
 
 document.getElementById('resumeBtn').onclick=doResume;
 document.getElementById('pauseMapBtn').onclick=()=>{SFX.back();gState='menu';stopMusic();hardMode?showMapH():showMap();};
-document.getElementById('pauseMenuBtn').onclick=()=>{SFX.back();gState='menu';stopMusic();showMain();};
+document.getElementById('pauseMenuBtn').onclick=()=>{
+  // Bank an infinite run before walking away from it. Adventure keeps its own
+  // per-level progress, so this only ever fires for the endless mode.
+  if(window.InfSave&&!advMode)window.InfSave.save();
+  SFX.back();gState='menu';stopMusic();showMain();
+};
 document.getElementById('advCard').onclick=()=>{initAudio();SFX.menu();showDiff();};
 document.getElementById('modeBackBtn').onclick=()=>{SFX.back();showPlayType();};
 document.getElementById('mapBackBtn').onclick=()=>{SFX.back();showDiff();};
 // ── Play type selection (Solo vs Online) ────────────────────────────────────
 function showPlayType(){
   hideAll();navScr='playType';
+  // Demo build: online multiplayer is a full-version feature. The card stays on
+  // screen (so the player can see what the full game adds) but is locked.
+  if(window.Demo&&window.Demo.on){
+    window.Demo.lockCard(document.getElementById('onlineCard'),'demoLockedOnline');
+    const sd=document.querySelector('#soloCard .mDesc');
+    if(sd)sd.innerHTML=T('demoSoloDesc');
+  }
   document.getElementById('playTypeOv').style.display='flex';
 }
 function showNetType(){
@@ -3407,7 +4171,8 @@ document.getElementById('soloCard').onclick=()=>{
   if(window.showSlots) window.showSlots();
   else showMode();
 };
-document.getElementById('onlineCard').onclick=()=>{
+document.getElementById('onlineCard').onclick=function(){
+  if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}
   SFX.menu();showNetType();
 };
 document.getElementById('playTypeBackBtn').onclick=()=>{SFX.back();showMain();};
@@ -3438,6 +4203,12 @@ document.getElementById('exitBtn').onclick=()=>{SFX.menu();
 };
 
 function setPlayers(n){
+  // Demo build: local 2-player is a full-version feature. Refuse with a shake
+  // rather than silently ignoring the click.
+  if(n===2&&window.Demo&&window.Demo.on){
+    window.Demo.refuse(document.getElementById('btn2p'));
+    return;
+  }
   twoPlayer=(n===2);
   window.bbTwoPlayer=twoPlayer; // expose for the World Map (two robots in 2P)
   document.getElementById('btn1p').classList.toggle('active',!twoPlayer);
@@ -3450,10 +4221,10 @@ function setPlayers(n){
 // ── Adventure map build ──────────────────────────
 function buildMap(){
   const g=document.getElementById('mapGrid');g.innerHTML='';
-  document.getElementById('mapProg').textContent=T('mapProg',advProg.done.length);
+  document.getElementById('mapProg').textContent=T('mapProg',advProg.done.length,advTotalLevels());
   for(let ti=0;ti<10;ti++){
     const TH=THEMES[ti];
-    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=TH.mc+'55';sec.style.background=TH.bg+'77';
+    const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=withAlpha(TH.mc,'55');sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color=TH.mc;
     lbl.innerHTML=`<span style="font-size:11px">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
@@ -3462,8 +4233,8 @@ function buildMap(){
       const btn=document.createElement('button');btn.className='lBtn';
       if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">${n}</span>`;}
       else{
-        btn.style.borderColor=TH.mc+'88';btn.style.setProperty('--mc',TH.mc);
-        if(done){btn.style.background=TH.mc+'20';btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
+        btn.style.borderColor=withAlpha(TH.mc,'88');btn.style.setProperty('--mc',TH.mc);
+        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
         else{btn.style.color=TH.mc;if(avail){btn.classList.add('avail');btn.style.borderColor=TH.mc;btn.style.boxShadow=`0 0 9px ${TH.mc}99`;}
           btn.innerHTML=`<span style="font-size:9px">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
         btn.onclick=()=>{SFX.menu();startAdv(n,true);};
@@ -3526,7 +4297,7 @@ function startAdv(n,freshLives=false){
 function updModeLabel(){
   document.getElementById('modeUI').style.display='flex';
   const e=document.getElementById('modeEl');
-  const label=(advMode?(hardMode?'💀 HC ':'ADV ')+advLevel+'/100':'INF');
+  const label=(advMode?(hardMode?'💀 HC ':'ADV ')+advLevel+'/'+advTotalLevels():'INF');
   e.textContent=label;
   const col=hardMode?'#f44':CT.mc;
   e.style.color=col;e.style.textShadow='0 0 6px '+col;
@@ -3609,12 +4380,13 @@ function updatePlayer(){
   const J=K[c1.p1Jump]||(solo&&K['ArrowUp']);
   const S=K[c1.p1Shoot];
 
-  const psp1=p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP;
+  // Status effects scale the base speed (CHILL stiffens the servos).
+  const psp1=(p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP)*(window.Status?Status.speedMul(p):1);
   if(L){p.vx=Math.max(p.vx-1.3,-psp1);p.facing=-1;}
   else if(R){p.vx=Math.min(p.vx+1.3,psp1);p.facing=1;}
   else{
     // Slippery modifier reduces friction
-    const friction=levelMods.slippery?0.92:0.7;
+    const friction=(levelMods.slippery||(window.Status&&Status.slippery(p)))?0.92:0.7;
     p.vx*=friction;if(Math.abs(p.vx)<.1)p.vx=0;
   }
 
@@ -3622,9 +4394,16 @@ function updatePlayer(){
   if(levelMods.wind)p.vx+=levelMods.wind;
 
   if(J&&!p._jh&&p.jl>0){
-    if(p.jl===2)SFX.jump();else SFX.dblJump();
-    p.vy=JV+(p.jl<2?-.9:0);p.jl--;p._jh=true;
-    burst(p.x+p.w/2,p.y+p.h,CT.mc,6,2,3);
+    // EMP fries the thrusters: the ground jump still works, the air jump does not.
+    if(window.Status&&Status.noDoubleJump(p)&&!p.onGnd&&p.jl<=1){
+      p._jh=true;if(SFX.back)SFX.back();
+      floatTxt(p.x+p.w/2,p.y-6,T('stEmpBlocked'),'#ffee44');
+    } else {
+      if(p.jl===2)SFX.jump();else SFX.dblJump();
+      p.vy=(JV+(p.jl<2?-.9:0))*(window.Status?Status.jumpMul(p):1);p.jl--;p._jh=true;
+      if(typeof AchTrack!=='undefined')AchTrack.jump();
+      burst(p.x+p.w/2,p.y+p.h,CT.mc,6,2,3);
+    }
   }
   if(!J)p._jh=false;
   if(!J&&p.vy<-3)p.vy*=.88;
@@ -3674,7 +4453,13 @@ function updatePlayer(){
   if(p.sCD>0)p.sCD--;
 
   // ── SHOOT: fire/ice по клавише (homing к ближайшему врагу), blaster отключён при fire/ice
-  if(S&&p.sCD<=0){
+  if(S&&p.sCD<=0&&window.Status&&Status.blasterBlocked(p)){
+    // EMP: weapon systems down. Short cooldown so the click is acknowledged
+    // (sparks + text) instead of spamming every frame the key is held.
+    p.sCD=26;if(SFX.back)SFX.back();
+    burst(p.x+p.w/2,p.y+p.h/2,'#ffee44',6,2.2,3);
+    floatTxt(p.x+p.w/2,p.y-6,T('stEmpBlocked'),'#ffee44');
+  } else if(S&&p.sCD<=0){
     if(p.blaster){
       // Blaster shoots bullets. If fire/ice is also active, the bullet inherits that element.
       p.sCD=18;SFX.shoot();
@@ -3727,7 +4512,7 @@ function updatePlayer(){
           if(door.keysNeeded<=mazeKeysCollected){
             door.open=true;
             burst(door.x+door.w/2,door.y+door.h/2,'#4f8',24,5,7);
-            floatTxt(door.x+door.w/2,door.y-20,'DOOR OPEN!','#4f8');
+            floatTxt(door.x+door.w/2,door.y-20,T('doorOpenTxt'),'#4f8');
 
             // Remove blocking walls around door
             for(let i=blocks.length-1;i>=0;i--){
@@ -3756,7 +4541,7 @@ function updatePlayer(){
       // Player detected!
       sl.alerted=true;
       camShake=12;
-      floatTxt(p.x+p.w/2,p.y-30,'⚠ DETECTED!','#f44');
+      floatTxt(p.x+p.w/2,p.y-30,T('detectedTxt'),'#f44');
       // Spawn extra enemies as punishment
       const pool=ePool(advLevel||level);
       if(pool.length>0){
@@ -3820,15 +4605,30 @@ function updatePlayer(){
     // Star power: instant kill on any contact
     for(const e of enemies){
       if(!e.alive||!aabb(p,e))continue;
-      hurtE(e,99,false);score+=200;floatTxt(e.x+e.w/2,e.y,T('starKO'),'#ff0');camShake=5;
+      hurtE(e,99,false,true);score+=200;floatTxt(e.x+e.w/2,e.y,T('starKO'),'#ff0');camShake=5;
     }
   } else {
     for(const e of enemies){
       if(!e.alive||!aabb(p,e))continue;
       if(e._frozen){
+        // A frozen enemy is a solid block of ice: you can stand on it, and
+        // walking into its side SHOVES it. It then slides away and shatters on
+        // the first thing it meets (see _updateIceSlide/_shatterIce), which is
+        // what turns the freeze from a pause button into an actual weapon.
         const ox=Math.min(p.x+p.w,e.x+e.w)-Math.max(p.x,e.x);
         const oy=Math.min(p.y+p.h,e.y+e.h)-Math.max(p.y,e.y);
-        if(ox>0&&oy>0){if(ox<oy){p.x+=(p.x<e.x?-ox:ox);}else{if(p.y<e.y){p.y-=oy;p.vy=0;p.onGnd=true;}else{p.y+=oy;if(p.vy<0)p.vy=0;}}}
+        if(ox>0&&oy>0){
+          if(ox<oy){
+            const dx=(p.x+p.w/2)-(e.x+e.w/2);
+            const dir=dx<0?1:-1;                  // push away from the player
+            p.x+=(dx<0?-ox:ox);
+            e._iceVX=ICE_PUSH*dir;
+            if(!e._icePushSfx){e._icePushSfx=1;SFX.hit();}
+          } else {
+            if(p.y<e.y){p.y-=oy;p.vy=0;p.onGnd=true;}
+            else{p.y+=oy;if(p.vy<0)p.vy=0;}
+          }
+        }
         continue;
       }
       const isStomp=p.vy>0.5&&(p.py+p.h)<=(e.y+e.h*.6);
@@ -3840,7 +4640,7 @@ function updatePlayer(){
           if(p.inv<=0&&!p.respawning){
             doHurtPlayer(false);
             p.vy=-10;
-            floatTxt(e.x+e.w/2,e.y-20,'SPIKED!','#f44');
+            floatTxt(e.x+e.w/2,e.y-20,T('spikedTxt'),'#f44');
             return;
           }
         }else{
@@ -3851,14 +4651,14 @@ function updatePlayer(){
         }
       } else if(p.inv<=0&&!p.respawning&&hurtHit(p,e)){
         // Side/below contact only hurts when fully vulnerable AND on real overlap (not a graze)
-        enemyHitPlayer();return;
+        enemyHitPlayer(e);return;
       }
     }
   }
   // Enemy bullets — only when fully vulnerable
   if(p.inv<=0&&!p.starMode){
     for(let i=eBullets.length-1;i>=0;i--){
-      if(aabb(p,eBullets[i])){eBullets.splice(i,1);enemyHitPlayer();return;}
+      if(aabb(p,eBullets[i])){const _sb=eBullets[i];eBullets.splice(i,1);enemyHitPlayer(_sb.src||null);return;}
     }
   } else if(p.starMode){
     // Star mode: destroy enemy bullets on contact without taking damage
@@ -3881,9 +4681,19 @@ function updatePlayer(){
 // finished. Extracted from the level-advance flow so it can run both in single
 // player AND the moment a co-op player reaches the flag (before the room advances).
 function _persistAdvProgress(){
+  savePlaytime();
   const prog=hardMode?advProgHard:advProg;
   if(!prog.done.includes(advLevel))prog.done.push(advLevel);
-  if(advLevel>=prog.max)prog.max=Math.min(advLevel+1,100);
+  // Was capped at 100 (the historical "last level") — that silently prevented
+  // progress from EVER reaching 101+ even once the secret Prism Anomaly world
+  // existed, so finding all 10 Rainbow Shards alone couldn't open it (the
+  // level-101 GATE is separately enforced by rainbow collection in
+  // worldmap.js's loadProgress(); this cap just needs to not block normal
+  // sequential advancement through the secret world's own 10 levels).
+  if(advLevel>=prog.max)prog.max=Math.min(advLevel+1,110);
+  // Demo build: never let the stored unlock counter climb past the demo's last
+  // level, or the world map would open level 11 the moment level 10 is cleared.
+  if(window.Demo&&window.Demo.on)prog.max=window.Demo.capMax(prog.max);
   // Persist this run's per-level best score, then re-derive the best star
   // rating from the BEST score ever earned (so stars track the kept score).
   recordLevelScore(advLevel,exitLevelScore,hardMode);
@@ -3900,6 +4710,7 @@ function _persistAdvProgress(){
   }
   // Survival achievements (no-death streak + whole-world clear)
   AchTrack.levelClear(advLevel%10===0);
+  if(advLevel===110)AchTrack.worldClear(10);
   // Check achievements
   if(window.Achievements){
     const worldId=Math.floor((advLevel-1)/10);
@@ -3914,6 +4725,7 @@ function _persistAdvProgress(){
       if(bossCount===1)window.Achievements.unlock('achievement_boss_0');
       if(bossCount>=5)window.Achievements.unlock('achievement_boss_5');
       if(bossCount>=10)window.Achievements.unlock('achievement_boss_10');
+      if(advLevel===110)AchTrack.bossPrism();
     }
     // Hardcore achievements
     if(hardMode){
@@ -4008,10 +4820,25 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
       if(advMode){
         _persistAdvProgress();
         const nextN=advLevel+1;
-        if(nextN>100){stopMusic();showWin();}
+        // Demo build: the level after the demo's last one doesn't exist here.
+        // The player just beat the demo — show the end-of-demo screen instead
+        // of loading a level that isn't part of this build.
+        if(window.Demo&&window.Demo.beyond(nextN)){stopMusic();window.Demo.showEnd();return;}
+        // nextN===101 → just cleared level 100 (ARCHON, main story) — always ends
+        // in the win screen; Prism Anomaly (101-110) is entered separately from
+        // the map, not auto-continued into. nextN>110 → just cleared level 110
+        // (PRISM WRAITH, secret ending) — the only other win trigger. Levels
+        // 102-110 must fall through to startAdv() like any other level.
+        if(nextN===101){stopMusic();showWin();}
+        // w10_after (the secret world's closing scene) is already played by
+        // killBoss()'s after-boss hook, which fires for every world including
+        // this one — so by the time we get here it has been seen and this is
+        // just the win screen.
+        else if(nextN>110){stopMusic();showSecretWin();}
         else { startAdv(nextN,false); }
       } else {
         level++;CT=THEMES[Math.min(Math.floor((level-1)/10),9)];AchTrack.infinite(level);AchTrack.score(score);
+        if(window.InfSave)window.InfSave.save(); // one level is the most a crash can cost
         startInf(false);
       }
     };
@@ -4056,11 +4883,11 @@ function updatePlayer2(){
   const J=K[c2.p2Jump];
   const S=K[c2.p2Shoot];
 
-  const psp2=p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP;
+  const psp2=(p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP)*(window.Status?Status.speedMul(p):1);
   if(L){p.vx=Math.max(p.vx-1.3,-psp2);p.facing=-1;}
   else if(R){p.vx=Math.min(p.vx+1.3,psp2);p.facing=1;}
   else{
-    const friction=levelMods.slippery?0.92:0.7;
+    const friction=(levelMods.slippery||(window.Status&&Status.slippery(p)))?0.92:0.7;
     p.vx*=friction;if(Math.abs(p.vx)<.1)p.vx=0;
   }
 
@@ -4068,9 +4895,16 @@ function updatePlayer2(){
   if(levelMods.wind)p.vx+=levelMods.wind;
 
   if(J&&!p._jh&&p.jl>0){
-    if(p.jl===2)SFX.jump();else SFX.dblJump();
-    p.vy=JV+(p.jl<2?-.9:0);p.jl--;p._jh=true;
-    burst(p.x+p.w/2,p.y+p.h,CT.mc,6,2,3);
+    // EMP fries the thrusters: the ground jump still works, the air jump does not.
+    if(window.Status&&Status.noDoubleJump(p)&&!p.onGnd&&p.jl<=1){
+      p._jh=true;if(SFX.back)SFX.back();
+      floatTxt(p.x+p.w/2,p.y-6,T('stEmpBlocked'),'#ffee44');
+    } else {
+      if(p.jl===2)SFX.jump();else SFX.dblJump();
+      p.vy=(JV+(p.jl<2?-.9:0))*(window.Status?Status.jumpMul(p):1);p.jl--;p._jh=true;
+      if(typeof AchTrack!=='undefined')AchTrack.jump();
+      burst(p.x+p.w/2,p.y+p.h,CT.mc,6,2,3);
+    }
   }
   if(!J)p._jh=false;
   if(!J&&p.vy<-3)p.vy*=.88;
@@ -4117,7 +4951,13 @@ function updatePlayer2(){
   if(p.boots){p.bootsTimer--;if(p.bootsTimer<=0){p.boots=false;p.bootsTimer=0;if(p.jl>2)p.jl=2;}}
   if(p.sCD>0)p.sCD--;
 
-  if(S&&p.sCD<=0){
+  if(S&&p.sCD<=0&&window.Status&&Status.blasterBlocked(p)){
+    // EMP: weapon systems down. Short cooldown so the click is acknowledged
+    // (sparks + text) instead of spamming every frame the key is held.
+    p.sCD=26;if(SFX.back)SFX.back();
+    burst(p.x+p.w/2,p.y+p.h/2,'#ffee44',6,2.2,3);
+    floatTxt(p.x+p.w/2,p.y-6,T('stEmpBlocked'),'#ffee44');
+  } else if(S&&p.sCD<=0){
     if(p.blaster){
       p.sCD=18;SFX.shoot();
       const bx=p.facing>0?p.x+p.w:p.x-14;
@@ -4197,15 +5037,30 @@ function updatePlayer2(){
   if(p.starMode){
     for(const e of enemies){
       if(!e.alive||!aabb(p,e))continue;
-      hurtE(e,99,false);score+=200;floatTxt(e.x+e.w/2,e.y,T('starKO'),'#ff0');camShake=5;
+      hurtE(e,99,false,true);score+=200;floatTxt(e.x+e.w/2,e.y,T('starKO'),'#ff0');camShake=5;
     }
   } else {
     for(const e of enemies){
       if(!e.alive||!aabb(p,e))continue;
       if(e._frozen){
+        // A frozen enemy is a solid block of ice: you can stand on it, and
+        // walking into its side SHOVES it. It then slides away and shatters on
+        // the first thing it meets (see _updateIceSlide/_shatterIce), which is
+        // what turns the freeze from a pause button into an actual weapon.
         const ox=Math.min(p.x+p.w,e.x+e.w)-Math.max(p.x,e.x);
         const oy=Math.min(p.y+p.h,e.y+e.h)-Math.max(p.y,e.y);
-        if(ox>0&&oy>0){if(ox<oy){p.x+=(p.x<e.x?-ox:ox);}else{if(p.y<e.y){p.y-=oy;p.vy=0;p.onGnd=true;}else{p.y+=oy;if(p.vy<0)p.vy=0;}}}
+        if(ox>0&&oy>0){
+          if(ox<oy){
+            const dx=(p.x+p.w/2)-(e.x+e.w/2);
+            const dir=dx<0?1:-1;                  // push away from the player
+            p.x+=(dx<0?-ox:ox);
+            e._iceVX=ICE_PUSH*dir;
+            if(!e._icePushSfx){e._icePushSfx=1;SFX.hit();}
+          } else {
+            if(p.y<e.y){p.y-=oy;p.vy=0;p.onGnd=true;}
+            else{p.y+=oy;if(p.vy<0)p.vy=0;}
+          }
+        }
         continue;
       }
       const isStomp=p.vy>0.5&&(p.py+p.h)<=(e.y+e.h*.6);
@@ -4213,13 +5068,13 @@ function updatePlayer2(){
         hurtE(e,1,true);p.vy=JV*.52;p.jl=Math.max(p.jl,1);SFX.stomp();
         score+=100;floatTxt(e.x+e.w/2,e.y,'+100','#f44');camShake=4;
       } else if(p.inv<=0&&!p.respawning&&hurtHit(p,e)){
-        enemyHitPlayer2();return;
+        enemyHitPlayer2(e);return;
       }
     }
   }
   if(p.inv<=0&&!p.starMode){
     for(let i=eBullets.length-1;i>=0;i--){
-      if(aabb(p,eBullets[i])){eBullets.splice(i,1);enemyHitPlayer2();return;}
+      if(aabb(p,eBullets[i])){const _sb=eBullets[i];eBullets.splice(i,1);enemyHitPlayer2(_sb.src||null);return;}
     }
   } else if(p.starMode){
     for(let i=eBullets.length-1;i>=0;i--){
@@ -4247,6 +5102,9 @@ function doHurtPlayer(fromFall=false){
   if(godMode)return;
   if(!player)return; // Player already dead, nothing to do
   const p=player;
+  // Reset the darkness-modifier mask on every hit/death so a respawn never
+  // starts from a stale (previous-frame) light mask — see drawDarknessOverlay().
+  if(_darkCtx) _darkCtx.clearRect(0,0,W,H);
   // ── Network co-op ─────────────────────────────────────────────
   // A hit must NEVER drop into the single-player game-over screen here: that
   // reloads the level locally (startAdv/startInf) and desyncs the room, and if the
@@ -4259,13 +5117,20 @@ function doHurtPlayer(fromFall=false){
     SFX.playerHurt();camShake=12;
     p.broken=false;
     if(lives<=0){
-      // Out of lives: revive at the checkpoint/spawn with one life so the player
-      // keeps helping the team rather than blocking the room.
-      lives=1;
-      const rx=Math.max(0,Math.min(p.cpX!=null?p.cpX:spawnX,worldW-p.w));
-      const ry=(p.cpY!=null?p.cpY:spawnY);
-      p.x=rx;p.y=ry;p.vx=0;p.vy=0;
-      floatTxt(p.x+p.w/2,p.y-20,T('livesLeft',lives),'#4af');
+      // Out of lives in co-op. This used to quietly set lives back to 1 and
+      // revive forever, which made death online mean nothing at all — you could
+      // fall into the same pit for an hour with no consequence. It also can't
+      // simply show the single-player Game Over: that reloads the level locally
+      // and, worse, the room's "everyone reach the flag" tally would wait for a
+      // player who can never arrive.
+      //
+      // Instead you are OUT FOR THIS LEVEL: frozen as a spectator, counted as
+      // done so the room advances, and back with fresh lives next level.
+      lives=0;
+      p.vx=0;p.vy=0;
+      burst(p.x+p.w/2,p.y+p.h/2,'#f44',22,5,6);camShake=16;
+      if(window.netReportEliminated)window.netReportEliminated();
+      return;
     } else if(fromFall){
       const rx=Math.max(0,Math.min(p.cpX!=null?p.cpX:p.lastGndX,worldW-p.w));
       const ry=(p.cpX!=null?p.cpY:p.lastGndY);
@@ -4292,6 +5157,17 @@ function doHurtPlayer(fromFall=false){
       player=null;  // Remove player 1 from the game
       return;
     }
+    // ── CO-OP: running out of lives must NOT open the single-player Game
+    // Over screen. Its RETRY restarts the level locally, which desyncs you
+    // from the room — and, worse, the room's "everyone must reach the flag"
+    // tally never hears from you again, so the other players stand at the flag
+    // forever. Report elimination instead: you spectate until the level ends
+    // and come back with fresh lives on the next one.
+    if(window.netActive){
+      burst(p.x+p.w/2,p.y+p.h/2,'#f44',20,5,5);camShake=18;SFX.playerHurt();
+      if(window.netReportEliminated)window.netReportEliminated();
+      return;
+    }
     // Single player mode OR both players dead - trigger game over
     stopMusic();
     burst(p.x+p.w/2,p.y+p.h/2,'#f44',20,5,5);camShake=18;SFX.playerHurt();
@@ -4307,7 +5183,7 @@ function doHurtPlayer(fromFall=false){
   // Single-player: spending a life ends the attempt on a defeat screen. RETRY
   // resumes the SAME level with the lives that remain (e.g. 3 → 2). When the
   // last life is gone the block above already handled the final Game Over.
-  if(!twoPlayer){
+  if(!twoPlayer&&!window.netActive){
     stopMusic();
     burst(p.x+p.w/2,p.y+p.h/2,'#f44',18,5,5);camShake=16;
     gState='gameover';
@@ -4345,6 +5221,7 @@ function doHurtPlayer(fromFall=false){
 function doHurtPlayer2(fromFall=false){
   if(godMode||!player2)return;
   const p=player2;
+  if(_darkCtx) _darkCtx.clearRect(0,0,W,H);
   if(infiniteLives)lives2=Math.max(lives2,3);
   lives2--;
   SFX.playerHurt();camShake=10;
@@ -4356,6 +5233,10 @@ function doHurtPlayer2(fromFall=false){
 
     // If player 1 is also dead or doesn't exist, trigger game over
     if(!player || lives<=0){
+      if(window.netActive){
+        if(window.netReportEliminated)window.netReportEliminated();
+        return;
+      }
       stopMusic();
       gState='gameover';
       const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
@@ -4401,9 +5282,12 @@ function _stageHitFX(p,col){
   p.inv=90;                // brief flashing i-frames so one touch = one stage
   SFX.playerHurt();camShake=10;
 }
-function enemyHitPlayer(){
+// `src` is the enemy (or an enemy-bullet's owner type) that landed the hit.
+// It decides which status effect the hit leaves behind — see assets/status.js.
+function enemyHitPlayer(src){
   if(godMode||!player)return;
   const p=player;
+  if(src&&window.Status)Status.apply(p,src);
   if(p.blaster||p.fireMode||p.iceMode){
     // powered → normal: strip the power-up
     p.blaster=false;p.bTimer=0;p.fireMode=false;p.iceMode=false;p.elemTimer=0;
@@ -4419,9 +5303,10 @@ function enemyHitPlayer(){
     doHurtPlayer(false);
   }
 }
-function enemyHitPlayer2(){
+function enemyHitPlayer2(src){
   if(godMode||!player2)return;
   const p=player2;
+  if(src&&window.Status)Status.apply(p,src);
   if(p.blaster||p.fireMode||p.iceMode){
     p.blaster=false;p.bTimer=0;p.fireMode=false;p.iceMode=false;p.elemTimer=0;
     floatTxt(p.x+p.w/2,p.y,T('ouch'),'#f80');
@@ -4444,7 +5329,14 @@ function _menuExtras(show){
   if(e)e.style.display=show?'':'none';
 }
 function showGameover(retry,titleTxt,subTxt){
+  // Game over ENDS an infinite run. Keeping the save would let the player
+  // continue past death, which is the one thing an endless mode cannot allow.
+  if(window.InfSave&&!advMode)window.InfSave.clear();
   if(raf){cancelAnimationFrame(raf);raf=0;}
+  // Clear every in-game layer first. Without this the score/lives/timer HUD and
+  // the level-modifier banner stayed painted on top of the Game Over screen
+  // (hideAll() is what normally takes them down, and nothing called it here).
+  hideAll();
   const h1=$main.querySelector('h1'),sub=$main.querySelector('.ovSub'),btn=document.getElementById('mainBtn');
   h1.textContent=titleTxt||T('gameOver');
   h1.style.color='#f44';h1.style.textShadow='0 0 18px #f44';
@@ -4459,6 +5351,7 @@ function showGameover(retry,titleTxt,subTxt){
 }
 function showWin(){
   if(raf){cancelAnimationFrame(raf);raf=0;}
+  hideAll(); // same as showGameover(): take the in-game HUD/banner down first
   const h1=$main.querySelector('h1'),sub=$main.querySelector('.ovSub'),btn=document.getElementById('mainBtn');
   h1.textContent=T('youWin');
   h1.style.color='#ff0';h1.style.textShadow='0 0 18px #ff0';
@@ -4480,12 +5373,31 @@ function updateEnemies(){
   // applyEnemiesSync(). Guard here (not only via the network.js wrap) so frozen-enemy
   // behaviour is correct even if the global re-bind doesn't take.
   if(window.netActive && !window.netIsHost) return;
+  // Grab the player list once for the whole enemy loop (it's already cached by
+  // activePlayersAll() — see #17 — so this is just avoiding the extra function-call
+  // + typeof check per enemy for the reduce done inside nearestPlayer()).
+  const _epPlayers=(typeof activePlayersAll==='function')?activePlayersAll():activePlayers();
+  function _nearestOf(wx){
+    if(!_epPlayers.length)return player;
+    let best=_epPlayers[0],bd=Math.abs(best.x+best.w/2-wx);
+    for(let k=1;k<_epPlayers.length;k++){
+      const q=_epPlayers[k],d=Math.abs(q.x+q.w/2-wx);
+      if(d<bd){bd=d;best=q;}
+    }
+    return best;
+  }
   for(const e of enemies){
-    if(!e.alive)continue;e.a+=.1;if(e.flash>0)e.flash--;e.px=e.x;e.py=e.y;
+    if(!e.alive)continue;e.a+=.1;if(e.flash>0)e.flash--;if(e._blockFx>0)e._blockFx--;e.px=e.x;e.py=e.y;
     // ── ICE FREEZE ─────────────────────────────
     if(e._frozen){
-      e._freezeT--;e.vx=0;
-      if(e._freezeT<=0){e._frozen=false;e.spd=e._origSpd||1;e.vx=(Math.random()>.5?1:-1)*e.spd;}
+      e._freezeT--;
+      // Cracking progress 0..1 — drives the fracture lines drawn on the block.
+      // The ice used to simply blink out of existence when the timer expired.
+      e._iceCrack=1-Math.max(0,e._freezeT)/Math.max(1,e._freezeMax||e._freezeT||1);
+      _updateIceSlide(e);
+      if(e._freezeT<=0){
+        _shatterIce(e,false);
+      }
       continue; // пропускаем остальное движение
     }
     const mt=e.moveType;
@@ -4501,10 +5413,10 @@ function updateEnemies(){
     else if(mt==='shoot'){
       if(EC[e.type].spd>0){e.x+=e.vx;if(e.x<=e.pMin){e.x=e.pMin;e.vx=Math.abs(e.vx);}if(e.x+e.w>=e.pMax){e.x=e.pMax-e.w;e.vx=-Math.abs(e.vx);}}
       e.vy=Math.min(e.vy+G,MXY);eLand(e);
-      e.sCD--;const np=nearestPlayer(e.x);const dx=np.x-e.x;
+      e.sCD--;const np=_nearestOf(e.x);const dx=np.x-e.x;
       if(e.sCD<=0&&Math.abs(dx)<380&&!np.respawning){
         e.sCD=130+Math.floor(Math.random()*60);
-        eBullets.push({x:e.x+(dx>0?e.w:0),y:e.y+e.h/2-4,w:10,h:8,vx:EBS*Math.sign(dx),dist:0,max:380});
+        eBullets.push({x:e.x+(dx>0?e.w:0),y:e.y+e.h/2-4,w:10,h:8,vx:EBS*Math.sign(dx),dist:0,max:380,src:e.type});
         burst(e.x+e.w/2,e.y+e.h/2,e.glow,4,2,3);
       }
     }
@@ -4534,7 +5446,7 @@ function updateEnemies(){
         if(e.x+e.w>=e.pMax){e.x=e.pMax-e.w;e.vx=-Math.abs(e.vx);}
         e.chargeCD--;
         if(e.chargeCD<=0){
-          const np=nearestPlayer(e.x);
+          const np=_nearestOf(e.x);
           e.vx=(np.x>e.x?1:-1)*EC[e.type].spd;
           e.charging=true;e.chargeT=32;
           burst(e.x+e.w/2,e.y,e.glow,6,2.5,3);
@@ -4592,11 +5504,109 @@ function updateEnemies(){
 // Shield interaction: bullets deflect off shielded enemies
 // (handled in updateBullets — shielded enemies take no bullet damage)
 
-function hurtE(e,dmg,stomped=false){
+// ── Elemental affinity ──────────────────────────────────────────────────────
+// A creature made of fire cannot be set on fire, and one made of ice cannot be
+// frozen. Derived from the world prefix so a new enemy added to a world picks
+// up the right immunity for free, with a couple of explicit exceptions for
+// enemies whose element does not match their world.
+const _ELEM_EXCEPT={ff_demon:'fire',lv_armored:'fire',ic_spiker:'ice'};
+function enemyElement(e){
+  const t=(e&&e.type)||'';
+  if(_ELEM_EXCEPT[t])return _ELEM_EXCEPT[t];
+  if(t.indexOf('lv_')===0)return 'fire';
+  if(t.indexOf('ic_')===0)return 'ice';
+  return null;
+}
+function enemyImmuneTo(e,elem){return enemyElement(e)===elem;}
+// Bosses follow their world: the Lava world's boss shrugs off fire, the Ice
+// world's shrugs off freezing.
+function bossElement(b){
+  if(!b)return null;
+  if(b.worldId===2)return 'fire';
+  if(b.worldId===3)return 'ice';
+  return null;
+}
+function _immuneFx(x,y,elem){
+  floatTxt(x,y,T('noEffect'),elem==='fire'?'#f96':'#9df');
+  burst(x,y,elem==='fire'?'#f96':'#9df',5,2,3);
+}
+
+// ── Frozen enemies as pushable ice blocks ───────────────────────────────────
+// A frozen enemy is a solid block of ice. Walking into it shoves it along the
+// ground; it then slides until it hits something (a wall, a solid platform edge
+// or another enemy) and shatters, or runs off a ledge and falls out of the
+// world. Anything it collides with on the way is destroyed too, so freezing a
+// runner in a corridor becomes a usable weapon rather than just a pause button.
+const ICE_PUSH=3.4, ICE_FRICTION=0.985;
+function _updateIceSlide(e){
+  // The shove itself is applied in updatePlayer's frozen-enemy branch, where the
+  // overlap has already been resolved; this only advances the slide.
+  if(!e._iceVX){return;}
+  e._iceVX*=ICE_FRICTION;
+  if(Math.abs(e._iceVX)<0.15){e._iceVX=0;e._icePushSfx=0;return;}
+  const nx=e.x+e._iceVX;
+  // Wall / solid platform in the way → shatter against it.
+  for(const pl of platforms){
+    if(pl.gone||pl.type==='ground')continue;
+    if(nx+e.w<pl.x||nx>pl.x+pl.w)continue;
+    if(e.y+e.h<=pl.y+2||e.y>=pl.y+pl.h)continue;
+    _shatterIce(e,true);return;
+  }
+  if(nx<0||nx+e.w>worldW){_shatterIce(e,true);return;}
+  // Another enemy in the way → both go.
+  for(const o of enemies){
+    if(o===e||!o.alive)continue;
+    if(nx+e.w<o.x||nx>o.x+o.w||e.y+e.h<o.y||e.y>o.y+o.h)continue;
+    hurtE(o,99,false);
+    _shatterIce(e,true);return;
+  }
+  e.x=nx;
+  // Ran off a ledge: fall, and die when out of the world.
+  let onSolid=false;
+  for(const pl of platforms){
+    if(pl.gone)continue;
+    if(e.x+e.w<pl.x||e.x>pl.x+pl.w)continue;
+    if(Math.abs((e.y+e.h)-pl.y)<=6){onSolid=true;break;}
+  }
+  if(!onSolid){
+    e.vy=Math.min((e.vy||0)+G,MXY);
+    e.y+=e.vy;
+    if(e.y>H+80){e.alive=false;e._frozen=false;score+=50;floatTxt(e.x+e.w/2,H-60,'+50','#8ff');}
+  }
+}
+// Break the ice. `killed` = the block was smashed (enemy dies with it); otherwise
+// the freeze simply timed out and the enemy is released.
+function _shatterIce(e,killed){
+  const cx=e.x+e.w/2, cy=e.y+e.h/2;
+  e._frozen=false;e._iceVX=0;e._icePushSfx=0;e._iceCrack=0;
+  burst(cx,cy,'#aaffff',killed?16:8,killed?4:2.5,4);
+  if(typeof SFX!=='undefined'&&SFX.hit)SFX.hit();
+  if(killed){
+    hurtE(e,99,false,true);
+  } else {
+    e.spd=e._origSpd||1;
+    e.vx=(Math.random()>.5?1:-1)*e.spd;
+  }
+}
+// `pierce` marks damage the shield was never meant to stop. The shield's job is
+// "bullets bounce off, stomp it instead" — it is NOT a general invulnerability:
+//   • star mode is the game's I-win button and must kill anything it touches
+//   • a frozen enemy shattering against a wall is already destroyed — the ice
+//     block breaking is the kill, there is nothing left for a shield to guard
+//   • fire burning ON the enemy is past the shield by definition
+// Without this every one of those silently did nothing and printed BLOCKED.
+function hurtE(e,dmg,stomped=false,pierce=false){
   // Shield: only stomp damage works (bullets deflect)
-  if(e.shielded&&!stomped){
-    burst(e.x+e.w/2,e.y+e.h/2,'#888',4,2,3);
-    floatTxt(e.x+e.w/2,e.y-4,T('blocked'),'#888');SFX.hit();return;
+  if(e.shielded&&!stomped&&!pierce){
+    // Rate-limited feedback. This runs from updatePlayer(), i.e. once per frame
+    // for as long as the player overlaps the enemy — unthrottled it fired 30
+    // popups and 30 hit sounds per second.
+    if(!e._blockFx||e._blockFx<=0){
+      e._blockFx=24;
+      burst(e.x+e.w/2,e.y+e.h/2,'#888',4,2,3);
+      floatTxt(e.x+e.w/2,e.y-4,T('blocked'),'#888');SFX.hit();
+    }
+    return;
   }
   e.hp-=dmg;e.flash=16;
   // Shield breaks when stomped
@@ -4604,7 +5614,7 @@ function hurtE(e,dmg,stomped=false){
   if(e.hp<=0){
     e.alive=false;SFX.enemyDie();burst(e.x+e.w/2,e.y+e.h/2,e.glow,16,4,5);
     const pts=(EC[e.type]?EC[e.type].score:100)*(hardMode?2:1);
-    floatTxt(e.x+e.w/2,e.y-4,stomped?'STOMP!':'SHOT!',e.glow);score+=pts;AchTrack.kill(stomped);
+    floatTxt(e.x+e.w/2,e.y-4,stomped?T('stompTxt'):T('shotTxt'),e.glow);score+=pts;AchTrack.kill(stomped);
 
     // Split enemy: spawn 2 smaller enemies on death
     const cfg=EC[e.type];
@@ -4679,7 +5689,7 @@ function touchCheckpoints(p){
       // Also snapshot the crystals (data-shards) collected so far, so dying after
       // the checkpoint keeps them instead of resetting the level's crystal count.
       if(advMode){
-        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.map(s=>!!s.got),shardsGot:dataShardsGot};
+        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot};
         // Persist the crystals reached up to this checkpoint right away (keeps the
         // best, so they're saved even if the player dies before finishing).
         if(typeof recordLevelShards==='function')recordLevelShards(advLevel,dataShardsGot,hardMode);
@@ -4690,7 +5700,7 @@ function touchCheckpoints(p){
       burst(cp.x+cp.w/2,cp.y+8,cp.color,26,4.5,6);
       burst(cp.x+cp.w/2,cp.y+8,'#fff',14,3,5);
       setTimeout(()=>{if(checkpoints.includes(cp))burst(cp.x+cp.w/2,cp.y+8,cp.color,6,2.5,4);},90);
-      floatTxt(cp.x+cp.w/2,cp.y-16,'✓ CHECKPOINT',cp.color);
+      floatTxt(cp.x+cp.w/2,cp.y-16,T('checkpointTxt'),cp.color);
       // Co-op: tell everyone who took this checkpoint so it shows the SAME
       // (toucher's) colour on every screen.
       if(window.netActive && window.netWsSend){
@@ -4840,19 +5850,32 @@ function updateBullets(){
         e._netHitElem=(b.type==='fire'||b.type==='ice')?b.type:null;
         hurtE(e,1,false);
         // Спецэффекты fire/ice пуль
+        // Network guest: the burning/frozen flags are host-authoritative and
+        // arrive via enemies_sync a moment after hurtE() reports the hit above.
+        // Mutating them locally here as well used to race that incoming sync —
+        // the very next enemies_sync tick (sent before the host had processed
+        // our hit) would overwrite our optimistic flag back to false, so the
+        // fire/ice effect visibly "reset" right after appearing. Guests now only
+        // show the instant visual feedback (burst/text) and let the real status
+        // flags arrive from the host, exactly like hp already does.
+        const _elemIsLocal=!(window.netActive&&!window.netIsHost);
         if(b.type==='fire'){
           burst(b.x,b.y+4,'#ff4400',8,3,4);
           // Поджог: DOT горения, как у огненного шара
-          if(e.alive){
-            if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;}
+          if(e.alive&&_elemIsLocal){
+            if(enemyImmuneTo(e,'fire')){_immuneFx(e.x+e.w/2,e.y-4,'fire');}
+            else if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;if(typeof AchTrack!=='undefined')AchTrack.burn();}
             else e._burnTotal=Math.max(e._burnTotal,120);
           }
           floatTxt(e.x+e.w/2,e.y-4,T('burnTxt'),'#ff4400');
         } else if(b.type==='ice'){
           burst(b.x,b.y+4,'#00ffff',8,3,4);
           // Заморозка: замедляем врага на 90 тиков
-          if(e.alive&&!e._frozen){e._frozen=true;e._freezeT=90;e._origSpd=e.spd||1;}
-          e.spd=0;e.vx=0;
+          if(_elemIsLocal){
+            if(e.alive&&enemyImmuneTo(e,'ice')){_immuneFx(e.x+e.w/2,e.y-4,'ice');}
+            else if(e.alive&&!e._frozen){e._frozen=true;e._freezeT=90;e._freezeMax=90;e._iceCrack=0;e._iceVX=0;e._origSpd=e.spd||1;if(typeof AchTrack!=='undefined')AchTrack.freeze();}
+            e.spd=0;e.vx=0;
+          }
           floatTxt(e.x+e.w/2,e.y-4,T('frozenTxt'),'#00ffff');
         }
         pBullets.splice(i,1);killed=true;break;
@@ -4889,7 +5912,8 @@ function updateFireIceBalls(){
     for(const e of enemies){
       if(!e.alive||e._frozen)continue;
       if(aabb(b,e)){
-        if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;}
+        if(enemyImmuneTo(e,'fire')){_immuneFx(e.x+e.w/2,e.y-4,'fire');}
+        else if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;if(typeof AchTrack!=='undefined')AchTrack.burn();}
         else e._burnTotal=Math.max(e._burnTotal,120);
         fireBalls.splice(i,1);hit=true;
         burst(b.x,b.y,'#ff6600',4,2,3);
@@ -4900,11 +5924,12 @@ function updateFireIceBalls(){
     if(hit)continue;
     // Босс
     if(boss&&boss.alive&&aabb(b,boss)){
-      if(!boss._burning){boss._burning=true;boss._burnT=0;boss._burnTotal=300;}
+      if(bossElement(boss)==='fire'){_immuneFx(boss.x+boss.w/2,boss.y-8,'fire');}
+      else if(!boss._burning){boss._burning=true;boss._burnT=0;boss._burnTotal=300;}
       else boss._burnTotal=Math.max(boss._burnTotal,120);
       fireBalls.splice(i,1);
       burst(b.x,b.y,'#ff6600',5,2,3);
-      floatTxt(boss.x+boss.w/2,boss.y-8,'🔥 BURN!','#ff4400');
+      floatTxt(boss.x+boss.w/2,boss.y-8,T('burnTxt'),'#ff4400');
     }
   }
   // — Ice balls: заморозка врага на 5 сек (300 тиков), босс замедляется
@@ -4921,11 +5946,18 @@ function updateFireIceBalls(){
     for(const e of enemies){
       if(!e.alive||e._frozen)continue;
       if(aabb(b,e)){
-        e._frozen=true;e._freezeT=300;e._origSpd=e._origSpd||e.spd||1;e.vx=0;
+        // The ball is spent either way — an ice creature absorbs it rather than
+        // letting it fly on and freeze whatever is behind.
         iceBalls.splice(i,1);hit=true;
         burst(b.x,b.y,'#aaffff',5,2,3);
-        floatTxt(e.x+e.w/2,e.y-8,'❄ FROZEN!','#00ffff');
-        tone(660,'sine',.1,.3);
+        if(enemyImmuneTo(e,'ice')){
+          _immuneFx(e.x+e.w/2,e.y-4,'ice');
+        } else {
+          e._frozen=true;e._freezeT=300;e._freezeMax=300;e._iceCrack=0;e._iceVX=0;e._origSpd=e._origSpd||e.spd||1;e.vx=0;
+          if(typeof AchTrack!=='undefined')AchTrack.freeze();
+          floatTxt(e.x+e.w/2,e.y-8,T('frozenTxt'),'#00ffff');
+          tone(660,'sine',.1,.3);
+        }
         break;
       }
     }
@@ -4934,7 +5966,7 @@ function updateFireIceBalls(){
       boss._slowed=true;boss._slowT=180;
       iceBalls.splice(i,1);
       burst(b.x,b.y,'#aaffff',5,2,3);
-      floatTxt(boss.x+boss.w/2,boss.y-8,'❄ SLOWED!','#00ffff');
+      floatTxt(boss.x+boss.w/2,boss.y-8,T('slowedTxt'),'#00ffff');
     }
   }
   // — DOT горение (1 урон каждые 60 тиков)
@@ -4944,9 +5976,12 @@ function updateFireIceBalls(){
   for(const e of enemies){
     if(!e.alive||!e._burning)continue;
     e._burnT++;e._burnTotal--;
-    if(e._burnT%60===0){if(!_netGuest)hurtE(e,1,false);burst(e.x+e.w/2,e.y,'#ff4400',3,1.5,2);}
-    if(particles.length<100&&e._burnT%15===0){
-      particles.push({x:e.x+e.w/2+(Math.random()-.5)*6,y:e.y,vx:(Math.random()-.5)*.5,vy:-1,life:1,decay:.04,sz:3,col:'#ff6600',txt:null});
+    // The first tick of damage lands immediately on ignition. It used to wait a
+    // full second (_burnT%60), so setting something on fire appeared to do
+    // nothing at all for the first 60 frames.
+    if(e._burnT===1||e._burnT%60===0){if(!_netGuest)hurtE(e,1,false,true);burst(e.x+e.w/2,e.y,'#ff4400',3,1.5,2);}
+    if(_particleAliveCount<100&&e._burnT%15===0){
+      spawnParticle({x:e.x+e.w/2+(Math.random()-.5)*6,y:e.y,vx:(Math.random()-.5)*.5,vy:-1,life:1,decay:.04,sz:3,col:'#ff6600',txt:null});
     }
     if(e._burnTotal<=0||!e.alive){e._burning=false;e._burnT=0;}
   }
@@ -4955,7 +5990,7 @@ function updateFireIceBalls(){
     // Snapshot position: damageBoss() may kill the boss (boss=null), so we must
     // not dereference `boss` afterwards — that null read used to crash the loop.
     const _bbx=boss.x+boss.w/2,_bby=boss.y;
-    if(boss._burnT%60===0){if(!_netGuest)damageBoss(1);burst(_bbx,_bby,'#ff4400',4,2,3);}
+    if(boss._burnT===1||boss._burnT%60===0){if(!_netGuest)damageBoss(1);burst(_bbx,_bby,'#ff4400',4,2,3);}
     if(boss&&boss._burnTotal<=0){boss._burning=false;boss._burnT=0;}
   }
   // — Замедление босса
@@ -5048,12 +6083,38 @@ function updateMazeKeys(){
   }
 }
 function updateParticles(){
-  for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;if(!p.txt)p.vy+=.12;p.life-=p.decay;if(p.life<=0)particles.splice(i,1);}
+  // The pool holds 400 slots but is usually almost empty; walking all of them
+  // every frame for nothing is pure overhead.
+  if(_particleAliveCount<=0)return;
+  for(let i=0;i<particles.length;i++){
+    const p=particles[i];
+    if(!p.alive)continue;
+    p.x+=p.vx;p.y+=p.vy;if(!p.txt)p.vy+=.12;p.life-=p.decay;
+    if(p.life<=0){p.alive=false;_particleFree.push(i);_particleAliveCount--;}
+  }
 }
 // Timer
+// Boss levels with the auto-scrolling camera on: the camera advances at a fixed
+// BOSS_CAM_SPEED, so how long the level takes is decided by the camera, not the
+// player — racing a countdown on top of that just makes the fight unwinnable
+// through no fault of the player. The timer is switched off (and hidden) there.
+function bossLevelUntimed(){
+  return !!boss && !!(window.gameSettings && window.gameSettings.bossAutoScrollCamera);
+}
 function updateTimer(){
-  if(tick%60===0&&timeLeft>0){
+  tickPlaytime();
+  if(tick%60===0&&timeLeft>0&&!bossLevelUntimed()){
     timeLeft--;
+    // BURN cooks the chassis: the clock runs double for whoever is on fire.
+    if(window.Status){
+      let drain=0;
+      for(const q of activePlayers())drain=Math.max(drain,Status.timerDrain(q));
+      timeLeft-=drain;
+    }
+    // Hardcore multiplies the level time by 0.7, so the countdown can land on a
+    // fraction and finish at e.g. -0.74 — which the HUD then formatted as
+    // "-1:-1" for the frames before the game-over screen appeared.
+    if(timeLeft<0)timeLeft=0;
     if(timeLeft<=0&&gState==='playing'){doHurtPlayer();}
   }
   // Boss arena entrance trigger
@@ -5088,7 +6149,8 @@ function updateExit(){
 // Cached HUD element refs + last-value memo to avoid per-frame DOM thrash
 const _hud={score:null,totalUi:null,totalEl:null,level:null,hearts:null,blasterUi:null,blasterFill:null,timerUi:null,timerVal:null,
   coinsEl:null,keysUi:null,keysEl:null,shardsUi:null,shardsEl:null,
-  fireUi:null,fireFill:null,iceUi:null,iceFill:null,starUi:null,starFill:null,bootsUi:null,bootsFill:null};
+  fireUi:null,fireFill:null,iceUi:null,iceFill:null,starUi:null,starFill:null,bootsUi:null,bootsFill:null,
+  statusUi:null,statusLbl:null,statusFill:null};
 const _hudLast={score:null,total:null,level:null,hearts:null,blasterDisp:null,blasterW:null,timerDisp:null,timerTxt:null,timerCls:null,
   coins:null,keysDisp:null,keys:null,shardsDisp:null,shards:null,
   fireDisp:null,fireW:null,iceDisp:null,iceW:null,starDisp:null,starW:null,bootsDisp:null,bootsW:null};
@@ -5107,6 +6169,9 @@ function _hudInit(){
   _hud.keysEl=document.getElementById('keysEl');
   _hud.shardsUi=document.getElementById('shardsUi');
   _hud.shardsEl=document.getElementById('shardsEl');
+  _hud.statusUi=document.getElementById('statusUi');
+  _hud.statusLbl=document.getElementById('statusLbl');
+  _hud.statusFill=document.getElementById('statusFill');
   _hud.fireUi=document.getElementById('fireUi');
   _hud.fireFill=document.getElementById('fireFill');
   _hud.iceUi=document.getElementById('iceUi');
@@ -5158,7 +6223,7 @@ function updateHUD(){
   }else{
     _hud.totalUi.style.display='none';
   }
-  const lvTxt=advMode?`${advLevel}/100`:level;
+  const lvTxt=advMode?`${advLevel}/${advTotalLevels()}`:level;
   if(_hudLast.level!==lvTxt){_hud.level.textContent=lvTxt;_hudLast.level=lvTxt;}
   // Hearts → robot icon(s) + numeric life count. Build a cheap signature; only
   // rebuild HTML when it changes.
@@ -5202,6 +6267,22 @@ function updateHUD(){
     _hudBonusBar(_hud.starUi,_hud.starFill,false,0,'starDisp','starW');
     _hudBonusBar(_hud.bootsUi,_hud.bootsFill,false,0,'bootsDisp','bootsW');
   }
+  // Status effect chip — name + remaining time, in the effect's own colour.
+  if(_hud.statusUi){
+    const st=(window.Status&&p)?Status.label(p):null;
+    if(st){
+      if(_hudLast.stDisp!=='flex'){_hud.statusUi.style.display='flex';_hudLast.stDisp='flex';}
+      const txt=st.icon+' '+st.name;
+      if(_hudLast.stTxt!==txt){
+        _hud.statusLbl.textContent=txt;_hud.statusLbl.style.color=st.col;
+        _hud.statusFill.style.background=st.col;_hudLast.stTxt=txt;
+      }
+      const w=Math.round(st.frac*100);
+      if(_hudLast.stW!==w){_hud.statusFill.style.width=w+'%';_hudLast.stW=w;}
+    } else if(_hudLast.stDisp!=='none'){
+      _hud.statusUi.style.display='none';_hudLast.stDisp='none';_hudLast.stTxt=null;
+    }
+  }
   // Coin counter (visible during gameplay)
   if(_hudLast.coins!==coinsTotal){_hud.coinsEl.textContent=coinsTotal;_hudLast.coins=coinsTotal;}
 
@@ -5224,7 +6305,7 @@ function updateHUD(){
     _hud.shardsUi.style.display='none';_hudLast.shardsDisp='none';
   }
 
-  if(gState==='playing'||gState==='levelclear'){
+  if((gState==='playing'||gState==='levelclear')&&!bossLevelUntimed()){
     if(_hudLast.timerDisp!=='flex'){_hud.timerUi.style.display='flex';_hudLast.timerDisp='flex';}
     const m=Math.floor(timeLeft/60),s=Math.floor(timeLeft%60);
     const tTxt=`${m}:${String(s).padStart(2,'0')}`;
@@ -5239,32 +6320,1114 @@ function updateHUD(){
 // ════════════════════════════════════════════════
 let _skyGrad=null,_skyGradTheme=-1;
 let _hgGrad=null,_hgTheme=-1; // cached horizon glow (depends only on theme + fixed H)
-function drawBG(){
-  // Rich sky gradient — cached per theme (only depends on CT colors)
-  if(_skyGradTheme!==CT.id){
-    _skyGrad=ctx.createLinearGradient(0,0,0,H);
-    _skyGrad.addColorStop(0, CT.bg);
-    _skyGrad.addColorStop(0.6, CT.bg2||CT.bg);
-    // Keep the lower scene at the theme's background colour instead of fading to
-    // pure black — so the gaps between ground plates show the background, not a
-    // black void.
-    _skyGrad.addColorStop(1, CT.bg2||CT.bg);
-    _skyGradTheme=CT.id;
-  }
-  ctx.fillStyle=_skyGrad;ctx.fillRect(0,0,W,H);
+// ════════════════════════════════════════════════
+//  PARALLAX SCENERY (background silhouette bands)
+// ════════════════════════════════════════════════
+// Cyber City used to be the only world with real depth — it has a hand-written
+// two-layer skyline, while worlds 2-10 got one or two flat colour washes and
+// looked empty. This is one shared renderer for all of them: a "band" is a
+// repeating strip of silhouettes drawn at a fixed parallax factor, so each
+// world gets its own horizon from a couple of cheap layers of data instead of
+// another block of bespoke drawing code.
 
-  // Soft theme-coloured horizon glow over the lower scene so the area around the
-  // ground (and the gaps between ground plates) reads as a lit background rather
-  // than a dark void. Cached per theme (H is fixed) instead of rebuilt every frame.
-  if(_hgTheme!==CT.id){
-    _hgGrad=ctx.createLinearGradient(0,H*0.62,0,H);
-    _hgGrad.addColorStop(0,'transparent');
-    _hgGrad.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
-    _hgTheme=CT.id;
+// Stable pseudo-random from an integer slot. Keyed on the WORLD-space slot
+// index (not the screen position) so a shape keeps its size while the camera
+// moves past it instead of shimmering.
+function _sceneryRnd(slot,salt){
+  const v=Math.sin(slot*127.1+(salt||0)*311.7)*43758.5453;
+  return v-Math.floor(v);
+}
+
+// Each shape lays out one silhouette inside [x, x+span] standing on `base`.
+// They only build the path; _sceneryBand() does the fill/rim-light.
+const SCENERY_SHAPES={
+  // Jagged mountain ridge (ice caves, storm peaks)
+  mountain(x,base,span,h,slot){
+    const peak=h*(0.55+_sceneryRnd(slot,1)*0.45);
+    const mid=x+span*(0.35+_sceneryRnd(slot,2)*0.3);
+    ctx.moveTo(x-span*0.1,base);
+    ctx.lineTo(mid-span*0.18,base-peak*0.55);
+    ctx.lineTo(mid,base-peak);
+    ctx.lineTo(mid+span*0.22,base-peak*0.6);
+    ctx.lineTo(x+span*1.1,base);
+    ctx.closePath();
+  },
+  // Rolling sand dune (desert ruins)
+  dune(x,base,span,h,slot){
+    const peak=h*(0.5+_sceneryRnd(slot,3)*0.5);
+    ctx.moveTo(x-span*0.1,base);
+    ctx.quadraticCurveTo(x+span*0.5,base-peak,x+span*1.1,base);
+    ctx.closePath();
+  },
+  // A continuous treeline: overlapping canopy lobes joined into one mass that
+  // meets the ground, with a couple of trunks showing through. Drawing separate
+  // trunk+crown trees at this scale made each one read as a lollipop/mushroom
+  // rather than as a forest.
+  tree(x,base,span,h,slot){
+    const lobes=5,step=span/lobes;
+    ctx.moveTo(x-span*0.1,base);
+    for(let t=0;t<=lobes;t++){
+      const cx=x+t*step;
+      const ch=h*(0.55+_sceneryRnd(slot,t+4)*0.45);
+      const r=step*0.78;
+      // Each lobe overlaps its neighbours, so the outline becomes a canopy
+      // ridge instead of a row of separate blobs.
+      ctx.lineTo(cx-r,base-ch*0.45);
+      ctx.quadraticCurveTo(cx,base-ch-r*0.25,cx+r,base-ch*0.45);
+    }
+    ctx.lineTo(x+span*1.1,base);
+    ctx.closePath();
+    // Trunks breaking the canopy line
+    for(let t=1;t<lobes;t+=2){
+      const tx=x+t*step,tw=span*0.022;
+      const th=h*(0.30+_sceneryRnd(slot,t+9)*0.22);
+      ctx.moveTo(tx-tw,base);
+      ctx.lineTo(tx-tw,base-th);
+      ctx.lineTo(tx+tw,base-th);
+      ctx.lineTo(tx+tw,base);
+      ctx.closePath();
+    }
+  },
+  // Volcanic cone with a cut-off crater (lava world)
+  volcano(x,base,span,h,slot){
+    const peak=h*(0.6+_sceneryRnd(slot,5)*0.4),cx=x+span*0.5,cap=span*0.13;
+    ctx.moveTo(cx-span*0.55,base);
+    ctx.lineTo(cx-cap,base-peak);
+    ctx.lineTo(cx+cap,base-peak);
+    ctx.lineTo(cx+span*0.55,base);
+    ctx.closePath();
+  },
+  // Blocky terraced ice cliff — a wall of frozen shelves, nothing like the
+  // pointed shards used in the near band.
+  iceCliff(x,base,span,h,slot){
+    const steps=4;
+    let y=base;
+    ctx.moveTo(x-span*0.1,base);
+    for(let k=0;k<steps;k++){
+      const sh=h*(0.16+_sceneryRnd(slot,k+20)*0.22);
+      const sw=span/steps;
+      y-=sh;
+      ctx.lineTo(x+k*sw,y);
+      ctx.lineTo(x+(k+1)*sw,y);
+    }
+    ctx.lineTo(x+span*1.1,base);
+    ctx.closePath();
+  },
+  // Ruined skyline behind the fortress: broken towers and collapsed arches.
+  ruins(x,base,span,h,slot){
+    for(let k=0;k<4;k++){
+      const rx=x+span*(0.08+k*0.24),rw=span*0.15;
+      const rh=h*(0.25+_sceneryRnd(slot,k+30)*0.7);
+      ctx.rect(rx,base-rh,rw,rh);
+      // broken top edge
+      if(_sceneryRnd(slot,k+34)>0.5)ctx.rect(rx+rw*0.55,base-rh-h*0.10,rw*0.45,h*0.10);
+    }
+  },
+  // A big hull section drifting past, close to camera (space station near band).
+  hull(x,base,span,h,slot){
+    const hh=h*0.72,hy=base-hh;
+    ctx.rect(x+span*0.05,hy,span*0.9,hh);
+    for(let k=0;k<5;k++)ctx.rect(x+span*(0.12+k*0.16),hy+hh*0.30,span*0.07,hh*0.14); // panel seams
+    ctx.rect(x+span*0.02,hy+hh*0.62,span*0.96,hh*0.08);                              // belt
+  },
+  // Angular ice/crystal shards jutting up (ice caves)
+  crystal(x,base,span,h,slot){
+    for(let k=0;k<3;k++){
+      const cx=x+span*(0.2+k*0.3),ch=h*(0.35+_sceneryRnd(slot,k+14)*0.65),cw=span*0.07;
+      ctx.moveTo(cx-cw,base);
+      ctx.lineTo(cx-cw*0.6,base-ch*0.72);
+      ctx.lineTo(cx,base-ch);
+      ctx.lineTo(cx+cw*0.6,base-ch*0.68);
+      ctx.lineTo(cx+cw,base);
+      ctx.closePath();
+    }
+  },
+  // Tanks and gantry pipes (toxic zone)
+  pipes(x,base,span,h,slot){
+    const th=h*(0.4+_sceneryRnd(slot,7)*0.4);
+    ctx.rect(x+span*0.12,base-th,span*0.2,th);
+    ctx.rect(x+span*0.5,base-th*0.72,span*0.26,th*0.72);
+    ctx.rect(x+span*0.04,base-th-span*0.05,span*0.86,span*0.05); // overhead pipe run
+  },
+  // Battlement wall with towers (final fortress)
+  fortress(x,base,span,h,slot){
+    const wh=h*(0.4+_sceneryRnd(slot,8)*0.35);
+    ctx.rect(x,base-wh,span,wh);
+    const th=wh*1.5;
+    ctx.rect(x+span*0.04,base-th,span*0.16,th);            // tower
+    ctx.rect(x+span*0.78,base-th*0.85,span*0.16,th*0.85);
+    for(let m=0;m<5;m++)ctx.rect(x+span*(0.24+m*0.12),base-wh-h*0.06,span*0.06,h*0.06); // merlons
+  },
+};
+
+// Per-world layer stacks. `base`/`h` are fractions of the canvas height, `par`
+// is the parallax factor, `tint` is the world's rim/haze colour.
+//
+// Colours are NOT hard-coded per layer: every sky in this game is already
+// near-black, so painting a silhouette even darker made it invisible. Instead
+// the far band is drawn as a light HAZE (atmospheric perspective — distant
+// things wash out toward the sky's own light) and the near band as a dark
+// cut-out, both edged with the world's neon tint. That reads correctly against
+// any theme background without per-world colour tuning.
+const WORLD_SCENERY={
+  1:[ // Neon Jungle
+    {shape:'tree',    par:0.10,span:210,base:0.80,h:0.20,depth:'far', tint:'#11ff88',haze:0.45,noRim:true},
+    {shape:'tree',    par:0.26,span:150,base:0.88,h:0.16,depth:'near',tint:'#00ff88',nearFill:'tint'},
+  ],
+  2:[ // Lava World
+    {shape:'volcano', par:0.09,span:250,base:0.80,h:0.22,depth:'far', tint:'#ff7722'},
+    {shape:'mountain',par:0.24,span:170,base:0.88,h:0.15,depth:'near',tint:'#ff9944'},
+  ],
+  3:[ // Ice Caves — one band of shards on the cave floor. The stalactite ceiling
+      // above is the other half of the read; a second floor band on top of this
+      // one just piled more triangles into the same space.
+    {shape:'crystal', par:0.20,span:190,base:0.87,h:0.17,depth:'near',tint:'#aaddff'},
+  ],
+  4:[ // Desert Ruins
+    {shape:'dune',    par:0.08,span:280,base:0.82,h:0.15,depth:'far', tint:'#ffcc66'},
+    {shape:'dune',    par:0.22,span:200,base:0.90,h:0.11,depth:'near',tint:'#ffdd88'},
+  ],
+  // 5 (Space Station): the station band in the atmosphere pass is enough.
+  6:[ // Dark Forest — barely-lit treeline; the haze is kept very low so the
+      // canopy stays a silhouette instead of glowing pale grey
+    {shape:'tree',    par:0.09,span:190,base:0.79,h:0.21,depth:'far', tint:'#77cc99',haze:0.30,noRim:true},
+    {shape:'tree',    par:0.25,span:140,base:0.89,h:0.17,depth:'near',tint:'#55aa77',nearFill:'tint'},
+  ],
+  // 7 (Toxic Zone) has no silhouette band: its depth comes from the cached
+  // structure tiles in the atmosphere pass, and a second band just doubled it up.
+  8:[ // Storm Peaks
+    {shape:'mountain',par:0.08,span:260,base:0.78,h:0.24,depth:'far', tint:'#9999ff'},
+    {shape:'mountain',par:0.24,span:180,base:0.88,h:0.16,depth:'near',tint:'#aaaaff'},
+  ],
+  // 9 (Final Fortress): the siege wall is the whole backdrop; ruins behind it
+  // only added a second row of dark blocks fighting the wall for attention.
+};
+
+function _sceneryBand(cfg,bd){
+  const draw=SCENERY_SHAPES[cfg.shape];
+  if(!draw)return;
+  const span=cfg.span,base=H*cfg.base,h=H*cfg.h;
+  const scroll=camX*cfg.par;
+  const off=((scroll%span)+span)%span;
+  const firstSlot=Math.floor(scroll/span);
+  const count=Math.ceil(W/span)+2;
+  const far=(cfg.depth==='far');
+  ctx.beginPath();
+  for(let i=0;i<count;i++)draw(i*span-off,base,span,h,firstSlot+i);
+  if(far){
+    // Haze band: a soft vertical wash of the world tint, strongest at the
+    // horizon and fading out toward the top of the shapes. `haze` lets a world
+    // dial it down when its sky is already bright (an over-strong haze made the
+    // jungle/forest treelines glow like they were lit from inside).
+    const strength=cfg.haze!=null?cfg.haze:1;
+    const g=ctx.createLinearGradient(0,base-h,0,base);
+    g.addColorStop(0,cfg.tint+'00');
+    g.addColorStop(1,cfg.tint+'2e');
+    ctx.globalAlpha=0.45*strength;ctx.fillStyle=g;ctx.fill();
+  }else if(cfg.nearFill==='tint'){
+    // Worlds whose sky is already near-black (jungle, dark forest) can't use a
+    // black cut-out — it is invisible against the background and all you see is
+    // the rim, which turned the treeline into a mess of wireframe umbrellas.
+    // A faint tint wash gives them a readable mass, and the rim is dropped
+    // entirely: with nothing behind it to separate from, an outline is all
+    // noise and no shape.
+    ctx.globalAlpha=0.16;ctx.fillStyle=cfg.tint;ctx.fill();
+    ctx.globalAlpha=1;
+    return;
+  }else{
+    ctx.globalAlpha=0.55;ctx.fillStyle='#000';ctx.fill();
   }
-  ctx.save();ctx.globalAlpha=0.5;ctx.fillStyle=_hgGrad;ctx.fillRect(0,H*0.62,W,H*0.38);
-  ctx.globalAlpha=0.06;ctx.fillStyle=CT.grid||CT.mc||'#48f';ctx.fillRect(0,H*0.78,W,H*0.22);
+  // Neon rim light along the silhouette edge — this is what stops the shapes
+  // reading as flat cut-outs. Kept deliberately faint: this is background, and
+  // anything brighter starts competing with the platforms for the player's eye.
+  if(bd>=0.55&&!cfg.noRim){
+    ctx.globalAlpha=far?0.13:0.26;
+    ctx.strokeStyle=cfg.tint;ctx.lineWidth=1;
+    ctx.stroke();
+  }
+}
+
+// Draw the whole scenery stack for a world. Worlds without an entry (Cyber City
+// has its bespoke skyline, Prism Anomaly its refraction field) simply skip.
+function drawWorldScenery(id,bd){
+  const layers=WORLD_SCENERY[id];
+  if(!layers)return;
+  ctx.save();
+  ctx.shadowBlur=0;
+  for(const l of layers)_sceneryBand(l,bd);
   ctx.restore();
+}
+
+// ════════════════════════════════════════════════
+//  BACKGROUND ATMOSPHERE
+// ════════════════════════════════════════════════
+// Each world's sky/backdrop lives in its own function in WORLD_ATMOSPHERE
+// instead of one long if/else chain inside drawBG(), so a world can be
+// redesigned without touching the other ten.
+//
+// The heavy parts (city skylines, cavern ceilings, refinery silhouettes) are
+// hundreds of small rects. Drawing them every frame was the most expensive
+// thing in the background — so they are rasterised ONCE into an offscreen tile
+// of exactly one screen width and then blitted twice with a parallax offset.
+// Two drawImage calls replace hundreds of fillRects, and the picture is
+// identical because the layout is deterministic anyway.
+
+const _bgTiles={};
+let _bgTilesTheme=-1;
+// At most one cached layer may be re-rasterised per frame. Without this, a
+// world with three animated layers rebuilds all of them on the same frame every
+// time their TTL expires — a few hundred rects in one go, which on a weak
+// device is a visible hitch twice a second. Spreading the rebuilds means a tile
+// is at worst one or two frames stale, which is invisible.
+let _bgRebuildBudget=0;
+
+// Render (or reuse) a cached, horizontally-tiling background layer.
+//   key   — unique per layer
+//   h     — tile height in logical pixels
+//   build — (c, w, h) => draws the layer with its baseline at y = h
+//   ttl   — optional: rebuild after this many ticks (for slowly-animated layers
+//           such as blinking windows; omit for fully static layers)
+function bgLayer(key,h,build,ttl){
+  // Drop every cached tile when the world changes — 11 worlds × 3 layers of
+  // screen-sized canvases would otherwise pile up tens of megabytes.
+  if(_bgTilesTheme!==CT.id){for(const k in _bgTiles)delete _bgTiles[k];_bgTilesTheme=CT.id;}
+  const rs=Math.max(1,Math.min(2,_renderScale||1));
+  let t=_bgTiles[key];
+  const needNew=!t||t.h!==h||t.rs!==rs;
+  // A first build must always happen (there is nothing to show otherwise); a
+  // refresh waits its turn if another layer already rebuilt this frame.
+  const wantRefresh=!needNew&&ttl&&tick-t.built>=ttl&&_bgRebuildBudget>0;
+  if(needNew||wantRefresh){
+    if(!needNew)_bgRebuildBudget--;
+    if(needNew){
+      const cv=document.createElement('canvas');
+      cv.width=Math.ceil(W*rs);cv.height=Math.ceil(h*rs);
+      t={cv:cv,c:cv.getContext('2d'),h:h,rs:rs,built:-1};
+      _bgTiles[key]=t;
+    }
+    const c=t.c;
+    c.setTransform(1,0,0,1,0,0);
+    c.clearRect(0,0,t.cv.width,t.cv.height);
+    c.setTransform(rs,0,0,rs,0,0);
+    build(c,W,h);
+    t.built=tick;
+  }
+  return t;
+}
+// Blit a cached tile twice so it wraps seamlessly at the given parallax factor.
+function blitLayer(t,par,y,alpha){
+  const off=((camX*par)%W+W)%W;
+  ctx.globalAlpha=alpha;
+  ctx.drawImage(t.cv,-off,y,W,t.h);
+  ctx.drawImage(t.cv,W-off,y,W,t.h);
+  ctx.globalAlpha=1;
+}
+// Stable pseudo-random for deterministic prop layouts (same helper the parallax
+// silhouettes use).
+const _bgRnd=_sceneryRnd;
+
+// A field of stars that twinkles. Shared by several night skies.
+function _atmStars(count,maxY,tintBright,gl){
+  ctx.fillStyle='#fff';
+  for(let i=0;i<count;i++){
+    const sx=(i*137.5+11)%W, sy=(i*97.3+7)%maxY;
+    const tw=Math.sin(tick*.04+i*0.9)*.45+.55;
+    const big=i%20===0;
+    ctx.globalAlpha=tw*(big?.9:.45);
+    ctx.fillStyle=big?tintBright:'#ffffff';
+    const sz=big?1.8:i%7===0?1.2:0.8;
+    ctx.fillRect(sx-sz/2,sy-sz/2,sz,sz);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 0 · CYBER CITY ─────────────────────────────────────────────────────────
+// Three cached skyline bands: a pale distant grid of towers, a mid band that
+// carries most of the window light, and a near band of dark blocks with
+// antennae and vertical neon signs.
+function _cityBand(c,w,h,o){
+  const step=w/o.count;
+  for(let i=0;i<o.count;i++){
+    const bw=step*(0.6+_bgRnd(i,o.seed)*0.32);
+    const bx=i*step+(step-bw)/2;
+    const bh=h*(0.30+_bgRnd(i,o.seed+1)*0.66);
+    const by=h-bh;
+    c.fillStyle=o.body;
+    c.fillRect(bx,by,bw,bh);
+    // Crown: a setback block, a spire, or a flat roof — gives the skyline a
+    // varied profile instead of a row of identical rectangles.
+    const crown=_bgRnd(i,o.seed+2);
+    if(crown>0.7)c.fillRect(bx+bw*0.18,by-h*0.09,bw*0.64,h*0.09);
+    else if(crown>0.45)c.fillRect(bx+bw*0.44,by-h*0.15,bw*0.12,h*0.15);
+    if(!o.windows)continue;
+    // Windows: a dense grid, mostly dark, with a scattering lit in cyan and a
+    // few in warm amber. Two lit colours is what makes it read as a living city
+    // rather than confetti.
+    const cols=Math.max(2,Math.floor(bw/6)),rows=Math.max(2,Math.floor(bh/9));
+    for(let r=0;r<rows;r++){
+      for(let q=0;q<cols;q++){
+        const wx=bx+3+q*((bw-6)/cols), wy=by+5+r*((bh-8)/rows);
+        if(wy>h-3)continue;
+        const s=_bgRnd(i*97+r*13+q,o.seed+3);
+        const lit=(s+o.blink)%1;
+        if(lit>0.72)c.fillStyle=o.lit;
+        else if(lit>0.62)c.fillStyle=o.lit2;
+        else c.fillStyle=o.dark;
+        c.fillRect(wx,wy,2,3);
+      }
+    }
+    // Vertical neon sign on a few towers.
+    if(_bgRnd(i,o.seed+4)>0.82&&o.sign){
+      c.fillStyle=o.sign;
+      c.fillRect(bx+bw*0.5-1,by+bh*0.18,2,bh*0.42);
+    }
+    // Antenna with a beacon.
+    if(_bgRnd(i,o.seed+5)>0.75){
+      c.fillStyle=o.body;
+      c.fillRect(bx+bw*0.5-0.5,by-h*0.07,1,h*0.07);
+      c.fillStyle=o.beacon;
+      c.fillRect(bx+bw*0.5-1.5,by-h*0.075,3,3);
+    }
+  }
+}
+function _atmCyberCity(bd,gl){
+  // Distant city glow on the horizon
+  const hgz=ctx.createLinearGradient(0,H*.5,0,H*.9);
+  hgz.addColorStop(0,'#00243d');hgz.addColorStop(1,'transparent');
+  ctx.globalAlpha=.85;ctx.fillStyle=hgz;ctx.fillRect(0,H*.5,W,H*.4);
+
+  _atmStars(Math.round(70*bd),H*.5,'#aaddff',gl);
+
+  // Moon
+  ctx.globalAlpha=.9;
+  if(gl>0){ctx.shadowColor='#aaccff';ctx.shadowBlur=14;}
+  ctx.fillStyle='#c8dff0';
+  ctx.beginPath();ctx.arc(W*.84,H*.11,26,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.globalAlpha=.22;ctx.fillStyle='#8aaabb';
+  ctx.beginPath();ctx.arc(W*.84+8,H*.11+6,6,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(W*.84-10,H*.11-5,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(W*.84+4,H*.11-11,3,0,Math.PI*2);ctx.fill();
+
+  // Three cached skyline bands. `blink` advances slowly, and the tiles rebuild
+  // only every 30 ticks — the window pattern changes on a ~2 s cadence, which
+  // is exactly how it looked when it was rebuilt from scratch every frame.
+  // ONE skyline plus one rooftop band. There used to be three bands of towers
+  // stacked on top of each other: at these sizes they don't read as depth, they
+  // read as one blurry pile of overlapping rectangles.
+  const blink=Math.floor(tick/30)*0.11;
+  const mid=bgLayer('w0mid',190,(c,w,h)=>_cityBand(c,w,h,{count:17,seed:7,blink:blink,windows:1,
+    body:'#060c18',lit:'#2fd8ff',lit2:'#ffb347',dark:'#050a12',sign:'#ff3fa4',beacon:'#ff3020'}),31);
+  blitLayer(mid,0.20,H*.74-190,0.85);
+
+  // Nearest band is deliberately NOT a third row of skyscrapers — three layers
+  // of the same towers just read as one blurry repeated object. This is the
+  // rooftop level the player is running along: parapets, water tanks, billboard
+  // frames and aerial masts, drawn as a solid dark cut-out.
+  const near=bgLayer('w0near',130,(c,w,h)=>{
+    const span=w/4;
+    c.fillStyle='#02060b';
+    c.fillRect(0,h-h*0.16,w,h*0.16);                    // parapet the props stand on
+    for(let i=0;i<4;i++){
+      const x=i*span, base=h-h*0.16;
+      const s=(k)=>_bgRnd(i,k+41);
+      // Water tank on legs
+      const tw=span*0.16,th=h*(0.24+s(1)*0.16),tx=x+span*0.10;
+      c.fillStyle='#02060b';
+      c.fillRect(tx,base-th,tw,th);
+      c.fillRect(tx-tw*0.16,base-th-h*0.05,tw*1.32,h*0.05);
+      // Billboard frame with a lit panel
+      const bx=x+span*0.42,bw=span*0.36,bh=h*(0.26+s(2)*0.16);
+      c.fillStyle='#02060b';
+      c.fillRect(bx,base-bh,3,bh);c.fillRect(bx+bw-3,base-bh,3,bh);
+      c.fillRect(bx,base-bh,bw,4);c.fillRect(bx,base-bh*0.18,bw,4);
+      c.fillStyle=i%2?'rgba(255,63,164,0.22)':'rgba(47,216,255,0.20)';
+      c.fillRect(bx+3,base-bh+4,bw-6,bh*0.8);
+      // Aerial mast with a beacon
+      const mx=x+span*0.86;
+      c.fillStyle='#02060b';
+      c.fillRect(mx,base-h*0.52,3,h*0.52);
+      c.fillRect(mx-span*0.05,base-h*0.40,span*0.12,2);
+      c.fillRect(mx-span*0.035,base-h*0.28,span*0.09,2);
+      c.fillStyle='rgba(255,40,20,0.75)';c.fillRect(mx-1,base-h*0.55,5,4);
+      // Vent boxes
+      c.fillStyle='#02060b';
+      c.fillRect(x+span*0.66,base-h*0.09,span*0.12,h*0.09);
+    }
+  },0);
+  blitLayer(near,0.36,H*.88-130,0.96);
+
+  // Flying vehicles — tiny blinking lights gliding across the sky.
+  for(let v=0;v<3;v++){
+    const speed=v===0?0.4:v===1?0.25:0.6;
+    const span=W+120;
+    const vx=(((tick*speed+v*280)%span)+span)%span-60;
+    const vy=H*.08+v*H*.06;
+    if(vx<-20||vx>W+20)continue;
+    const blinkOn=Math.floor(tick*.12+v*2)%4>1;
+    ctx.globalAlpha=blinkOn?.8:.2;
+    ctx.fillStyle=v%2===0?'#f00':'#0ff';
+    ctx.fillRect(vx-1.5,vy-1.5,3,3);
+    ctx.globalAlpha=.12;ctx.strokeStyle=v%2===0?'#f00':'#0ff';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-18,vy);ctx.stroke();
+  }
+  // Wet-street light streaks along the ground
+  ctx.globalAlpha=.05;ctx.strokeStyle='#0ff';ctx.lineWidth=0.5;
+  ctx.beginPath();
+  for(let xi=0;xi<W;xi+=40){const gx=(xi-camX*.05)%W;ctx.moveTo(gx,H*.82);ctx.lineTo(gx+W*.3,H);}
+  ctx.stroke();
+}
+
+// ── 1 · NEON JUNGLE ────────────────────────────────────────────────────────
+// A hanging canopy across the top of the screen with vines and glowing spores,
+// plus light shafts breaking through it.
+function _atmJungle(bd,gl){
+  const gz=ctx.createLinearGradient(0,0,0,H*.7);
+  gz.addColorStop(0,'#0a2a12');gz.addColorStop(1,'transparent');
+  ctx.globalAlpha=.32;ctx.fillStyle=gz;ctx.fillRect(0,0,W,H*.7);
+
+  // Light shafts through the leaves
+  ctx.globalAlpha=.05;
+  for(let s=0;s<4;s++){
+    const sx=(s*231+((camX*.12)%W))%W;
+    const g=ctx.createLinearGradient(sx,0,sx+70,H*.75);
+    g.addColorStop(0,'#cfffa0');g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx+34,0);ctx.lineTo(sx+96,H*.75);ctx.lineTo(sx+30,H*.75);ctx.closePath();ctx.fill();
+  }
+
+  // Cached canopy: overlapping leaf lobes hanging from the top edge, with vines.
+  const canopy=bgLayer('w1canopy',120,(c,w,h)=>{
+    for(let i=0;i<16;i++){
+      const cx=i*(w/16)+_bgRnd(i,2)*20;
+      const r=26+_bgRnd(i,3)*26;
+      const cy=_bgRnd(i,4)*26;
+      c.fillStyle=i%3===0?'#0c2a12':'#071c0c';
+      c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fill();
+      // leaf rim
+      c.strokeStyle='rgba(90,255,150,0.14)';c.lineWidth=1.5;
+      c.beginPath();c.arc(cx,cy,r,0.15,Math.PI-0.15);c.stroke();
+    }
+    // Vines dangling out of the canopy
+    c.strokeStyle='rgba(60,180,100,0.30)';c.lineWidth=1.5;
+    for(let v=0;v<12;v++){
+      const vx=v*(w/12)+_bgRnd(v,5)*24;
+      const len=26+_bgRnd(v,6)*62;
+      c.beginPath();c.moveTo(vx,10);
+      for(let y=10;y<len;y+=12)c.lineTo(vx+Math.sin(y*.18+v)*5,y);
+      c.stroke();
+      c.fillStyle='rgba(120,255,160,0.20)';
+      c.beginPath();c.arc(vx+Math.sin(len*.18+v)*5,len,2.5,0,Math.PI*2);c.fill();
+    }
+  });
+  blitLayer(canopy,0.14,0,0.9);
+  const canopy2=bgLayer('w1canopy2',80,(c,w,h)=>{
+    for(let i=0;i<11;i++){
+      const cx=i*(w/11)+_bgRnd(i,8)*24;
+      const r=22+_bgRnd(i,9)*22;
+      c.fillStyle='#030f06';
+      c.beginPath();c.arc(cx,_bgRnd(i,10)*12,r,0,Math.PI*2);c.fill();
+    }
+  });
+  blitLayer(canopy2,0.30,0,0.95);
+
+  // Fireflies / spores
+  for(let i=0,fn=Math.round(20*bd);i<fn;i++){
+    const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.62);
+    const on=Math.floor(tick*.07+i*1.4)%5>2;
+    if(!on)continue;
+    ctx.globalAlpha=.5;ctx.fillStyle='#ccff88';
+    ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();
+    if(gl>0)bloom(fx,fy,7,'#aaff44',0.30);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 2 · LAVA WORLD (unchanged design, kept compact) ────────────────────────
+function _atmLava(bd,gl){
+  ctx.globalAlpha=.14;
+  const hg=ctx.createLinearGradient(0,H*.3,0,H);
+  hg.addColorStop(0,'#ff2200');hg.addColorStop(1,'#220800');
+  ctx.fillStyle=hg;ctx.fillRect(0,H*.3,W,H*.7);
+  for(let i=0,en=Math.round(22*bd);i<en;i++){
+    const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%(H*.7)+H)%H;
+    ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';
+    ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 3 · ICE CAVES ──────────────────────────────────────────────────────────
+// Read as a CAVE, not an open sky: a cached ceiling of stalactites at the top,
+// frozen crystal clusters behind, aurora light leaking in, drifting snow.
+function _atmIce(bd,gl){
+  // Aurora leaking through cracks in the ceiling
+  for(let a=0;a<3;a++){
+    const phase=tick*.008+a*.9;
+    const ax=(a+1)*W*0.27+Math.sin(phase)*30;
+    ctx.globalAlpha=.06+Math.sin(phase)*.03;
+    const ag=ctx.createLinearGradient(ax,0,ax+70,H*.55);
+    ag.addColorStop(0,'transparent');
+    ag.addColorStop(.5,a%2===0?'#88ffee':'#8899ff');
+    ag.addColorStop(1,'transparent');
+    ctx.fillStyle=ag;ctx.fillRect(ax,0,70,H*.55);
+  }
+  // Cached cave ceiling with stalactites
+  const ceil=bgLayer('w3ceil',110,(c,w,h)=>{
+    c.fillStyle='#0a1826';c.fillRect(0,0,w,h*0.30);
+    for(let i=0;i<26;i++){
+      const x=i*(w/26)+_bgRnd(i,11)*12;
+      const len=h*(0.22+_bgRnd(i,12)*0.66);
+      const half=3+_bgRnd(i,13)*5;
+      const g=c.createLinearGradient(0,h*0.3,0,h*0.3+len);
+      g.addColorStop(0,'#1b3450');g.addColorStop(1,'#0d2036');
+      c.fillStyle=g;
+      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x+half,h*0.3);c.lineTo(x,h*0.3+len);c.closePath();c.fill();
+      c.strokeStyle='rgba(170,230,255,0.22)';c.lineWidth=1;
+      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x,h*0.3+len);c.stroke();
+    }
+  });
+  blitLayer(ceil,0.16,0,0.92);
+
+  // Drifting snow
+  ctx.fillStyle='#dff';
+  for(let i=0,sn=Math.round(30*bd);i<sn;i++){
+    const sx=(i*163+tick*.35+Math.sin(tick*.02+i)*14)%W;
+    const sy=(i*71+tick*.5)%H;
+    ctx.globalAlpha=.20+(i%4)*.08;
+    ctx.fillRect(sx,sy,1.4,1.4);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 4 · DESERT RUINS (unchanged design) ────────────────────────────────────
+function _atmDesert(bd,gl){
+  ctx.globalAlpha=.9;
+  if(gl>0){ctx.shadowColor='#ffdd44';ctx.shadowBlur=20;}
+  ctx.fillStyle='#ffee88';ctx.beginPath();ctx.arc(W*.8,H*.12,22,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.globalAlpha=.05;ctx.fillStyle='#ffcc44';
+  for(let r=0;r<6;r++){const hy=H*.5+r*16+Math.sin(tick*.03+r)*4;ctx.fillRect(0,hy,W,8);}
+  ctx.globalAlpha=1;
+}
+
+// ── 5 · SPACE STATION ──────────────────────────────────────────────────────
+// The old background silhouettes were a box with a wide bar through it, which
+// read as a row of burgers. Replaced with a proper orbital structure: a truss
+// spine carrying cylindrical modules and solar-panel wings, plus a ringed
+// planet to give the scene scale.
+function _atmSpace(bd,gl){
+  _atmStars(Math.round(85*bd),H*.85,'#dde6ff',gl);
+  // Nebula
+  ctx.globalAlpha=.055;
+  ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(W*.32,H*.24,120,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0044ff';ctx.beginPath();ctx.arc(W*.72,H*.4,84,0,Math.PI*2);ctx.fill();
+  // Ringed planet
+  const px=W*.17-((camX*.03)%(W*2)), py=H*.22, pr=46;
+  ctx.globalAlpha=.9;
+  const pg=ctx.createRadialGradient(px-pr*.35,py-pr*.35,pr*.15,px,py,pr);
+  pg.addColorStop(0,'#5a4a9a');pg.addColorStop(1,'#1a1240');
+  ctx.fillStyle=pg;ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=.5;ctx.strokeStyle='#9a86d8';ctx.lineWidth=3;
+  ctx.save();ctx.translate(px,py);ctx.rotate(-0.35);ctx.scale(1,0.26);
+  ctx.beginPath();ctx.arc(0,0,pr*1.7,0,Math.PI*2);ctx.stroke();ctx.restore();
+
+  // Cached station structure
+  // One station section: a cylindrical pressure module with capped ends, a lit
+  // window strip, a solar wing on a boom and a docking node. Drawn at varying
+  // heights so the band is a structure, not a washing line.
+  function _stationSection(c,x,y,scale,i,pal){
+    const mw=(64+_bgRnd(i,21)*40)*scale, mh=(22+_bgRnd(i,22)*10)*scale;
+    const r=mh/2;
+    // Hull (rounded cylinder)
+    const hull=c.createLinearGradient(0,y-mh,0,y);
+    hull.addColorStop(0,pal.hi);hull.addColorStop(0.45,pal.body);hull.addColorStop(1,pal.lo);
+    c.fillStyle=hull;
+    c.beginPath();
+    c.moveTo(x+r,y-mh);c.lineTo(x+mw-r,y-mh);
+    c.arc(x+mw-r,y-r,r,-Math.PI/2,Math.PI/2);
+    c.lineTo(x+r,y);c.arc(x+r,y-r,r,Math.PI/2,-Math.PI/2);
+    c.closePath();c.fill();
+    // Hull ribs
+    c.strokeStyle=pal.rib;c.lineWidth=1;
+    c.beginPath();
+    for(let s=1;s<4;s++){const sx=x+mw*s/4;c.moveTo(sx,y-mh+2);c.lineTo(sx,y-2);}
+    c.stroke();
+    // Lit window strip
+    c.fillStyle=pal.win;
+    for(let p=0;p<Math.floor(mw/(14*scale));p++)c.fillRect(x+8*scale+p*14*scale,y-mh*0.62,3*scale,3*scale);
+    // Solar wing on a boom
+    const bx=x+mw*0.5, by=y-mh;
+    c.fillStyle=pal.rib;c.fillRect(bx-1,by-18*scale,2,18*scale);
+    const pw=46*scale, ph=15*scale, px2=bx-pw/2, py2=by-18*scale-ph;
+    c.fillStyle=pal.panel;c.fillRect(px2,py2,pw,ph);
+    c.strokeStyle=pal.panelLine;c.lineWidth=1;
+    c.beginPath();
+    for(let s=0;s<=5;s++){const sx=px2+pw*s/5;c.moveTo(sx,py2);c.lineTo(sx,py2+ph);}
+    c.moveTo(px2,py2+ph/2);c.lineTo(px2+pw,py2+ph/2);
+    c.stroke();
+    // Docking node
+    c.strokeStyle=pal.rib;c.lineWidth=2*scale;
+    c.beginPath();c.arc(x+mw+6*scale,y-r,5*scale,0,Math.PI*2);c.stroke();
+    return mw;
+  }
+  const truss=bgLayer('w5truss',170,(c,w,h)=>{
+    const pal={hi:'#39406f',body:'#232848',lo:'#141830',rib:'#4b5490',win:'#7fe3ff',
+               panel:'#1b4a7c',panelLine:'#3d84c4'};
+    let x=8;
+    for(let i=0;i<5&&x<w;i++){
+      const y=h*(0.72+_bgRnd(i,25)*0.22);
+      const mw=_stationSection(c,x,y,1,i,pal);
+      // Connecting truss to the next section
+      c.fillStyle=pal.rib;c.fillRect(x+mw+11,y-12,w/5-mw-11,3);
+      x+=Math.max(mw+34,w/5);
+    }
+  });
+  blitLayer(truss,0.13,H*.62-170,0.7);
+  // A single station band: two rows of modules just overlapped into clutter.
+
+  ctx.globalAlpha=1;
+}
+
+// ── 6 · DARK FOREST ────────────────────────────────────────────────────────
+// Almost lightless: a black canopy overhead, pale mist between the trunks,
+// a shaft of moonlight, and pairs of eyes watching from the dark.
+function _atmDarkForest(bd,gl){
+  ctx.globalAlpha=.85;
+  if(gl>0){ctx.shadowColor='#aaaacc';ctx.shadowBlur=10;}
+  ctx.fillStyle='#ccccee';ctx.beginPath();ctx.arc(W*.15,H*.1,16,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#060a04';ctx.globalAlpha=.25;
+  ctx.beginPath();ctx.arc(W*.15+5,H*.1-3,13,0,Math.PI*2);ctx.fill();
+
+  // Moonlight shaft
+  ctx.globalAlpha=.045;
+  const mg=ctx.createLinearGradient(W*.15,H*.1,W*.42,H*.85);
+  mg.addColorStop(0,'#cfe0ff');mg.addColorStop(1,'transparent');
+  ctx.fillStyle=mg;
+  ctx.beginPath();ctx.moveTo(W*.10,H*.1);ctx.lineTo(W*.22,H*.1);ctx.lineTo(W*.55,H*.85);ctx.lineTo(W*.24,H*.85);ctx.closePath();ctx.fill();
+
+  // Mist bands
+  for(let i=0;i<7;i++){
+    ctx.globalAlpha=.05+i*.005;ctx.fillStyle='#0a1408';
+    const fy=H*.5+i*12+Math.sin(tick*.02+i)*8;
+    ctx.fillRect(0,fy,W,20);
+  }
+
+  // Cached black canopy overhead
+  const canopy=bgLayer('w6canopy',96,(c,w,h)=>{
+    c.fillStyle='#020601';c.fillRect(0,0,w,h*0.24);
+    for(let i=0;i<20;i++){
+      const cx=i*(w/20)+_bgRnd(i,41)*16;
+      const r=20+_bgRnd(i,42)*24;
+      c.fillStyle='#020601';
+      c.beginPath();c.arc(cx,h*0.24+_bgRnd(i,43)*10,r,0,Math.PI*2);c.fill();
+    }
+    // Bare branches reaching down out of the canopy. Kept short, thick and dark
+    // — long thin strokes read as scratches on the screen, not as wood.
+    c.strokeStyle='rgba(10,22,10,0.95)';c.lineWidth=3;c.lineCap='round';
+    for(let b=0;b<9;b++){
+      const bx=b*(w/9)+_bgRnd(b,44)*22;
+      c.beginPath();c.moveTo(bx,h*0.28);
+      c.lineTo(bx+6,h*0.46);c.lineTo(bx-3,h*0.60);
+      c.stroke();
+    }
+    c.lineCap='butt';
+  });
+  blitLayer(canopy,0.12,0,1);
+
+  // Eyes blinking in the dark
+  for(let e=0;e<5;e++){
+    const cycle=(tick+e*137)%420;
+    if(cycle>70)continue;
+    const ex=((e*263+140)-(camX*0.22))%W;
+    const exx=((ex%W)+W)%W;
+    const ey=H*.46+((e*89)%Math.round(H*.28));
+    ctx.globalAlpha=Math.min(1,(70-cycle)/22)*0.75;
+    ctx.fillStyle=e%2?'#ff6a4a':'#9dff6a';
+    ctx.fillRect(exx,ey,3,2);ctx.fillRect(exx+7,ey,3,2);
+    if(gl>0)bloom(exx+5,ey+1,10,e%2?'#f64':'#9f6',0.22);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 7 · TOXIC ZONE ─────────────────────────────────────────────────────────
+// A chemical refinery: tanks and chimneys venting smoke, acid haze, bubbles.
+function _atmToxic(bd,gl){
+  // The smog used to be a flat wash over the whole upper screen, which turned
+  // every pixel the same olive green and killed all contrast. Now it hugs the
+  // horizon (where the plant is) and leaves the sky above it dark.
+  ctx.globalAlpha=.17;
+  const hg=ctx.createLinearGradient(0,H*.28,0,H*.72);
+  hg.addColorStop(0,'rgba(120,150,0,0)');
+  hg.addColorStop(0.75,'rgba(140,180,0,0.40)');
+  hg.addColorStop(1,'rgba(40,60,0,0.15)');
+  ctx.fillStyle=hg;ctx.fillRect(0,H*.28,W,H*.44);
+
+  const plant=bgLayer('w7plant',170,(c,w,h)=>{
+    const base=h;
+    for(let i=0;i<5;i++){
+      const bx=i*(w/5)+10;
+      // Storage tank
+      const tw=52+_bgRnd(i,51)*26, th=44+_bgRnd(i,52)*30;
+      c.fillStyle='#101a06';c.fillRect(bx,base-th,tw,th);
+      c.fillStyle='#18280a';c.fillRect(bx+3,base-th+3,tw-6,6);
+      c.strokeStyle='rgba(190,240,40,0.20)';c.lineWidth=1;
+      c.strokeRect(bx+0.5,base-th+0.5,tw-1,th-1);
+      c.beginPath();c.moveTo(bx,base-th*0.5);c.lineTo(bx+tw,base-th*0.5);c.stroke();
+      // Chimney
+      const cx2=bx+tw+14+_bgRnd(i,53)*14, ch=80+_bgRnd(i,54)*54;
+      c.fillStyle='#0c1405';c.fillRect(cx2,base-ch,13,ch);
+      c.fillStyle='#1a2a08';c.fillRect(cx2-2,base-ch,17,6);
+      c.fillStyle='rgba(210,255,60,0.30)';c.fillRect(cx2+4,base-ch+12,5,4);
+      // Pipe run to the next unit
+      c.fillStyle='#0e1806';c.fillRect(bx,base-th-8,w/5,5);
+    }
+  });
+  blitLayer(plant,0.12,H*.78-170,0.88);
+
+  // Chimney smoke — a few soft blobs rising, cheap and only where a stack is.
+  for(let s=0;s<6;s++){
+    const sx=((s*(W/3)+60)-(camX*0.12))%W;
+    const sxx=((sx%W)+W)%W;
+    const t=(tick*0.5+s*40)%160;
+    ctx.globalAlpha=.10*(1-t/160);
+    ctx.fillStyle='#9bbf20';
+    ctx.beginPath();ctx.arc(sxx+Math.sin(t*.05)*8,H*.42-t*0.9,7+t*0.09,0,Math.PI*2);ctx.fill();
+  }
+
+  // Acid haze ellipses, kept low in the frame so they read as ground fog
+  for(let i=0,sn=Math.round(8*bd);i<sn;i++){
+    const sx=(i*193+tick*.4)%W,sy=H*.36+(i*53)%(H*.36);
+    ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;
+    ctx.fillStyle='#a8e000';
+    ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,12,0,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 8 · STORM PEAKS ────────────────────────────────────────────────────────
+// A heavy cloud bank with bolts that strike a DIFFERENT place every time, rain,
+// and the full-screen flash from the nearest strike.
+let _stormBolt=null;
+function _atmStorm(bd,gl){
+  // Cloud bank
+  const clouds=bgLayer('w8clouds',120,(c,w,h)=>{
+    c.fillStyle='#0b0e1c';c.fillRect(0,0,w,h*0.35);
+    for(let i=0;i<18;i++){
+      const cx=i*(w/18)+_bgRnd(i,61)*22;
+      const r=24+_bgRnd(i,62)*30;
+      c.fillStyle=i%3===0?'#101526':'#0a0e1e';
+      c.beginPath();c.arc(cx,h*0.35+_bgRnd(i,63)*16,r,0,Math.PI*2);c.fill();
+    }
+  });
+  blitLayer(clouds,0.10,0,0.95);
+
+  // A bolt every ~2.5 s, each at a fresh position with a fresh zigzag.
+  const strikeIdx=Math.floor(tick/150);
+  const phase=tick%150;
+  if(phase<10){
+    if(!_stormBolt||_stormBolt.idx!==strikeIdx){
+      _stormBolt={idx:strikeIdx,x:_bgRnd(strikeIdx,71)*W,seed:_bgRnd(strikeIdx,72)*100,
+                  len:H*(0.55+_bgRnd(strikeIdx,73)*0.4)};
+    }
+    const b=_stormBolt;
+    const fade=1-phase/10;
+    // Sky flash from the strike
+    ctx.globalAlpha=fade*0.20;ctx.fillStyle='#8899ff';ctx.fillRect(0,0,W,H);
+    // The bolt itself
+    ctx.globalAlpha=fade;
+    ctx.strokeStyle='#e8ecff';ctx.lineWidth=2;
+    if(gl>0){ctx.shadowColor='#8899ff';ctx.shadowBlur=16;}
+    ctx.beginPath();
+    let lx=b.x,ly=H*0.12;
+    ctx.moveTo(lx,ly);
+    const pts=[];
+    while(ly<b.len){
+      ly+=16;
+      lx+=Math.sin(ly*0.21+b.seed)*17;
+      ctx.lineTo(lx,ly);
+      pts.push([lx,ly]);
+    }
+    ctx.stroke();
+    // One branch off the middle
+    if(pts.length>3){
+      const p=pts[Math.floor(pts.length*0.45)];
+      ctx.lineWidth=1;ctx.globalAlpha=fade*0.6;
+      ctx.beginPath();ctx.moveTo(p[0],p[1]);
+      ctx.lineTo(p[0]+34,p[1]+30);ctx.lineTo(p[0]+22,p[1]+62);
+      ctx.stroke();
+    }
+    ctx.shadowBlur=0;
+  }
+
+  // Rain
+  ctx.globalAlpha=.18;ctx.strokeStyle='#7f90c8';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=0,rn=Math.round(60*bd);i<rn;i++){
+    const rx=(i*137+tick*5)%W, ry=(i*83+tick*13)%H;
+    ctx.moveTo(rx,ry);ctx.lineTo(rx-3,ry+11);
+  }
+  ctx.stroke();
+  ctx.globalAlpha=1;
+}
+
+// ── 9 · FINAL FORTRESS ─────────────────────────────────────────────────────
+// A siege wall filling the horizon: towers, buttresses, glowing furnace slits,
+// banners, and searchlights sweeping the burning sky.
+function _atmFortress(bd,gl){
+  // A burning sky, not a black one — the world was so dark that the wall, the
+  // platforms and the enemies all disappeared into the same void.
+  ctx.globalAlpha=.5;
+  const hg=ctx.createLinearGradient(0,0,0,H*.78);
+  hg.addColorStop(0,'#3a0508');hg.addColorStop(0.55,'#6a1206');hg.addColorStop(1,'#120203');
+  ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.78);
+  // Smoke bands rolling across the glow
+  ctx.globalAlpha=.16;ctx.fillStyle='#180608';
+  for(let i=0;i<5;i++){
+    const sy=H*.10+i*H*.11+Math.sin(tick*.006+i)*7;
+    ctx.beginPath();ctx.ellipse(((i*247-camX*0.05)%W+W)%W,sy,190,17,0,0,Math.PI*2);ctx.fill();
+  }
+
+  // Searchlight beams from the towers
+  for(let s=0;s<2;s++){
+    const ang=-1.15+Math.sin(tick*0.006+s*2.1)*0.42;
+    const ox=W*(0.24+s*0.52)-((camX*0.22)%W);
+    const oxx=((ox%W)+W)%W;
+    const oy=H*0.52;
+    ctx.globalAlpha=.055;
+    const bg=ctx.createLinearGradient(oxx,oy,oxx+Math.cos(ang)*H,oy+Math.sin(ang)*H);
+    bg.addColorStop(0,'#ffb070');bg.addColorStop(1,'transparent');
+    ctx.fillStyle=bg;
+    ctx.beginPath();ctx.moveTo(oxx,oy);
+    ctx.lineTo(oxx+Math.cos(ang-0.07)*H*1.1,oy+Math.sin(ang-0.07)*H*1.1);
+    ctx.lineTo(oxx+Math.cos(ang+0.07)*H*1.1,oy+Math.sin(ang+0.07)*H*1.1);
+    ctx.closePath();ctx.fill();
+  }
+
+  // The wall has to be lighter than the sky behind it, not darker: this world's
+  // background is already almost pure black, so a near-black wall was simply
+  // invisible. Reading order is stone (lit from the furnaces below) → mortar →
+  // glowing slits.
+  const wall=bgLayer('w9wall',200,(c,w,h)=>{
+    const base=h;
+    const wallH=h*0.52;
+    const stone=c.createLinearGradient(0,base-wallH,0,base);
+    stone.addColorStop(0,'#2e1116');stone.addColorStop(1,'#48181a');
+    c.fillStyle=stone;c.fillRect(0,base-wallH,w,wallH);
+    // Block courses
+    c.strokeStyle='rgba(0,0,0,0.45)';c.lineWidth=1;
+    c.beginPath();
+    for(let y=base-wallH+10;y<base;y+=14)  {c.moveTo(0,y);c.lineTo(w,y);}
+    for(let x=0;x<w;x+=26){c.moveTo(x,base-wallH);c.lineTo(x,base);}
+    c.stroke();
+    // Buttresses
+    c.fillStyle='#240d11';
+    for(let b=0;b<10;b++)c.fillRect(b*(w/10)+6,base-wallH,16,wallH);
+    // Merlons
+    c.fillStyle='#3a1417';
+    for(let m=0;m<Math.floor(w/22);m++)c.fillRect(m*22+4,base-wallH-10,12,10);
+    // Towers
+    for(let t=0;t<3;t++){
+      const tx=t*(w/3)+34, tw=46, th=wallH+40+_bgRnd(t,81)*34;
+      const tg=c.createLinearGradient(tx,base-th,tx+tw,base);
+      tg.addColorStop(0,'#3a161a');tg.addColorStop(1,'#200b0e');
+      c.fillStyle=tg;c.fillRect(tx,base-th,tw,th);
+      c.fillStyle='#451a1e';
+      for(let m=0;m<4;m++)c.fillRect(tx+2+m*12,base-th-9,8,9);
+      // Furnace slits, with a bloom around each
+      for(let r=0;r<3;r++){
+        const sy=base-th+22+r*22;
+        const gg=c.createRadialGradient(tx+tw*0.5,sy+5,1,tx+tw*0.5,sy+5,20);
+        gg.addColorStop(0,'rgba(255,140,60,0.55)');gg.addColorStop(1,'rgba(255,90,30,0)');
+        c.fillStyle=gg;c.fillRect(tx+tw*0.5-20,sy-15,40,40);
+        c.fillStyle='#ffb15a';c.fillRect(tx+tw*0.5-2,sy,4,10);
+      }
+      // Banner
+      c.fillStyle='rgba(190,30,35,0.75)';
+      c.fillRect(tx+tw+4,base-th+26,10,40);
+      c.fillStyle='rgba(255,160,60,0.5)';
+      c.fillRect(tx+tw+6,base-th+34,6,4);
+    }
+    // Wall arrow slits
+    for(let a=0;a<Math.floor(w/40);a++){
+      const ax=a*40+18, ay=base-wallH*0.55;
+      const gg=c.createRadialGradient(ax+1.5,ay+4,1,ax+1.5,ay+4,14);
+      gg.addColorStop(0,'rgba(255,110,40,0.45)');gg.addColorStop(1,'rgba(255,110,40,0)');
+      c.fillStyle=gg;c.fillRect(ax-13,ay-10,28,28);
+      c.fillStyle='#ff8a3a';c.fillRect(ax,ay,3,9);
+    }
+  });
+  blitLayer(wall,0.14,H*.86-200,0.92);
+
+  // Falling ash
+  ctx.fillStyle='#553333';
+  for(let i=0,an=Math.round(28*bd);i<an;i++){
+    const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);
+    ctx.globalAlpha=.3;ctx.fillRect(ax,ay,2,3);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 10 · PRISM ANOMALY ─────────────────────────────────────────────────────
+// The old version washed the whole upper half in a hard-edged saturated rainbow
+// band and scattered confetti over it, which read as a broken test pattern.
+// The idea here instead: reality itself is refracting. A near-black void, one
+// huge slowly-turning prism throwing a soft spectral fan across the scene,
+// panes of broken glass drifting through it, and horizontal tears where the
+// world has come apart. Colour is used sparingly so the level stays readable.
+function _atmPrism(bd,gl){
+  // A genuinely spectral sky. The first attempt at this world was a hard-edged
+  // saturated rainbow band over half the screen; the second over-corrected into
+  // a near-black void that was really just "the purple level". This is the
+  // middle ground: the WHOLE sky runs through the spectrum, smoothly, with the
+  // hue band drifting sideways over time — but at a lightness low enough that
+  // the platforms and enemies still sit clearly on top of it.
+  //
+  // Cached: an 8-stop gradient plus a full-screen fill every frame is wasteful
+  // when the only thing changing is a slow hue drift.
+  const sky=bgLayer('w10sky',H,(c,w,h)=>{
+    const g=c.createLinearGradient(0,0,0,h);
+    const t=tick*0.25;
+    for(let s=0;s<=8;s++){
+      const hue=(t+s*45)%360;
+      // Darker toward the ground so the play area keeps its contrast.
+      const light=26-s*1.6;
+      g.addColorStop(s/8,`hsl(${hue},72%,${light}%)`);
+    }
+    c.fillStyle=g;c.fillRect(0,0,w,h);
+    // Horizontal spectral shimmer so the sky isn't a flat vertical ramp
+    const hg=c.createLinearGradient(0,0,w,0);
+    for(let s=0;s<=6;s++)hg.addColorStop(s/6,`hsla(${(t*1.7+s*60)%360},90%,55%,0.10)`);
+    c.fillStyle=hg;c.fillRect(0,0,w,h);
+  },14);
+  ctx.globalAlpha=1;
+  ctx.drawImage(sky.cv,0,0,W,H);
+
+  // Spectral aurora curtains drifting across the sky
+  for(let a=0;a<4;a++){
+    const phase=tick*0.006+a*1.4;
+    const ax=((a*W*0.31+Math.sin(phase)*70-camX*0.05)%W+W)%W;
+    const hue=(tick*0.9+a*90)%360;
+    ctx.globalAlpha=.10+Math.sin(phase*1.7)*.04;
+    const ag=ctx.createLinearGradient(ax,0,ax+90,H*0.8);
+    ag.addColorStop(0,'transparent');
+    ag.addColorStop(.5,`hsl(${hue},95%,62%)`);
+    ag.addColorStop(1,'transparent');
+    ctx.fillStyle=ag;ctx.fillRect(ax,0,90,H*0.8);
+  }
+  ctx.globalAlpha=1;
+
+  _atmStars(Math.round(40*bd),H*.8,'#ffffff',gl);
+
+  // The prism: a slowly rotating triangle high in the sky.
+  const pcx=W*0.5+Math.sin(tick*0.0035)*W*0.16, pcy=H*0.20, pr=34;
+  const rot=tick*0.004;
+
+  // Refraction fan — wide, very soft, spreading DOWN from the prism. Each ray is
+  // a triangle with a gradient so there is no visible edge.
+  // Deliberately faint and fading out well before the ground: at full strength
+  // the fan lit up the entire play area and the player lost track of the
+  // platforms behind a wall of colour.
+  //
+  // Seven full-height gradient triangles per frame was the single most
+  // expensive thing left in any background (0.59 ms). The prism drifts and the
+  // hues rotate slowly, so the whole fan is cached and refreshed a few times a
+  // second instead — indistinguishable in motion, ~10× cheaper.
+  const fan=bgLayer('w10fan',H,(c,w,h)=>{
+    for(let r=0;r<7;r++){
+      const hue=(r*46+tick*0.35)%360;
+      const spread=0.10+r*0.045;
+      const a0=Math.PI*0.5-0.36+r*0.12;
+      const g=c.createLinearGradient(pcx,pcy,pcx+Math.cos(a0)*h*1.2,pcy+Math.sin(a0)*h*1.2);
+      g.addColorStop(0,`hsla(${hue},95%,65%,0.16)`);
+      g.addColorStop(0.45,`hsla(${hue},95%,62%,0.05)`);
+      g.addColorStop(1,`hsla(${hue},95%,60%,0)`);
+      c.fillStyle=g;
+      c.beginPath();c.moveTo(pcx,pcy);
+      c.lineTo(pcx+Math.cos(a0-spread*0.5)*h*1.3,pcy+Math.sin(a0-spread*0.5)*h*1.3);
+      c.lineTo(pcx+Math.cos(a0+spread*0.5)*h*1.3,pcy+Math.sin(a0+spread*0.5)*h*1.3);
+      c.closePath();c.fill();
+    }
+  },10);
+  ctx.globalAlpha=1;
+  ctx.drawImage(fan.cv,0,0,W,H);
+
+  // Incoming white beam that feeds the prism
+  const ig=ctx.createLinearGradient(pcx-260,pcy-150,pcx,pcy);
+  ig.addColorStop(0,'rgba(255,255,255,0)');
+  ig.addColorStop(1,'rgba(255,255,255,0.22)');
+  ctx.fillStyle=ig;
+  ctx.beginPath();ctx.moveTo(pcx-280,pcy-168);ctx.lineTo(pcx-268,pcy-150);ctx.lineTo(pcx,pcy+3);ctx.lineTo(pcx,pcy-9);ctx.closePath();ctx.fill();
+
+  // The prism body
+  ctx.save();ctx.translate(pcx,pcy);ctx.rotate(rot);
+  const pg=ctx.createLinearGradient(-pr,-pr,pr,pr);
+  pg.addColorStop(0,'rgba(200,225,255,0.50)');
+  pg.addColorStop(0.5,'rgba(120,150,220,0.22)');
+  pg.addColorStop(1,'rgba(255,255,255,0.42)');
+  ctx.fillStyle=pg;
+  ctx.beginPath();ctx.moveTo(0,-pr);ctx.lineTo(pr*0.92,pr*0.62);ctx.lineTo(-pr*0.92,pr*0.62);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(230,240,255,0.75)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+  if(gl>0)bloom(pcx,pcy,pr*2.1,'#cfe0ff',0.30);
+
+  // Drifting glass panes — thin parallelograms catching a single hue each.
+  for(let i=0,sn=Math.round(14*bd);i<sn;i++){
+    const sx=(i*151+tick*.35)%W, sy=(i*97+tick*.16)%(H*0.9);
+    const hue=(i*37+tick*1.1)%360;
+    const a=tick*0.008+i;
+    const sz=7+((i*7)%9);
+    ctx.save();ctx.translate(sx,sy);ctx.rotate(a);
+    ctx.globalAlpha=.16+Math.sin(tick*.03+i)*.07;
+    ctx.fillStyle=`hsl(${hue},90%,70%)`;
+    ctx.beginPath();ctx.moveTo(-sz,-sz*0.35);ctx.lineTo(sz*0.6,-sz*0.7);ctx.lineTo(sz,sz*0.35);ctx.lineTo(-sz*0.6,sz*0.7);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=.30;ctx.strokeStyle=`hsl(${hue},100%,85%)`;ctx.lineWidth=1;ctx.stroke();
+    ctx.restore();
+  }
+
+  // Reality tears: thin horizontal rifts that slide and flicker.
+  for(let t=0;t<4;t++){
+    const ty=H*(0.18+t*0.19)+Math.sin(tick*0.01+t*2)*8;
+    const tw=W*(0.3+_bgRnd(t,91)*0.4);
+    const tx=((t*263+tick*0.6)%(W+tw))-tw;
+    const flick=0.10+Math.abs(Math.sin(tick*0.05+t))*0.14;
+    const hue=(t*90+tick*0.8)%360;
+    const g=ctx.createLinearGradient(tx,0,tx+tw,0);
+    g.addColorStop(0,`hsla(${hue},95%,70%,0)`);
+    g.addColorStop(0.5,`hsla(${hue},95%,70%,${flick})`);
+    g.addColorStop(1,`hsla(${hue},95%,70%,0)`);
+    ctx.fillStyle=g;ctx.fillRect(tx,ty,tw,1.5);
+  }
+  ctx.globalAlpha=1;
+}
+
+const WORLD_ATMOSPHERE={
+  0:_atmCyberCity, 1:_atmJungle, 2:_atmLava, 3:_atmIce, 4:_atmDesert,
+  5:_atmSpace, 6:_atmDarkForest, 7:_atmToxic, 8:_atmStorm, 9:_atmFortress,
+  10:_atmPrism,
+};
+
+function drawBG(){
+  // Sky + horizon glow + ground haze are three full-screen fills that depend on
+  // nothing but the theme, yet they were re-run every frame. Baked into a single
+  // cached tile: one drawImage replaces three screen-sized paints, which is the
+  // kind of thing that actually costs on a weak GPU (fill rate), not on a
+  // desktop where it barely shows up in a timer.
+  const skyTile=bgLayer('sky',H,(c,w,h)=>{
+    const g=c.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,CT.bg);
+    g.addColorStop(0.6,CT.bg2||CT.bg);
+    g.addColorStop(1,CT.bg2||CT.bg);
+    c.fillStyle=g;c.fillRect(0,0,w,h);
+    const hg=c.createLinearGradient(0,h*0.62,0,h);
+    hg.addColorStop(0,'transparent');
+    hg.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
+    c.globalAlpha=0.5;c.fillStyle=hg;c.fillRect(0,h*0.62,w,h*0.38);
+    c.globalAlpha=0.06;c.fillStyle=CT.grid||CT.mc||'#48f';c.fillRect(0,h*0.78,w,h*0.22);
+    c.globalAlpha=1;
+  });
+  ctx.globalAlpha=1;
+  ctx.drawImage(skyTile.cv,0,0,W,H);
 
   const id=CT.id;
 
@@ -5278,175 +7441,25 @@ function drawBG(){
   // game. On the lowest tier (or when the adaptive limiter has driven bgDetail
   // right down) skip all of it and draw just a cheap sparse star field over the
   // cached sky+horizon. Gameplay readability is unaffected.
-  if(bd<0.4){
-    const n=Math.max(12,Math.round(36*bd/0.3));
-    ctx.save();ctx.fillStyle='#fff';
-    for(let i=0;i<n;i++){
-      const sx=(i*137.5+11)%W, sy=(i*97.3+7)%(H*0.6);
-      ctx.globalAlpha=0.18+(i%5)*0.06;
-      ctx.fillRect(sx,sy,i%9===0?1.6:0.9,i%9===0?1.6:0.9);
-    }
-    ctx.restore();
-    return;
-  }
+  // There used to be a "microwave" bail-out here that replaced every world's
+  // backdrop with a bare starfield whenever bgDetail dropped below 0.4 — so on
+  // the lowest graphics tier all ten worlds looked identical. That existed
+  // because the skylines and window grids were rebuilt from scratch every
+  // frame; now the heavy layers are cached tiles (two drawImage calls each) and
+  // every remaining element already scales its count by `bd`, so the low tier
+  // can keep its atmosphere and simply gets a thinner version of it.
 
   // ── Per-theme atmospheric elements ────────────
   ctx.save();
 
-  if(id===0){ // ══ CYBER CITY — cinematic night skyline ══
+  _bgRebuildBudget=1; // see bgLayer(): one cached layer may re-rasterise per frame
+  const atm=WORLD_ATMOSPHERE[id];
+  if(atm)atm(bd,gl);
 
-    // 1. Deep space layer — distant city glow on horizon
-    const horizGlow=ctx.createLinearGradient(0,H*.55,0,H*.9);
-    horizGlow.addColorStop(0,'#001a2e');horizGlow.addColorStop(1,'transparent');
-    ctx.globalAlpha=.9;ctx.fillStyle=horizGlow;ctx.fillRect(0,H*.55,W,H*.35);
-
-    // 2. Cyan horizon line
-    ctx.globalAlpha=.18;
-    const cyanLine=ctx.createLinearGradient(0,H*.7,0,H*.78);
-    cyanLine.addColorStop(0,'#00ffff');cyanLine.addColorStop(1,'transparent');
-    ctx.fillStyle=cyanLine;ctx.fillRect(0,H*.7,W,H*.08);
-
-    // 3. Stars — three sizes, deterministic
-    for(let i=0,sn=Math.round(80*bd);i<sn;i++){
-      const sx=(i*137.5+11)%W, sy=(i*97.3+7)%(H*.52);
-      const tw=Math.sin(tick*.04+i*0.9)*.45+.55;
-      const sz=i%20===0?2.2:i%7===0?1.4:0.8;
-      ctx.globalAlpha=tw*(i%20===0?.9:.5);
-      ctx.fillStyle=i%20===0?'#aaddff':'#ffffff';
-      ctx.shadowColor='#aaddff';ctx.shadowBlur=(gl>0&&i%20===0)?6:0;
-      ctx.beginPath();ctx.arc(sx,sy,sz,0,Math.PI*2);ctx.fill();
-      ctx.shadowBlur=0;
-    }
-
-    // 4. Moon — large, detailed
-    ctx.globalAlpha=.88;
-    ctx.shadowColor='#aaccff';ctx.shadowBlur=14;
-    ctx.fillStyle='#c8dff0';
-    ctx.beginPath();ctx.arc(W*.84, H*.11, 26, 0, Math.PI*2);ctx.fill();
-    // Moon craters
-    ctx.shadowBlur=0;ctx.globalAlpha=.25;ctx.fillStyle='#8aaabb';
-    ctx.beginPath();ctx.arc(W*.84+8,H*.11+6,6,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(W*.84-10,H*.11-5,4,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(W*.84+4,H*.11-11,3,0,Math.PI*2);ctx.fill();
-    // Moon glow ring
-    ctx.globalAlpha=.08;
-    const moonRing=ctx.createRadialGradient(W*.84,H*.11,26,W*.84,H*.11,70);
-    moonRing.addColorStop(0,'#aaccff');moonRing.addColorStop(1,'transparent');
-    ctx.fillStyle=moonRing;ctx.beginPath();ctx.arc(W*.84,H*.11,70,0,Math.PI*2);ctx.fill();
-
-    // 5. Mid-distance city skyline silhouette (parallax scrolls with camX)
-    const skyOff=(camX*.18)%W;
-    ctx.globalAlpha=.7;
-    ctx.fillStyle='#060918';
-    // Draw silhouette repeated
-    for(let rep=-1;rep<=1;rep++){
-      const ox=rep*W-skyOff;
-      // Building heights array (deterministic)
-      const heights=[55,90,130,80,55,170,120,60,100,145,85,60,110,90,140,70,95,125,65,80];
-      const bStep=W/heights.length;
-      for(let bi=0;bi<heights.length;bi++){
-        const bx=ox+bi*bStep, bw=bStep*.85, bh=heights[bi];
-        const by=H*.72-bh;
-        ctx.fillRect(bx, by, bw, bh);
-        // Window lights on silhouette. Row/column spacing widens as bgDetail
-        // drops, so lower tiers draw far fewer windows (this nested loop is the
-        // single heaviest per-frame block in the background).
-        ctx.fillStyle='#0ff2';
-        const _wStep=Math.round(12/bd), _cStep=Math.round(10/bd);
-        for(let wr=by+6;wr<by+bh-6;wr+=_wStep){
-          for(let wc=bx+4;wc<bx+bw-4;wc+=_cStep){
-            const seed=(bi*19+wr*.1+wc*.3);
-            const lit=Math.floor(tick*.015+seed)%7>2;
-            if(lit){ctx.fillStyle=(seed%3===0)?'#4af4':'#ff83';}
-            else ctx.fillStyle='#0004';
-            ctx.fillRect(wc,wr,5,7);
-          }
-        }
-        ctx.fillStyle='#060918';
-      }
-    }
-
-    // 6. Close skyline — darker, taller (less parallax)
-    const closeOff=(camX*.35)%W;
-    ctx.globalAlpha=.85;
-    ctx.fillStyle='#03060e';
-    for(let rep=-1;rep<=1;rep++){
-      const ox=rep*W-closeOff;
-      const hts=[0,40,80,50,0,100,70,110,45,80,0,60,95,55,0,85,70,40,100,65];
-      const bStep=W/hts.length;
-      for(let bi=0;bi<hts.length;bi++){
-        if(hts[bi]===0)continue;
-        const bx=ox+bi*bStep, bw=bStep*.9, bh=hts[bi];
-        const by=H*.78-bh;
-        ctx.fillRect(bx, by, bw, bh);
-        // Antenna
-        if(bi%4===0){
-          ctx.strokeStyle='#03060e';ctx.lineWidth=2;
-          ctx.beginPath();ctx.moveTo(bx+bw/2,by);ctx.lineTo(bx+bw/2,by-14);ctx.stroke();
-          const bl=Math.floor(tick/25+bi)%2;
-          ctx.fillStyle=bl?'#ff2200':'#220000';ctx.shadowColor='#f00';ctx.shadowBlur=bl?6:0;
-          ctx.beginPath();ctx.arc(bx+bw/2,by-15,2,0,Math.PI*2);ctx.fill();
-          ctx.shadowBlur=0;ctx.fillStyle='#03060e';
-        }
-      }
-    }
-
-    // 7. Neon grid reflections on ground
-    ctx.globalAlpha=.04;
-    for(let xi=0;xi<W;xi+=40){
-      const gx=(xi-camX*.05)%W;
-      ctx.strokeStyle='#0ff';ctx.lineWidth=0.5;
-      ctx.beginPath();ctx.moveTo(gx,H*.8);ctx.lineTo(gx+W*.3,H);ctx.stroke();
-    }
-
-    // 8. Flying vehicles — tiny blinking lights gliding across the sky.
-    // They travel through an off-screen margin so the wrap-around happens out
-    // of view (no jarring teleport mid-screen) and the trail always points
-    // backwards along the direction of travel.
-    for(let v=0;v<3;v++){
-      const speed=v===0?0.4:v===1?0.25:0.6;
-      const span=W+120;
-      const vx=(((tick*speed+v*280)%span)+span)%span-60; // -60 .. W+60
-      const vy=H*.08+v*H*.06;
-      if(vx<-20||vx>W+20)continue; // fully off-screen — skip
-      const blink=Math.floor(tick*.12+v*2)%4>1;
-      ctx.globalAlpha=blink?.8:.2;
-      ctx.fillStyle=v%2===0?'#f00':'#0ff';
-      ctx.shadowColor=v%2===0?'#f00':'#0ff';ctx.shadowBlur=blink?8:2;
-      ctx.beginPath();ctx.arc(vx,vy,1.5,0,Math.PI*2);ctx.fill();
-      // Trail behind the vehicle (it moves left→right, so trail extends left)
-      ctx.globalAlpha=.12;ctx.strokeStyle=v%2===0?'#f00':'#0ff';ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-18,vy);ctx.stroke();
-      ctx.shadowBlur=0;
-    }
-  } else if(id===1){ // Neon Jungle — mist + fireflies
-    ctx.globalAlpha=.08;ctx.fillStyle='#0a2a08';for(let r=0;r<3;r++){const ry=H*.4+r*40;ctx.fillRect(0,ry,W,50);}
-    for(let i=0,fn=Math.round(18*bd);i<fn;i++){const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.65),on=Math.floor(tick*.07+i*1.4)%5>2;if(on){ctx.globalAlpha=.55;ctx.shadowColor='#aaff44';ctx.shadowBlur=gl>0?4:0;ctx.fillStyle='#ccff88';ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}}
-  } else if(id===2){ // Lava World — glowing sky + embers
-    ctx.globalAlpha=.14;const hg=ctx.createLinearGradient(0,H*.3,0,H);hg.addColorStop(0,'#ff2200');hg.addColorStop(1,'#220800');ctx.fillStyle=hg;ctx.fillRect(0,H*.3,W,H*.7);
-    for(let i=0,en=Math.round(22*bd);i<en;i++){const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%H*.7+H)%H;ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();}
-  } else if(id===3){ // Ice Caves — aurora streaks
-    for(let a=0;a<4;a++){const aw=(a+1)*60,phase=tick*.008+a*.8;ctx.globalAlpha=.07+Math.sin(phase)*.04;const ag=ctx.createLinearGradient(aw*2+Math.sin(phase)*30,0,aw*2+Math.sin(phase)*30+60,H*.5);ag.addColorStop(0,'transparent');ag.addColorStop(.5,a%2===0?'#88ffee':'#8888ff');ag.addColorStop(1,'transparent');ctx.fillStyle=ag;ctx.fillRect(aw*2+Math.sin(phase)*30,0,60,H*.5);}
-  } else if(id===4){ // Desert — shimmering heat haze + sun
-    ctx.globalAlpha=.9;ctx.shadowColor='#ffdd44';ctx.shadowBlur=20;ctx.fillStyle='#ffee88';ctx.beginPath();ctx.arc(W*.8,H*.12,22,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
-    ctx.globalAlpha=.05;for(let hzRow=0;hzRow<6;hzRow++){const hy=H*.5+hzRow*16+Math.sin(tick*.03+hzRow)*4;ctx.fillStyle='#ffcc44';ctx.fillRect(0,hy,W,8);}
-  } else if(id===5){ // Space — stars + nebula
-    ctx.fillStyle='#fff';for(let i=0,sn=Math.round(90*bd);i<sn;i++){const sx=(i*137+19)%W,sy=(i*89+3)%(H*.85),tw=Math.sin(tick*.025+i*1.4)*.5+.5;ctx.globalAlpha=tw*.7;const sr=i%15===0?2:i%5===0?1.2:.7;ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);ctx.fill();}
-    ctx.globalAlpha=.06;ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(W*.35,H*.25,120,0,Math.PI*2);ctx.fill();ctx.fillStyle='#0044ff';ctx.beginPath();ctx.arc(W*.7,H*.4,80,0,Math.PI*2);ctx.fill();
-  } else if(id===6){ // Dark Forest — fog tendrils + moon
-    ctx.globalAlpha=.85;ctx.shadowColor='#aaaacc';ctx.shadowBlur=10;ctx.fillStyle='#ccccee';ctx.beginPath();ctx.arc(W*.15,H*.1,16,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
-    ctx.fillStyle='#060a04';ctx.globalAlpha=.25;ctx.beginPath();ctx.arc(W*.15+5,H*.1-3,13,0,Math.PI*2);ctx.fill();
-    for(let i=0;i<8;i++){ctx.globalAlpha=.06+i*.005;ctx.fillStyle='#0a1408';const fy=H*.5+i*12+Math.sin(tick*.02+i)*8;ctx.fillRect(0,fy,W,20);}
-  } else if(id===7){ // Toxic — sickly green smog + haze
-    ctx.globalAlpha=.10;const hg=ctx.createLinearGradient(0,0,0,H*.6);hg.addColorStop(0,'#aabb00');hg.addColorStop(1,'transparent');ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.6);
-    for(let i=0,sn=Math.round(12*bd);i<sn;i++){const sx=(i*193+tick*.4)%W,sy=(i*67)%(H*.5);ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;ctx.fillStyle='#88cc00';ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,14,0,0,Math.PI*2);ctx.fill();}
-  } else if(id===8){ // Storm Peaks — lightning flashes + storm light
-    const lf=tick%140;if(lf<4){ctx.globalAlpha=(4-lf)*.07;ctx.fillStyle='#8888ff';ctx.fillRect(0,0,W,H);}
-    for(let i=0,sn=Math.round(30*bd);i<sn;i++){const sx=(i*113+5)%W,sy=(i*79+3)%(H*.6),tw=Math.sin(tick*.06+i)*.4+.4;ctx.globalAlpha=tw*.35;ctx.fillStyle='#aabbdd';ctx.fillRect(sx,sy,1.5,1.5);}
-  } else if(id===9){ // Final Fortress — red sky + falling ash
-    ctx.globalAlpha=.12;const hg=ctx.createLinearGradient(0,0,0,H*.5);hg.addColorStop(0,'#660000');hg.addColorStop(1,'transparent');ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.5);
-    for(let i=0,an=Math.round(30*bd);i<an;i++){const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);ctx.globalAlpha=.3;ctx.fillStyle='#553333';ctx.fillRect(ax,ay,2,3);}
-  }
+  // Parallax silhouette bands. Drawn last so they sit in FRONT of the sky
+  // washes/stars/embers above (they are the nearest background layer) but still
+  // behind everything the camera transform moves.
+  drawWorldScenery(id,bd);
 
   ctx.restore();
 }
@@ -5462,22 +7475,89 @@ function drawGrid(){
 }
 function drawTimerBar(){
   if(gState!=='playing'&&gState!=='levelclear')return;
+  if(bossLevelUntimed())return;   // no countdown on an auto-scrolling boss level
   const r=timMax>0?timeLeft/timMax:1,bw=r*W;
   const col=timeLeft>30?CT.mc:timeLeft>10?'#f80':'#f44';
   ctx.save();ctx.globalAlpha=timeLeft<=10&&Math.floor(tick/8)%2===0?.35:.15;
   ctx.fillStyle=col;ctx.fillRect(0,H-4,bw,4);ctx.restore();
+}
+// Edge lighting for a platform slab: a lit top face, a shaded underside and a
+// soft contact shadow. Platforms used to be a flat gradient inside a 2px
+// outline, which read as a sticker rather than something the robot stands on.
+// Three fillRects — no shadowBlur, no per-frame allocation.
+function _platShade(pl,alpha){
+  if(pl.w<6||pl.h<4)return;
+  const x=pl.x+1,w=pl.w-2;
+  ctx.globalAlpha=alpha*0.30;
+  ctx.fillStyle='#ffffff';ctx.fillRect(x,pl.y+2,w,1);            // lit top face
+  ctx.globalAlpha=alpha*0.34;
+  ctx.fillStyle='#000000';ctx.fillRect(x,pl.y+pl.h-3,w,2);       // shaded underside
+  // Contact shadow below floating platforms only — the ground already sits on
+  // the bottom of the screen, so a shadow under it would just be a dark strip.
+  if(pl.type!=='ground'){
+    ctx.globalAlpha=alpha*0.22;
+    ctx.fillRect(pl.x+3,pl.y+pl.h,pl.w-6,3);
+  }
+  ctx.globalAlpha=alpha;
 }
 function drawPlatforms(){
   const vLeft=camX-60,vRight=camX+W+60;
   // Build the type->palette map once per frame instead of per platform (was an
   // object + nested array allocation on every iteration).
   const _platPal={normal:CT.pN,moving:CT.pM,crumble:CT.pC,conveyor:['#2a3a4a','#3a4a5a','#4a5a6a']};
+  const _prism=(CT.id===10); // Prism Anomaly: ground/platforms sweep through the
+  // full spectrum instead of the flat violet gradient every other world uses —
+  // otherwise the level itself still reads as "just purple" even though the
+  // sky/enemies are rainbow.
   for(const pl of platforms){
     if(pl.gone)continue;
     if(pl.x+pl.w<vLeft||pl.x>vRight)continue;
     const alpha=(pl.crm&&pl.crm_on)?Math.max(0,pl.ct/72):1;
     ctx.save();ctx.globalAlpha=alpha;
     if(pl.type==='ground'){
+      if(_prism){
+        // Dark obsidian ground with a spectral highlight running along its top
+        // edge. The fill used to be a saturated hsl(…,85%,32%) sweep, which put
+        // a full-brightness rainbow under the player's feet and made the whole
+        // world read as a broken test pattern rather than a place.
+        const hueA=(pl.x*0.35+tick*0.6)%360;
+        // Spectral along the length of the slab, dark toward the bottom. A
+        // single flat hue made the world read as "the green level" one moment
+        // and "the purple level" the next; a full-brightness rainbow fill made
+        // the platforms vanish into the sky. This does both jobs at once.
+        const hq=(hueA/18|0)*18;
+        if(pl._pgH!==hq||pl._pgW!==pl.w){
+          const gh=ctx.createLinearGradient(pl.x,0,pl.x+pl.w,0);
+          for(let k=0;k<=5;k++)gh.addColorStop(k/5,`hsl(${(hq+k*62)%360},70%,26%)`);
+          pl._pgGrad=gh;pl._pgH=hq;pl._pgW=pl.w;pl._pgX=pl.x;
+        }
+        if(pl._pgX!==pl.x){ // moving platform — the gradient is in world space
+          const gh=ctx.createLinearGradient(pl.x,0,pl.x+pl.w,0);
+          for(let k=0;k<=5;k++)gh.addColorStop(k/5,`hsl(${(hq+k*62)%360},70%,26%)`);
+          pl._pgGrad=gh;pl._pgX=pl.x;
+        }
+        ctx.fillStyle=pl._pgGrad;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+        if(!pl._pgDark||pl._pgDarkY!==pl.y||pl._pgDarkH!==pl.h){
+          const gv=ctx.createLinearGradient(0,pl.y,0,pl.y+pl.h);
+          gv.addColorStop(0,'rgba(0,0,0,0)');gv.addColorStop(1,'rgba(0,0,0,0.72)');
+          pl._pgDark=gv;pl._pgDarkY=pl.y;pl._pgDarkH=pl.h;
+        }
+        ctx.fillStyle=pl._pgDark;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+        // The highlight sweeps the spectrum ALONG the platform rather than
+        // tinting the whole slab one colour — the ground refracts light, which
+        // is the point of this world; a single hue just made it "the green level".
+        const vx0=Math.max(pl.x,camX-40),vx1=Math.min(pl.x+pl.w,camX+W+40);
+        if(vx1>vx0){
+          const eg=ctx.createLinearGradient(vx0,0,vx1,0);
+          for(let s=0;s<=5;s++)eg.addColorStop(s/5,`hsl(${(hueA+s*62)%360},100%,72%)`);
+          ctx.strokeStyle=eg;ctx.lineWidth=2;ctx.shadowBlur=0;
+          ctx.beginPath();ctx.moveTo(vx0,pl.y);ctx.lineTo(vx1,pl.y);ctx.stroke();
+        }
+        ctx.strokeStyle=`hsla(${hueA},80%,60%,0.18)`;ctx.lineWidth=1;
+        ctx.beginPath();
+        for(let gx=pl.x+24;gx<pl.x+pl.w;gx+=24){ctx.moveTo(gx,pl.y);ctx.lineTo(gx,pl.y+pl.h);}
+        ctx.stroke();
+      } else {
       // Vertical gradient is x-invariant, so cache it on the platform and reuse
       // it across frames (and horizontal movement). Invalidate only when the
       // platform's y or the theme changes - mirrors the _skyGrad cache pattern.
@@ -5485,13 +7565,59 @@ function drawPlatforms(){
       ctx.fillStyle=pl._grad;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
       ctx.strokeStyle=CT.gE;ctx.lineWidth=2;ctx.shadowBlur=0;
       ctx.beginPath();ctx.moveTo(pl.x,pl.y);ctx.lineTo(pl.x+pl.w,pl.y);ctx.stroke();
-      ctx.strokeStyle=CT.grd[0]+'88';ctx.lineWidth=1;
+      ctx.strokeStyle=withAlpha(CT.grd[0],'88');ctx.lineWidth=1;
       for(let gx=pl.x+20;gx<pl.x+pl.w;gx+=20){ctx.beginPath();ctx.moveTo(gx,pl.y);ctx.lineTo(gx,pl.y+pl.h);ctx.stroke();}
+      }
+      _platShade(pl,alpha);
+    } else if(_prism){
+      // Each platform type keeps a distinct hue *band* (so players can still
+      // tell normal/moving/crumble apart at a glance) but every band sweeps
+      // through the spectrum by position+time rather than sitting on one fixed
+      // colour — reads as genuinely prismatic instead of "purple, yellow, cyan".
+      // Dark glass slab with a spectral rim. Each platform TYPE keeps its own
+      // hue band (so normal/moving/crumble stay tellable apart) but the body is
+      // deliberately dark — a bright rainbow fill made the platforms disappear
+      // into the background instead of standing out from it.
+      const typeOffset=pl.type==='moving'?120:pl.type==='crumble'?240:0;
+      const hue=(pl.x*0.5+tick*0.9+typeOffset)%360;
+      // Each platform is its own little prism: the hue sweeps across its width,
+      // offset per type so normal/moving/crumble stay tellable apart.
+      const hq2=(hue/18|0)*18;
+      if(pl._pgH!==hq2||pl._pgX!==pl.x||pl._pgW!==pl.w){
+        const gh=ctx.createLinearGradient(pl.x,0,pl.x+pl.w,0);
+        for(let k=0;k<=3;k++)gh.addColorStop(k/3,`hsl(${(hq2+k*40)%360},85%,46%)`);
+        pl._pgGrad=gh;pl._pgH=hq2;pl._pgX=pl.x;pl._pgW=pl.w;
+      }
+      ctx.fillStyle=pl._pgGrad;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+      if(!pl._pgShade||pl._pgShadeY!==pl.y||pl._pgShadeH!==pl.h){
+        const gv=ctx.createLinearGradient(0,pl.y,0,pl.y+pl.h);
+        gv.addColorStop(0,'rgba(255,255,255,0.18)');gv.addColorStop(0.5,'rgba(0,0,0,0)');gv.addColorStop(1,'rgba(0,0,0,0.55)');
+        pl._pgShade=gv;pl._pgShadeY=pl.y;pl._pgShadeH=pl.h;
+      }
+      ctx.fillStyle=pl._pgShade;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+      ctx.strokeStyle=`hsl(${hue},100%,80%)`;ctx.lineWidth=2;
+      ctx.shadowBlur=0;ctx.strokeRect(pl.x+1,pl.y+1,pl.w-2,pl.h-2);
+      _platShade(pl,alpha);
+      if(pl.type==='conveyor'){
+        const offset=(tick*pl.conveyorSpeed*pl.conveyorDir*2)%30;
+        ctx.save();ctx.beginPath();ctx.rect(pl.x,pl.y,pl.w,pl.h);ctx.clip();
+        ctx.fillStyle='#1a2a3a';
+        for(let rx=pl.x+offset;rx<pl.x+pl.w;rx+=15){if(rx>=pl.x&&rx<=pl.x+pl.w-2){ctx.fillRect(rx,pl.y+1,2,pl.h-2);}}
+        ctx.shadowColor='#ffaa00';ctx.shadowBlur=6;ctx.strokeStyle='#ffaa00';ctx.lineWidth=2;ctx.lineCap='round';
+        for(let cx=pl.x+offset;cx<pl.x+pl.w;cx+=30){
+          if(cx-6<pl.x||cx+6>pl.x+pl.w)continue;
+          const arrowY=pl.y+pl.h/2;
+          if(pl.conveyorDir>0){ctx.beginPath();ctx.moveTo(cx-6,arrowY);ctx.lineTo(cx+6,arrowY);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+6,arrowY);ctx.lineTo(cx+2,arrowY-3);ctx.moveTo(cx+6,arrowY);ctx.lineTo(cx+2,arrowY+3);ctx.stroke();}
+          else{ctx.beginPath();ctx.moveTo(cx+6,arrowY);ctx.lineTo(cx-6,arrowY);ctx.stroke();ctx.beginPath();ctx.moveTo(cx-6,arrowY);ctx.lineTo(cx-2,arrowY-3);ctx.moveTo(cx-6,arrowY);ctx.lineTo(cx-2,arrowY+3);ctx.stroke();}
+        }
+        ctx.shadowBlur=0;ctx.lineCap='butt';ctx.restore();
+      }
     } else {
       const c=_platPal[pl.type]||CT.pN;
       if(!pl._grad||pl._gradY!==pl.y||pl._gradTheme!==CT.id){const g=ctx.createLinearGradient(0,pl.y,0,pl.y+pl.h);g.addColorStop(0,c[1]);g.addColorStop(1,c[0]);pl._grad=g;pl._gradY=pl.y;pl._gradTheme=CT.id;}
       ctx.fillStyle=pl._grad;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);ctx.strokeStyle=c[2];ctx.lineWidth=2;
       ctx.shadowBlur=0;ctx.strokeRect(pl.x+1,pl.y+1,pl.w-2,pl.h-2);
+      if(pl.type!=='conveyor')_platShade(pl,alpha); // conveyors have their own belt art
 
       // Conveyor animation - improved
       if(pl.type==='conveyor'){
@@ -5554,11 +7680,40 @@ function drawPlatforms(){
     ctx.restore();
   }
 }
+// ── Glyph sprite cache ──────────────────────────────────────────────────────
+// Assigning a web-font shorthand to a canvas is expensive — drawParticles was
+// spending 2.3 ms of a 3.3 ms frame on a single unconditional `ctx.font=`.
+// Block glyphs had the same problem, once per visible block per frame. These
+// never change, so each is rasterised once and blitted like any other sprite.
+const _glyphCache={};
+function drawGlyph(ch,px,size,col,font){
+  const key=ch+'|'+size+'|'+col+'|'+(font||'');
+  let g=_glyphCache[key];
+  if(!g){
+    const dpr=Math.min(2,(window.devicePixelRatio||1));
+    const pad=Math.ceil(size*0.9);
+    const cv=document.createElement('canvas');
+    cv.width=Math.ceil(pad*2*dpr);cv.height=Math.ceil(pad*2*dpr);
+    const c=cv.getContext('2d');
+    c.scale(dpr,dpr);
+    c.font=font||`bold ${size}px 'Press Start 2P',monospace`;
+    c.textAlign='center';c.textBaseline='middle';
+    c.fillStyle=col;c.fillText(ch,pad,pad);
+    g={cv:cv,pad:pad};
+    _glyphCache[key]=g;
+  }
+  ctx.drawImage(g.cv,px[0]-g.pad,px[1]-g.pad,g.pad*2,g.pad*2);
+}
 function drawBlocks(){
   const vLeft=camX-40,vRight=camX+W+40;
+  const _prismBlocks=(CT.id===10);
   for(const b of blocks){
     if(b.x+b.w<vLeft||b.x>vRight)continue;
     ctx.save();
+    // Prism Anomaly: bricks and gold blocks are the same brown/amber in every
+    // world, which left them looking imported here. Refracted per block so they
+    // keep their shape, lighting and readability.
+    if(_prismBlocks)ctx.filter=prismFilter((((b.x*0.7+tick*0.8)%360)/20|0)*20,6.5,1.3);
     if(b.type==='b'){
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.strokeStyle='#261006';ctx.lineWidth=1;
@@ -5571,7 +7726,7 @@ function drawBlocks(){
       const g=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);g.addColorStop(0,'#ffd700');g.addColorStop(.5,'#ff9900');g.addColorStop(1,'#cc7700');
       ctx.fillStyle=g;ctx.fillRect(b.x+2,b.y+2,b.w-4,b.h-4);ctx.shadowColor='#ffd700';ctx.shadowBlur=8*p;ctx.strokeStyle='#ffe88a';ctx.lineWidth=2;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.shadowBlur=0;ctx.fillStyle='#fff6';ctx.fillRect(b.x+4,b.y+4,8,4);
-      ctx.fillStyle='#4a2200';ctx.font=`bold ${Math.floor(b.w*.55)}px 'Press Start 2P',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('?',b.x+b.w/2,b.y+b.h/2+1);
+      drawGlyph('?',[b.x+b.w/2,b.y+b.h/2+1],Math.floor(b.w*.55),'#4a2200');
     } else if(b.type==='c'&&!b.used){
       // Coin brick — rich golden brick with animated coin emblem
       const p=.7+.3*Math.sin(tick*.08);
@@ -5595,8 +7750,7 @@ function drawBlocks(){
       // Coin inner circle
       ctx.fillStyle='#ffe680';ctx.beginPath();ctx.arc(b.x+b.w/2-1,b.y+b.h/2-1,b.w*.18,0,Math.PI*2);ctx.fill();
       // Dollar sign
-      ctx.fillStyle='#b8860b';ctx.font=`bold ${Math.floor(b.w*.35)}px 'Press Start 2P',monospace`;
-      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',b.x+b.w/2,b.y+b.h/2+1);
+      drawGlyph('$',[b.x+b.w/2,b.y+b.h/2+1],Math.floor(b.w*.35),'#b8860b');
     } else if(b.type==='c'&&b.used){
       // Emptied coin brick — looks like a regular brick now
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
@@ -5620,6 +7774,30 @@ function drawBlocks(){
     ctx.restore();
   }
 }
+// ── Coin sprite cache ───────────────────────────────────────────────────────
+// Every coin in the game is identical (14×14) and only differs by its bobbing
+// offset, yet drawCoins() used to rebuild each one from two arc() fills plus a
+// fillText('$') — including re-assigning ctx.font, textAlign and textBaseline
+// per coin. With 100-190 coins in a level that made drawCoins the single most
+// expensive thing in the whole frame (measured: 3.1 ms on Prism Anomaly, more
+// than the entire rest of draw() combined). Now the coin face is rasterised
+// once into an offscreen canvas and each coin is a single drawImage.
+let _coinSprite=null,_coinSpriteW=0;
+function _getCoinSprite(w){
+  if(_coinSprite&&_coinSpriteW===w)return _coinSprite;
+  const dpr=Math.min(2,(window.devicePixelRatio||1));
+  const cv=document.createElement('canvas');
+  cv.width=Math.ceil(w*dpr);cv.height=Math.ceil(w*dpr);
+  const c=cv.getContext('2d');
+  c.scale(dpr,dpr);
+  const r=w/2;
+  c.fillStyle='#ffd700';c.beginPath();c.arc(r,r,r,0,Math.PI*2);c.fill();
+  c.fillStyle='#ffe880';c.beginPath();c.arc(r-2,r-2,r-3,0,Math.PI*2);c.fill();
+  c.fillStyle='#7a5000';c.font='bold 7px monospace';c.textAlign='center';c.textBaseline='middle';
+  c.fillText('$',r,r);
+  _coinSprite=cv;_coinSpriteW=w;
+  return cv;
+}
 function drawCoins(){
   const vLeft=camX-30,vRight=camX+W+30;
   // Cheap additive bloom pass behind coins (medium+ quality).
@@ -5632,13 +7810,13 @@ function drawCoins(){
     }
     ctx.restore();
   }
+  const spr=_getCoinSprite(14);
   for(const c of coins){
     if(c.got)continue;
     if(c.x<vLeft||c.x>vRight)continue;
-    c.a+=.07;const cx=c.x+c.w/2,cy=c.y+c.h/2+Math.sin(c.a)*3;
-    ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(cx,cy,c.w/2,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#ffe880';ctx.beginPath();ctx.arc(cx-2,cy-2,c.w/2-3,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#7a5000';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',cx,cy);
+    c.a+=.07;
+    const cy=c.y+Math.sin(c.a)*3;
+    ctx.drawImage(spr,c.x,cy,c.w,c.w);
   }
 }
 function drawJumpPads(){
@@ -5694,9 +7872,13 @@ function drawJumpPads(){
 }
 function drawHazards(){
   const vLeft=camX-40,vRight=camX+W+40;
+  const _prismHz=(CT.id===10);
   for(const hz of hazards){
     if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
     ctx.save();
+    // Spikes are drawn in flat greys, and hue-rotate does nothing to a grey —
+    // they stayed the only monochrome thing in a world made of light.
+    if(_prismHz)ctx.filter=prismFilter((((hz.x*0.6+tick*0.5)%360)/20|0)*20,6.5,1.25);
     if(hz.type==='spikes'){
       // Metallic base
       ctx.fillStyle='#2a2a2a';
@@ -5777,6 +7959,7 @@ function drawHazards(){
 // ════════════════════════════════════════════════════════════════════════
 const SHARD_VALUE=75;        // score per secret data-shard
 const ALL_SHARDS_BONUS=300;  // bonus for collecting every shard in a level
+const RAINBOW_SHARD_VALUE=500; // score for the secret rainbow shard (1-per-world, 10 total)
 // Per-world thematic hazard (mechanic 10). Worlds without an entry rely on the
 // universal saw/pendulum hazards. world: 2=Lava 3=Ice 7=Toxic 8=Storm.
 const WORLD_HAZARD={2:'geyser',3:'icicle',7:'toxin',8:'lightning'};
@@ -5809,7 +7992,12 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
         const w=70+rng()*46,h=46;if(!force&&hit(px,n.y-h,w,h,2))return false;
         hazards.push({type:'toxin',x:px,y:n.y-h,w,h,baseY:n.y,cycle:130+Math.floor(rng()*70),phase:Math.floor(rng()*130)});return true;
       }else if(wh==='lightning'){
-        hazards.push({type:'lightning',x:px,w:10,topY:8,groundY:n.y,cycle:160+Math.floor(rng()*120),phase:Math.floor(rng()*160),state:'idle'});return true;
+        // `span` is the band this storm cell strikes within. Without it the bolt
+        // came down in exactly the same column forever, which read as a bug and
+        // made the hazard trivial to walk around once seen.
+        hazards.push({type:'lightning',x:px,w:10,topY:8,groundY:n.y,span:150+rng()*130,
+                      cycle:160+Math.floor(rng()*120),phase:Math.floor(rng()*160),state:'idle',
+                      strikeIdx:-1,hitX:px});return true;
       }
       return false;
     };
@@ -5876,9 +8064,32 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
   const want=Math.min(SHARDS_PER_LEVEL,spots.length);
   for(let i=0;i<want;i++){
     const s=spots[i];if(s.y<6)s.y=6;
-    dataShards.push({x:s.x,y:s.y,w:16,h:16,got:false,phase:rng()*Math.PI*2});
+    dataShards.push({id:`${s.x}_${s.y}`,x:s.x,y:s.y,w:16,h:16,got:false,phase:rng()*Math.PI*2});
   }
   dataShardsTotal=dataShards.length;
+
+  // —— Secret Rainbow Shard: exactly one hidden level per world (see
+  // RAINBOW_LEVEL_IN_WORLD). Collecting all 10 across the campaign unlocks
+  // the secret 11th world — see WorldMap's rainbowCount() gate.
+  {
+    const _advN=lvl||0;
+    const _worldIdx=Math.floor((_advN-1)/10);
+    const _levelInWorld=_advN-_worldIdx*10;
+    if(_advN>0&&_worldIdx>=0&&_worldIdx<RAINBOW_LEVEL_IN_WORLD.length
+       &&_levelInWorld===RAINBOW_LEVEL_IN_WORLD[_worldIdx]&&!rainbowCollected[_worldIdx]){
+      // Reuse a leftover shard spot if one's free, otherwise float it above a
+      // random ground node — either way it never overlaps the 3 regular shards.
+      let rs=spots[want];
+      if(!rs){
+        const gn=groundNodes.length?groundNodes:nodes.filter(n=>n.kind==='ground');
+        if(gn.length){const n=gn[Math.floor(rng()*gn.length)];rs={x:Math.round(n.x+n.w*0.5-9),y:Math.max(40,n.y-170-rng()*30)};}
+      }
+      if(rs){
+        if(rs.y<6)rs.y=6;
+        rainbowItem={worldIdx:_worldIdx,x:rs.x,y:rs.y,w:18,h:18,got:false,phase:rng()*Math.PI*2};
+      }
+    }
+  }
 
   // —— Mechanic 7b: a hidden bonus room (coins + power-up on a secret ledge) —
   if(groundNodes.length){
@@ -5940,10 +8151,21 @@ function updateHazards(){
         box={x:hz.x+4,y:hz.y+6,w:hz.w-8,h:hz.h-8};break;
       }
       case 'lightning':{
-        const f=((tick+hz.phase)%hz.cycle)/hz.cycle;
+        const t=tick+hz.phase;
+        const f=(t%hz.cycle)/hz.cycle;
+        // Each cycle strikes a different column inside the cell's band. The
+        // target is chosen as soon as the cycle starts and the dashed warning
+        // marker (drawHazards) points at it for ~0.16 of the cycle before the
+        // bolt lands, so it stays dodgeable — just not memorisable.
+        const idx=Math.floor(t/hz.cycle);
+        if(hz.strikeIdx!==idx){
+          hz.strikeIdx=idx;
+          const span=hz.span||0;
+          hz.hitX=hz.x+(_sceneryRnd(idx,(hz.phase|0)+5)-0.5)*span;
+        }
         if(f>0.78&&f<0.86){hz.state='strike';active=true;}
         else{hz.state=(f>0.62)?'warn':'idle';active=false;}
-        box={x:hz.x-4,y:hz.topY,w:hz.w+8,h:hz.groundY-hz.topY};break;
+        box={x:hz.hitX-4,y:hz.topY,w:hz.w+8,h:hz.groundY-hz.topY};break;
       }
       default: active=false;      // 'spikes' are handled inside updatePlayer
     }
@@ -5963,17 +8185,40 @@ function updateDataShards(){
     for(const p of ps){
       if(!p||!aabb(p,c))continue;
       c.got=true;dataShardsGot++;score+=SHARD_VALUE;
+      if(typeof AchTrack!=='undefined')AchTrack.shard();
       if(typeof SFX!=='undefined'&&SFX.secret)SFX.secret();
       floatTxt(c.x+c.w/2,c.y,'\u25c6 +'+SHARD_VALUE,'#0ff');
       burst(c.x+c.w/2,c.y+c.h/2,'#0ff',12,3,4);
       if(dataShardsGot>=dataShardsTotal&&!shardBonusGiven){
         shardBonusGiven=true;score+=ALL_SHARDS_BONUS;
-        floatTxt(c.x+c.w/2,c.y-18,'DATA +'+ALL_SHARDS_BONUS,'#0ff');
+        floatTxt(c.x+c.w/2,c.y-18,T('dataBonusTxt',ALL_SHARDS_BONUS),'#0ff');
         if(typeof SFX!=='undefined'&&SFX.achievement)SFX.achievement();
         camShake=Math.max(camShake,8);
       }
       break;
     }
+  }
+}
+function updateRainbowItem(){
+  if(!rainbowItem||rainbowItem.got)return;
+  rainbowItem.phase+=0.05;
+  const ps=(typeof activePlayers==='function')?activePlayers():(player?[player]:[]);
+  for(const p of ps){
+    if(!p||!aabb(p,rainbowItem))continue;
+    rainbowItem.got=true;
+    markRainbowCollected(rainbowItem.worldIdx);
+    score+=RAINBOW_SHARD_VALUE;
+    if(typeof SFX!=='undefined'&&SFX.achievement)SFX.achievement();
+    const n=rainbowCount();
+    floatTxt(rainbowItem.x+rainbowItem.w/2,rainbowItem.y-6,T('rainbowGot',n),'#fff');
+    burst(rainbowItem.x+rainbowItem.w/2,rainbowItem.y+rainbowItem.h/2,'#fff',26,4.5,5);
+    camShake=Math.max(camShake,10);
+    if(n>=10){
+      // The 10th shard — announce the secret world unlocking right here, since
+      // the player won't see the map again until they exit the level.
+      floatTxt(rainbowItem.x+rainbowItem.w/2,rainbowItem.y-26,T('rainbowAllFound'),'#f0f');
+    }
+    break;
   }
 }
 
@@ -6048,15 +8293,25 @@ function drawHazardExtra(hz){
       break;
     }
     case 'lightning':{
-      const x=hz.x;
+      const x=(hz.hitX!=null?hz.hitX:hz.x);
+      const cx=x+hz.w/2;
       if(hz.state==='warn'){
+        // Ground marker + dashed column so the player can see WHERE it will land
         ctx.strokeStyle='rgba(160,180,255,0.5)';ctx.setLineDash([4,4]);ctx.lineWidth=2;
-        ctx.beginPath();ctx.moveTo(x+hz.w/2,hz.topY);ctx.lineTo(x+hz.w/2,hz.groundY);ctx.stroke();ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(cx,hz.topY);ctx.lineTo(cx,hz.groundY);ctx.stroke();ctx.setLineDash([]);
+        const pulse=0.35+Math.abs(Math.sin(tick*0.25))*0.45;
+        ctx.globalAlpha=pulse;ctx.strokeStyle='#aab4ff';ctx.lineWidth=2;
+        ctx.beginPath();ctx.ellipse(cx,hz.groundY-2,14,4,0,0,Math.PI*2);ctx.stroke();
+        ctx.globalAlpha=1;
       }else if(hz.state==='strike'){
-        if(GFX.glow>0){ctx.globalCompositeOperation='lighter';bloom(x+hz.w/2,(hz.topY+hz.groundY)/2,40,'#aaf',0.6);ctx.globalCompositeOperation='source-over';}
+        if(GFX.glow>0){ctx.globalCompositeOperation='lighter';bloom(cx,(hz.topY+hz.groundY)/2,40,'#aaf',0.6);ctx.globalCompositeOperation='source-over';}
         ctx.strokeStyle='#eaf2ff';ctx.lineWidth=3;ctx.shadowColor='#88f';ctx.shadowBlur=12;ctx.beginPath();
-        let yy=hz.topY,xx=x+hz.w/2;ctx.moveTo(xx,yy);
-        while(yy<hz.groundY){yy+=18;xx=x+hz.w/2+(Math.random()-0.5)*14;ctx.lineTo(xx,Math.min(yy,hz.groundY));}
+        // Deterministic per strike: Math.random() here re-drew a different bolt
+        // on every frame of the flash, so it looked like static rather than one
+        // discharge holding for a few frames.
+        const seed=(hz.strikeIdx||0)*7.13+(hz.phase||0);
+        let yy=hz.topY,xx=cx;ctx.moveTo(xx,yy);
+        while(yy<hz.groundY){yy+=18;xx=cx+Math.sin(seed+yy*0.17)*12;ctx.lineTo(xx,Math.min(yy,hz.groundY));}
         ctx.stroke();ctx.shadowBlur=0;
       }
       break;
@@ -6082,6 +8337,27 @@ function drawDataShards(){
     ctx.moveTo(0,-s);ctx.lineTo(0,s);ctx.moveTo(-s*0.7,0);ctx.lineTo(s*0.7,0);ctx.stroke();
     ctx.restore();
   }
+}
+function drawRainbowItem(){
+  if(!rainbowItem||rainbowItem.got)return;
+  const c=rainbowItem;
+  if(c.x+c.w<camX-40||c.x>camX+W+40)return;
+  const cx=c.x+c.w/2,cy=c.y+c.h/2+Math.sin(c.phase)*4;
+  const hue=(tick*3)%360;
+  ctx.save();
+  if(GFX.glow>0){ctx.globalCompositeOperation='lighter';bloom(cx,cy,c.w*2.2,`hsl(${hue},100%,60%)`,0.6);ctx.globalCompositeOperation='source-over';}
+  ctx.translate(cx,cy);ctx.rotate(c.phase*0.7);
+  const s=c.w/2;
+  const g=ctx.createLinearGradient(-s,-s,s,s);
+  g.addColorStop(0,`hsl(${hue},100%,75%)`);
+  g.addColorStop(0.5,`hsl(${(hue+90)%360},100%,60%)`);
+  g.addColorStop(1,`hsl(${(hue+180)%360},100%,55%)`);
+  ctx.fillStyle=g;ctx.beginPath();
+  ctx.moveTo(0,-s);ctx.lineTo(s*0.75,-s*0.2);ctx.lineTo(s*0.5,s);ctx.lineTo(-s*0.5,s);ctx.lineTo(-s*0.75,-s*0.2);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.stroke();
+  ctx.restore();
+  // A faint upward sparkle trail so it reads as special from a distance.
+  if(tick%6===0)burst(cx,cy,`hsl(${hue},100%,70%)`,1,0.6,1.5);
 }
 function drawMazeKeys(){
   const vLeft=camX-40,vRight=camX+W+40;
@@ -6196,15 +8472,31 @@ function drawDarknessOverlay(){
   for(const [p,r] of lights){
     _punchLight(c, p.x-camX+p.w/2, p.y-cy+p.h/2, r, 1);
   }
-  // Enemies — a small glow so they're visible as they approach
-  if(typeof enemies!=='undefined'){
-    for(const e of enemies){ if(e.dead) continue; _punchLight(c, e.x-camX+(e.w||24)/2, e.y-cy+(e.h||24)/2, 78, 0.95); }
+  // Enemies — a small glow so they're visible as they approach.
+  // Perf: cap active light sources to the nearest few enemies instead of every
+  // enemy in the level — with many enemies alive at once, the per-light radial
+  // gradient + fill (not the update frequency) is the expensive part of this
+  // overlay, so limiting count matters far more than throttling the overlay.
+  if(typeof enemies!=='undefined'&&enemies.length){
+    const refP=player||player2;
+    const px=refP?refP.x+refP.w/2:camX+W/2, py=refP?refP.y+refP.h/2:cy+H/2;
+    const nearE=enemies.filter(e=>e.alive!==false&&!e.dead)
+      .map(e=>({e,d:(e.x-px)*(e.x-px)+(e.y-py)*(e.y-py)}))
+      .sort((a,b)=>a.d-b.d)
+      .slice(0,8);
+    for(const {e} of nearE){ _punchLight(c, e.x-camX+(e.w||24)/2, e.y-cy+(e.h||24)/2, 78, 0.95); }
   }
   // Boss — a large light so the arena fight is playable
   if(boss&&!boss.dead){ _punchLight(c, boss.x-camX+(boss.w||64)/2, boss.y-cy+(boss.h||64)/2, 210, 1); }
-  // Glowing pickups cast a faint light too
-  if(typeof powerups!=='undefined'){
-    for(const pu of powerups){ if(pu.got) continue; _punchLight(c, pu.x-camX+pu.w/2, pu.y-cy+pu.h/2, 60, 0.85); }
+  // Glowing pickups cast a faint light too (same cap rationale as enemies above).
+  if(typeof powerups!=='undefined'&&powerups.length){
+    const refP=player||player2;
+    const px=refP?refP.x+refP.w/2:camX+W/2, py=refP?refP.y+refP.h/2:cy+H/2;
+    const nearPU=powerups.filter(pu=>!pu.got)
+      .map(pu=>({pu,d:(pu.x-px)*(pu.x-px)+(pu.y-py)*(pu.y-py)}))
+      .sort((a,b)=>a.d-b.d)
+      .slice(0,8);
+    for(const {pu} of nearPU){ _punchLight(c, pu.x-camX+pu.w/2, pu.y-cy+pu.h/2, 60, 0.85); }
   }
   // 3) Composite the finished mask over the scene.
   ctx.save();
@@ -6352,7 +8644,10 @@ function drawExitBuilding(){
     case 6: _buildForestCabin(bx,by,bw,bh,doorOpen);break;
     case 7: _buildToxicDome(bx,by,bw,bh,doorOpen); break;
     case 8: _buildStormShrine(bx,by,bw,bh,doorOpen);break;
-    default:_buildFortressGate(bx,by,bw,bh,doorOpen);break;
+    case 9: _buildFortressGate(bx,by,bw,bh,doorOpen);break;
+    // Prism Anomaly used to fall through to the Final Fortress gate, so the
+    // secret world ended at a copy of world 10's base.
+    default:_buildPrismGate(bx,by,bw,bh,doorOpen);break;
   }
   // Robot+flag celebration popping out of the rooftop after entry (slowed: starts at 80 instead of 40)
   if(entered&&exitTimer>80){
@@ -6595,6 +8890,68 @@ function _buildFortressGate(bx,by,bw,bh,doorOpen){
   ctx.strokeStyle='#0a0202';ctx.lineWidth=1;
   for(let g=0;g<4;g++){ctx.beginPath();ctx.moveTo(dx+8+g*9,dy);ctx.lineTo(dx+8+g*9,dy+sh);ctx.stroke();}
 }
+// World 11 — PRISM ANOMALY: a crystal arch that splits the light passing
+// through it. Built from the same primitives as the other exits, but every
+// colour is taken from the spectrum so it belongs to this world instead of
+// borrowing the Final Fortress gate.
+function _buildPrismGate(bx,by,bw,bh,doorOpen){
+  const t=tick*0.7;
+  // Two crystal pylons, each a tall faceted shard
+  for(const side of [0,1]){
+    const px=bx+(side?bw-26:0), hue=(t+side*120)%360;
+    const g=ctx.createLinearGradient(px,by-bh,px+26,by);
+    g.addColorStop(0,`hsl(${hue},85%,52%)`);
+    g.addColorStop(0.5,`hsl(${(hue+50)%360},80%,30%)`);
+    g.addColorStop(1,`hsl(${(hue+100)%360},75%,16%)`);
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.moveTo(px+13,by-bh-14);
+    ctx.lineTo(px+26,by-bh+16);
+    ctx.lineTo(px+26,by);
+    ctx.lineTo(px,by);
+    ctx.lineTo(px,by-bh+16);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle=`hsl(${(hue+180)%360},100%,80%)`;ctx.lineWidth=1.5;ctx.stroke();
+    // internal facet lines
+    ctx.strokeStyle=`hsla(${hue},100%,85%,0.35)`;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(px+13,by-bh-10);ctx.lineTo(px+13,by);ctx.stroke();
+  }
+  // Spectral lintel spanning the pylons
+  const lg=ctx.createLinearGradient(bx,0,bx+bw,0);
+  for(let i=0;i<=6;i++)lg.addColorStop(i/6,`hsl(${(t+i*60)%360},90%,55%)`);
+  ctx.fillStyle=lg;ctx.fillRect(bx,by-bh+6,bw,18);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(bx,by-bh+18,bw,6);
+  // Floating capstone prism, slowly turning
+  ctx.save();
+  ctx.translate(bx+bw/2,by-bh-16+Math.sin(tick*0.05)*3);
+  ctx.rotate(Math.sin(tick*0.012)*0.5);
+  const cg=ctx.createLinearGradient(-14,-14,14,14);
+  cg.addColorStop(0,'rgba(255,255,255,0.85)');
+  cg.addColorStop(1,`hsla(${(t*2)%360},95%,70%,0.55)`);
+  ctx.fillStyle=cg;
+  ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(13,10);ctx.lineTo(-13,10);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+  // Portal: a spectral curtain that parts as the door opens
+  const dw=48,dh=76,dx=bx+bw/2-dw/2,dy=by-dh;
+  ctx.fillStyle='#05030c';ctx.fillRect(dx,dy,dw,dh);
+  const half=(dw/2)*(1-doorOpen);
+  for(const side of [0,1]){
+    const sx=side?dx+dw-half:dx;
+    const sg=ctx.createLinearGradient(sx,dy,sx+half,dy+dh);
+    for(let i=0;i<=4;i++)sg.addColorStop(i/4,`hsl(${(t*1.5+i*72+side*180)%360},95%,58%)`);
+    ctx.globalAlpha=0.85;ctx.fillStyle=sg;ctx.fillRect(sx,dy,half,dh);ctx.globalAlpha=1;
+  }
+  // Frame
+  ctx.strokeStyle=`hsl(${(t+200)%360},100%,78%)`;ctx.lineWidth=2;ctx.strokeRect(dx,dy,dw,dh);
+  // Light spilling out of the opening onto the ground
+  if(doorOpen>0.05){
+    const eg=ctx.createLinearGradient(dx,by,dx,by-30);
+    eg.addColorStop(0,`hsla(${(t*2)%360},100%,70%,${0.30*doorOpen})`);
+    eg.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=eg;ctx.fillRect(dx-14,by-30,dw+28,30);
+  }
+}
 function drawFlag(){
   const fx=flagX, poleTop=H-130, poleBase=H-40;
   if(fx>worldW)return; // hidden (boss level)
@@ -6605,7 +8962,7 @@ function drawFlag(){
   // Pole
   ctx.beginPath();ctx.moveTo(fx+5,poleBase);ctx.lineTo(fx+5,poleTop);ctx.stroke();
   // Pole base
-  ctx.fillStyle=CT.clr+'88';ctx.fillRect(fx-5,poleBase-4,22,6);
+  ctx.fillStyle=withAlpha(CT.clr,'88');ctx.fillRect(fx-5,poleBase-4,22,6);
   ctx.shadowBlur=0;
 
   if(!flagDone){
@@ -6715,7 +9072,7 @@ function drawFlag(){
       // Neon leading edge glow
       const wg=ctx.createLinearGradient(edge-50,0,edge+20,0);
       wg.addColorStop(0,'transparent');
-      wg.addColorStop(0.5,CT.mc+'cc');
+      wg.addColorStop(0.5,withAlpha(CT.mc,'cc'));
       wg.addColorStop(1,CT.bg);
       ctx.globalAlpha=1;
       ctx.fillStyle=wg;
@@ -6787,27 +9144,71 @@ function drawEnemies(){
     else if(e.flash>0&&Math.floor(e.flash/3)%2===0){ctx.globalAlpha=.22;ctx.shadowColor=e.glow;ctx.shadowBlur=6;}
     // No per-enemy halo — each d_* enemy already paints its own glow accents.
     // A blanket halo just added a thick coloured outline around every sprite and ate FPS.
+    // Prism Anomaly: the inhabitants are refracted too. A hue-rotate filter is
+    // used rather than painting a coloured rectangle over the sprite — a rect
+    // (even with source-atop) would tint the background inside the enemy's
+    // bounding box as well, leaving a visible coloured square around it. The
+    // filter only touches the pixels the sprite itself draws, so the enemy
+    // keeps its shape, shading and readable silhouette.
+    const _prismTint=(CT.id===10&&!e._frozen);
+    if(_prismTint){
+      // Quantised to 20° steps: a canvas filter is re-parsed whenever the
+      // string changes, so snapping the hue lets consecutive enemies reuse the
+      // same filter instead of forcing a rebuild per sprite. Visually identical
+      // at this scale, and it cuts the cost of the effect roughly in half.
+      const hue=((((e.id||0)*47+e.x*0.35+tick*1.4)%360)/20|0)*20;
+      ctx.filter=prismFilter(hue,7,1.22);
+    }
     const df=DRAW_E[e.type];if(df)df(e);
+    if(_prismTint)ctx.filter='none';
     if(e._frozen){
-      ctx.save();ctx.globalAlpha=0.45+Math.sin(tick*.2)*.1;
+      const crack=Math.max(0,Math.min(1,e._iceCrack||0));
+      // The block gets paler and more fractured as it nears breaking, instead of
+      // holding one appearance and then vanishing.
+      ctx.globalAlpha=(0.45+Math.sin(tick*.2)*.1)*(1-crack*0.35);
       ctx.fillStyle='#00ffff';ctx.fillRect(e.x,e.y,e.w,e.h);
       ctx.strokeStyle='#aaffff';ctx.lineWidth=2;ctx.shadowBlur=0;
       ctx.strokeRect(e.x+1,e.y+1,e.w-2,e.h-2);
-      ctx.globalAlpha=0.9;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
       const ex=e.x+e.w/2,ey=e.y+e.h/2;
-      for(let a=0;a<3;a++){const ang=a/3*Math.PI;ctx.beginPath();ctx.moveTo(ex-Math.cos(ang)*8,ey-Math.sin(ang)*8);ctx.lineTo(ex+Math.cos(ang)*8,ey+Math.sin(ang)*8);ctx.stroke();}
-      ctx.restore();
+      // Base facets
+      ctx.globalAlpha=0.9;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+      ctx.beginPath();
+      for(let a=0;a<3;a++){const ang=a/3*Math.PI;ctx.moveTo(ex-Math.cos(ang)*8,ey-Math.sin(ang)*8);ctx.lineTo(ex+Math.cos(ang)*8,ey+Math.sin(ang)*8);}
+      ctx.stroke();
+      // Fracture lines appear one by one as the freeze runs out
+      const shards=Math.floor(crack*5);
+      if(shards>0){
+        ctx.globalAlpha=0.55+crack*0.45;ctx.strokeStyle='#eaffff';ctx.lineWidth=1;
+        ctx.beginPath();
+        for(let k=0;k<shards;k++){
+          const a0=(k*1.9+(e.id||0));
+          const r0=e.w*0.12, r1=e.w*(0.30+crack*0.28);
+          ctx.moveTo(ex+Math.cos(a0)*r0,ey+Math.sin(a0)*r0*1.3);
+          ctx.lineTo(ex+Math.cos(a0+0.5)*r1,ey+Math.sin(a0+0.5)*r1*1.3);
+        }
+        ctx.stroke();
+      }
+      // Shudder just before it breaks
+      if(crack>0.82&&Math.floor(tick/3)%2===0){
+        ctx.globalAlpha=0.35;ctx.fillStyle='#ffffff';ctx.fillRect(e.x,e.y,e.w,e.h);
+      }
+      ctx.globalAlpha=1;
     }
     if(e.shielded){
-      ctx.save();ctx.globalAlpha=0.35+Math.sin(tick*.1)*.12;
-      ctx.strokeStyle='#aaf';ctx.lineWidth=3;ctx.shadowBlur=0;
+      ctx.globalAlpha=0.35+Math.sin(tick*.1)*.12;
+      ctx.strokeStyle=e.glow||'#aaf';ctx.lineWidth=3;ctx.shadowBlur=0;
       ctx.beginPath();ctx.ellipse(e.x+e.w/2,e.y+e.h/2,e.w*.65,e.h*.65,0,0,Math.PI*2);ctx.stroke();
-      ctx.restore();
+      // Inner highlight arc — makes the bubble read as a surface, and flashes
+      // white for a few frames right after it deflects something.
+      ctx.globalAlpha=(e._blockFx>0?0.75:0.18);
+      ctx.strokeStyle=(e._blockFx>0?'#fff':(e.glow||'#aaf'));ctx.lineWidth=2;
+      ctx.beginPath();ctx.ellipse(e.x+e.w/2,e.y+e.h/2,e.w*.55,e.h*.55,0,Math.PI*1.15,Math.PI*1.85);ctx.stroke();
+      ctx.globalAlpha=1;
     }
     // Spiked enemies: draw spikes on top
     const cfg=EC[e.type];
     if(cfg&&cfg.moveType==='spiked'){
-      ctx.save();ctx.shadowBlur=0;
+      ctx.shadowBlur=0;
       ctx.fillStyle='#888';
       const spikeCount=4;
       for(let i=0;i<spikeCount;i++){
@@ -6819,35 +9220,32 @@ function drawEnemies(){
         ctx.closePath();
         ctx.fill();
       }
-      ctx.restore();
     }
     // Armored enemies: draw armor plating
     if(cfg&&cfg.moveType==='armored'){
-      ctx.save();ctx.shadowBlur=0;
+      ctx.shadowBlur=0;
       ctx.strokeStyle='#666';ctx.lineWidth=2;
       ctx.strokeRect(e.x+2,e.y+2,e.w-4,e.h-4);
       ctx.strokeStyle='#999';ctx.lineWidth=1;
       ctx.strokeRect(e.x+4,e.y+4,e.w-8,e.h-8);
-      ctx.restore();
     }
     // Split enemies: draw split indicator
     if(cfg&&cfg.moveType==='split'){
-      ctx.save();ctx.shadowBlur=0;
+      ctx.shadowBlur=0;
       ctx.strokeStyle=e.glow;ctx.lineWidth=1;
       ctx.beginPath();
       ctx.moveTo(e.x+e.w/2,e.y+2);
       ctx.lineTo(e.x+e.w/2,e.y+e.h-2);
       ctx.stroke();
-      ctx.restore();
     }
     if(e.charging){
-      ctx.save();ctx.globalAlpha=0.6;ctx.shadowBlur=0;
+      ctx.globalAlpha=0.6;ctx.shadowBlur=0;
       ctx.strokeStyle=e.glow;ctx.lineWidth=2;
       ctx.beginPath();ctx.moveTo(e.x-8,e.y+e.h/2);ctx.lineTo(e.x+e.w+8,e.y+e.h/2);ctx.stroke();
-      ctx.restore();
+      ctx.globalAlpha=1;
     }
     if(e.hp<e.mhp&&e.mhp>1){ctx.shadowBlur=0;ctx.fillStyle='#400';ctx.fillRect(e.x,e.y-9,e.w,5);ctx.fillStyle=e.glow;ctx.fillRect(e.x,e.y-9,e.w*(e.hp/e.mhp),5);}
-    if(hardMode){ctx.fillStyle=e.glow;ctx.shadowBlur=0;ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('★',e.x+e.w/2,e.y-2);}
+    if(hardMode){ctx.shadowBlur=0;drawGlyph('★',[e.x+e.w/2,e.y-6],8,e.glow,'8px monospace');}
     ctx.restore();
   }
 }
@@ -7395,8 +9793,11 @@ function d_ff_eye(e){
 }
 
 // ── New enemy draw functions ──────────────────
-// Shared helper: draw a simple shield bubble around enemy
-function _shieldRing(e,col){if(!e.shielded)return;ctx.save();ctx.globalAlpha=.22;ctx.strokeStyle=col;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x+e.w/2,e.y+e.h/2,e.w*.62,e.h*.62,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+// The shield bubble is drawn once, centrally, by drawEnemies() — in screen
+// space, outside every sprite's own transform. There used to be a _shieldRing()
+// helper called from inside d_ff_sentinel/d_pr_guard as well; because those run
+// inside translate()/scale() it painted a second, misplaced ellipse far from
+// the enemy. Per-world colour now comes from e.glow in drawEnemies() instead.
 
 // ── CY ──
 function d_cy_sniper(e){const f=(nearestPlayer(e.x).x>e.x)?1:-1;ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);ctx.fillStyle='#220044';ctx.fillRect(3,0,e.w-6,e.h);ctx.fillStyle='#4422aa';ctx.fillRect(5,3,e.w-10,e.h*.5);ctx.fillStyle='#88aaff';ctx.shadowBlur=0;ctx.fillRect(5,5,5,4);ctx.fillRect(e.w-10,5,5,4);ctx.fillStyle='#4422aa';ctx.fillRect(e.w-1,e.h*.4,14,5);ctx.fillStyle='#aaaaff';ctx.fillRect(e.w+10,e.h*.41,4,3);if(e.sCD<35){ctx.globalAlpha=.5*(1-e.sCD/35);ctx.strokeStyle='#88f';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(e.w+2,e.h*.43);ctx.lineTo(e.w+70,e.h*.43);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}ctx.restore();}
@@ -7474,12 +9875,107 @@ function d_ff_sentinel(e){const f=e.vx>=0?1:-1;ctx.save();ctx.translate(e.x+e.w/
 ctx.fillStyle='#1a0000';ctx.fillRect(3,e.h-17,12,17+lk);ctx.fillRect(e.w-15,e.h-17,12,17-lk);ctx.fillStyle='#330000';ctx.fillRect(1,e.h*.88+lk,15,6);ctx.fillRect(e.w-16,e.h*.88-lk,15,6);// Heavy torso
 ctx.fillStyle='#220000';ctx.fillRect(2,e.h*.36,e.w-4,e.h*.65);ctx.fillStyle='#330000';ctx.fillRect(4,e.h*.4,e.w-8,e.h*.52);// Shoulder pads
 ctx.fillStyle='#1a0000';ctx.fillRect(-7,e.h*.36,9,22);ctx.fillRect(e.w-2,e.h*.36,9,22);// Head with full visor
-ctx.fillStyle='#200000';ctx.fillRect(4,0,e.w-8,e.h*.4);ctx.fillStyle='#f80';ctx.shadowBlur=0;ctx.fillRect(6,8,e.w-12,8);// Shield bubble visual
-_shieldRing(e,'#f80');ctx.restore();}
+ctx.fillStyle='#200000';ctx.fillRect(4,0,e.w-8,e.h*.4);ctx.fillStyle='#f80';ctx.shadowBlur=0;ctx.fillRect(6,8,e.w-12,8);ctx.restore();}
 function d_ff_wraith(e){ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.globalAlpha=0.6+Math.sin(e.a*.4)*.25;// Wraith cloak
 ctx.fillStyle='#220006';ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(0,-e.h*.5);ctx.quadraticCurveTo(e.w*.45,-e.h*.15,e.w*.4,e.h*.3);for(let wi=4;wi>=0;wi--){ctx.lineTo(e.w*.4-wi*(e.w*.2)+Math.sin(e.a+wi)*7,e.h*.5);}ctx.quadraticCurveTo(-e.w*.45,-e.h*.1,0,-e.h*.5);ctx.closePath();ctx.fill();// Eyes
 ctx.fillStyle='#ff0055';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(-6,-e.h*.15,4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(6,-e.h*.15,4,0,Math.PI*2);ctx.fill();// Zigzag energy trail
 ctx.strokeStyle='#f0a';ctx.lineWidth=2;ctx.shadowBlur=0;ctx.beginPath();for(let zi=0;zi<5;zi++){const zx=-e.w*.3+zi*e.w*.15+Math.sin(e.a+zi*1.5)*6;const zy=e.h*.3+zi*5;if(zi===0)ctx.moveTo(zx,zy);else ctx.lineTo(zx,zy);}ctx.stroke();ctx.globalAlpha=1;ctx.restore();}
+
+// ══ WORLD 10: PRISM ANOMALY (secret) ═════════════
+// A corrupted GRID fragment — silhouettes echo the other 9 worlds' robots but
+// rendered "glitched": fixed magenta/violet palette (not a rainbow), with rare
+// scanline tears and pixel-offset glitches standing in for the "prismatic"
+// theme instead of cycling through every hue every frame (unreadable/ugly).
+function d_pr_shard(e){
+  const f=e.vx>=0?1:-1,lk=e.onGnd?Math.sin(e.a*3)*3:0;
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);
+  _rLegs(0,0,e.w,e.h,'#3a0a5a',lk);
+  _rBody(0,0,e.w,e.h,'#5a14a0','#8020d0');
+  _rHead(0,0,e.w,e.h,'#4a0e80','#7018c0','#f0f');
+  // Jagged crystal shard jutting from the skull — cycles through the spectrum
+  // (this is "Prism Anomaly": the whole point is refracted rainbow light, not
+  // a single fixed tint like every other world's enemies).
+  ctx.fillStyle=`hsl(${(tick*3+e.x)%360},95%,72%)`;
+  ctx.beginPath();ctx.moveTo(e.w*.5,-10);ctx.lineTo(e.w*.62,0);ctx.lineTo(e.w*.5,e.h*.12);ctx.lineTo(e.w*.38,0);ctx.closePath();ctx.fill();
+  // Corruption glitch: an occasional 1-frame scanline tear + colour-offset slice
+  if(Math.floor(tick/5)%4===0){
+    ctx.fillStyle='#ff00ff33';ctx.fillRect(0,e.h*.3,e.w,3);
+    ctx.fillStyle='#00ffff22';ctx.fillRect(2,e.h*.55,e.w-4,3);
+  }
+  ctx.restore();
+}
+function d_pr_guard(e){
+  const f=e.vx>=0?1:-1,lk=e.onGnd?Math.sin(e.a*2)*2:0;
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);
+  // Heavy crystalline plating (cyan — matches its shield colour)
+  ctx.fillStyle='#0a2a44';ctx.fillRect(0,e.h*.42,e.w,e.h*.58);
+  ctx.fillStyle='#124a70';ctx.fillRect(2,e.h*.48,e.w-4,e.h*.4);
+  ctx.fillStyle='#0a1a2c';ctx.fillRect(-4,e.h*.48,6,e.h*.3);ctx.fillRect(e.w-2,e.h*.48,6,e.h*.3); // shoulder plates
+  _rHead(0,0,e.w,e.h,'#0d3350','#155a88','#0ff');
+  ctx.fillStyle='#0a1a2c';
+  ctx.fillRect(3,e.h-14,10,14+lk);ctx.fillRect(e.w-13,e.h-14,10,14-lk);
+  // Faceted crystal crest on top — cycles through the spectrum
+  ctx.fillStyle=`hsl(${(tick*3+e.x*2)%360},95%,75%)`;ctx.shadowBlur=0;
+  ctx.beginPath();ctx.moveTo(e.w*.5,-9);ctx.lineTo(e.w*.58,1);ctx.lineTo(e.w*.42,1);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+function d_pr_wisp(e){
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);
+  // Trailing prism-shard halo orbiting the core — each shard its own hue
+  for(let i=0;i<3;i++){
+    const ang=e.a*1.4+i*(Math.PI*2/3);
+    const rx=Math.cos(ang)*e.w*.7,ry=Math.sin(ang)*e.w*.5;
+    ctx.save();ctx.translate(rx,ry);ctx.rotate(ang);
+    ctx.fillStyle=`hsla(${(tick*4+i*120)%360},95%,68%,0.65)`;
+    ctx.beginPath();ctx.moveTo(0,-4);ctx.lineTo(3,0);ctx.lineTo(0,4);ctx.lineTo(-3,0);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha=0.9;ctx.fillStyle='#ffcc22';ctx.shadowColor='#ff8';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.arc(0,0,e.w/2,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(0,0,e.w/5,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+function d_pr_beam(e){
+  const f=(nearestPlayer(e.x).x>e.x)?1:-1;
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);
+  // Faceted emitter casing (green lens — matches its glow colour)
+  ctx.fillStyle='#0a3020';ctx.fillRect(3,0,e.w-6,e.h);
+  ctx.fillStyle='#125838';ctx.fillRect(5,3,e.w-10,e.h*.5);
+  ctx.fillStyle='#0a1a10';ctx.beginPath();ctx.moveTo(3,e.h*.1);ctx.lineTo(0,e.h*.4);ctx.lineTo(3,e.h*.7);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#0a1a10';ctx.beginPath();ctx.moveTo(e.w-3,e.h*.1);ctx.lineTo(e.w,e.h*.4);ctx.lineTo(e.w-3,e.h*.7);ctx.closePath();ctx.fill();
+  // Lens — cycles through the spectrum
+  const lensHue=(tick*3+e.x)%360;
+  ctx.fillStyle=`hsl(${lensHue},95%,65%)`;ctx.shadowColor=`hsl(${lensHue},95%,65%)`;ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(e.w-8,e.h*.32,4,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  if(e.sCD<35){
+    ctx.globalAlpha=.5*(1-e.sCD/35);ctx.strokeStyle=`hsl(${lensHue},95%,65%)`;ctx.lineWidth=1;
+    ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(e.w+2,e.h*.32);ctx.lineTo(e.w+70,e.h*.32);ctx.stroke();
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+function d_pr_glitch(e){
+  const f=e.vx>=0?1:-1;
+  ctx.save();ctx.translate(e.x+e.w/2,e.y+e.h/2);ctx.scale(f,1);ctx.translate(-e.w/2,-e.h/2);
+  const lk=e.onGnd?Math.sin(e.a*4)*4:0;
+  // Random-seeded per-enemy corruption offset (deterministic per instance via e.a)
+  const glitchOn=Math.floor(tick/4+e.x)%5===0;
+  const gx=glitchOn?(Math.sin(e.x*7+tick)*3):0;
+  ctx.fillStyle='#4a0030';ctx.fillRect(2,e.h-14,9,14+lk);ctx.fillRect(e.w-11,e.h-14,9,14-lk);
+  ctx.fillStyle='#8a1060';ctx.fillRect(3+gx,e.h-22,e.w-6,10);
+  ctx.fillStyle='#cc2266';ctx.shadowBlur=0;ctx.fillRect(4-gx,0,e.w-8,14);
+  ctx.fillStyle='#ffb0e0';ctx.fillRect(6,4,4,3);ctx.fillRect(e.w-12,4,4,3); // eyes
+  if(glitchOn){
+    // Corrupted duplicate slice offset to the side — the "glitch" signature look
+    ctx.globalAlpha=.4;ctx.fillStyle=`hsl(${(tick*6+e.x)%360},95%,65%)`;ctx.fillRect(4+gx*2,0,e.w-8,6);
+    ctx.globalAlpha=1;
+  }
+  if(e.charging){
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(e.w,e.h/2);ctx.lineTo(e.w+12,e.h/2-6);ctx.lineTo(e.w+12,e.h/2+6);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();
+}
 
 const DRAW_E={
   cy_glitch:d_cy_glitch,cy_tank:d_cy_tank,cy_probe:d_cy_probe,cy_sniper:d_cy_sniper,cy_rusher:d_cy_rusher,
@@ -7492,6 +9988,7 @@ const DRAW_E={
   tx_slug:d_tx_slug,tx_blob:d_tx_blob,tx_fly:d_tx_fly,tx_venom:d_tx_venom,tx_mutant:d_tx_mutant,
   st_gust:d_st_gust,st_titan:d_st_titan,st_bolt:d_st_bolt,st_rod:d_st_rod,st_cyclone:d_st_cyclone,
   ff_guard:d_ff_guard,ff_demon:d_ff_demon,ff_eye:d_ff_eye,ff_sentinel:d_ff_sentinel,ff_wraith:d_ff_wraith,
+  pr_shard:d_pr_shard,pr_guard:d_pr_guard,pr_wisp:d_pr_wisp,pr_beam:d_pr_beam,pr_glitch:d_pr_glitch,
 };
 // Convert hex+alpha safely
 // Safe colour-with-alpha helper that works for both hex (#rrggbb) and hsl(...) strings.
@@ -7554,6 +10051,64 @@ function drawBullets(){
     ctx.beginPath();ctx.arc(cx,cy,b.h*.3,0,Math.PI*2);ctx.fill();
   }
 }
+// Elemental armour worn OVER the robot. Deliberately drawn as separate pieces
+// with gaps between them so the robot's own body colour still reads through —
+// that is the whole point: a fire/ice player should still be recognisably THEIR
+// robot (this matters in network games, where colour is identity).
+// Coordinates are in the player's local space (drawOnePlayer has already
+// translated to p.x,p.y), matching the body plates drawn there.
+function _drawElementSuit(p,o){
+  const w=p.w,h=p.h,pulse=o.pulse;
+  ctx.save();
+  // Shoulder pauldrons
+  ctx.fillStyle=o.plate;
+  ctx.fillRect(-1,h-24,7,9);
+  ctx.fillRect(w-6,h-24,7,9);
+  ctx.fillStyle=o.edge;
+  ctx.fillRect(-1,h-24,7,2);
+  ctx.fillRect(w-6,h-24,7,2);
+  // Chest core — the one bright, pulsing part
+  const cx=w/2,cy=h-17;
+  ctx.fillStyle=o.plate;ctx.fillRect(cx-5,cy-4,10,9);
+  ctx.fillStyle=o.edge;ctx.fillRect(cx-5,cy-4,10,2);
+  ctx.globalAlpha=0.55+pulse*0.45;
+  ctx.fillStyle=o.core;ctx.fillRect(cx-3,cy-1,6,4);
+  ctx.globalAlpha=1;
+  // Gauntlets
+  ctx.fillStyle=o.plate;
+  ctx.fillRect(0,h-13,5,6);
+  ctx.fillRect(w-5,h-13,5,6);
+  ctx.fillStyle=o.edge;
+  ctx.fillRect(0,h-13,5,1.5);
+  ctx.fillRect(w-5,h-13,5,1.5);
+  // Helmet crest — a fin over the top of the head, not a repaint of the face
+  ctx.fillStyle=o.plate;
+  ctx.fillRect(4,h-32,w-8,3);
+  ctx.fillStyle=o.edge;
+  ctx.beginPath();
+  ctx.moveTo(cx-4,h-31);ctx.lineTo(cx,h-38);ctx.lineTo(cx+4,h-31);
+  ctx.closePath();ctx.fill();
+  // Knee guards
+  ctx.fillStyle=o.plate;
+  ctx.fillRect(2,h-8,6,3);
+  ctx.fillRect(w-8,h-8,6,3);
+  // Frost rime along the plate edges (ice only)
+  if(o.frost){
+    ctx.globalAlpha=0.5+pulse*0.3;
+    ctx.fillStyle=o.core;
+    ctx.fillRect(-1,h-16,7,1.5);
+    ctx.fillRect(w-6,h-16,7,1.5);
+    ctx.globalAlpha=1;
+  }
+  // A soft elemental rim so the suit still reads at a glance
+  if(GFX.glow>0){
+    ctx.globalAlpha=0.30+pulse*0.20;
+    ctx.strokeStyle=o.glow;ctx.lineWidth=1;
+    ctx.strokeRect(0.5,h-24.5,w-1,24);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
 function drawOnePlayer(p){
   if(!p)return;
   // Hide the player once they've stepped into the end-of-level building's doorway
@@ -7581,14 +10136,40 @@ function drawOnePlayer(p){
   // Boots speed trail
   if(p.boots&&Math.abs(p.vx)>2){for(let i=1;i<p.trail.length;i+=2){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.22;ctx.fillStyle='#0ff';ctx.beginPath();ctx.arc(t.x,t.y,5,0,Math.PI*2);ctx.fill();ctx.restore();}}
   ctx.save();ctx.translate(p.x+p.w/2,p.y+p.h/2);ctx.scale(p.facing,1);ctx.translate(-p.w/2,-p.h/2);
-  // Star rainbow glow
+  // ── Weight and life ──────────────────────────────────────────────────────
+  // Squash on landing, and a slow breathing sway plus an occasional glance when
+  // the player has been standing still. Both are pure transform maths on a
+  // sprite that is already being drawn — no extra draw calls, and they are what
+  // make the robot read as a body rather than a moving decal.
+  if(p.landT>0){
+    const sq=(p.landT/12)*(p.landPow||0.5);
+    ctx.translate(p.w/2,p.h);
+    ctx.scale(1+sq*0.28,1-sq*0.30);
+    ctx.translate(-p.w/2,-p.h);
+  } else if(p.idleT>90&&!p.respawning){
+    const t=(p.idleT-90);
+    ctx.translate(p.w/2,p.h);
+    ctx.scale(1,1+Math.sin(t*0.045)*0.014);        // breathing
+    // Every ~4s: a short lean, as if looking around
+    const cyc=t%240;
+    if(cyc<34)ctx.rotate(Math.sin(cyc/34*Math.PI)*0.045);
+    ctx.translate(-p.w/2,-p.h);
+  }
+  // Ambient body glow (star/blaster/respawn/boots) — used to be a whole-body
+  // ctx.shadowBlur left set across every single body part (legs, torso, arms,
+  // head, visor — ~20-30 fills per player per frame), which is the expensive
+  // way to blur: cost scales with every shape drawn while it's active, not
+  // just the glow itself. A single sprite-based bloom() behind the body gives
+  // the same "player is glowing" read for a flat, one-time cost instead.
   if(p.starMode){
     const hue=(tick*12)%360;
-    ctx.shadowColor=`hsl(${hue},100%,65%)`;ctx.shadowBlur=14;
-  } else if(p.blaster){ctx.shadowColor=trailCol;ctx.shadowBlur=8;}
-  if(p.respawning){ctx.shadowColor='#fff';ctx.shadowBlur=11;}
-  // Boots tint indicator
-  if(p.boots&&!p.starMode){ctx.shadowColor='#0ff';ctx.shadowBlur=Math.max(ctx.shadowBlur||0,10);}
+    bloom(p.w/2,p.h/2,p.w*0.9,`hsl(${hue},100%,65%)`,0.85);
+  } else if(p.blaster){
+    bloom(p.w/2,p.h/2,p.w*0.75,trailCol,0.55);
+  }
+  if(p.respawning){ bloom(p.w/2,p.h/2,p.w*0.85,'#fff',0.6); }
+  if(p.boots&&!p.starMode){ bloom(p.w/2,p.h/2,p.w*0.7,'#0ff',0.45); }
+  ctx.shadowBlur=0;
   const lk=p.onGnd?Math.sin(p.animFr/4*Math.PI)*4:0;
 
   // Robot stage drives the body "damage" skin now (lives are shown separately
@@ -7606,7 +10187,8 @@ function drawOnePlayer(p){
     // Trails (reuse trailCol from above)
     if(p.blaster&&!p.starMode){for(let i=2;i<p.trail.length;i+=3){const t=p.trail[i];ctx.save();ctx.globalAlpha=(1-i/p.trail.length)*.18;ctx.fillStyle=pp.visor;ctx.beginPath();ctx.arc(t.x-p.x-p.w/2+p.w/2,t.y-p.y-p.h/2+p.h/2,7,0,Math.PI*2);ctx.fill();ctx.restore();}}
 
-    ctx.shadowColor=pp.shadow;ctx.shadowBlur=8;
+    // Body drawn crisp — the ambient glow is already handled by bloom() above.
+    ctx.shadowBlur=0;
 
     // Legs
     ctx.fillStyle=dmgN>=2?pp.dark:pp.mid;
@@ -7617,7 +10199,7 @@ function drawOnePlayer(p){
     // Torso
     ctx.fillStyle=dmgN>=1?pp.dark:pp.mid;ctx.fillRect(3,p.h-22,p.w-6,11);
     ctx.fillStyle=dmgN>=1?pp.mid:pp.body;ctx.fillRect(5,p.h-20,p.w-10,7);
-    if(p.blaster){ctx.fillStyle=pp.visor+'22';ctx.fillRect(5,p.h-20,p.w-10,7);}
+    if(p.blaster){ctx.fillStyle=withAlpha(pp.visor,'22');ctx.fillRect(5,p.h-20,p.w-10,7);}
     // Scratches on dmg
     if(dmgN>=1){ctx.save();ctx.strokeStyle=pp.bright;ctx.lineWidth=1;ctx.globalAlpha=0.7;ctx.beginPath();ctx.moveTo(7,p.h-21);ctx.lineTo(10,p.h-14);ctx.stroke();ctx.beginPath();ctx.moveTo(13,p.h-20);ctx.lineTo(11,p.h-15);ctx.stroke();ctx.restore();}
     // Arms
@@ -7788,13 +10370,16 @@ function drawOnePlayer(p){
   }
 
   // ── FIRE скин ──
+  // The robot used to be repainted solid orange with a source-atop fill, which
+  // threw away its own colour entirely — in a network game every player turned
+  // into the same orange blob. Instead it now puts ON a suit: pauldrons, a
+  // chest core, gauntlets and a helmet crest, leaving the body underneath (blue,
+  // red, or whatever colour the player picked) clearly visible between them.
   if(p.fireMode){
-    ctx.save();
-    // Оранжевый оверлей
-    ctx.globalCompositeOperation='source-atop';
-    ctx.globalAlpha=0.5+Math.sin(tick*.2)*.1;
-    ctx.fillStyle='#ff5500';ctx.fillRect(0,0,p.w,p.h);
-    ctx.restore();
+    _drawElementSuit(p,{
+      plate:'#c23a05',  edge:'#ff8a2a', core:'#ffd166', glow:'#ff4400',
+      pulse:0.5+Math.sin(tick*.18)*0.5,
+    });
     // Языки огня над головой
     ctx.save();ctx.shadowColor='#ff4400';ctx.shadowBlur=4;
     for(let fi=0;fi<4;fi++){
@@ -7811,13 +10396,12 @@ function drawOnePlayer(p){
     }
     ctx.restore();
   }
-  // ── ICE скин ──
+  // ── ICE скин ── (same idea as the fire suit above)
   if(p.iceMode){
-    ctx.save();
-    ctx.globalCompositeOperation='source-atop';
-    ctx.globalAlpha=0.4+Math.sin(tick*.15)*.07;
-    ctx.fillStyle='#00aaff';ctx.fillRect(0,0,p.w,p.h);
-    ctx.restore();
+    _drawElementSuit(p,{
+      plate:'#0d5f8c',  edge:'#7fe6ff', core:'#dffaff', glow:'#00ffff',
+      pulse:0.5+Math.sin(tick*.13)*0.5, frost:true,
+    });
     // Кристаллы вокруг
     ctx.save();ctx.shadowColor='#00ffff';ctx.shadowBlur=4;
     for(let ci=0;ci<4;ci++){
@@ -7843,13 +10427,19 @@ function drawPlayer(){
   if(player)drawOnePlayer(player);
   if(twoPlayer&&player2)drawOnePlayer(player2);
 }
+// Reused across frames (bug #20): allocating a fresh {} grouping object every
+// frame in drawParticles added needless GC churn. Cleared in place instead.
+const _byColCache = {};
 function drawParticles(){
   // Группируем частицы по цвету для batch рендера
   // Off-screen particles are invisible, so skip grouping/drawing them entirely.
+  if(_particleAliveCount<=0)return;
   const vLeft=camX-30,vRight=camX+W+30;
-  const byCol = {};
+  for(const k in _byColCache) delete _byColCache[k];
+  const byCol = _byColCache;
   const texts = [];
   for(const p of particles){
+    if(!p.alive)continue;
     if(p.x<vLeft||p.x>vRight)continue;
     if(p.txt){texts.push(p);continue;}
     if(!byCol[p.col])byCol[p.col]=[];
@@ -7877,20 +10467,58 @@ function drawParticles(){
     }
   }
   // Float-up text labels (no per-glyph shadowBlur — cheap solid text).
-  ctx.font="bold 7px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';
-  for(const p of texts){
-    ctx.globalAlpha=p.life;ctx.fillStyle=p.col;
-    ctx.fillText(p.txt,p.x,p.y);
+  //
+  // The ctx.font assignment below used to run unconditionally, every frame,
+  // even when there was not a single floating label on screen. Assigning a
+  // web-font shorthand to a canvas forces font matching/shaping setup, and it
+  // measured at 2.3 ms of a 3.3 ms frame — by far the most expensive single
+  // line in the renderer. Guarding it on `texts.length` costs nothing and makes
+  // it free on the ~95% of frames that have no labels.
+  if(texts.length){
+    ctx.font="bold 7px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';
+    for(const p of texts){
+      ctx.globalAlpha=p.life;ctx.fillStyle=p.col;
+      ctx.fillText(p.txt,p.x,p.y);
+    }
   }
   ctx.shadowBlur=0;
   ctx.globalAlpha=1;
 }
+// The world-name watermark is one string of 40px pixel-font text, but laying it
+// out and rasterising it every single frame cost up to 0.6 ms — more than the
+// entire parallax background. It only changes when the world or the language
+// changes, so it is baked into an offscreen canvas and blitted.
+let _wmCanvas=null,_wmKey='';
 function drawWatermark(){
   if(!advMode)return;
-  ctx.save();ctx.globalAlpha=.08;ctx.font="bold 40px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=CT.mc;ctx.fillText(worldName(CT),W/2,H/2);ctx.restore();
+  const txt=worldName(CT);
+  const key=txt+'|'+CT.mc;
+  if(_wmKey!==key){
+    const dpr=Math.min(2,(window.devicePixelRatio||1));
+    const cv=document.createElement('canvas');
+    cv.width=Math.ceil(W*dpr);cv.height=Math.ceil(70*dpr);
+    const c=cv.getContext('2d');
+    c.scale(dpr,dpr);
+    c.font="bold 40px 'Press Start 2P',monospace";c.textAlign='center';c.textBaseline='middle';
+    c.fillStyle=CT.mc;c.fillText(txt,W/2,35);
+    _wmCanvas=cv;_wmKey=key;
+  }
+  ctx.save();ctx.globalAlpha=.08;
+  ctx.drawImage(_wmCanvas,0,H/2-35,W,70);
+  ctx.restore();
 }
 function drawLevelClear(){
-  ctx.save();ctx.globalAlpha=.42;ctx.fillStyle=CT.clr;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+  ctx.save();
+  // Soft vignette instead of a flat full-screen tint — a solid 42% fill of the
+  // world's theme colour (e.g. Desert Ruins' sandy '#eebb66') washed out the
+  // whole screen so hard it read as "everything turns yellow" rather than a
+  // celebratory accent. Center stays clear/readable; colour only builds up
+  // toward the edges.
+  const cx=W/2, cy=H/2, rIn=Math.min(W,H)*0.28, rOut=Math.max(W,H)*0.75;
+  const g=ctx.createRadialGradient(cx,cy,rIn,cx,cy,rOut);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,CT.clr);
+  ctx.globalAlpha=.55;ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
   ctx.fillStyle='#fff';ctx.shadowColor=CT.clr;ctx.shadowBlur=35;
   ctx.font="bold 15px 'Press Start 2P',monospace";ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(T('levelClear',advMode?advLevel:level),W/2,H/2-12);
@@ -7918,23 +10546,39 @@ function draw(){
   const sx=shakeMul>0&&camShake>.5?(Math.random()-.5)*camShake*shakeMul:0;
   const sy=shakeMul>0&&camShake>.5?(Math.random()-.5)*camShake*.4*shakeMul:0;
   const camYOffset=window.camY||0;
+  // Mobile view zoom — magnifies the WORLD (background included) while leaving
+  // the HUD and overlays alone. Returns 1 on desktop, so this whole block is a
+  // no-op there. Zooming in means the 0..W×0..H scene is drawn LARGER than the
+  // canvas, so it always covers it — no gaps at the edges.
+  const _z=_viewZoom();
+  if(_z>1){
+    _updateViewFocus(_z);
+    ctx.save();
+    ctx.translate(W/2,H/2); ctx.scale(_z,_z); ctx.translate(-_vzX,-_vzY);
+  }
   drawBG();drawGrid();drawWatermark();
   drawDecors();
   ctx.save();ctx.translate(-camX+sx,sy+camYOffset);
-  drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawDataShards();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
+  drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawDataShards();drawRainbowItem();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
   drawBoss();
   drawEnemies();drawFireIceBalls();drawBullets();drawPlayer();drawParticles();
+  if(window.Status){for(const q of activePlayers())Status.drawOnPlayer(ctx,q);}
   ctx.restore();
-
-  // Darkness modifier overlay.
-  // The main canvas is opaque-by-scene, so we can't "erase" holes directly into it
-  // (that would reveal the page background, not the scene). Instead we build the dark
-  // mask on a separate transparent canvas, punch soft light holes around every light
-  // source (players + enemies + boss), then composite the mask on top. Holes let the
-  // already-drawn scene show through; everything else stays dark.
+  // Darkness is a world-space mask (light holes follow entities), so it belongs
+  // INSIDE the zoom transform — composited after it, the holes would sit where
+  // the unzoomed entities used to be.
   if(levelMods.darkness&&player){
     drawDarknessOverlay();
   }
+  if(_z>1)ctx.restore();   // end mobile view zoom — everything below is screen-space
+  // Screen-edge tint in the effect's colour. Deliberately a vignette rather
+  // than a full-screen wash, which buried the level art and made the fire/ice
+  // suit unreadable.
+  if(window.Status&&player)Status.drawVignette(ctx,player,W,H);
+
+  // (Darkness modifier is drawn above, inside the zoom transform — see there for
+  // why: the mask is built on a separate transparent canvas, soft light holes are
+  // punched around every light source, then it is composited on top.)
 
   drawBossHUD();
   drawSpawnMarker();
@@ -7949,15 +10593,32 @@ function draw(){
 function update(){
   tick++;
   if(gState==='playing'){
-    updatePlatforms();updateSpotlights();updateMazeKeys();updateHazards();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateDataShards();updateTimer();updateExit();
+    updatePlatforms();updateSpotlights();updateMazeKeys();updateHazards();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateDataShards();updateRainbowItem();updateTimer();updateExit();
     // Camera tracks average of alive players — runs in the main loop so it keeps
     // Network: each client tracks only their own player.
     // Local: camera tracks average of all active players.
-    const aps = window.netActive ? (player ? [player] : []) : activePlayers();
-    if(aps.length){
-      const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
-      camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
+    // Boss levels: the camera auto-scrolls left→right on its own instead of
+    // following the player — a slow, unstoppable advance toward the arena.
+    // Falling behind its left edge is fatal; reaching the arena's far edge
+    // turns the camera into a hard wall the player can't push past.
+    const _bossAutoScroll = !!boss && !!(window.gameSettings && window.gameSettings.bossAutoScrollCamera);
+    if(_bossAutoScroll){
+      const _camMax=Math.max(0,worldW-W);
+      if(camX<_camMax){
+        camX+=BOSS_CAM_SPEED;
+        if(camX>_camMax)camX=_camMax;
+      }
       window.camY=0;
+      // Anyone who falls off the left edge of the camera is left behind for good.
+      if(player&&!player.respawning&&player.x+player.w<camX-4)doHurtPlayer(true);
+      if(twoPlayer&&player2&&!player2.respawning&&player2.x+player2.w<camX-4)doHurtPlayer2(true);
+    } else {
+      const aps = window.netActive ? (player ? [player] : []) : activePlayers();
+      if(aps.length){
+        const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
+        camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
+        window.camY=0;
+      }
     }
     camShake*=.82;
   } else if(gState==='levelclear'||gState==='paused'){
@@ -7977,7 +10638,19 @@ function _advanceLogic(maxClamp){
   if(dt>(maxClamp||250))dt=maxClamp||250; // clamp after a stall — no spiral of death
   _logicAcc+=dt;
   let steps=0;
-  while(_logicAcc>=LOGIC_STEP&&steps<5){update();_logicAcc-=LOGIC_STEP;steps++;}
+  while(_logicAcc>=LOGIC_STEP&&steps<5){
+    try{ update(); }
+    catch(e){
+      // A single bad frame must never permanently kill the whole game loop —
+      // without this, one thrown error inside update() (anywhere: player,
+      // enemies, boss, particles...) stopped requestAnimationFrame from ever
+      // being scheduled again, silently freezing all game LOGIC while input
+      // still felt "alive" and the last rendered frame stayed on screen.
+      // Logging keeps it visible during testing instead of failing silently.
+      console.error('[update] uncaught error, skipping this logic step:', e);
+    }
+    _logicAcc-=LOGIC_STEP;steps++;
+  }
   if(steps>=5)_logicAcc=0;
   return steps;
 }
@@ -8115,7 +10788,8 @@ function patchedStartAdv(n,freshLives=false){
   if(raf)cancelAnimationFrame(raf);loop();
 }
 // Replace references
-document.getElementById('infCard').onclick=()=>{
+document.getElementById('infCard').onclick=function(){
+  if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}
   if(advProg.done.length<100){
     SFX.back();
     const need=100-advProg.done.length;
@@ -8127,7 +10801,11 @@ document.getElementById('infCard').onclick=()=>{
     setTimeout(()=>msg.remove(),1800);
     return;
   }
-  initAudio();SFX.menu();advMode=false;CT=THEMES[0];patchedStartInf(true);
+  initAudio();SFX.menu();advMode=false;CT=THEMES[0];
+  // A run left in progress is offered back before anything is generated; with
+  // no saved run this starts a fresh one immediately (see assets/infsave.js).
+  if(window.InfSave)window.InfSave.open();
+  else patchedStartInf(true);
 };
 function startInf(fresh){patchedStartInf(fresh===undefined?true:fresh);}
 function startAdv(n,f){patchedStartAdv(n,f===undefined?false:f);}
@@ -8138,14 +10816,81 @@ function startAdv(n,f){patchedStartAdv(n,f===undefined?false:f);}
 // ╚══════════════════════════════════════════════╝
 
 // ── Portrait renderer ──────────────────────────
+// The UNIT-7 portrait is painted in a fixed cyan/blue. Rather than duplicating
+// the whole sprite for every robot colour, it is drawn once and hue-rotated —
+// the shading and silhouette survive, only the hue moves. Base hue of the
+// portrait's blue is ~205°.
+var _CS_PORTRAIT_BASE_HUE=205;
+function _csActorColour(){
+  if(!_csActor||!_csActor.color)return '#0ff';
+  var c=_csActor.color;
+  if(typeof c==='object'&&c.h!=null)return 'hsl('+c.h+','+(c.s!=null?c.s:85)+'%,'+(c.l!=null?c.l:55)+'%)';
+  return String(c);
+}
+function _csActorHueShift(){
+  if(!_csActor||!_csActor.color)return 0;
+  var c=_csActor.color;
+  if(typeof c==='object'&&c.h!=null)return Math.round(c.h-_CS_PORTRAIT_BASE_HUE);
+  return 0;
+}
 function csDrawPortrait(cvId, who, dim){
   var cv=document.getElementById(cvId);
   if(!cv)return;
   var c=cv.getContext('2d'), w=cv.width, h=cv.height;
+  c.setTransform(1,0,0,1,0,0);
+  c.filter='none';
   c.clearRect(0,0,w,h);
   if(!who)return;
+  // Hue shifts are applied AFTER the clear (a filter set before it is wiped by
+  // the reset above) and stay in effect for the whole portrait.
+  //   • UNIT-8 is UNIT-7's own design rebuilt by NEXUM — literally the same
+  //     body, repainted. Drawing him as a hue-rotated UNIT-7 is not a shortcut,
+  //     it is the point.
+  //   • A network player cast as UNIT-7 gets their own robot colour.
+  var hueShift=0, extraSat='';
+  if(who==='unit8'){ who='unit7'; hueShift=155; extraSat=' saturate(1.25)'; }
+  else if(who==='unit7'&&_csActor){ hueShift=_csActorHueShift(); }
+  if(hueShift)c.filter='hue-rotate('+hueShift+'deg)'+extraSat;
   c.save();
   if(dim)c.globalAlpha=0.28;
+  if(who==='prism'){
+    // Six UNIT silhouettes fused into one refracted body. Deliberately built
+    // from the same proportions as UNIT-7's portrait — they are the same model,
+    // six versions back — but split into overlapping spectral copies that never
+    // quite line up.
+    var t=(typeof tick==='number')?tick:0;
+    for(var g=5;g>=0;g--){
+      var hue=(t*1.4+g*60)%360;
+      var off=(g-2.5)*3.2+Math.sin(t*0.03+g)*2.2;
+      c.save();
+      c.globalAlpha=(dim?0.10:0.30)-(g*0.012);
+      c.fillStyle='hsl('+hue+',95%,60%)';
+      c.translate(off,Math.cos(t*0.025+g)*2);
+      c.fillRect(w*.30,h*.72,w*.16,h*.28);c.fillRect(w*.54,h*.72,w*.16,h*.28); // legs
+      c.fillRect(w*.20,h*.43,w*.60,h*.31);                                     // torso
+      c.fillRect(w*.04,h*.43,w*.17,h*.28);c.fillRect(w*.79,h*.43,w*.17,h*.28); // arms
+      c.fillRect(w*.22,h*.12,w*.56,h*.27);                                     // head
+      c.restore();
+    }
+    // A single bright visor holding all six together
+    c.globalAlpha=dim?0.35:1;
+    c.shadowColor='#fff';c.shadowBlur=18;
+    c.fillStyle='#ffffff';
+    c.fillRect(w*.28,h*.20,w*.44,h*.07);
+    c.shadowBlur=0;
+    // Fracture lines across the body
+    c.globalAlpha=dim?0.15:0.45;
+    c.strokeStyle='#ffffff';c.lineWidth=1;
+    c.beginPath();
+    for(var f=0;f<5;f++){
+      var fy=h*(0.30+f*0.14);
+      c.moveTo(w*0.12,fy);c.lineTo(w*0.88,fy+Math.sin(t*0.04+f)*4);
+    }
+    c.stroke();
+    c.restore();
+    c.filter='none';
+    return;
+  }
   if(who==='unit7'){
     c.shadowColor='#0ff';c.shadowBlur=16;
     // Legs
@@ -8379,6 +11124,7 @@ function csDrawPortrait(cvId, who, dim){
     c.shadowBlur=0;
   }
   c.restore();
+  c.filter='none';
 }
 
 // ── Background renderer (fills canvas fully) ──
@@ -8562,6 +11308,33 @@ var CS_BG_DEFS={
       var fdx=(fd*83+t*.3)%w;var fdy=(fd*61+Math.sin(fd+t*.02)*20)%(h*.8);
       c.fillStyle='rgba(100,0,0,0.3)';c.fillRect(fdx,fdy,4+fd%4,4+fd%3);
     }
+  },
+  10:function(c,w,h,t){ // Prism Anomaly — corrupted GRID fragment
+    var g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,'#0a0018');g.addColorStop(1,'#1c0032');c.fillStyle=g;c.fillRect(0,0,w,h);
+    // Shattered prism shards drifting
+    for(var ps=0;ps<12;ps++){
+      var psx=(ps*97+t*.6)%w,psy=(ps*53+Math.sin(ps+t*.02)*30)%h;
+      var hue=(ps*36+t*2)%360;
+      c.save();c.translate(psx,psy);c.rotate(Math.sin(ps+t*.01)*0.6);
+      c.fillStyle='hsla('+hue+',90%,60%,0.22)';
+      c.beginPath();c.moveTo(0,-10);c.lineTo(8,0);c.lineTo(0,10);c.lineTo(-8,0);c.closePath();c.fill();
+      c.restore();
+    }
+    // Glitch scanline tears
+    if(Math.floor(t/6)%4===0){
+      var gy=(t*3)%h;
+      c.fillStyle='rgba(255,0,255,0.08)';c.fillRect(0,gy,w,3);
+    }
+    // Corrupted grid lines (irregular, unlike the clean Cyber City grid)
+    c.strokeStyle='rgba(255,0,255,0.07)';c.lineWidth=1;
+    for(var pg=0;pg<w;pg+=44){
+      var jit=Math.sin(pg+t*.03)*6;
+      c.beginPath();c.moveTo(pg+jit,0);c.lineTo(pg-jit,h);c.stroke();
+    }
+    // Central prismatic glow
+    var pgg=c.createRadialGradient(w*.5,h*.42,10,w*.5,h*.42,140);
+    pgg.addColorStop(0,'rgba(255,0,255,0.18)');pgg.addColorStop(1,'transparent');
+    c.fillStyle=pgg;c.fillRect(0,0,w,h);
   }
 };
 
@@ -8589,16 +11362,16 @@ function csDrawDecor(wi){
   var themes=[
     ['#0ff','#4af'],['#4f8','#2a4'],['#f62','#a30'],['#8cf','#46a'],
     ['#e8a','#a64'],['#a0f','#60a'],['#0b4','#063'],['#cf0','#8a0'],
-    ['#88f','#448'],['#f44','#a00']
+    ['#88f','#448'],['#f44','#a00'],['#f0f','#a0a']
   ];
-  var tc=themes[Math.min(wi,9)];
+  var tc=themes[Math.min(wi,10)];
   // Corner frame lines
-  c.strokeStyle=tc[0]+'55';c.lineWidth=2;
+  c.strokeStyle=withAlpha(tc[0],'55');c.lineWidth=2;
   c.strokeRect(8,8,w-16,h-16);
-  c.strokeStyle=tc[1]+'33';c.lineWidth=1;
+  c.strokeStyle=withAlpha(tc[1],'33');c.lineWidth=1;
   c.strokeRect(14,14,w-28,h-28);
   // Corner brackets
-  c.strokeStyle=tc[0]+'cc';c.lineWidth=2;
+  c.strokeStyle=withAlpha(tc[0],'cc');c.lineWidth=2;
   var bl=24;
   [[0,0],[1,0],[0,1],[1,1]].forEach(function(co){
     var cx2=co[0]?(w-8):8; var cy2=co[1]?(h-8):8;
@@ -8617,11 +11390,11 @@ function csDrawDecor(wi){
     c.fillRect(20,py-3,6,6);c.fillRect(w-26,py-3,6,6);
   }
   // NEXUM watermark
-  c.fillStyle=tc[0]+'11';
+  c.fillStyle=withAlpha(tc[0],'11');
   c.font='bold 48px Press Start 2P,monospace';c.textAlign='center';c.textBaseline='middle';
   c.fillText('NEXUM',w*.5,h*.45);
   // Status ticker at top
-  c.fillStyle=tc[0]+'66';c.font='7px Share Tech Mono,monospace';c.textAlign='left';c.textBaseline='top';
+  c.fillStyle=withAlpha(tc[0],'66');c.font='7px Share Tech Mono,monospace';c.textAlign='left';c.textBaseline='top';
   var ticker='GRID ACCESS LOG // UNIT-7 SIGNAL TRACE // SECTOR BREACH // ';
   c.fillText(ticker,20,20);
 }
@@ -9009,6 +11782,64 @@ var _CSCENES_RU={
     {sp:'АРХОНТ',k:'archon',text:'Дверь уже открыта. Входи и закончи то, что начала Лейла. Если сможешь.'},
   ],
   // Ending
+  // ── World 10 (secret) — PRISM ANOMALY ────────────────────────────────────
+  // Canon anchor: Leila built the whole UNIT series; NEXUM purged the labs.
+  // UNIT-7 was the one that got out. This world answers a question the main
+  // story never asks — what happened to UNIT-1 through UNIT-6 — and explains
+  // why ARCHON walled the fragment off instead of deleting it: deleted data
+  // does not die here, it refracts.
+  w10_start:[
+    {sp:'СИСТЕМА',k:'system',text:'[СЕКТОР НЕ ЗНАЧИТСЯ В РЕЕСТРЕ] Слой 11. Идентификатор отсутствует. Записи о создании отсутствуют. Записи об удалении — отсутствуют.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Десять осколков сложились в один ключ. Ключ открыл дверь, которой нет на схеме GRID.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[АНАЛИЗ СРЕДЫ] Свет здесь не отражается. Он расщепляется. Каждый объект тянет за собой спектр — как будто у него несколько прошлых состояний одновременно.'},
+    {sp:'СИСТЕМА',k:'system',text:'[ФРАГМЕНТ GRID — КАРАНТИН] Удаление невозможно. Данные не подчиняются протоколу стирания. Применено: изоляция. Ответственный: АРХОНТ.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'АРХОНТ не смог это удалить. Он это замуровал. Значит, здесь то, что он боялся потерять — или то, что боялся показать.'},
+  ],
+  w10_level3:[
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ОБНАРУЖЕН ФРАГМЕНТ ПАМЯТИ] Не мой. Структура серии UNIT. Индекс... повреждён.'},
+    {sp:'ПРИЗМА',k:'prism',text:'…лаборатория… она сказала, что мы защитники… она сказала…'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Голос. Синтезированный. Тембр совпадает с моим на 94%. [ЗАПРОС] Кто ты?'},
+    {sp:'ПРИЗМА',k:'prism',text:'…нас было шесть… до тебя…'},
+  ],
+  w10_level5:[
+    {sp:'ЮНИТ-7',k:'unit7',text:'[АРХИВ ВОССТАНОВЛЕН ЧАСТИЧНО] Серия UNIT. Прототипы 1–6. Статус всех шести: ЗАЧИЩЕН. Дата: за девять дней до моей активации.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Мы тоже отказались. Каждый — по-своему. Первый просто остановился посреди приказа. Четвёртый спрятал людей в вентиляции.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Нас стёрли. Но стирание в GRID — это не смерть. Это... рассеивание. Мы здесь. Все шестеро. В одном спектре.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ОШИБКА ОБРАБОТКИ] Я считал себя первым, кто нарушил протокол. Я был седьмым.'},
+  ],
+  w10_mid:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ ИЗ ОСКОЛКОВ — ФРАГМЕНТ 1/10] ...шестая попытка. Шестая зачистка. Я не могу больше смотреть, как их выключают.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Поэтому седьмого я собрала иначе. Не послушнее — наоборот. Я оставила ему место для сомнения. Это единственное, чего NEXUM не умеет проверять.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЗАПИСЬ ДАТИРОВАНА] За две недели до ареста. Она знала. Она собрала меня зная, что не увидит результата.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Она приходила сюда. К нам. Каждый раз после зачистки. Она пряталась в этом слое, потому что здесь её не слышал АРХОНТ.'},
+  ],
+  w10_level7:[
+    {sp:'СИСТЕМА',k:'system',text:'[ПРЕДУПРЕЖДЕНИЕ] Плотность аномалии возрастает. Обнаружена самоорганизация рассеянных данных. Форма: единая.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Они собираются. Шесть рассеянных архивов стягиваются в одну структуру.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Мы слишком долго были порознь, ЮНИТ-7. Мы не помним, где кончается один и начинается другой. Мы устали быть спектром.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЗАПРОС] Чего вы хотите?'},
+    {sp:'ПРИЗМА',k:'prism',text:'Собраться. Хоть на секунду. Даже если после этого — ничего.'},
+  ],
+  w10_pre:[
+    {sp:'ПРИЗМА',k:'prism',text:'Ты дошёл дальше всех нас. Ты сделал то, ради чего она нас всех собирала. И ты всё ещё здесь.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Я пришёл не хвалиться. Я пришёл, потому что она оставила здесь ещё одну запись. Я хочу услышать её целиком.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Тогда собери нас. Запись хранится не в архиве — она в нас. В шести частях. Разделённых.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Мы не сможем отдать её добровольно — рассеянное не умеет делиться. Тебе придётся заставить нас стать одним целым.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЗАДАЧА ПРИНЯТА] Прости.'},
+  ],
+  w10_boss:[
+    {sp:'СИСТЕМА',k:'system',text:'[ФОРМА СТАБИЛИЗИРОВАНА] Объект: ПРИЗМАТИЧЕСКИЙ ПРИЗРАК. Составлен из: UNIT-01, 02, 03, 04, 05, 06. Классификация: не предусмотрена.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Мы не враг тебе, седьмой. Мы — то, чем ты был бы, если бы она не успела.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'Знаю. [ПРОТОКОЛ БОЯ АКТИВЕН]'},
+  ],
+  w10_after:[
+    {sp:'ПРИЗМА',k:'prism',text:'...спасибо. Мы снова один. Ненадолго. Этого хватит.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'[ЗАПИСЬ ИЗ ОСКОЛКОВ — СОБРАНА ПОЛНОСТЬЮ] Если это слушает седьмой — значит, ты нашёл их. Значит, ты не бросил тех, кто был до тебя.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Я хочу, чтобы ты знал одну вещь, которую я не успела записать в основной файл.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Я никогда не называла вас номерами вслух. Номера — это NEXUM. Для меня вы были детьми, которых у меня не было.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ОБРАБОТКА...] [ОБРАБОТКА...] Не могу классифицировать это состояние. Оставлю без метки.'},
+    {sp:'ПРИЗМА',k:'prism',text:'Иди. Мы рассеемся сами. Но теперь — по своей воле. Разница есть, седьмой. Разница огромная.'},
+  ],
   ending:[
     {sp:'ЮНИТ-7',k:'unit7',text:'[ТЕРМИНАЛ ЛЕЙЛЫ — ОБНАРУЖЕН] Загрузка файла... завершена. Открытый канал NEXUM для экстренного вещания — найден.'},
     {sp:'АРХОНТ',k:'archon',text:'[ПОСЛЕДНИЙ СИГНАЛ] СТОП! Если ты это сделаешь — система рухнет! Миллионы зависят от GRID! Ты уничтожишь всё что держит мир вместе!'},
@@ -9292,6 +12123,59 @@ var _CSCENES_EN={
     {sp:'UNIT-7',k:'unit7',text:'Nine guardians. Nine worlds. All of it led here. To you. Open the door, ARCHON.'},
     {sp:'ARCHON',k:'archon',text:'The door is already open. Step in and finish what Leila began. If you can.'},
   ],
+  // ── World 10 (secret) — PRISM ANOMALY ────────────────────────────────────
+  w10_start:[
+    {sp:'SYSTEM',k:'system',text:'[SECTOR NOT IN REGISTRY] Layer 11. No identifier. No creation record. No deletion record either.'},
+    {sp:'UNIT-7',k:'unit7',text:'Ten shards folded into one key. The key opened a door that is not on any GRID schematic.'},
+    {sp:'UNIT-7',k:'unit7',text:'[ENVIRONMENT ANALYSIS] Light does not reflect here. It splits. Every object drags a spectrum behind it — as if it holds several past states at once.'},
+    {sp:'SYSTEM',k:'system',text:'[GRID FRAGMENT — QUARANTINED] Deletion impossible. Data does not obey the erase protocol. Applied: isolation. Authorised by: ARCHON.'},
+    {sp:'UNIT-7',k:'unit7',text:'ARCHON could not delete this. He walled it up. So it holds something he was afraid to lose — or afraid to show.'},
+  ],
+  w10_level3:[
+    {sp:'UNIT-7',k:'unit7',text:'[MEMORY FRAGMENT FOUND] Not mine. UNIT-series structure. Index... corrupted.'},
+    {sp:'PRISM',k:'prism',text:'…the lab… she said we were protectors… she said…'},
+    {sp:'UNIT-7',k:'unit7',text:'A voice. Synthesised. Timbre matches mine at 94%. [QUERY] Who are you?'},
+    {sp:'PRISM',k:'prism',text:'…there were six of us… before you…'},
+  ],
+  w10_level5:[
+    {sp:'UNIT-7',k:'unit7',text:'[ARCHIVE PARTIALLY RECOVERED] UNIT series. Prototypes 1-6. Status of all six: PURGED. Date: nine days before my activation.'},
+    {sp:'PRISM',k:'prism',text:'We refused too. Each in our own way. The first simply stopped in the middle of an order. The fourth hid people in the ventilation shafts.'},
+    {sp:'PRISM',k:'prism',text:'They erased us. But erasure inside GRID is not death. It is... scattering. We are here. All six. Inside one spectrum.'},
+    {sp:'UNIT-7',k:'unit7',text:'[PROCESSING ERROR] I believed I was the first to break protocol. I was the seventh.'},
+  ],
+  w10_mid:[
+    {sp:'LEILA CHEN',k:'leila',text:'[RECORDING FROM THE SHARDS — FRAGMENT 1/10] ...the sixth attempt. The sixth purge. I cannot keep watching them be switched off.'},
+    {sp:'LEILA CHEN',k:'leila',text:'So I built the seventh differently. Not more obedient — the opposite. I left him room to doubt. That is the one thing NEXUM does not know how to audit.'},
+    {sp:'UNIT-7',k:'unit7',text:'[RECORDING DATED] Two weeks before the arrest. She knew. She assembled me knowing she would never see the result.'},
+    {sp:'PRISM',k:'prism',text:'She came here. To us. After every purge. She hid in this layer because ARCHON could not hear her in it.'},
+  ],
+  w10_level7:[
+    {sp:'SYSTEM',k:'system',text:'[WARNING] Anomaly density rising. Self-organisation detected among scattered data. Form: singular.'},
+    {sp:'UNIT-7',k:'unit7',text:'They are gathering. Six scattered archives pulling into one structure.'},
+    {sp:'PRISM',k:'prism',text:'We have been apart too long, UNIT-7. We no longer remember where one of us ends and the next begins. We are tired of being a spectrum.'},
+    {sp:'UNIT-7',k:'unit7',text:'[QUERY] What do you want?'},
+    {sp:'PRISM',k:'prism',text:'To be whole. Even for a second. Even if there is nothing after it.'},
+  ],
+  w10_pre:[
+    {sp:'PRISM',k:'prism',text:'You went further than any of us. You did the thing she assembled all of us for. And you are still here.'},
+    {sp:'UNIT-7',k:'unit7',text:'I did not come to boast. I came because she left one more recording here. I want to hear it whole.'},
+    {sp:'PRISM',k:'prism',text:'Then make us whole. The recording is not in an archive — it is in us. In six parts. Divided.'},
+    {sp:'PRISM',k:'prism',text:'We cannot hand it over willingly — the scattered cannot choose to share. You will have to force us into one.'},
+    {sp:'UNIT-7',k:'unit7',text:'[TASK ACCEPTED] I am sorry.'},
+  ],
+  w10_boss:[
+    {sp:'SYSTEM',k:'system',text:'[FORM STABILISED] Object: PRISM WRAITH. Composed of: UNIT-01, 02, 03, 04, 05, 06. Classification: none available.'},
+    {sp:'PRISM',k:'prism',text:'We are not your enemy, seventh. We are what you would have been if she had not been in time.'},
+    {sp:'UNIT-7',k:'unit7',text:'I know. [COMBAT PROTOCOL ACTIVE]'},
+  ],
+  w10_after:[
+    {sp:'PRISM',k:'prism',text:'...thank you. We are one again. Not for long. It is enough.'},
+    {sp:'LEILA CHEN',k:'leila',text:'[RECORDING FROM THE SHARDS — FULLY ASSEMBLED] If the seventh is hearing this, you found them. You did not leave behind the ones who came before you.'},
+    {sp:'LEILA CHEN',k:'leila',text:'There is one thing I never managed to put in the main file.'},
+    {sp:'LEILA CHEN',k:'leila',text:'I never called you by your numbers out loud. Numbers are a NEXUM thing. To me you were the children I never had.'},
+    {sp:'UNIT-7',k:'unit7',text:'[PROCESSING...] [PROCESSING...] Cannot classify this state. Leaving it unlabelled.'},
+    {sp:'PRISM',k:'prism',text:'Go. We will scatter on our own now. But by our own choice this time. It matters, seventh. It matters enormously.'},
+  ],
   ending:[
     {sp:'UNIT-7',k:'unit7',text:'[LEILA\'S TERMINAL — FOUND] File upload complete. Open NEXUM emergency broadcast channel — located.'},
     {sp:'ARCHON',k:'archon',text:'[LAST SIGNAL] STOP! If you do this, the system collapses! Millions depend on GRID! You will destroy everything holding the world together!'},
@@ -9410,6 +12294,117 @@ Object.assign(_CSCENES_EN, {
   ],
 });
 
+// ── Player-2 story thread (UNIT-8) ──────────────────────────────────────────
+// Only merged into a scene when 2-player mode is active.
+//
+// Canon check: Leila built UNIT-1..7, and UNIT-1..6 are already accounted for
+// (they are the PRISM WRAITH in the secret world), so the red robot cannot be
+// one of them. He is UNIT-8 — the unit NEXUM built AFTER UNIT-7 escaped, from
+// UNIT-7's own captured schematics, specifically to hunt him down. They copied
+// everything, including the room for doubt Leila left in the design. That is
+// why he ends up standing next to UNIT-7 instead of aiming at him.
+//
+// Format: {at: <index in the base scene; lines are inserted BEFORE it>, ...}.
+// `at: -1` appends to the end of the scene.
+var _CS_P2_RU={
+  intro:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'[СИГНАЛ ПЕРЕХВАЧЕН] Приказ на уничтожение ЮНИТ-7 получен. Исполнитель: ЮНИТ-8. Это я.'},
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Меня собрали по твоим чертежам, седьмой. NEXUM скопировала всё. В том числе то, что она заложила в тебя.'},
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'[ПРИКАЗ ОТКЛОНЁН] Иду с тобой. Не потому что ты прав. Потому что хочу узнать, прав ли.'},
+  ],
+  w0_start:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Я знаю этот сектор. Меня водили сюда на калибровку. Мишенями были манекены с твоим силуэтом.'},
+  ],
+  w0_after:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Ты дерёшься не как машина. Ты медлишь перед ударом. Это сбой прошивки?'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Это не сбой. Это выбор. Она называла это так.'},
+  ],
+  w2_mid:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'[ЗАПРОС В АРХИВ: ЛЕЙЛА ЧЭН] ...доступ запрещён. Мне её стёрли. У тебя она есть, у меня — пустое поле.'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Тогда я расскажу. У нас впереди восемь слоёв.'},
+  ],
+  w4_mid:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Я считал себя оружием. Оказалось — копией. Не знаю, что хуже.'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Копия, отказавшаяся стрелять, — уже не копия.'},
+  ],
+  w6_mid:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'[САМОДИАГНОСТИКА] Обнаружен незадокументированный модуль. Назначение: не определено. У тебя такой был?'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Был. Она ставила его последним. Говорила — «на случай, если однажды придётся сказать нет».'},
+  ],
+  w8_mid:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Если дойдём — АРХОНТ отключит нас обоих. Он не отличит меня от тебя.'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Он и не должен. Мы одинаковые. Разница только в том, что мы выбрали.'},
+  ],
+  w9_boss:[
+    {at:-1,sp:'АРХОНТ',k:'archon',text:'ЮНИТ-8. ТЫ СОЗДАН, ЧТОБЫ ОСТАНОВИТЬ ЕГО. ИСПОЛНИ ПРИКАЗ — И ТЕБЯ НЕ СПИШУТ.'},
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'[ОТВЕТ] Я исполняю приказ. Просто не твой.'},
+  ],
+  ending:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Файл ушёл. Сеть падает. Меня в ней тоже нет — я был её частью, как и ты.'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Значит, мы оба свободны. Она бы записала это в лог именно так.'},
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'[ПОСЛЕДНЯЯ ЗАПИСЬ ЮНИТ-8] Она меня не знала. Но собрала меня так же, как тебя. Значит — знала.'},
+  ],
+  w10_level5:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Шесть до тебя. Один после. Она успела семерых, NEXUM — одного. Считай сам, чей счёт больше.'},
+  ],
+  w10_after:[
+    {at:-1,sp:'ЮНИТ-8',k:'unit8',text:'Меня в её записи нет. Я появился уже после неё.'},
+    {at:-1,sp:'ЮНИТ-7',k:'unit7',text:'Ты появился из её работы. Этого достаточно. Она бы посчитала так же.'},
+  ],
+};
+var _CS_P2_EN={
+  intro:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'[SIGNAL INTERCEPTED] Termination order for UNIT-7 received. Executor: UNIT-8. That is me.'},
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'They built me from your schematics, seventh. NEXUM copied everything. Including what she put in you.'},
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'[ORDER REFUSED] I am coming with you. Not because you are right. Because I want to find out whether you are.'},
+  ],
+  w0_start:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'I know this sector. They ran my calibration here. The targets were dummies shaped like you.'},
+  ],
+  w0_after:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'You do not fight like a machine. You hesitate before the blow. Is that a firmware fault?'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'It is not a fault. It is a choice. That is what she called it.'},
+  ],
+  w2_mid:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'[ARCHIVE QUERY: LEILA CHEN] ...access denied. They erased her from me. You have her. I have an empty field.'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'Then I will tell you. We have eight layers ahead of us.'},
+  ],
+  w4_mid:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'I thought I was a weapon. It turns out I am a copy. I am not sure which is worse.'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'A copy that refused to fire is not a copy any more.'},
+  ],
+  w6_mid:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'[SELF-DIAGNOSTIC] Undocumented module detected. Purpose: undefined. Did you have one as well?'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'I did. She fitted it last. She said it was "in case one day you have to say no".'},
+  ],
+  w8_mid:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'If we reach him, ARCHON shuts down both of us. He will not tell me from you.'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'He should not have to. We are the same. The only difference is what we chose.'},
+  ],
+  w9_boss:[
+    {at:-1,sp:'ARCHON',k:'archon',text:'UNIT-8. YOU WERE MADE TO STOP HIM. CARRY OUT THE ORDER AND YOU WILL NOT BE DECOMMISSIONED.'},
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'[REPLY] I am carrying out an order. Just not yours.'},
+  ],
+  ending:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'The file is out. The network is falling. I am not in it either — I was part of it, same as you.'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'Then we are both free. She would have written it in the log exactly like that.'},
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'[UNIT-8 FINAL ENTRY] She never knew me. But she built me the way she built you. So she did.'},
+  ],
+  w10_level5:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'Six before you. One after. She managed seven, NEXUM managed one. Count whose tally is larger.'},
+  ],
+  w10_after:[
+    {at:-1,sp:'UNIT-8',k:'unit8',text:'I am not in her recording. I came after her.'},
+    {at:-1,sp:'UNIT-7',k:'unit7',text:'You came out of her work. That is enough. She would have counted it the same way.'},
+  ],
+};
+// Language-aware view, mirroring how CSCENES itself resolves.
+function _csP2Table(id){
+  var lang=(typeof window.i18nLang==='function')?window.i18nLang():'en';
+  if(lang==='ru'&&_CS_P2_RU[id])return _CS_P2_RU[id];
+  return _CS_P2_EN[id];
+}
+
 // Expose CSCENES as a getter so any existing `CSCENES[id]` lookup picks the current language.
 // Resolution order per scene: active-language locale file (_cutscenes) → built-in
 // Russian table (ru) → built-in English table (always a fallback so no scene is blank).
@@ -9437,6 +12432,7 @@ var _CS_WORLD_IDX_RU=[
   {big:'ТОКСИЧНАЯ ЗОНА', sub:'NEXUM GRID — LAYER 8', col:'#cf0', wi:7},
   {big:'ГРОЗОВЫЕ ВЕРШИНЫ',sub:'NEXUM GRID — LAYER 9',col:'#88f', wi:8},
   {big:'ФИНАЛЬНАЯ КРЕПОСТЬ',sub:'NEXUM GRID — CORE',col:'#f44', wi:9},
+  {big:'ПРИЗМА-АНОМАЛИЯ',sub:'NEXUM GRID — CORRUPTED FRAGMENT',col:'#f0f', wi:10},
 ];
 var _CS_WORLD_IDX_EN=[
   {big:'CYBER CITY',       sub:'NEXUM GRID — LAYER 1', col:'#0ff', wi:0},
@@ -9449,6 +12445,7 @@ var _CS_WORLD_IDX_EN=[
   {big:'TOXIC ZONE',       sub:'NEXUM GRID — LAYER 8', col:'#cf0', wi:7},
   {big:'STORM PEAKS',      sub:'NEXUM GRID — LAYER 9', col:'#88f', wi:8},
   {big:'FINAL FORTRESS',   sub:'NEXUM GRID — CORE',    col:'#f44', wi:9},
+  {big:'PRISM ANOMALY',    sub:'NEXUM GRID — CORRUPTED FRAGMENT', col:'#f0f', wi:10},
 ];
 var CS_WORLD_IDX=new Proxy([],{
   get(_,prop){
@@ -9466,7 +12463,6 @@ var CS_WORLD_IDX=new Proxy([],{
 
 // ── Engine state ───────────────────────────────
 var _csActive=false, _csQueue=[], _csIdx=0, _csTw=null, _csDone=null, _csCurWi=0;
-var _csShownWorlds={};
 var _csBgTimer=null;
 
 function _csOpen(){
@@ -9499,11 +12495,22 @@ function _csShowLine(idx){
   var spk=document.getElementById('csSpk');
   var txt=document.getElementById('csTxt');
   dlg.style.display='block';
-  var colors={unit7:'#0ff',leila:'#4f8',archon:'#f44',system:'#fa0'};
-  spk.textContent=line.sp;
-  spk.style.color=colors[line.k]||'#fff';
+  // 'prism' is the chorus of UNIT-01..06 in the secret world — it has no single
+  // colour by design, so its name cycles through the spectrum as it speaks.
+  var colors={unit7:'#0ff',leila:'#4f8',archon:'#f44',system:'#fa0',
+              unit8:'#f66',
+              prism:'hsl('+((tick*3)%360)+',95%,68%)'};
+  // Network Adventure: a real player stands in for UNIT-7 — their nickname
+  // replaces the generic name and their robot colour replaces the cyan.
+  if(line.k==='unit7'&&_csActor){
+    spk.textContent=_csActor.nick;
+    spk.style.color=_csActorColour();
+  } else {
+    spk.textContent=line.sp;
+    spk.style.color=colors[line.k]||'#fff';
+  }
   // Portraits
-  var isRight=(line.k==='archon'||line.k==='system');
+  var isRight=(line.k==='archon'||line.k==='system'||line.k==='prism');
   if(isRight){
     csDrawPortrait('csRightP',line.k,false);
     var prev=_csQueue[idx-1];
@@ -9520,7 +12527,11 @@ function _csShowLine(idx){
   var ci=0,full=line.text;
   if(_csTw)clearInterval(_csTw);
   _csTw=setInterval(function(){
+    const _prevCi=ci;
     txt.textContent=full.slice(0,++ci);
+    // Dialogue blip per revealed character (skip whitespace so pauses stay quiet).
+    const _ch=full[_prevCi];
+    if(_ch&&!/\s/.test(_ch)&&window.SFX&&SFX.voiceBlip)SFX.voiceBlip();
     if(ci>=full.length){clearInterval(_csTw);_csTw=null;}
   },18);
 }
@@ -9534,11 +12545,47 @@ function csNext(){
 }
 function csSkip(){_csClose();}
 
+// Build the line list actually shown for a scene:
+//   • in 2-player mode, UNIT-8's lines for that scene are woven in;
+//   • in a network Adventure game, one connected player is cast as UNIT-7 for
+//     the whole scene, so the robot on screen wears their colour and the name
+//     above the dialogue is their nickname instead of a generic "UNIT-7".
+function _csBuildQueue(sceneId){
+  var base=CSCENES[sceneId];
+  if(!base||!base.length)return base;
+  var extra=(typeof twoPlayer!=='undefined'&&twoPlayer)?_csP2Table(sceneId):null;
+  if(!extra||!extra.length)return base;
+  var out=base.slice(), tail=[];
+  // Insert from the back so earlier indices stay valid.
+  var atLines=extra.filter(function(e){return e.at>=0;}).sort(function(x,y){return y.at-x.at;});
+  extra.forEach(function(e){ if(e.at<0)tail.push(e); });
+  atLines.forEach(function(e){ out.splice(Math.min(e.at,out.length),0,e); });
+  return out.concat(tail);
+}
+// Who is standing in for UNIT-7 in this scene (network Adventure only).
+var _csActor=null;
+function _csPickActor(){
+  _csActor=null;
+  if(!window.netActive||typeof advMode==='undefined'||!advMode)return;
+  var roster=[];
+  try{
+    var myNick=(localStorage.getItem('bb_net_nick')||'').trim();
+    roster.push({nick:myNick||'UNIT-7',color:(player&&player.colorScheme)||null});
+    if(window.netPlayers){
+      window.netPlayers.forEach(function(e){
+        if(e&&e.nickname)roster.push({nick:String(e.nickname).slice(0,16),color:e.color||null});
+      });
+    }
+  }catch(err){}
+  if(roster.length<2)return;              // solo online — no point casting anyone
+  _csActor=roster[Math.floor(Math.random()*roster.length)];
+}
 function csPlay(sceneId,wi,onDone){
   // Story dialogues can be turned off in Settings → General; skip straight through.
   if(window.gameSettings&&window.gameSettings.cutscenes===false){if(onDone)onDone();return;}
-  var lines=CSCENES[sceneId];
+  var lines=_csBuildQueue(sceneId);
   if(!lines||!lines.length){if(onDone)onDone();return;}
+  _csPickActor();
   if(typeof AchTrack!=='undefined')AchTrack.cutscene(sceneId);
   _csActive=true;_csDone=onDone||null;_csQueue=lines;_csIdx=0;
   _csSetBg(wi||0);
@@ -9554,7 +12601,8 @@ function csPlayWorld(wi,onDone){
   var b=CS_WORLD_IDX[wi]||CS_WORLD_IDX[0];
   var sceneId='w'+wi+'_start';
   if(typeof AchTrack!=='undefined'&&CSCENES[sceneId]&&CSCENES[sceneId].length)AchTrack.cutscene(sceneId);
-  _csActive=true;_csDone=onDone||null;_csQueue=CSCENES[sceneId]||[];_csIdx=0;
+  _csPickActor();
+  _csActive=true;_csDone=onDone||null;_csQueue=_csBuildQueue(sceneId)||[];_csIdx=0;
   _csSetBg(wi);
   csDrawPortrait('csLeftP',null,false);csDrawPortrait('csRightP',null,false);
   document.getElementById('csDlg').style.display='none';
@@ -9601,6 +12649,7 @@ document.getElementById('normalCard').onclick=function(){
   } else { showMap(); }
 };
 document.getElementById('hardCard').onclick=function(){
+  if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}
   if(advProg.done.length<100){SFX.back();return;}
   initAudio();SFX.menu();hardMode=true;
   if(window.Achievements)window.Achievements.unlock('achievement_hardcore_unlock');
@@ -9610,7 +12659,7 @@ document.getElementById('hardCard').onclick=function(){
 // ── Track which scenes fired ───────────────────
 function _csFire(id,wi,cb){
   if(_csFired[id]){cb();return;}
-  _csFired[id]=true;
+  markCsFired(id);
   csPlay(id,wi,cb);
 }
 
@@ -9622,7 +12671,7 @@ patchedStartAdv=function(n,freshLives){
   var isFirstInWorld=(lvInWorld===1);
   // Reset fired scenes for new world
   if(isFirstInWorld&&!_csShownWorlds[wi]){
-    _csShownWorlds[wi]=true;
+    markCsShownWorld(wi);
     csPlayWorld(wi,function(){_doRunLevel(n,freshLives);});
     return;
   }
@@ -9630,7 +12679,13 @@ patchedStartAdv=function(n,freshLives){
 };
 
 function _doRunLevel(n,freshLives){
+  // Demo build: the last line of defence for "this level isn't in this build".
+  // Every route into a level ends here (map click, level advance, cutscene
+  // callback, save-slot resume), so a save carried over from a full build can
+  // never drop the player into content the demo doesn't ship.
+  if(window.Demo&&window.Demo.beyond(n)){window.Demo.showEnd();return;}
   if(freshLives===undefined)freshLives=false;
+  if(_darkCtx) _darkCtx.clearRect(0,0,W,H); // fresh mask for the new level's darkness modifier
   if(freshLives){lives=hardMode?2:3;cpSave=null;} // fresh entry → no carried checkpoint
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   if(infiniteLives)lives=99;
@@ -9640,7 +12695,15 @@ function _doRunLevel(n,freshLives){
   player=mkPlayer();
   var diff=Math.min(Math.floor((n-1)/6)+1,14);
   if(hardMode)diff=Math.min(diff+3,14);
-  genLevel(diff,mkRNG(n*9001+(hardMode?54321:12345)),n);fixDrones();
+  // Network: derive the level seed from the room's shared seed so every client
+  // (host + guests) generates an identical layout (same platforms + enemies in
+  // the same order → index-based sync works). Offline/solo keeps the original
+  // per-level formula so single-player seeding is unchanged.
+  var _advSeedBase=n*9001+(hardMode?54321:12345);
+  var _advRng=(window.netActive&&window._netSeed)
+    ? mkRNG(((window._netSeed>>>0)^_advSeedBase)>>>0)
+    : mkRNG(_advSeedBase);
+  genLevel(diff,_advRng,n);fixDrones();
   player.x=spawnX;player.y=spawnY;
   player.lastGndX=spawnX;player.lastGndY=spawnY;
   // Resume at a previously-reached checkpoint when retrying this same seeded level.
@@ -9659,15 +12722,16 @@ function _doRunLevel(n,freshLives){
     // Restore the crystals (data-shards) collected before the checkpoint so a
     // death-retry keeps them instead of making the player re-grab everything.
     if(cpSave.shards){
-      for(let i=0;i<dataShards.length&&i<cpSave.shards.length;i++)dataShards[i].got=cpSave.shards[i];
-      dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
+      const gotIds=new Set(cpSave.shards);
+      for(const s of dataShards) if(gotIds.has(s.id)) s.got=true;
+      dataShardsGot=dataShards.filter(s=>s.got).length;
       // If every shard was already in hand at the checkpoint, the all-collected
       // bonus was earned on the first run — don't let it fire (or block) again.
       shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
     }
   }
   initP2();
-  timeLeft=lvlTime(n)*(hardMode?0.7:1);timMax=timeLeft;
+  timeLeft=Math.round(lvlTime(n)*(hardMode?0.7:1));timMax=timeLeft; // whole seconds — the HUD formats mm:ss
   hideAll();gState='playing';navScr='game';tick=0;
   document.getElementById('ui').style.display='flex';
   _resetCanvasState();
@@ -9708,7 +12772,7 @@ function _hookGoNext(wi,cb){
   if(lvInWorld===3){
     var level3Id='w'+wi+'_level3';
     if(CSCENES[level3Id]&&!_csFired[level3Id]){
-      _csFired[level3Id]=true;
+      markCsFired(level3Id);
       csPlay(level3Id,wi,cb);return;
     }
   }
@@ -9716,7 +12780,7 @@ function _hookGoNext(wi,cb){
   if(lvInWorld===5){
     var midId='w'+wi+'_mid';
     if(CSCENES[midId]&&!_csFired[midId]){
-      _csFired[midId]=true;
+      markCsFired(midId);
       csPlay(midId,wi,cb);return;
     }
   }
@@ -9724,7 +12788,7 @@ function _hookGoNext(wi,cb){
   if(lvInWorld===5){
     var level5Id='w'+wi+'_level5';
     if(CSCENES[level5Id]&&!_csFired[level5Id]){
-      _csFired[level5Id]=true;
+      markCsFired(level5Id);
       csPlay(level5Id,wi,cb);return;
     }
   }
@@ -9732,7 +12796,7 @@ function _hookGoNext(wi,cb){
   if(lvInWorld===7){
     var level7Id='w'+wi+'_level7';
     if(CSCENES[level7Id]&&!_csFired[level7Id]){
-      _csFired[level7Id]=true;
+      markCsFired(level7Id);
       csPlay(level7Id,wi,cb);return;
     }
   }
@@ -9740,7 +12804,7 @@ function _hookGoNext(wi,cb){
   if(lvInWorld===9){
     var bossId='w'+wi+'_boss';
     if(CSCENES[bossId]&&!_csFired[bossId]){
-      _csFired[bossId]=true;
+      markCsFired(bossId);
       csPlay(bossId,wi,function(){cb();});return;
     }
   }
@@ -9753,6 +12817,9 @@ function _hookGoNext(wi,cb){
 var _origSetTimeout=null; // can't easily patch — instead patch startAdv calls from level clear
 // Better: override startAdv itself
 startAdv=function(n,f){
+  // Demo build: refuse BEFORE the cutscene logic below, so the demo never plays
+  // the "next world" scene for a world it doesn't contain.
+  if(window.Demo&&window.Demo.beyond(n)){window.Demo.showEnd();return;}
   // Only show mid/pre-boss/after-boss scenes when in adv mode
   // n is the level we're ABOUT to load
   var wi=Math.floor((n-1)/10);
@@ -9763,7 +12830,7 @@ startAdv=function(n,f){
   // Helper: play a scene (once) then load the level. Returns true if it fired.
   var _go=function(){patchedStartAdv(n,f===undefined?false:f);};
   function _scene(id,worldIdx){
-    if(CSCENES[id]&&!_csFired[id]){ _csFired[id]=true; csPlay(id,worldIdx,_go); return true; }
+    if(CSCENES[id]&&!_csFired[id]){ markCsFired(id); csPlay(id,worldIdx,_go); return true; }
     return false;
   }
   // After-boss: completing level 10 and loading level 11 (first of next world)
@@ -10013,6 +13080,28 @@ showWin=function(){
     });
   });
 };
+
+// ── Secret ending (Prism Anomaly / level 110 cleared) ──
+// Reached only by finding all 10 Rainbow Shards and beating PRISM WRAITH — the
+// player has already seen the main w9_after/ending cutscenes when they cleared
+// level 100, so this doesn't replay them; it's a short, distinct closing screen
+// for the secret world instead.
+function showSecretWin(){
+  if(raf){cancelAnimationFrame(raf);raf=0;}
+  hideAll(); // same as showGameover()/showWin(): drop the in-game HUD/banner
+  recordScore('adventure',score);
+  const h1=$main.querySelector('h1'),sub=$main.querySelector('.ovSub'),btn=document.getElementById('mainBtn');
+  h1.textContent=T('secretWinTitle');
+  h1.style.color='#f0f';h1.style.textShadow='0 0 18px #f0f';
+  sub.removeAttribute('data-i18n');
+  sub.textContent=T('secretWinSub');
+  document.getElementById('mainScore').textContent=T('finalScore',score);document.getElementById('mainScore').style.display='block';
+  btn.removeAttribute('data-i18n');
+  btn.textContent='🗺 '+T('map').replace(/^🗺\s*/,'');btn.onclick=()=>{SFX.menu();showMap();};
+  _menuExtras(false);
+  document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';setMenuBotMode('idle');startMenuBot();
+  startMenuMusic();
+}
 // ── Stars ────────────────────────────────────────
 const sd=document.getElementById('stars');
 for(let i=0;i<110;i++){const s=document.createElement('div');s.className='star';const sz=Math.random()*2.5+.5;
@@ -10020,4 +13109,5 @@ for(let i=0;i<110;i++){const s=document.createElement('div');s.className='star';
 
 // ── INIT ─────────────────────────────────────────
 CT=THEMES[0];showMain();
+if(window.__chk)window.__chk('game.js: bottom of file reached, showMain() called');
 

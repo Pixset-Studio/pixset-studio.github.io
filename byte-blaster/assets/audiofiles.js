@@ -1,5 +1,5 @@
 // ============================================================================
-//  SAMPLE AUDIO LAYER — plays the baked Audio/Music + Audio/SFX .mp3 files.
+//  SAMPLE AUDIO LAYER — plays the baked assets/audio/Music + assets/audio/SFX .mp3 files.
 // ----------------------------------------------------------------------------
 //  The game's original audio is fully procedural: every 16th-note spawns ~10
 //  WebAudio nodes via setTimeout. On phones that stutters badly and steals main-
@@ -59,7 +59,7 @@
   }
 
   async function loadOne(kind, name) {
-    const rel = 'Audio/' + (kind === 'music' ? 'Music' : 'SFX') + '/' + name + '.mp3';
+    const rel = 'assets/audio/' + (kind === 'music' ? 'Music' : 'SFX') + '/' + name + '.mp3';
     const ab = await readBytes(rel);
     const buf = await decode(ab);
     if (kind === 'music') { musicBuf[name] = buf; loopPt[name] = findLoop(buf); }
