@@ -1,10 +1,14 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru"
+      data-title-ru="BYTE BLASTER — киберпанк-платформер от Pixset Studio"
+      data-title-en="BYTE BLASTER — a cyberpunk platformer by Pixset Studio"
+      data-desc-ru="Byte Blaster — киберпанк 2D-платформер: 110 уровней, 11 миров, 11 боссов, кооператив до 5 игроков и 49 языков. Играйте в браузере — полная версия или демо."
+      data-desc-en="Byte Blaster — a cyberpunk 2D platformer: 110 levels, 11 worlds, 11 bosses, 5-player co-op and 49 languages. Play in your browser — full version or demo.">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BYTE BLASTER — киберпанк-платформер от Pixset Studio</title>
-<meta name="description" content="Byte Blaster — киберпанк 2D-платформер: 110 уровней, 11 миров, 11 боссов, кооператив до 5 игроков и 49 языков. Играйте прямо в браузере — полная версия или демо.">
+<meta name="description" content="Byte Blaster — киберпанк 2D-платформер: 110 уровней, 11 миров, 11 боссов, кооператив до 5 игроков и 49 языков. Играйте в браузере — полная версия или демо.">
 <meta name="theme-color" content="#04040f">
 <link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
@@ -12,21 +16,37 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="BYTE BLASTER — киберпанк-платформер">
 <meta property="og:description" content="110 уровней, 11 миров, 11 боссов, кооператив до 5 игроков. Играйте в браузере.">
+<meta property="og:image" content="https://pixset-studio.github.io/byte-blaster/assets/logo-512.png">
 <meta property="og:url" content="https://pixset-studio.github.io/byte-blaster/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<script>
+/* Pick the language BEFORE first paint so the page never flashes the wrong one. */
+(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+</script>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="/byte-blaster/">⚡ BYTE BLASTER</a>
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
     <nav class="main">
-      <a href="/byte-blaster/" aria-current="page">ГЛАВНАЯ</a>
-      <a href="/byte-blaster/wiki/">ВИКИ</a>
-      <a href="#play">ИГРАТЬ</a>
+      <a href="/byte-blaster/" aria-current="page"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/updates/"><span data-l="ru">ОБНОВЛЕНИЯ</span><span data-l="en">UPDATES</span></a>
+      <a href="#play"><span data-l="ru">ИГРАТЬ</span><span data-l="en">PLAY</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
     </nav>
   </div>
 </header>
@@ -34,146 +54,193 @@
 <main>
 
 <div class="hero wrap">
-  <div class="robot">🤖</div>
+  <img class="logo" src="/byte-blaster/assets/logo-512.png" alt="BYTE BLASTER" width="512" height="512">
   <h1>BYTE BLASTER</h1>
-  <div class="sub">КИБЕРПАНК НЕОНОВЫЙ ПЛАТФОРМЕР</div>
-  <p class="lead">2147 год. Землёй управляет корпорация NEXUM, а всем, что в ней происходит, — сеть GRID.<br>
+  <div class="sub"><span data-l="ru">КИБЕРПАНК НЕОНОВЫЙ ПЛАТФОРМЕР</span><span data-l="en">CYBERPUNK NEON PLATFORMER</span></div>
+  <p class="lead" data-l="ru">2147 год. Землёй управляет корпорация NEXUM, а всем, что в ней происходит, — сеть GRID.<br>
      Ты — <b>UNIT-7</b>, боевой андроид, который отказался выполнить приказ. Тебе нужно пройти десять слоёв защиты и вынести правду наружу.</p>
+  <p class="lead" data-l="en">The year is 2147. Earth belongs to the NEXUM corporation, and everything that happens on it runs through the GRID.<br>
+     You are <b>UNIT-7</b>, a combat android that refused an order. Ten layers of security stand between you and the truth.</p>
   <div class="btns" id="play">
-    <a class="btn primary" href="/byte-blaster/game/full/">▶ ИГРАТЬ<small>полная версия · 110 уровней · 11 миров</small></a>
-    <a class="btn" href="/byte-blaster/game/demo/">◆ ДЕМО<small>первые 10 уровней · без установки</small></a>
+    <a class="btn primary" href="/byte-blaster/game/full/">
+      <span data-l="ru">▶ ИГРАТЬ<small>полная версия · 110 уровней · 11 миров</small></span>
+      <span data-l="en">▶ PLAY NOW<small>full version · 110 levels · 11 worlds</small></span>
+    </a>
+    <a class="btn" href="/byte-blaster/game/demo/">
+      <span data-l="ru">◆ ДЕМО<small>первые 10 уровней · без установки</small></span>
+      <span data-l="en">◆ DEMO<small>first 10 levels · nothing to install</small></span>
+    </a>
   </div>
-  <p class="dim" style="font-size:14px">Запускается прямо в браузере. Ничего скачивать не нужно.</p>
+  <p style="margin-top:6px">
+    <a class="btn ghost" href="https://www.rustore.ru/catalog/app/com.pixsetstudio.byteblaster" target="_blank" rel="noopener">
+      <span data-l="ru">📱 СКАЧАТЬ НА ANDROID · RuStore</span><span data-l="en">📱 GET IT ON ANDROID · RuStore</span>
+    </a>
+  </p>
+  <p class="dim" style="font-size:14px">
+    <span data-l="ru">Запускается прямо в браузере. Ничего скачивать не нужно.</span>
+    <span data-l="en">Runs right in your browser. No download required.</span>
+  </p>
 </div>
 
 <section>
   <div class="wrap">
     <div class="stats">
-      <div class="stat"><b>110</b><span>уровней</span></div>
-      <div class="stat"><b>11</b><span>миров</span></div>
-      <div class="stat"><b>11</b><span>боссов</span></div>
-      <div class="stat"><b>5</b><span>игроков в кооперативе</span></div>
-      <div class="stat"><b>49</b><span>языков</span></div>
+      <div class="stat"><b>110</b><span><span data-l="ru">уровней</span><span data-l="en">levels</span></span></div>
+      <div class="stat"><b>11</b><span><span data-l="ru">миров</span><span data-l="en">worlds</span></span></div>
+      <div class="stat"><b>11</b><span><span data-l="ru">боссов</span><span data-l="en">bosses</span></span></div>
+      <div class="stat"><b>5</b><span><span data-l="ru">игроков в кооперативе</span><span data-l="en">players in co-op</span></span></div>
+      <div class="stat"><b>49</b><span><span data-l="ru">языков</span><span data-l="en">languages</span></span></div>
     </div>
   </div>
 </section>
 
-<section>
+<section id="about">
   <div class="wrap">
-    <h2>ЧТО ЭТО ЗА ИГРА</h2>
-    <p class="lead">Классический платформер в неоновом киберпанке: бегай, прыгай, дави врагов сверху, бей блоки снизу и проходи уровень, пока не кончилось время.</p>
+    <h2><span data-l="ru">ЧТО ЭТО ЗА ИГРА</span><span data-l="en">WHAT IS THIS</span></h2>
+    <p class="lead" data-l="ru">Классический платформер в неоновом киберпанке: бегай, прыгай, дави врагов сверху, бей блоки снизу и проходи уровень, пока не кончилось время.</p>
+    <p class="lead" data-l="en">A classic platformer wrapped in neon cyberpunk: run, jump, stomp enemies from above, punch blocks from below and finish the level before the clock runs out.</p>
     <div class="grid">
       <div class="card">
         <div class="ico">🗺</div>
-        <h3>Живая карта мира</h3>
-        <p>Не список уровней, а карта: узлы соединены дорогами, робот идёт по ним сам, новые пути открываются по мере прохождения. У каждого мира своё окружение — джунгли, лава, лёд, космос.</p>
+        <h3><span data-l="ru">Живая карта мира</span><span data-l="en">A living world map</span></h3>
+        <p data-l="ru">Не список уровней, а карта: узлы соединены дорогами, робот идёт по ним сам, новые пути открываются по мере прохождения. У каждого мира своё окружение — джунгли, лава, лёд, космос.</p>
+        <p data-l="en">Not a level list but an actual map: nodes joined by roads the robot walks along, with new paths opening as you progress. Every world has its own environment — jungle, lava, ice, space.</p>
       </div>
       <div class="card">
         <div class="ico">👾</div>
-        <h3>11 боссов</h3>
-        <p>У каждого своя слабость: одного берёт только прыжок на голову, другого — только выстрел в открытую пасть, третьего нужно сначала лишить трёх щитовых сфер.</p>
+        <h3><span data-l="ru">11 боссов</span><span data-l="en">11 bosses</span></h3>
+        <p data-l="ru">У каждого своя слабость: одного берёт только прыжок на голову, другого — только выстрел в открытую пасть, третьего нужно сначала лишить трёх щитовых сфер.</p>
+        <p data-l="en">Each has its own weakness: one only takes damage from a stomp, another only from a shot into its open mouth, a third must first be stripped of three shield orbs.</p>
       </div>
       <div class="card">
         <div class="ico">🌈</div>
-        <h3>Секретный 11-й мир</h3>
-        <p>Собери 10 радужных осколков — по одному спрятано в каждом мире — и откроется <b>PRISM ANOMALY</b>: уровни 101–110 со своим боссом и отдельной сюжетной линией.</p>
+        <h3><span data-l="ru">Секретный 11-й мир</span><span data-l="en">A secret 11th world</span></h3>
+        <p data-l="ru">Собери 10 радужных осколков — по одному спрятано в каждом мире — и откроется <b>PRISM ANOMALY</b>: уровни 101–110 со своим боссом и отдельной сюжетной линией.</p>
+        <p data-l="en">Collect 10 rainbow shards — one hidden in every world — to unlock <b>PRISM ANOMALY</b>: levels 101–110 with its own boss and its own story.</p>
       </div>
       <div class="card">
         <div class="ico">🎮</div>
-        <h3>Вдвоём и по сети</h3>
-        <p>Локально на одной клавиатуре или онлайн до пяти игроков — публичные комнаты, коды для друзей и игра по локальной сети.</p>
+        <h3><span data-l="ru">Вдвоём и по сети</span><span data-l="en">Two players and online</span></h3>
+        <p data-l="ru">Локально на одной клавиатуре или онлайн до пяти игроков — публичные комнаты, коды для друзей и игра по локальной сети.</p>
+        <p data-l="en">Locally on one keyboard, or online with up to five players — public rooms, private codes and LAN play.</p>
       </div>
       <div class="card">
         <div class="ico">☣</div>
-        <h3>Эффекты от врагов</h3>
-        <p>Удар оставляет след того, кто его нанёс: горение ускоряет таймер, обледенение замедляет, ЭМИ отключает бластер и двойной прыжок, коррозия делает робота скользким.</p>
+        <h3><span data-l="ru">Эффекты от врагов</span><span data-l="en">Enemy status effects</span></h3>
+        <p data-l="ru">Удар оставляет след того, кто его нанёс: горение ускоряет таймер, обледенение замедляет, ЭМИ отключает бластер и двойной прыжок, коррозия делает робота скользким.</p>
+        <p data-l="en">A hit leaves the mark of whoever landed it: burning speeds up the timer, chill slows you down, an EMP surge disables the blaster and double jump, corrosion makes you slide.</p>
       </div>
       <div class="card">
         <div class="ico">📱</div>
-        <h3>Телефон, планшет, ПК</h3>
-        <p>Сенсорное управление настраивается: стрелки или джойстик, размер кнопок и раскладка перетаскиванием. Качество графики подбирается автоматически.</p>
+        <h3><span data-l="ru">Телефон, планшет, ПК</span><span data-l="en">Phone, tablet, PC</span></h3>
+        <p data-l="ru">Сенсорное управление настраивается: стрелки или джойстик, размер кнопок и раскладка перетаскиванием. Качество графики подбирается автоматически.</p>
+        <p data-l="en">Touch controls are configurable: arrows or a joystick, button size and a drag-to-place layout. Graphics quality is detected automatically.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section>
+<section id="worlds">
   <div class="wrap">
-    <h2>ОДИННАДЦАТЬ МИРОВ</h2>
-    <p>Каждый мир — это десять уровней, собственная тема, свой набор врагов и босс в конце.</p>
+    <h2><span data-l="ru">ОДИННАДЦАТЬ МИРОВ</span><span data-l="en">ELEVEN WORLDS</span></h2>
+    <p data-l="ru">Каждый мир — это десять уровней, собственная тема, свой набор врагов и босс в конце.</p>
+    <p data-l="en">Each world is ten levels with its own theme, its own enemies and a boss at the end.</p>
     <div class="tw">
       <table>
-        <thead><tr><th>#</th><th>Мир</th><th>Уровни</th><th>Босс</th></tr></thead>
+        <thead><tr><th>#</th>
+          <th><span data-l="ru">Мир</span><span data-l="en">World</span></th>
+          <th><span data-l="ru">Уровни</span><span data-l="en">Levels</span></th>
+          <th><span data-l="ru">Босс</span><span data-l="en">Boss</span></th></tr></thead>
         <tbody>
-          <tr><td>1</td><td>КИБЕРГОРОД</td><td>1–10</td><td>СТРАЖ-X</td></tr>
-          <tr><td>2</td><td>НЕОНОВЫЕ ДЖУНГЛИ</td><td>11–20</td><td>КОРОЛЕВА ЛОЗ</td></tr>
-          <tr><td>3</td><td>МИР ЛАВЫ</td><td>21–30</td><td>ЯДРО ИНФЕРНО</td></tr>
-          <tr><td>4</td><td>ЛЕДЯНЫЕ ПЕЩЕРЫ</td><td>31–40</td><td>ЛЕДЯНОЙ ПРИЗРАК</td></tr>
-          <tr><td>5</td><td>РУИНЫ ПУСТЫНИ</td><td>41–50</td><td>ПЕСЧАНЫЙ ТИТАН</td></tr>
-          <tr><td>6</td><td>КОСМОСТАНЦИЯ</td><td>51–60</td><td>РОЙ ДРОНОВ</td></tr>
-          <tr><td>7</td><td>ТЁМНЫЙ ЛЕС</td><td>61–70</td><td>ТЕНЕВОЙ ЖНЕЦ</td></tr>
-          <tr><td>8</td><td>ТОКСИЧНАЯ ЗОНА</td><td>71–80</td><td>КОРОЛЬ СЛИЗИ</td></tr>
-          <tr><td>9</td><td>ГРОЗОВЫЕ ПИКИ</td><td>81–90</td><td>ШТОРМОВОЙ ТИТАН</td></tr>
-          <tr><td>10</td><td>ПОСЛЕДНЯЯ КРЕПОСТЬ</td><td>91–100</td><td>АРХОНТ</td></tr>
-          <tr><td>🌈</td><td>PRISM ANOMALY <span class="tag mag">секрет</span></td><td>101–110</td><td>PRISM WRAITH</td></tr>
+          <tr><td>1</td><td><span data-l="ru">КИБЕРГОРОД</span><span data-l="en">CYBER CITY</span></td><td>1–10</td><td><span data-l="ru">СТРАЖ-X</span><span data-l="en">GUARDIAN-X</span></td></tr>
+          <tr><td>2</td><td><span data-l="ru">НЕОНОВЫЕ ДЖУНГЛИ</span><span data-l="en">NEON JUNGLE</span></td><td>11–20</td><td><span data-l="ru">КОРОЛЕВА ЛОЗ</span><span data-l="en">VINE QUEEN</span></td></tr>
+          <tr><td>3</td><td><span data-l="ru">МИР ЛАВЫ</span><span data-l="en">LAVA WORLD</span></td><td>21–30</td><td>INFERNO CORE</td></tr>
+          <tr><td>4</td><td><span data-l="ru">ЛЕДЯНЫЕ ПЕЩЕРЫ</span><span data-l="en">ICE CAVES</span></td><td>31–40</td><td><span data-l="ru">ЛЕДЯНОЙ ПРИЗРАК</span><span data-l="en">FROST PHANTOM</span></td></tr>
+          <tr><td>5</td><td><span data-l="ru">РУИНЫ ПУСТЫНИ</span><span data-l="en">DESERT RUINS</span></td><td>41–50</td><td><span data-l="ru">ПЕСЧАНЫЙ ТИТАН</span><span data-l="en">SAND TITAN</span></td></tr>
+          <tr><td>6</td><td><span data-l="ru">КОСМОСТАНЦИЯ</span><span data-l="en">SPACE STATION</span></td><td>51–60</td><td><span data-l="ru">РОЙ ДРОНОВ</span><span data-l="en">DRONE HIVE</span></td></tr>
+          <tr><td>7</td><td><span data-l="ru">ТЁМНЫЙ ЛЕС</span><span data-l="en">DARK FOREST</span></td><td>61–70</td><td><span data-l="ru">ТЕНЕВОЙ ЖНЕЦ</span><span data-l="en">SHADOW REAPER</span></td></tr>
+          <tr><td>8</td><td><span data-l="ru">ТОКСИЧНАЯ ЗОНА</span><span data-l="en">TOXIC ZONE</span></td><td>71–80</td><td><span data-l="ru">КОРОЛЬ СЛИЗИ</span><span data-l="en">SLUDGE KING</span></td></tr>
+          <tr><td>9</td><td><span data-l="ru">ГРОЗОВЫЕ ПИКИ</span><span data-l="en">STORM PEAKS</span></td><td>81–90</td><td><span data-l="ru">ШТОРМОВОЙ ТИТАН</span><span data-l="en">STORM TITAN</span></td></tr>
+          <tr><td>10</td><td><span data-l="ru">ПОСЛЕДНЯЯ КРЕПОСТЬ</span><span data-l="en">FINAL FORTRESS</span></td><td>91–100</td><td><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></td></tr>
+          <tr><td>🌈</td><td>PRISM ANOMALY <span class="tag mag"><span data-l="ru">секрет</span><span data-l="en">secret</span></span></td><td>101–110</td><td>PRISM WRAITH</td></tr>
         </tbody>
       </table>
     </div>
-    <p><a href="/byte-blaster/wiki/#worlds">Подробнее о каждом мире — в вики →</a></p>
+    <p><a href="/byte-blaster/wiki/#worlds"><span data-l="ru">Подробнее о каждом мире — в вики →</span><span data-l="en">More about every world in the wiki →</span></a></p>
   </div>
 </section>
 
-<section>
+<section id="modes">
   <div class="wrap">
-    <h2>РЕЖИМЫ</h2>
+    <h2><span data-l="ru">РЕЖИМЫ</span><span data-l="en">GAME MODES</span></h2>
     <div class="grid">
       <div class="card">
-        <h3>🗺 Приключение</h3>
-        <p>Основной режим: 100 уровней в 10 мирах, таймер на каждый, прогресс сохраняется. Плюс секретные 10 уровней.</p>
+        <h3><span data-l="ru">🗺 Приключение</span><span data-l="en">🗺 Adventure</span></h3>
+        <p data-l="ru">Основной режим: 100 уровней в 10 мирах, таймер на каждый, прогресс сохраняется. Плюс секретные 10 уровней.</p>
+        <p data-l="en">The main mode: 100 levels across 10 worlds, a timer on each, progress saved. Plus the 10 secret ones.</p>
       </div>
       <div class="card">
-        <h3>💀 Хардкор</h3>
-        <p>Открывается после прохождения обычного режима. У всех врагов +1 hp, таймеры быстрее, очки удваиваются.</p>
+        <h3><span data-l="ru">💀 Хардкор</span><span data-l="en">💀 Hardcore</span></h3>
+        <p data-l="ru">Открывается после прохождения обычного режима. У всех врагов +1 hp, таймеры быстрее, очки удваиваются.</p>
+        <p data-l="en">Unlocked by finishing normal mode. Every enemy gets +1 hp, timers run faster, score is doubled.</p>
       </div>
       <div class="card">
-        <h3>∞ Бесконечный</h3>
-        <p>Карты генерируются без конца, сложность растёт. Забег сохраняется, если выйти посреди него.</p>
+        <h3><span data-l="ru">∞ Бесконечный</span><span data-l="en">∞ Infinite</span></h3>
+        <p data-l="ru">Карты генерируются без конца, сложность растёт. Забег сохраняется, если выйти посреди него.</p>
+        <p data-l="en">Endlessly generated maps with rising difficulty. Your run is saved if you leave in the middle of it.</p>
       </div>
       <div class="card">
-        <h3>👥 Два игрока</h3>
-        <p>На одной клавиатуре. У второго игрока — красный робот UNIT-8 и своя ветка реплик.</p>
+        <h3><span data-l="ru">👥 Два игрока</span><span data-l="en">👥 Two players</span></h3>
+        <p data-l="ru">На одной клавиатуре. У второго игрока — красный робот UNIT-8 и своя ветка реплик.</p>
+        <p data-l="en">On one keyboard. Player two is UNIT-8, a red robot with its own dialogue.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section>
+<section id="controls">
   <div class="wrap">
-    <h2>УПРАВЛЕНИЕ</h2>
+    <h2><span data-l="ru">УПРАВЛЕНИЕ</span><span data-l="en">CONTROLS</span></h2>
     <div class="tw">
       <table>
-        <thead><tr><th>Действие</th><th>Клавиатура</th><th>Сенсор</th></tr></thead>
+        <thead><tr>
+          <th><span data-l="ru">Действие</span><span data-l="en">Action</span></th>
+          <th><span data-l="ru">Клавиатура</span><span data-l="en">Keyboard</span></th>
+          <th><span data-l="ru">Сенсор</span><span data-l="en">Touch</span></th></tr></thead>
         <tbody>
-          <tr><td>Движение</td><td>Стрелки или <code>WASD</code></td><td>Стрелки или джойстик на экране</td></tr>
-          <tr><td>Прыжок (двойной)</td><td><code>Пробел</code> или <code>↑</code></td><td>Кнопка ПРЫЖОК</td></tr>
-          <tr><td>Выстрел</td><td><code>Z</code>, <code>X</code> или <code>Ctrl</code></td><td>Кнопка ОГОНЬ</td></tr>
-          <tr><td>Пауза</td><td><code>Esc</code></td><td>Кнопка паузы в углу</td></tr>
+          <tr><td><span data-l="ru">Движение</span><span data-l="en">Move</span></td><td><span data-l="ru">Стрелки или <code>WASD</code></span><span data-l="en">Arrows or <code>WASD</code></span></td><td><span data-l="ru">Стрелки или джойстик</span><span data-l="en">Arrows or joystick</span></td></tr>
+          <tr><td><span data-l="ru">Прыжок (двойной)</span><span data-l="en">Jump (double)</span></td><td><span data-l="ru"><code>Пробел</code> или <code>↑</code></span><span data-l="en"><code>Space</code> or <code>↑</code></span></td><td><span data-l="ru">Кнопка ПРЫЖОК</span><span data-l="en">JUMP button</span></td></tr>
+          <tr><td><span data-l="ru">Выстрел</span><span data-l="en">Shoot</span></td><td><code>Z</code>, <code>X</code>, <code>Ctrl</code></td><td><span data-l="ru">Кнопка ОГОНЬ</span><span data-l="en">FIRE button</span></td></tr>
+          <tr><td><span data-l="ru">Пауза</span><span data-l="en">Pause</span></td><td><code>Esc</code></td><td><span data-l="ru">Кнопка в углу</span><span data-l="en">Corner button</span></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="note cy">Бластер нужно сначала найти — без него стрелять нечем. Врагов можно давить прыжком сверху, а жёлтые блоки бить снизу.</div>
+    <div class="note cy">
+      <span data-l="ru">Бластер нужно сначала найти — без него стрелять нечем. Врагов можно давить прыжком сверху, а жёлтые блоки бить снизу.</span>
+      <span data-l="en">You have to find the blaster first — without it there is nothing to shoot with. Enemies can be stomped from above, and yellow blocks are punched from below.</span>
+    </div>
   </div>
 </section>
 
-<section>
+<section id="ready">
   <div class="wrap" style="text-align:center">
-    <h2>ГОТОВ?</h2>
-    <p class="lead">Демо — это первый мир целиком, без установки и регистрации. Полная версия продолжает ровно с того места.</p>
+    <h2><span data-l="ru">ГОТОВ?</span><span data-l="en">READY?</span></h2>
+    <p class="lead" data-l="ru">Демо — это первый мир целиком, без установки и регистрации. Полная версия продолжает ровно с того места.</p>
+    <p class="lead" data-l="en">The demo is the whole first world, no install and no sign-up. The full version picks up exactly where it stops.</p>
     <div class="btns">
-      <a class="btn primary" href="/byte-blaster/game/full/">▶ ПОЛНАЯ ВЕРСИЯ<small>110 уровней · кооператив · хардкор</small></a>
-      <a class="btn" href="/byte-blaster/game/demo/">◆ ДЕМО<small>10 уровней · попробовать сейчас</small></a>
+      <a class="btn primary" href="/byte-blaster/game/full/">
+        <span data-l="ru">▶ ПОЛНАЯ ВЕРСИЯ<small>110 уровней · кооператив · хардкор</small></span>
+        <span data-l="en">▶ FULL VERSION<small>110 levels · co-op · hardcore</small></span>
+      </a>
+      <a class="btn" href="/byte-blaster/game/demo/">
+        <span data-l="ru">◆ ДЕМО<small>10 уровней · попробовать сейчас</small></span>
+        <span data-l="en">◆ DEMO<small>10 levels · try it now</small></span>
+      </a>
     </div>
-    <p style="margin-top:26px"><a class="btn ghost" href="/byte-blaster/wiki/">📖 ОТКРЫТЬ ВИКИ</a></p>
+    <p style="margin-top:22px">
+      <a class="btn ghost" href="/byte-blaster/download/"><span data-l="ru">⬇ ВСЕ ВЕРСИИ</span><span data-l="en">⬇ ALL VERSIONS</span></a>
+      <a class="btn ghost" href="/byte-blaster/wiki/"><span data-l="ru">📖 ОТКРЫТЬ ВИКИ</span><span data-l="en">📖 OPEN THE WIKI</span></a>
+    </p>
   </div>
 </section>
 
@@ -182,9 +249,15 @@
 <footer class="site">
   <div class="wrap">
     <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
-    <div><a href="/byte-blaster/wiki/">Вики</a> · <a href="/byte-blaster/wiki/#requirements">Требования</a> · <a href="/byte-blaster/wiki/#faq">FAQ</a></div>
+    <div>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a> ·
+      <a href="/byte-blaster/download/"><span data-l="ru">Скачать</span><span data-l="en">Download</span></a> ·
+      <a href="/byte-blaster/updates/"><span data-l="ru">Обновления</span><span data-l="en">Updates</span></a> ·
+      <a href="/byte-blaster/wiki/#faq">FAQ</a>
+    </div>
   </div>
 </footer>
 
+<script src="/byte-blaster/assets/site.js"></script>
 </body>
 </html>

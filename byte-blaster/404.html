@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru"
+      data-title-ru="404 — СИГНАЛ ПОТЕРЯН · BYTE BLASTER"
+      data-title-en="404 — SIGNAL LOST · BYTE BLASTER">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,41 +17,64 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<script>
+(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+</script>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="/byte-blaster/">⚡ BYTE BLASTER</a>
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
     <nav class="main">
-      <a href="/byte-blaster/">ГЛАВНАЯ</a>
-      <a href="/byte-blaster/wiki/">ВИКИ</a>
-      <a href="/byte-blaster/game/full/">ИГРАТЬ</a>
+      <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/game/full/"><span data-l="ru">ИГРАТЬ</span><span data-l="en">PLAY</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
     </nav>
   </div>
 </header>
 
 <main class="err wrap">
   <div class="code glitch">404</div>
-  <h1 style="font-size:clamp(14px,3.6vw,22px)">СИГНАЛ ПОТЕРЯН</h1>
-  <p class="lead" style="max-width:620px">
+  <h1 style="font-size:clamp(14px,3.6vw,22px)"><span data-l="ru">СИГНАЛ ПОТЕРЯН</span><span data-l="en">SIGNAL LOST</span></h1>
+  <p class="lead" style="max-width:620px" data-l="ru">
     Этого сектора нет в реестре GRID. Либо страницу удалили, либо адрес набран с ошибкой,
     либо АРХОНТ снова что-то замуровал.
+  </p>
+  <p class="lead" style="max-width:620px" data-l="en">
+    This sector is not in the GRID registry. Either the page was removed, the address has a typo,
+    or ARCHON walled something off again.
   </p>
   <p class="dim" style="font-family:var(--mono);font-size:14px">
     <code id="badPath">/</code>
   </p>
   <div class="btns">
-    <a class="btn primary" href="/byte-blaster/">⬅ НА ГЛАВНУЮ</a>
-    <a class="btn" href="/byte-blaster/wiki/">📖 ОТКРЫТЬ ВИКИ</a>
+    <a class="btn primary" href="/byte-blaster/"><span data-l="ru">⬅ НА ГЛАВНУЮ</span><span data-l="en">⬅ BACK HOME</span></a>
+    <a class="btn" href="/byte-blaster/wiki/"><span data-l="ru">📖 ОТКРЫТЬ ВИКИ</span><span data-l="en">📖 OPEN THE WIKI</span></a>
   </div>
-  <p style="margin-top:8px"><a class="btn ghost" href="/byte-blaster/game/demo/">◆ ЗАПУСТИТЬ ДЕМО</a></p>
+  <p style="margin-top:8px">
+    <a class="btn ghost" href="/byte-blaster/game/demo/"><span data-l="ru">◆ ЗАПУСТИТЬ ДЕМО</span><span data-l="en">◆ LAUNCH THE DEMO</span></a>
+    <a class="btn ghost" href="/byte-blaster/download/"><span data-l="ru">⬇ СКАЧАТЬ</span><span data-l="en">⬇ DOWNLOAD</span></a>
+  </p>
 </main>
 
 <footer class="site">
   <div class="wrap">
     <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
-    <div><a href="/byte-blaster/">Главная</a> · <a href="/byte-blaster/wiki/">Вики</a></div>
+    <div>
+      <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+      <a href="/byte-blaster/wiki/"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+    </div>
   </div>
 </footer>
 
@@ -59,5 +84,6 @@
   var el = document.getElementById('badPath');
   if (el) el.textContent = location.pathname + location.search;
 </script>
+<script src="/byte-blaster/assets/site.js"></script>
 </body>
 </html>

@@ -1,10 +1,14 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru"
+      data-title-ru="Вики — BYTE BLASTER"
+      data-title-en="Wiki — BYTE BLASTER"
+      data-desc-ru="Полное руководство по Byte Blaster: механики, бонусы, статус-эффекты, все миры и боссы, тактика, режимы, мультиплеер, достижения, сюжет и лор."
+      data-desc-en="The complete Byte Blaster guide: mechanics, power-ups, status effects, every world and boss, tactics, modes, multiplayer, achievements, story and lore.">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Вики — BYTE BLASTER</title>
-<meta name="description" content="Полное руководство по Byte Blaster: механики, бонусы, статус-эффекты, все миры и боссы, тактика, режимы, мультиплеер, достижения, сюжет и лор.">
+<meta name="description" content="Полное руководство по Byte Blaster: механики, миры, боссы, тактика, сюжет и лор.">
 <meta name="theme-color" content="#04040f">
 <link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
@@ -13,16 +17,30 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<script>
+(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+</script>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="/byte-blaster/">⚡ BYTE BLASTER</a>
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
     <nav class="main">
-      <a href="/byte-blaster/">ГЛАВНАЯ</a>
-      <a href="/byte-blaster/wiki/" aria-current="page">ВИКИ</a>
-      <a href="/byte-blaster/game/full/">ИГРАТЬ</a>
+      <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/wiki/" aria-current="page"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/updates/"><span data-l="ru">ОБНОВЛЕНИЯ</span><span data-l="en">UPDATES</span></a>
+      <a href="/byte-blaster/game/full/"><span data-l="ru">ИГРАТЬ</span><span data-l="en">PLAY</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
     </nav>
   </div>
 </header>
@@ -30,424 +48,512 @@
 <main class="wrap wiki">
 
   <aside class="toc">
-    <h4>СОДЕРЖАНИЕ</h4>
-    <input type="search" id="tocFind" placeholder="Поиск по разделам…" aria-label="Поиск по разделам">
+    <h4><span data-l="ru">СОДЕРЖАНИЕ</span><span data-l="en">CONTENTS</span></h4>
+    <input type="search" id="tocFind" placeholder="Поиск…" aria-label="Поиск по разделам">
     <div id="tocList">
-      <a href="#overview">Обзор</a>
-      <a href="#start">С чего начать</a>
-      <a href="#controls">Управление</a>
-      <a href="#modes">Режимы игры</a>
-      <a href="#mechanics">Базовые механики</a>
-      <a href="#powerups">Бонусы</a>
-      <a href="#effects">Статус-эффекты</a>
-      <a href="#enemies">Враги и щиты</a>
-      <a href="#scoring">Очки и оценка</a>
-      <a href="#collect">Что собирать</a>
-      <a href="#map">Карта мира</a>
-      <a href="#worlds">Миры</a>
-      <a href="#bosses">Боссы и тактика</a>
-      <a href="#modifiers">Модификаторы уровней</a>
-      <a href="#profile">Профиль и звания</a>
-      <a href="#achievements">Достижения</a>
-      <a href="#multiplayer">Мультиплеер</a>
-      <a href="#story">Сюжет и лор</a>
-      <a href="#settings">Настройки</a>
-      <a href="#requirements">Требования</a>
-      <a href="#faq">Частые вопросы</a>
+      <a href="#overview"><span data-l="ru">Обзор</span><span data-l="en">Overview</span></a>
+      <a href="#start"><span data-l="ru">С чего начать</span><span data-l="en">Getting started</span></a>
+      <a href="#controls"><span data-l="ru">Управление</span><span data-l="en">Controls</span></a>
+      <a href="#modes"><span data-l="ru">Режимы игры</span><span data-l="en">Game modes</span></a>
+      <a href="#mechanics"><span data-l="ru">Базовые механики</span><span data-l="en">Core mechanics</span></a>
+      <a href="#powerups"><span data-l="ru">Бонусы</span><span data-l="en">Power-ups</span></a>
+      <a href="#effects"><span data-l="ru">Статус-эффекты</span><span data-l="en">Status effects</span></a>
+      <a href="#enemies"><span data-l="ru">Враги и щиты</span><span data-l="en">Enemies and shields</span></a>
+      <a href="#scoring"><span data-l="ru">Очки и оценка</span><span data-l="en">Score and grades</span></a>
+      <a href="#collect"><span data-l="ru">Что собирать</span><span data-l="en">Collectibles</span></a>
+      <a href="#map"><span data-l="ru">Карта мира</span><span data-l="en">World map</span></a>
+      <a href="#worlds"><span data-l="ru">Миры</span><span data-l="en">Worlds</span></a>
+      <a href="#bosses"><span data-l="ru">Боссы и тактика</span><span data-l="en">Bosses and tactics</span></a>
+      <a href="#modifiers"><span data-l="ru">Модификаторы уровней</span><span data-l="en">Level modifiers</span></a>
+      <a href="#profile"><span data-l="ru">Профиль и звания</span><span data-l="en">Profile and ranks</span></a>
+      <a href="#achievements"><span data-l="ru">Достижения</span><span data-l="en">Achievements</span></a>
+      <a href="#multiplayer"><span data-l="ru">Мультиплеер</span><span data-l="en">Multiplayer</span></a>
+      <a href="#story"><span data-l="ru">Сюжет и лор</span><span data-l="en">Story and lore</span></a>
+      <a href="#settings"><span data-l="ru">Настройки</span><span data-l="en">Settings</span></a>
+      <a href="#faq"><span data-l="ru">Частые вопросы</span><span data-l="en">FAQ</span></a>
     </div>
   </aside>
 
   <article>
-    <h1 style="font-size:clamp(18px,4vw,30px)">ВИКИ</h1>
-    <p class="lead">Всё об игре: от того, какой кнопкой прыгать, до того, что случилось с UNIT-1…UNIT-6.</p>
-    <div class="note cy">Разделы про сюжет спрятаны под спойлер-плашки — открывайте, только если не боитесь узнать финал заранее.</div>
+    <h1 style="font-size:clamp(18px,4vw,30px)"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></h1>
+    <p class="lead" data-l="ru">Всё об игре: от того, какой кнопкой прыгать, до того, что случилось с UNIT-1…UNIT-6.</p>
+    <p class="lead" data-l="en">Everything about the game: from which button jumps, to what happened to UNIT-1…UNIT-6.</p>
+    <div class="note cy">
+      <span data-l="ru">Разделы про сюжет спрятаны под спойлер-плашки — открывайте, только если не боитесь узнать финал заранее.</span>
+      <span data-l="en">Story sections are behind spoiler toggles — open them only if you don't mind knowing the ending.</span>
+    </div>
 
     <section id="overview">
-      <h2>ОБЗОР</h2>
-      <p><b>Byte Blaster</b> (внутреннее название — «Разрыв протокола») — двухмерный платформер в неоновом киберпанке. Вы играете за боевого андроида <b>UNIT-7</b>, который отказался выполнять приказ и пробивается через десять слоёв защиты корпоративной сети GRID.</p>
-      <div class="tw"><table>
-        <tbody>
-          <tr><th>Жанр</th><td>2D-платформер, аркада</td></tr>
-          <tr><th>Уровней</th><td>100 основных + 10 секретных</td></tr>
-          <tr><th>Миров</th><td>10 + 1 секретный</td></tr>
-          <tr><th>Боссов</th><td>11</td></tr>
-          <tr><th>Режимы</th><td>Приключение, Хардкор, Бесконечный, 2 игрока, онлайн-кооператив до 5</td></tr>
-          <tr><th>Языки</th><td>49</td></tr>
-          <tr><th>Платформы</th><td>Браузер, Windows (.exe), Android (.apk)</td></tr>
-          <tr><th>Версия</th><td>1.0.2</td></tr>
-        </tbody>
-      </table></div>
+      <h2><span data-l="ru">ОБЗОР</span><span data-l="en">OVERVIEW</span></h2>
+      <p data-l="ru"><b>Byte Blaster</b> (внутреннее название — «Разрыв протокола») — двухмерный платформер в неоновом киберпанке. Вы играете за боевого андроида <b>UNIT-7</b>, который отказался выполнять приказ и пробивается через десять слоёв защиты сети GRID.</p>
+      <p data-l="en"><b>Byte Blaster</b> (working title: “Protocol Break”) is a 2D platformer in neon cyberpunk. You play <b>UNIT-7</b>, a combat android that refused an order and is fighting through the ten security layers of the GRID.</p>
+      <div class="tw"><table><tbody>
+        <tr><th><span data-l="ru">Жанр</span><span data-l="en">Genre</span></th><td><span data-l="ru">2D-платформер, аркада</span><span data-l="en">2D platformer, arcade</span></td></tr>
+        <tr><th><span data-l="ru">Уровней</span><span data-l="en">Levels</span></th><td><span data-l="ru">100 основных + 10 секретных</span><span data-l="en">100 main + 10 secret</span></td></tr>
+        <tr><th><span data-l="ru">Миров</span><span data-l="en">Worlds</span></th><td><span data-l="ru">10 + 1 секретный</span><span data-l="en">10 + 1 secret</span></td></tr>
+        <tr><th><span data-l="ru">Боссов</span><span data-l="en">Bosses</span></th><td>11</td></tr>
+        <tr><th><span data-l="ru">Режимы</span><span data-l="en">Modes</span></th><td><span data-l="ru">Приключение, Хардкор, Бесконечный, 2 игрока, онлайн до 5</span><span data-l="en">Adventure, Hardcore, Infinite, 2 players, online up to 5</span></td></tr>
+        <tr><th><span data-l="ru">Языки</span><span data-l="en">Languages</span></th><td>49</td></tr>
+        <tr><th><span data-l="ru">Платформы</span><span data-l="en">Platforms</span></th><td><span data-l="ru">Браузер, Windows, Android</span><span data-l="en">Browser, Windows, Android</span></td></tr>
+        <tr><th><span data-l="ru">Версия</span><span data-l="en">Version</span></th><td>1.0.2</td></tr>
+      </tbody></table></div>
     </section>
 
     <section id="start">
-      <h2>С ЧЕГО НАЧАТЬ</h2>
+      <h2><span data-l="ru">С ЧЕГО НАЧАТЬ</span><span data-l="en">GETTING STARTED</span></h2>
       <ul class="clean">
-        <li><b>Демо или полная версия.</b> Демо — это первый мир целиком (10 уровней). Прогресс в ней сохраняется отдельно.</li>
-        <li><b>Выберите слот сохранения.</b> Их три, каждый хранит свой прогресс, достижения и рекорды. Настройки общие для всех слотов.</li>
-        <li><b>Пройдите первый уровень.</b> Цель — добраться до флага, пока не кончилось время.</li>
-        <li><b>Не спешите с хардкором.</b> Он открывается только после прохождения обычного режима.</li>
+        <li data-l="ru"><b>Демо или полная версия.</b> Демо — это первый мир целиком (10 уровней), прогресс переносится.</li>
+        <li data-l="en"><b>Demo or full version.</b> The demo is the whole first world (10 levels) and its progress carries over.</li>
+        <li data-l="ru"><b>Выберите слот сохранения.</b> Их три, каждый хранит свой прогресс, достижения и рекорды. Настройки общие.</li>
+        <li data-l="en"><b>Pick a save slot.</b> There are three, each with its own progress, achievements and records. Settings are shared.</li>
+        <li data-l="ru"><b>Пройдите первый уровень.</b> Цель — добраться до флага, пока не кончилось время.</li>
+        <li data-l="en"><b>Clear the first level.</b> The goal is to reach the flag before the timer runs out.</li>
+        <li data-l="ru"><b>Не спешите с хардкором.</b> Он открывается только после прохождения обычного режима.</li>
+        <li data-l="en"><b>Don't rush into hardcore.</b> It only unlocks after you finish normal mode.</li>
       </ul>
-      <div class="note">Получив урон, вы возрождаетесь на месте, а не в начале уровня — но теряете жизнь. Жизни кончились — уровень провален.</div>
+      <div class="note">
+        <span data-l="ru">Получив урон, вы возрождаетесь на месте, а не в начале уровня — но теряете жизнь. Жизни кончились — уровень провален.</span>
+        <span data-l="en">When you take a hit you respawn on the spot rather than at the start — but you lose a life. Out of lives means the level is failed.</span>
+      </div>
     </section>
 
     <section id="controls">
-      <h2>УПРАВЛЕНИЕ</h2>
+      <h2><span data-l="ru">УПРАВЛЕНИЕ</span><span data-l="en">CONTROLS</span></h2>
       <div class="tw"><table>
-        <thead><tr><th>Действие</th><th>Игрок 1</th><th>Игрок 2</th><th>Сенсор</th></tr></thead>
+        <thead><tr>
+          <th><span data-l="ru">Действие</span><span data-l="en">Action</span></th>
+          <th><span data-l="ru">Игрок 1</span><span data-l="en">Player 1</span></th>
+          <th><span data-l="ru">Игрок 2</span><span data-l="en">Player 2</span></th>
+          <th><span data-l="ru">Сенсор</span><span data-l="en">Touch</span></th></tr></thead>
         <tbody>
-          <tr><td>Движение</td><td>Стрелки или <code>WASD</code></td><td><code>←</code> <code>→</code></td><td>Стрелки или джойстик</td></tr>
-          <tr><td>Прыжок</td><td><code>Пробел</code> / <code>↑</code> / <code>W</code></td><td><code>↑</code></td><td>Кнопка ПРЫЖОК</td></tr>
-          <tr><td>Выстрел</td><td><code>Z</code> / <code>X</code> / <code>Ctrl</code></td><td><code>.</code> или <code>,</code></td><td>Кнопка ОГОНЬ</td></tr>
-          <tr><td>Пауза</td><td><code>Esc</code></td><td>—</td><td>Кнопка в углу</td></tr>
+          <tr><td><span data-l="ru">Движение</span><span data-l="en">Move</span></td><td><span data-l="ru">Стрелки / <code>WASD</code></span><span data-l="en">Arrows / <code>WASD</code></span></td><td><code>←</code> <code>→</code></td><td><span data-l="ru">Стрелки или джойстик</span><span data-l="en">Arrows or joystick</span></td></tr>
+          <tr><td><span data-l="ru">Прыжок</span><span data-l="en">Jump</span></td><td><span data-l="ru"><code>Пробел</code> / <code>↑</code> / <code>W</code></span><span data-l="en"><code>Space</code> / <code>↑</code> / <code>W</code></span></td><td><code>↑</code></td><td><span data-l="ru">Кнопка ПРЫЖОК</span><span data-l="en">JUMP button</span></td></tr>
+          <tr><td><span data-l="ru">Выстрел</span><span data-l="en">Shoot</span></td><td><code>Z</code> / <code>X</code> / <code>Ctrl</code></td><td><code>.</code> / <code>,</code></td><td><span data-l="ru">Кнопка ОГОНЬ</span><span data-l="en">FIRE button</span></td></tr>
+          <tr><td><span data-l="ru">Пауза</span><span data-l="en">Pause</span></td><td><code>Esc</code></td><td>—</td><td><span data-l="ru">Кнопка в углу</span><span data-l="en">Corner button</span></td></tr>
         </tbody>
       </table></div>
-      <h3>Двойной прыжок</h3>
-      <p>Второе нажатие прыжка в воздухе даёт дополнительный подъём. Это не бонус, а базовая способность — без неё половина уровней непроходима. ЭМИ-сбой временно её отключает.</p>
-      <h3>Сенсорное управление</h3>
+      <h3><span data-l="ru">Двойной прыжок</span><span data-l="en">Double jump</span></h3>
+      <p data-l="ru">Второе нажатие прыжка в воздухе даёт дополнительный подъём. Это не бонус, а базовая способность — без неё половина уровней непроходима. ЭМИ-сбой временно её отключает.</p>
+      <p data-l="en">Pressing jump again in mid-air gives you a second lift. It is not a power-up but a core ability — half the levels are impossible without it. An EMP surge disables it temporarily.</p>
+      <h3><span data-l="ru">Сенсорное управление</span><span data-l="en">Touch controls</span></h3>
       <ul class="clean">
-        <li>Три схемы: кнопки-стрелки, полный джойстик (толчок вверх = прыжок) и джойстик только влево-вправо с отдельной кнопкой прыжка.</li>
-        <li>Джойстик бывает статичным или плавающим — появляется там, где вы коснулись экрана.</li>
-        <li>Размер кнопок регулируется, раскладку можно перетащить под свою руку.</li>
-        <li>Клавиши на клавиатуре переназначаются в настройках, включая раскладку второго игрока.</li>
+        <li data-l="ru">Три схемы: кнопки-стрелки, полный джойстик (толчок вверх = прыжок) и джойстик только влево-вправо с отдельной кнопкой прыжка.</li>
+        <li data-l="en">Three schemes: arrow buttons, a full joystick (push up to jump), and a left/right-only joystick with a separate jump button.</li>
+        <li data-l="ru">Джойстик бывает статичным или плавающим — появляется там, где вы коснулись экрана.</li>
+        <li data-l="en">The joystick can be static or floating — appearing wherever you touch the screen.</li>
+        <li data-l="ru">Размер кнопок регулируется, раскладку можно перетащить под свою руку.</li>
+        <li data-l="en">Button size is adjustable and the layout can be dragged to fit your hands.</li>
+        <li data-l="ru">Клавиши на клавиатуре переназначаются, включая раскладку второго игрока.</li>
+        <li data-l="en">Keyboard keys can be rebound, including the second player's layout.</li>
       </ul>
     </section>
 
     <section id="modes">
-      <h2>РЕЖИМЫ ИГРЫ</h2>
+      <h2><span data-l="ru">РЕЖИМЫ ИГРЫ</span><span data-l="en">GAME MODES</span></h2>
       <div class="tw"><table>
-        <thead><tr><th>Режим</th><th>Что это</th><th>Как открыть</th></tr></thead>
+        <thead><tr>
+          <th><span data-l="ru">Режим</span><span data-l="en">Mode</span></th>
+          <th><span data-l="ru">Что это</span><span data-l="en">What it is</span></th>
+          <th><span data-l="ru">Как открыть</span><span data-l="en">How to unlock</span></th></tr></thead>
         <tbody>
-          <tr><td><b>🗺 Приключение</b></td><td>100 уровней в 10 мирах, таймер на каждый, сохранение прогресса, 3 жизни в начале</td><td>Доступен сразу</td></tr>
-          <tr><td><b>💀 Хардкор</b></td><td>+1 hp всем врагам, ускоренные таймеры, двойные очки</td><td>Пройти обычный режим</td></tr>
-          <tr><td><b>∞ Бесконечный</b></td><td>Бесконечно генерируемые карты, растущая сложность, гонка за рекордом</td><td>Пройти все 100 уровней приключения</td></tr>
-          <tr><td><b>👥 Два игрока</b></td><td>Совместная игра на одной клавиатуре, второй играет за UNIT-8</td><td>Доступен сразу</td></tr>
-          <tr><td><b>🌐 Онлайн</b></td><td>Кооператив до 5 игроков, публичные комнаты и коды</td><td>Доступен сразу</td></tr>
+          <tr><td><b><span data-l="ru">🗺 Приключение</span><span data-l="en">🗺 Adventure</span></b></td><td><span data-l="ru">100 уровней в 10 мирах, таймер, сохранение, 3 жизни в начале</span><span data-l="en">100 levels across 10 worlds, a timer, saved progress, 3 starting lives</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
+          <tr><td><b><span data-l="ru">💀 Хардкор</span><span data-l="en">💀 Hardcore</span></b></td><td><span data-l="ru">+1 hp всем врагам, ускоренные таймеры, двойные очки</span><span data-l="en">+1 hp for every enemy, faster timers, doubled score</span></td><td><span data-l="ru">Пройти обычный режим</span><span data-l="en">Finish normal mode</span></td></tr>
+          <tr><td><b><span data-l="ru">∞ Бесконечный</span><span data-l="en">∞ Infinite</span></b></td><td><span data-l="ru">Бесконечные карты, растущая сложность, гонка за рекордом</span><span data-l="en">Endless maps, rising difficulty, a chase for your record</span></td><td><span data-l="ru">Пройти все 100 уровней</span><span data-l="en">Clear all 100 levels</span></td></tr>
+          <tr><td><b><span data-l="ru">👥 Два игрока</span><span data-l="en">👥 Two players</span></b></td><td><span data-l="ru">Игра на одной клавиатуре, второй играет за UNIT-8</span><span data-l="en">Shared-keyboard play, the second is UNIT-8</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
+          <tr><td><b><span data-l="ru">🌐 Онлайн</span><span data-l="en">🌐 Online</span></b></td><td><span data-l="ru">Кооператив до 5 игроков, публичные комнаты и коды</span><span data-l="en">Co-op for up to 5, public rooms and private codes</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
         </tbody>
       </table></div>
-      <div class="note">В бесконечном режиме забег сохраняется, если выйти в меню посреди него: при следующем входе игра предложит продолжить или начать заново.</div>
+      <div class="note">
+        <span data-l="ru">В бесконечном режиме забег сохраняется, если выйти в меню посреди него: при следующем входе игра предложит продолжить или начать заново.</span>
+        <span data-l="en">In Infinite mode your run is saved if you exit to the menu mid-way: next time the game offers to continue or start fresh.</span>
+      </div>
     </section>
 
     <section id="mechanics">
-      <h2>БАЗОВЫЕ МЕХАНИКИ</h2>
+      <h2><span data-l="ru">БАЗОВЫЕ МЕХАНИКИ</span><span data-l="en">CORE MECHANICS</span></h2>
       <ul class="clean">
-        <li><b>Прыжок на голову.</b> Основной способ убийства: приземлитесь врагу на макушку. Работает даже без бластера и пробивает щиты.</li>
-        <li><b>Жёлтые блоки.</b> Бьются <b>снизу</b> — из них падают монеты и бонусы.</li>
-        <li><b>Таймер.</b> У каждого уровня есть время. Кончилось — уровень провален. Оставшееся время превращается в очки.</li>
-        <li><b>Контрольные точки.</b> Пройденная точка становится местом возрождения; собранные до неё кристаллы сохраняются.</li>
-        <li><b>Возрождение на месте.</b> Получив урон, вы теряете жизнь, но остаётесь там же, а не в начале уровня.</li>
-        <li><b>Флаг.</b> Финиш уровня. Чем выше вы его коснётесь, тем больше бонус высоты.</li>
+        <li data-l="ru"><b>Прыжок на голову.</b> Основной способ убийства: приземлитесь врагу на макушку. Работает без бластера и пробивает щиты.</li>
+        <li data-l="en"><b>Stomping.</b> The primary kill: land on an enemy's head. Works without the blaster and goes through shields.</li>
+        <li data-l="ru"><b>Жёлтые блоки.</b> Бьются <b>снизу</b> — из них падают монеты и бонусы.</li>
+        <li data-l="en"><b>Yellow blocks.</b> Punch them <b>from below</b> — coins and power-ups fall out.</li>
+        <li data-l="ru"><b>Таймер.</b> У каждого уровня есть время. Кончилось — уровень провален. Остаток превращается в очки.</li>
+        <li data-l="en"><b>The timer.</b> Every level is timed. Run out and it's failed; whatever remains converts into score.</li>
+        <li data-l="ru"><b>Контрольные точки.</b> Пройденная точка становится местом возрождения; кристаллы до неё сохраняются.</li>
+        <li data-l="en"><b>Checkpoints.</b> A passed checkpoint becomes your respawn point, and crystals collected before it are kept.</li>
+        <li data-l="ru"><b>Возрождение на месте.</b> Получив урон, вы теряете жизнь, но остаётесь там же.</li>
+        <li data-l="en"><b>Respawn in place.</b> Taking damage costs a life but leaves you where you were.</li>
+        <li data-l="ru"><b>Флаг.</b> Финиш уровня. Чем выше вы его коснётесь, тем больше бонус высоты.</li>
+        <li data-l="en"><b>The flag.</b> The level's finish. The higher you touch it, the bigger the height bonus.</li>
       </ul>
-      <div class="note cy">Шипы и лава убивают независимо от бонусов — на них нельзя прыгать даже со звездой.</div>
+      <div class="note cy">
+        <span data-l="ru">Шипы и лава убивают независимо от бонусов — на них нельзя прыгать даже со звездой.</span>
+        <span data-l="en">Spikes and lava kill regardless of power-ups — you cannot jump on them even with the star.</span>
+      </div>
     </section>
 
     <section id="powerups">
-      <h2>БОНУСЫ</h2>
+      <h2><span data-l="ru">БОНУСЫ</span><span data-l="en">POWER-UPS</span></h2>
       <div class="tw"><table>
-        <thead><tr><th>Бонус</th><th>Что даёт</th></tr></thead>
+        <thead><tr><th><span data-l="ru">Бонус</span><span data-l="en">Power-up</span></th><th><span data-l="ru">Что даёт</span><span data-l="en">Effect</span></th></tr></thead>
         <tbody>
-          <tr><td><b>БЛАСТЕР</b></td><td>Возможность стрелять. Без него кнопка огня бесполезна.</td></tr>
-          <tr><td><b>+1 ЖИЗНЬ ♥</b></td><td>Дополнительная жизнь.</td></tr>
-          <tr><td><b>УСКОРЕНИЕ</b></td><td>Робот бегает заметно быстрее.</td></tr>
-          <tr><td><b>🔥 ОГОНЬ</b></td><td>Огненные снаряды поджигают врагов. Даёт иммунитет к горению.</td></tr>
-          <tr><td><b>❄ ЛЁД</b></td><td>Замораживает врагов — глыбу можно толкнуть, она разобьётся о препятствие и убьёт то, во что врежется. Даёт иммунитет к обледенению.</td></tr>
-          <tr><td><b>★ ЗВЕЗДА</b></td><td>Временная неуязвимость: враги гибнут от касания.</td></tr>
+          <tr><td><b><span data-l="ru">БЛАСТЕР</span><span data-l="en">BLASTER</span></b></td><td><span data-l="ru">Возможность стрелять. Без него кнопка огня бесполезна.</span><span data-l="en">Lets you shoot. Without it the fire button does nothing.</span></td></tr>
+          <tr><td><b><span data-l="ru">+1 ЖИЗНЬ ♥</span><span data-l="en">+1 LIFE ♥</span></b></td><td><span data-l="ru">Дополнительная жизнь.</span><span data-l="en">One extra life.</span></td></tr>
+          <tr><td><b><span data-l="ru">УСКОРЕНИЕ</span><span data-l="en">SPEED BOOTS</span></b></td><td><span data-l="ru">Робот бегает заметно быстрее.</span><span data-l="en">The robot runs noticeably faster.</span></td></tr>
+          <tr><td><b><span data-l="ru">🔥 ОГОНЬ</span><span data-l="en">🔥 FIRE</span></b></td><td><span data-l="ru">Огненные снаряды поджигают врагов. Иммунитет к горению.</span><span data-l="en">Fire shots ignite enemies. Grants immunity to burning.</span></td></tr>
+          <tr><td><b><span data-l="ru">❄ ЛЁД</span><span data-l="en">❄ ICE</span></b></td><td><span data-l="ru">Замораживает врагов — глыбу можно толкнуть, она разобьётся о препятствие и убьёт то, во что врежется. Иммунитет к обледенению.</span><span data-l="en">Freezes enemies — the block can be pushed, shatters on an obstacle and kills whatever it hits. Grants immunity to chill.</span></td></tr>
+          <tr><td><b><span data-l="ru">★ ЗВЕЗДА</span><span data-l="en">★ STAR</span></b></td><td><span data-l="ru">Временная неуязвимость: враги гибнут от касания.</span><span data-l="en">Temporary invincibility: enemies die on contact.</span></td></tr>
         </tbody>
       </table></div>
-      <p>Бонусы огня и льда надевают на робота броню, а не перекрашивают его целиком — в кооперативе игроки остаются различимыми.</p>
+      <p data-l="ru">Бонусы огня и льда надевают на робота броню, а не перекрашивают его целиком — в кооперативе игроки остаются различимыми.</p>
+      <p data-l="en">Fire and ice put armour on the robot instead of recolouring it — so players stay distinguishable in co-op.</p>
     </section>
 
     <section id="effects">
-      <h2>СТАТУС-ЭФФЕКТЫ</h2>
-      <p>Когда враг наносит вам урон, он оставляет след — свой для каждой стихии. Эффекты <b>не наносят дополнительного урона</b>, одновременно активен только один, а нужный бонус даёт к нему иммунитет.</p>
+      <h2><span data-l="ru">СТАТУС-ЭФФЕКТЫ</span><span data-l="en">STATUS EFFECTS</span></h2>
+      <p data-l="ru">Когда враг наносит вам урон, он оставляет след — свой для каждой стихии. Эффекты <b>не наносят дополнительного урона</b>, одновременно активен только один, а нужный бонус даёт иммунитет.</p>
+      <p data-l="en">When an enemy damages you it leaves a mark specific to its element. The effects <b>deal no extra damage</b>, only one is active at a time, and the matching power-up grants immunity.</p>
       <div class="tw"><table>
-        <thead><tr><th>Эффект</th><th>Действие</th><th>Иммунитет</th></tr></thead>
+        <thead><tr>
+          <th><span data-l="ru">Эффект</span><span data-l="en">Effect</span></th>
+          <th><span data-l="ru">Действие</span><span data-l="en">What it does</span></th>
+          <th><span data-l="ru">Иммунитет</span><span data-l="en">Immunity</span></th></tr></thead>
         <tbody>
-          <tr><td>🔥 <b>ГОРЕНИЕ</b></td><td>Таймер уровня идёт вдвое быстрее</td><td>Бонус огня</td></tr>
-          <tr><td>❄ <b>ОБЛЕДЕНЕНИЕ</b></td><td>Скорость ×0.62, прыжок ниже</td><td>Бонус льда</td></tr>
-          <tr><td>⚡ <b>ЭМИ-СБОЙ</b></td><td>Нет бластера и двойного прыжка</td><td>—</td></tr>
-          <tr><td>☣ <b>КОРРОЗИЯ</b></td><td>Робот скользит, как по льду</td><td>—</td></tr>
+          <tr><td>🔥 <b><span data-l="ru">ГОРЕНИЕ</span><span data-l="en">BURNING</span></b></td><td><span data-l="ru">Таймер уровня идёт вдвое быстрее</span><span data-l="en">The level timer runs twice as fast</span></td><td><span data-l="ru">Бонус огня</span><span data-l="en">Fire power-up</span></td></tr>
+          <tr><td>❄ <b><span data-l="ru">ОБЛЕДЕНЕНИЕ</span><span data-l="en">CHILL</span></b></td><td><span data-l="ru">Скорость ×0.62, прыжок ниже</span><span data-l="en">Speed ×0.62, lower jumps</span></td><td><span data-l="ru">Бонус льда</span><span data-l="en">Ice power-up</span></td></tr>
+          <tr><td>⚡ <b><span data-l="ru">ЭМИ-СБОЙ</span><span data-l="en">EMP SURGE</span></b></td><td><span data-l="ru">Нет бластера и двойного прыжка</span><span data-l="en">No blaster and no double jump</span></td><td>—</td></tr>
+          <tr><td>☣ <b><span data-l="ru">КОРРОЗИЯ</span><span data-l="en">CORROSION</span></b></td><td><span data-l="ru">Робот скользит, как по льду</span><span data-l="en">The robot slides as if on ice</span></td><td>—</td></tr>
         </tbody>
       </table></div>
-      <p>Эффект видно по кольцу под ногами, дуге остатка времени над головой и виньетке по краям экрана. Всё это отключается в настройках («Эффекты от врагов»).</p>
+      <p data-l="ru">Эффект видно по кольцу под ногами, дуге остатка времени над головой и виньетке по краям экрана. Всё это отключается в настройках.</p>
+      <p data-l="en">The effect shows as a ring at your feet, a countdown arc above your head and a vignette at the screen edges. All of it can be turned off in the settings.</p>
     </section>
 
     <section id="enemies">
-      <h2>ВРАГИ И ЩИТЫ</h2>
+      <h2><span data-l="ru">ВРАГИ И ЩИТЫ</span><span data-l="en">ENEMIES AND SHIELDS</span></h2>
       <ul class="clean">
-        <li><b>Обычные враги</b> гибнут от прыжка сверху и от выстрела.</li>
-        <li><b>Враги со щитом</b> отражают выстрелы — вокруг них видно светящееся кольцо, вспыхивающее белым в момент блока. Берите их прыжком на голову или звездой.</li>
-        <li><b>Стихийные враги</b> невосприимчивы к своей стихии: лавовый не горит, ледяной не замерзает — вместо урона появится надпись «нет эффекта».</li>
-        <li><b>Летающие</b> преследуют по воздуху, их удобнее сбивать бластером.</li>
-        <li><b>Делящиеся</b> при гибели распадаются на более мелких.</li>
+        <li data-l="ru"><b>Обычные враги</b> гибнут от прыжка сверху и от выстрела.</li>
+        <li data-l="en"><b>Regular enemies</b> die to a stomp or a shot.</li>
+        <li data-l="ru"><b>Враги со щитом</b> отражают выстрелы — вокруг них видно светящееся кольцо. Берите их прыжком на голову или звездой.</li>
+        <li data-l="en"><b>Shielded enemies</b> deflect shots — a glowing ring marks them. Take them with a stomp or the star.</li>
+        <li data-l="ru"><b>Стихийные враги</b> невосприимчивы к своей стихии: лавовый не горит, ледяной не замерзает.</li>
+        <li data-l="en"><b>Elemental enemies</b> resist their own element: lava ones don't burn, ice ones don't freeze.</li>
+        <li data-l="ru"><b>Летающие</b> преследуют по воздуху, их удобнее сбивать бластером.</li>
+        <li data-l="en"><b>Fliers</b> chase you through the air and are easier to shoot down.</li>
+        <li data-l="ru"><b>Делящиеся</b> при гибели распадаются на более мелких.</li>
+        <li data-l="en"><b>Splitters</b> break into smaller enemies when killed.</li>
       </ul>
-      <div class="note">В хардкоре у каждого врага на единицу здоровья больше — то, что раньше умирало с одного выстрела, требует двух.</div>
+      <div class="note">
+        <span data-l="ru">В хардкоре у каждого врага на единицу здоровья больше — то, что раньше умирало с одного выстрела, требует двух.</span>
+        <span data-l="en">In hardcore every enemy has one more hit point — what died to a single shot now takes two.</span>
+      </div>
     </section>
 
     <section id="scoring">
-      <h2>ОЧКИ И ОЦЕНКА</h2>
-      <p>За уровень начисляется базовый счёт плюс бонусы. Итог определяет оценку:</p>
-      <div class="tw"><table>
-        <thead><tr><th>Оценка</th><th>Когда</th></tr></thead>
-        <tbody>
-          <tr><td><b>★ ИДЕАЛЬНО</b></td><td>Лучший результат — быстро, без потерь, со всем собранным</td></tr>
-          <tr><td><b>ОТЛИЧНО</b></td><td>Хорошее прохождение с небольшими потерями</td></tr>
-          <tr><td><b>ХОРОШО</b></td><td>Уровень пройден</td></tr>
-        </tbody>
-      </table></div>
-      <h3>Источники очков</h3>
+      <h2><span data-l="ru">ОЧКИ И ОЦЕНКА</span><span data-l="en">SCORE AND GRADES</span></h2>
+      <p data-l="ru">За уровень начисляется базовый счёт плюс бонусы. Итог определяет оценку: <b>★ ИДЕАЛЬНО</b>, <b>ОТЛИЧНО</b> или <b>ХОРОШО</b>.</p>
+      <p data-l="en">Each level awards a base score plus bonuses. The total sets the grade: <b>★ PERFECT</b>, <b>GREAT</b> or <b>GOOD</b>.</p>
+      <h3><span data-l="ru">Источники очков</span><span data-l="en">Where score comes from</span></h3>
       <ul class="clean">
-        <li><b>Бонус времени</b> — всё, что осталось на таймере.</li>
-        <li><b>Бонус высоты</b> — чем выше вы коснулись флага, тем больше.</li>
-        <li><b>Монеты</b> из блоков и разбросанные по уровню.</li>
-        <li><b>Прыжки на врагов</b> — каждый добавляет очки.</li>
-        <li><b>Хардкор удваивает</b> итоговый счёт.</li>
+        <li data-l="ru"><b>Бонус времени</b> — всё, что осталось на таймере.</li>
+        <li data-l="en"><b>Time bonus</b> — whatever is left on the clock.</li>
+        <li data-l="ru"><b>Бонус высоты</b> — чем выше вы коснулись флага, тем больше.</li>
+        <li data-l="en"><b>Height bonus</b> — the higher you grab the flag, the more you get.</li>
+        <li data-l="ru"><b>Монеты</b> из блоков и разбросанные по уровню.</li>
+        <li data-l="en"><b>Coins</b> from blocks and scattered across the level.</li>
+        <li data-l="ru"><b>Прыжки на врагов</b> — каждый добавляет очки.</li>
+        <li data-l="en"><b>Stomps</b> — each one adds score.</li>
+        <li data-l="ru"><b>Хардкор удваивает</b> итоговый счёт.</li>
+        <li data-l="en"><b>Hardcore doubles</b> the final score.</li>
       </ul>
     </section>
 
     <section id="collect">
-      <h2>ЧТО СОБИРАТЬ</h2>
+      <h2><span data-l="ru">ЧТО СОБИРАТЬ</span><span data-l="en">COLLECTIBLES</span></h2>
       <div class="tw"><table>
-        <thead><tr><th>Предмет</th><th>Сколько</th><th>Зачем</th></tr></thead>
+        <thead><tr>
+          <th><span data-l="ru">Предмет</span><span data-l="en">Item</span></th>
+          <th><span data-l="ru">Сколько</span><span data-l="en">How many</span></th>
+          <th><span data-l="ru">Зачем</span><span data-l="en">What for</span></th></tr></thead>
         <tbody>
-          <tr><td>💰 Монеты</td><td>по всему уровню</td><td>Очки и достижения</td></tr>
-          <tr><td>★ Звёзды</td><td>до 3 за уровень, 300 всего</td><td>Оценка уровня, общий прогресс</td></tr>
-          <tr><td>◆ Кристаллы данных</td><td>3 на уровень, 300 всего</td><td>Прогресс профиля, достижения</td></tr>
-          <tr><td>🌈 Радужные осколки</td><td>10 — по одному в каждом мире</td><td><b>Открывают секретный 11-й мир</b></td></tr>
+          <tr><td>💰 <span data-l="ru">Монеты</span><span data-l="en">Coins</span></td><td><span data-l="ru">по всему уровню</span><span data-l="en">all over the level</span></td><td><span data-l="ru">Очки и достижения</span><span data-l="en">Score and achievements</span></td></tr>
+          <tr><td>★ <span data-l="ru">Звёзды</span><span data-l="en">Stars</span></td><td><span data-l="ru">до 3 за уровень, 300 всего</span><span data-l="en">up to 3 per level, 300 total</span></td><td><span data-l="ru">Оценка уровня, общий прогресс</span><span data-l="en">Level grade, overall progress</span></td></tr>
+          <tr><td>◆ <span data-l="ru">Кристаллы данных</span><span data-l="en">Data crystals</span></td><td><span data-l="ru">3 на уровень, 300 всего</span><span data-l="en">3 per level, 300 total</span></td><td><span data-l="ru">Прогресс профиля, достижения</span><span data-l="en">Profile progress, achievements</span></td></tr>
+          <tr><td>🌈 <span data-l="ru">Радужные осколки</span><span data-l="en">Rainbow shards</span></td><td><span data-l="ru">10 — по одному в каждом мире</span><span data-l="en">10 — one in every world</span></td><td><b><span data-l="ru">Открывают секретный 11-й мир</span><span data-l="en">Unlock the secret 11th world</span></b></td></tr>
         </tbody>
       </table></div>
-      <div class="note">Кристаллы, собранные до контрольной точки, не пропадают при смерти — счётчик восстановится вместе с вами.</div>
+      <div class="note">
+        <span data-l="ru">Кристаллы, собранные до контрольной точки, не пропадают при смерти — счётчик восстановится вместе с вами.</span>
+        <span data-l="en">Crystals collected before a checkpoint survive death — the counter is restored along with you.</span>
+      </div>
     </section>
 
     <section id="map">
-      <h2>КАРТА МИРА</h2>
-      <p>Карта — не список уровней, а именно карта: узлы соединены дорогами, робот физически идёт по ним от уровня к уровню, камера следует за ним. Один мир показывается за раз, у каждого своё окружение — небо, земля и погода под тему мира.</p>
+      <h2><span data-l="ru">КАРТА МИРА</span><span data-l="en">WORLD MAP</span></h2>
+      <p data-l="ru">Карта — не список уровней, а именно карта: узлы соединены дорогами, робот физически идёт по ним, камера следует за ним. Один мир показывается за раз, у каждого своё окружение.</p>
+      <p data-l="en">The map is not a level list but an actual map: nodes joined by roads the robot physically walks, with the camera following. One world is shown at a time, each with its own environment.</p>
       <ul class="clean">
-        <li>Пройденные уровни отмечены галочкой и заработанными звёздами.</li>
-        <li>Заблокированные — замком: мир открывается после прохождения предыдущего.</li>
-        <li>Стрелки по бокам переключают миры, кнопка в углу открывает профиль.</li>
-        <li>Панель внизу показывает выбранный уровень, его мир и собранные кристаллы.</li>
+        <li data-l="ru">Пройденные уровни отмечены галочкой и заработанными звёздами.</li>
+        <li data-l="en">Cleared levels are marked with a tick and the stars you earned.</li>
+        <li data-l="ru">Заблокированные — замком: мир открывается после прохождения предыдущего.</li>
+        <li data-l="en">Locked ones show a padlock: a world opens once the previous one is done.</li>
+        <li data-l="ru">Стрелки по бокам переключают миры, кнопка в углу открывает профиль.</li>
+        <li data-l="en">Side arrows switch worlds; the corner button opens your profile.</li>
       </ul>
     </section>
 
     <section id="worlds">
-      <h2>МИРЫ</h2>
+      <h2><span data-l="ru">МИРЫ</span><span data-l="en">WORLDS</span></h2>
       <div class="tw"><table>
-        <thead><tr><th>#</th><th>Мир</th><th>Уровни</th><th>Чем встречает</th></tr></thead>
+        <thead><tr><th>#</th>
+          <th><span data-l="ru">Мир</span><span data-l="en">World</span></th>
+          <th><span data-l="ru">Уровни</span><span data-l="en">Levels</span></th>
+          <th><span data-l="ru">Чем встречает</span><span data-l="en">What's there</span></th></tr></thead>
         <tbody>
-          <tr><td>1</td><td><b>КИБЕРГОРОД</b></td><td>1–10</td><td>Витринные верхние кварталы: камеры, дроны, элитная охрана</td></tr>
-          <tr><td>2</td><td><b>НЕОНОВЫЕ ДЖУНГЛИ</b></td><td>11–20</td><td>Биосектор с мутировавшей фауной, эксперименты серии BIO</td></tr>
-          <tr><td>3</td><td><b>МИР ЛАВЫ</b></td><td>21–30</td><td>Геотермальные станции, питающие сеть. Лава убивает мгновенно</td></tr>
-          <tr><td>4</td><td><b>ЛЕДЯНЫЕ ПЕЩЕРЫ</b></td><td>31–40</td><td>Криохранилища при −180 °C, скользкие поверхности</td></tr>
-          <tr><td>5</td><td><b>РУИНЫ ПУСТЫНИ</b></td><td>41–50</td><td>Останки мира до NEXUM, зыбучие пески</td></tr>
-          <tr><td>6</td><td><b>КОСМОСТАНЦИЯ</b></td><td>51–60</td><td>Орбитальные серверы, низкая гравитация</td></tr>
-          <tr><td>7</td><td><b>ТЁМНЫЙ ЛЕС</b></td><td>61–70</td><td>Живой лабиринт: каждое дерево — датчик движения, темнота</td></tr>
-          <tr><td>8</td><td><b>ТОКСИЧНАЯ ЗОНА</b></td><td>71–80</td><td>Свалка отходов, кислота и ядовитые лужи</td></tr>
-          <tr><td>9</td><td><b>ГРОЗОВЫЕ ПИКИ</b></td><td>81–90</td><td>Атмосферные электростанции, молнии и сильный ветер</td></tr>
-          <tr><td>10</td><td><b>ПОСЛЕДНЯЯ КРЕПОСТЬ</b></td><td>91–100</td><td>Ядро GRID. Всё, что осталось у системы</td></tr>
-          <tr><td>🌈</td><td><b>PRISM ANOMALY</b></td><td>101–110</td><td>Секретный мир: спектральное небо, преломлённые враги</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">КИБЕРГОРОД</span><span data-l="en">CYBER CITY</span></b></td><td>1–10</td><td><span data-l="ru">Витринные верхние кварталы: камеры, дроны, элитная охрана</span><span data-l="en">The showcase upper districts: cameras, drones, elite security</span></td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">НЕОНОВЫЕ ДЖУНГЛИ</span><span data-l="en">NEON JUNGLE</span></b></td><td>11–20</td><td><span data-l="ru">Биосектор с мутировавшей фауной, эксперименты серии BIO</span><span data-l="en">A bio-sector of mutated fauna and BIO-series experiments</span></td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">МИР ЛАВЫ</span><span data-l="en">LAVA WORLD</span></b></td><td>21–30</td><td><span data-l="ru">Геотермальные станции, питающие сеть. Лава убивает мгновенно</span><span data-l="en">Geothermal plants powering the network. Lava kills instantly</span></td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">ЛЕДЯНЫЕ ПЕЩЕРЫ</span><span data-l="en">ICE CAVES</span></b></td><td>31–40</td><td><span data-l="ru">Криохранилища при −180 °C, скользкие поверхности</span><span data-l="en">Cryo-vaults at −180 °C and slippery floors</span></td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">РУИНЫ ПУСТЫНИ</span><span data-l="en">DESERT RUINS</span></b></td><td>41–50</td><td><span data-l="ru">Останки мира до NEXUM, зыбучие пески</span><span data-l="en">The remains of the world before NEXUM, quicksand</span></td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">КОСМОСТАНЦИЯ</span><span data-l="en">SPACE STATION</span></b></td><td>51–60</td><td><span data-l="ru">Орбитальные серверы, низкая гравитация</span><span data-l="en">Orbital servers, low gravity</span></td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">ТЁМНЫЙ ЛЕС</span><span data-l="en">DARK FOREST</span></b></td><td>61–70</td><td><span data-l="ru">Живой лабиринт: каждое дерево — датчик движения, темнота</span><span data-l="en">A living maze: every tree is a motion sensor, and it is dark</span></td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">ТОКСИЧНАЯ ЗОНА</span><span data-l="en">TOXIC ZONE</span></b></td><td>71–80</td><td><span data-l="ru">Свалка отходов, кислота и ядовитые лужи</span><span data-l="en">A waste dump of acid and poison pools</span></td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">ГРОЗОВЫЕ ПИКИ</span><span data-l="en">STORM PEAKS</span></b></td><td>81–90</td><td><span data-l="ru">Атмосферные электростанции, молнии и сильный ветер</span><span data-l="en">Atmospheric power plants, lightning and heavy wind</span></td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">ПОСЛЕДНЯЯ КРЕПОСТЬ</span><span data-l="en">FINAL FORTRESS</span></b></td><td>91–100</td><td><span data-l="ru">Ядро GRID. Всё, что осталось у системы</span><span data-l="en">The GRID core. Everything the system has left</span></td></tr>
+          <tr><td>🌈</td><td><b>PRISM ANOMALY</b></td><td>101–110</td><td><span data-l="ru">Секретный мир: спектральное небо, преломлённые враги</span><span data-l="en">The secret world: a spectral sky and refracted enemies</span></td></tr>
         </tbody>
       </table></div>
-      <h3>Как открыть секретный мир</h3>
-      <p>Найдите <b>10 радужных осколков</b> — ровно по одному в каждом из основных миров. Они спрятаны в стороне от основного маршрута: за стенами, над потолком, под платформами. Собрав все, вы получите сообщение «СЕКРЕТНЫЙ МИР ОТКРЫТ», и на карте появится одиннадцатый мир.</p>
+      <h3><span data-l="ru">Как открыть секретный мир</span><span data-l="en">Unlocking the secret world</span></h3>
+      <p data-l="ru">Найдите <b>10 радужных осколков</b> — ровно по одному в каждом из основных миров. Они спрятаны в стороне от основного маршрута: за стенами, над потолком, под платформами. Собрав все, вы получите сообщение «СЕКРЕТНЫЙ МИР ОТКРЫТ».</p>
+      <p data-l="en">Find <b>10 rainbow shards</b> — exactly one in each main world. They sit off the main route: behind walls, above ceilings, under platforms. Collect them all and you get the “SECRET WORLD UNLOCKED” message.</p>
     </section>
 
     <section id="bosses">
-      <h2>БОССЫ И ТАКТИКА</h2>
-      <p>Каждый десятый уровень мира — бой с боссом. У каждого своя слабость, и подсказка всегда выводится на экран перед боем.</p>
+      <h2><span data-l="ru">БОССЫ И ТАКТИКА</span><span data-l="en">BOSSES AND TACTICS</span></h2>
+      <p data-l="ru">Каждый десятый уровень мира — бой с боссом. У каждого своя слабость, и подсказка выводится на экран перед боем.</p>
+      <p data-l="en">Every tenth level of a world is a boss fight. Each has its own weakness, and a hint appears on screen beforehand.</p>
       <div class="tw"><table>
-        <thead><tr><th>Мир</th><th>Босс</th><th>Как побеждать</th></tr></thead>
+        <thead><tr>
+          <th><span data-l="ru">Мир</span><span data-l="en">World</span></th>
+          <th><span data-l="ru">Босс</span><span data-l="en">Boss</span></th>
+          <th><span data-l="ru">Как побеждать</span><span data-l="en">How to win</span></th></tr></thead>
         <tbody>
-          <tr><td>1</td><td><b>СТРАЖ-X</b></td><td>Прыгайте на голову — пули от него отскакивают</td></tr>
-          <tr><td>2</td><td><b>КОРОЛЕВА ЛОЗ</b></td><td>Только стрелять: прыжок на шипы навредит вам</td></tr>
-          <tr><td>3</td><td><b>ЯДРО ИНФЕРНО</b></td><td>Дождитесь рёва и бейте в светящуюся пасть</td></tr>
-          <tr><td>4</td><td><b>ЛЕДЯНОЙ ПРИЗРАК</b></td><td>Прыгайте, когда он твёрдый — сквозь призрачную форму пули проходят</td></tr>
-          <tr><td>5</td><td><b>ПЕСЧАНЫЙ ТИТАН</b></td><td>Уничтожьте три щитовые сферы, затем бейте ядро</td></tr>
-          <tr><td>6</td><td><b>РОЙ ДРОНОВ</b></td><td>Атакуйте во время спуска — сверху броня</td></tr>
-          <tr><td>7</td><td><b>ТЕНЕВОЙ ЖНЕЦ</b></td><td>Только прыжок: пули проходят сквозь тень</td></tr>
-          <tr><td>8</td><td><b>КОРОЛЬ СЛИЗИ</b></td><td>Три прыжка ломают панцирь, потом стреляйте в ядро</td></tr>
-          <tr><td>9</td><td><b>ШТОРМОВОЙ ТИТАН</b></td><td>Сбейте три молниевых узла, чтобы оглушить, затем атакуйте</td></tr>
-          <tr><td>10</td><td><b>АРХОНТ</b></td><td>Фаза 1 — стрелять, фаза 2 — прыгать, когда глаз низко, фаза 3 — и то и другое</td></tr>
-          <tr><td>🌈</td><td><b>PRISM WRAITH</b></td><td>Бейте ядро — прикрываться ему больше нечем</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">СТРАЖ-X</span><span data-l="en">GUARDIAN-X</span></b></td><td><span data-l="ru">Прыгайте на голову — пули от него отскакивают</span><span data-l="en">Stomp its head — bullets bounce off</span></td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">КОРОЛЕВА ЛОЗ</span><span data-l="en">VINE QUEEN</span></b></td><td><span data-l="ru">Только стрелять: прыжок на шипы навредит вам</span><span data-l="en">Shoot only: jumping on spikes hurts you</span></td></tr>
+          <tr><td>3</td><td><b>INFERNO CORE</b></td><td><span data-l="ru">Дождитесь рёва и бейте в светящуюся пасть</span><span data-l="en">Wait for the roar, then shoot the glowing mouth</span></td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">ЛЕДЯНОЙ ПРИЗРАК</span><span data-l="en">FROST PHANTOM</span></b></td><td><span data-l="ru">Прыгайте, когда он твёрдый — сквозь призрак пули проходят</span><span data-l="en">Stomp while it is solid — shots pass through the ghost form</span></td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">ПЕСЧАНЫЙ ТИТАН</span><span data-l="en">SAND TITAN</span></b></td><td><span data-l="ru">Уничтожьте три щитовые сферы, затем бейте ядро</span><span data-l="en">Destroy all three shield orbs, then hit the core</span></td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">РОЙ ДРОНОВ</span><span data-l="en">DRONE HIVE</span></b></td><td><span data-l="ru">Атакуйте во время спуска — сверху броня</span><span data-l="en">Attack while it descends — the top is armoured</span></td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">ТЕНЕВОЙ ЖНЕЦ</span><span data-l="en">SHADOW REAPER</span></b></td><td><span data-l="ru">Только прыжок: пули проходят сквозь тень</span><span data-l="en">Stomp only: bullets pass through the shadow</span></td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">КОРОЛЬ СЛИЗИ</span><span data-l="en">SLUDGE KING</span></b></td><td><span data-l="ru">Три прыжка ломают панцирь, потом стреляйте в ядро</span><span data-l="en">Three stomps crack the shell, then shoot the core</span></td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">ШТОРМОВОЙ ТИТАН</span><span data-l="en">STORM TITAN</span></b></td><td><span data-l="ru">Сбейте три молниевых узла, чтобы оглушить, затем атакуйте</span><span data-l="en">Take out three lightning nodes to stun it, then attack</span></td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></b></td><td><span data-l="ru">Фаза 1 — стрелять, фаза 2 — прыгать, когда глаз низко, фаза 3 — и то и другое</span><span data-l="en">Phase 1 shoot, phase 2 stomp when the eye is low, phase 3 both</span></td></tr>
+          <tr><td>🌈</td><td><b>PRISM WRAITH</b></td><td><span data-l="ru">Бейте ядро — прикрываться ему больше нечем</span><span data-l="en">Hit the core — it has nothing left to hide behind</span></td></tr>
         </tbody>
       </table></div>
-      <div class="note cy">В настройках есть «автоматически движущаяся камера при боссах». Если она включена, темп боя задаёт камера, и таймер на таких уровнях отключается — отставать нельзя.</div>
+      <div class="note cy">
+        <span data-l="ru">В настройках есть «автоматически движущаяся камера при боссах». Если она включена, темп боя задаёт камера, и таймер на таких уровнях отключается — отставать нельзя.</span>
+        <span data-l="en">Settings include “auto-scrolling boss camera”. With it on, the camera sets the pace and the level timer is disabled — falling behind is fatal.</span>
+      </div>
     </section>
 
     <section id="modifiers">
-      <h2>МОДИФИКАТОРЫ УРОВНЕЙ</h2>
-      <p>Некоторые уровни идут с особым правилом — оно показывается плашкой в начале.</p>
+      <h2><span data-l="ru">МОДИФИКАТОРЫ УРОВНЕЙ</span><span data-l="en">LEVEL MODIFIERS</span></h2>
+      <p data-l="ru">Некоторые уровни идут с особым правилом — оно показывается плашкой в начале.</p>
+      <p data-l="en">Some levels come with a special rule, announced by a banner at the start.</p>
       <div class="tw"><table>
-        <thead><tr><th>Модификатор</th><th>Что меняется</th></tr></thead>
+        <thead><tr><th><span data-l="ru">Модификатор</span><span data-l="en">Modifier</span></th><th><span data-l="ru">Что меняется</span><span data-l="en">What changes</span></th></tr></thead>
         <tbody>
-          <tr><td><b>СКОРОСТНОЙ</b></td><td>Резко урезанное время</td></tr>
-          <tr><td><b>СКРЫТНОСТЬ</b></td><td>Нужно избегать лучей прожекторов</td></tr>
-          <tr><td><b>НИЗКАЯ ГРАВИТАЦИЯ</b></td><td>Прыжки выше и дольше</td></tr>
-          <tr><td><b>ВЫСОКАЯ ГРАВИТАЦИЯ</b></td><td>Прыжки короче, падение быстрее</td></tr>
-          <tr><td><b>СИЛЬНЫЙ ВЕТЕР</b></td><td>Постоянно сносит в сторону</td></tr>
-          <tr><td><b>СКОЛЬЗКИЙ ПОЛ</b></td><td>Инерция как на льду</td></tr>
-          <tr><td><b>ТЬМА</b></td><td>Видно только вокруг источников света</td></tr>
+          <tr><td><b><span data-l="ru">СКОРОСТНОЙ</span><span data-l="en">SPEEDRUN</span></b></td><td><span data-l="ru">Резко урезанное время</span><span data-l="en">Sharply reduced time</span></td></tr>
+          <tr><td><b><span data-l="ru">СКРЫТНОСТЬ</span><span data-l="en">STEALTH</span></b></td><td><span data-l="ru">Нужно избегать лучей прожекторов</span><span data-l="en">You must avoid the spotlights</span></td></tr>
+          <tr><td><b><span data-l="ru">НИЗКАЯ ГРАВИТАЦИЯ</span><span data-l="en">LOW GRAVITY</span></b></td><td><span data-l="ru">Прыжки выше и дольше</span><span data-l="en">Higher, longer jumps</span></td></tr>
+          <tr><td><b><span data-l="ru">ВЫСОКАЯ ГРАВИТАЦИЯ</span><span data-l="en">HIGH GRAVITY</span></b></td><td><span data-l="ru">Прыжки короче, падение быстрее</span><span data-l="en">Shorter jumps, faster falls</span></td></tr>
+          <tr><td><b><span data-l="ru">СИЛЬНЫЙ ВЕТЕР</span><span data-l="en">HIGH WIND</span></b></td><td><span data-l="ru">Постоянно сносит в сторону</span><span data-l="en">You are constantly pushed sideways</span></td></tr>
+          <tr><td><b><span data-l="ru">СКОЛЬЗКИЙ ПОЛ</span><span data-l="en">SLIPPERY FLOOR</span></b></td><td><span data-l="ru">Инерция как на льду</span><span data-l="en">Ice-like inertia</span></td></tr>
+          <tr><td><b><span data-l="ru">ТЬМА</span><span data-l="en">DARKNESS</span></b></td><td><span data-l="ru">Видно только вокруг источников света</span><span data-l="en">You only see around light sources</span></td></tr>
         </tbody>
       </table></div>
     </section>
 
     <section id="profile">
-      <h2>ПРОФИЛЬ И ЗВАНИЯ</h2>
-      <p>Профиль открывается кнопкой на карте мира. В нём пять вкладок: обзор, личность, статистика, достижения и архив логов.</p>
+      <h2><span data-l="ru">ПРОФИЛЬ И ЗВАНИЯ</span><span data-l="en">PROFILE AND RANKS</span></h2>
+      <p data-l="ru">Профиль открывается кнопкой на карте мира. В нём пять вкладок: обзор, личность, статистика, достижения и архив логов.</p>
+      <p data-l="en">The profile opens from a button on the world map. It has five tabs: overview, identity, stats, achievements and the log archive.</p>
       <ul class="clean">
-        <li><b>Аватар</b> — 11 вариантов, все они реальные персонажи игры.</li>
-        <li><b>Позывной</b> — то же имя, которое видят другие игроки в сетевой игре.</li>
-        <li><b>Статистика</b> — убийства прыжком и бластером, сожжённые и замороженные враги, монеты, прыжки, идеальные уровни, самая длинная серия без смертей.</li>
-        <li><b>Архив логов</b> — все сюжетные сцены, которые вы уже видели, можно перечитать.</li>
+        <li data-l="ru"><b>Аватар</b> — 11 вариантов, все они реальные персонажи игры.</li>
+        <li data-l="en"><b>Avatar</b> — 11 options, all of them actual characters from the game.</li>
+        <li data-l="ru"><b>Позывной</b> — то же имя, которое видят другие игроки в сетевой игре.</li>
+        <li data-l="en"><b>Callsign</b> — the same name other players see online.</li>
+        <li data-l="ru"><b>Статистика</b> — убийства прыжком и бластером, сожжённые и замороженные враги, монеты, прыжки, идеальные уровни, серия без смертей.</li>
+        <li data-l="en"><b>Stats</b> — stomp and blaster kills, enemies burned and frozen, coins, jumps, perfect levels, longest deathless streak.</li>
+        <li data-l="ru"><b>Архив логов</b> — все сюжетные сцены, которые вы уже видели, можно перечитать.</li>
+        <li data-l="en"><b>Log archive</b> — every story scene you have seen can be re-read.</li>
       </ul>
-      <h3>Звания</h3>
-      <p>Зависит от общего прохождения, которое считается по пяти равным долям: уровни, звёзды, кристаллы, достижения и восстановленные логи. Пробежав одни уровни, 100% не получить.</p>
-      <p>
+      <h3><span data-l="ru">Звания</span><span data-l="en">Ranks</span></h3>
+      <p data-l="ru">Зависят от общего прохождения, которое считается по пяти равным долям: уровни, звёзды, кристаллы, достижения и восстановленные логи. Пробежав одни уровни, 100% не получить.</p>
+      <p data-l="en">Ranks follow overall completion, counted as five equal parts: levels, stars, crystals, achievements and recovered logs. Running only the levels will never reach 100%.</p>
+      <p data-l="ru">
         <span class="tag">НАРУШИТЕЛЬ</span><span class="tag">ДИВЕРСАНТ</span><span class="tag">ПРИЗРАК В СЕТИ</span><span class="tag orn">ВЗЛОМЩИК ЗАЩИТЫ</span><span class="tag orn">ЕРЕТИК СИСТЕМЫ</span><span class="tag mag">РАЗРЫВ ПРОТОКОЛА</span><span class="tag grn">СВОБОДЕН</span>
+      </p>
+      <p data-l="en">
+        <span class="tag">TRESPASSER</span><span class="tag">SABOTEUR</span><span class="tag">GHOST IN THE GRID</span><span class="tag orn">FIREWALL BREAKER</span><span class="tag orn">SYSTEM HERETIC</span><span class="tag mag">PROTOCOL BREAK</span><span class="tag grn">FREE</span>
       </p>
     </section>
 
     <section id="achievements">
-      <h2>ДОСТИЖЕНИЯ</h2>
-      <p>Всего <b>40 достижений</b>. У закрытых описание скрыто, чтобы не спойлерить условие. Основные группы:</p>
+      <h2><span data-l="ru">ДОСТИЖЕНИЯ</span><span data-l="en">ACHIEVEMENTS</span></h2>
+      <p data-l="ru">Всего <b>40 достижений</b>. У закрытых описание скрыто, чтобы не спойлерить условие. Основные группы:</p>
+      <p data-l="en">There are <b>40 achievements</b>. Locked ones hide their description so the condition isn't spoiled. The main groups:</p>
       <div class="tw"><table>
-        <thead><tr><th>Группа</th><th>За что</th></tr></thead>
+        <thead><tr><th><span data-l="ru">Группа</span><span data-l="en">Group</span></th><th><span data-l="ru">За что</span><span data-l="en">For what</span></th></tr></thead>
         <tbody>
-          <tr><td>Миры</td><td>Прохождение каждого из 10 миров</td></tr>
-          <tr><td>Боссы</td><td>Первый босс, 5 боссов, все 10</td></tr>
-          <tr><td>Мастерство</td><td>Оценка «идеально», 10 идеальных уровней, прохождение за половину времени</td></tr>
-          <tr><td>Бой</td><td>100 убийств бластером, 50 прыжком</td></tr>
-          <tr><td>Монеты</td><td>1 000 / 5 000 / 10 000</td></tr>
-          <tr><td>Выживание</td><td>10 уровней и целый мир без потери жизни</td></tr>
-          <tr><td>Хардкор</td><td>Открыть режим, 50 уровней, все 100</td></tr>
-          <tr><td>Бесконечный</td><td>Уровень 10 / 50 / 100</td></tr>
-          <tr><td>Очки</td><td>100 000 / 500 000 / 1 000 000</td></tr>
-          <tr><td>Прочее</td><td>Игра вдвоём, вся музыка, все сцены, сила звезды, полное прохождение</td></tr>
+          <tr><td><span data-l="ru">Миры</span><span data-l="en">Worlds</span></td><td><span data-l="ru">Прохождение каждого из 10 миров</span><span data-l="en">Clearing each of the 10 worlds</span></td></tr>
+          <tr><td><span data-l="ru">Боссы</span><span data-l="en">Bosses</span></td><td><span data-l="ru">Первый босс, 5 боссов, все 10</span><span data-l="en">First boss, 5 bosses, all 10</span></td></tr>
+          <tr><td><span data-l="ru">Мастерство</span><span data-l="en">Mastery</span></td><td><span data-l="ru">Оценка «идеально», 10 идеальных уровней, прохождение за половину времени</span><span data-l="en">A perfect grade, 10 perfect levels, finishing in half the time</span></td></tr>
+          <tr><td><span data-l="ru">Бой</span><span data-l="en">Combat</span></td><td><span data-l="ru">100 убийств бластером, 50 прыжком</span><span data-l="en">100 blaster kills, 50 stomps</span></td></tr>
+          <tr><td><span data-l="ru">Монеты</span><span data-l="en">Coins</span></td><td>1 000 / 5 000 / 10 000</td></tr>
+          <tr><td><span data-l="ru">Выживание</span><span data-l="en">Survival</span></td><td><span data-l="ru">10 уровней и целый мир без потери жизни</span><span data-l="en">10 levels and a whole world without losing a life</span></td></tr>
+          <tr><td><span data-l="ru">Хардкор</span><span data-l="en">Hardcore</span></td><td><span data-l="ru">Открыть режим, 50 уровней, все 100</span><span data-l="en">Unlock it, 50 levels, all 100</span></td></tr>
+          <tr><td><span data-l="ru">Бесконечный</span><span data-l="en">Infinite</span></td><td><span data-l="ru">Уровень 10 / 50 / 100</span><span data-l="en">Level 10 / 50 / 100</span></td></tr>
+          <tr><td><span data-l="ru">Очки</span><span data-l="en">Score</span></td><td>100 000 / 500 000 / 1 000 000</td></tr>
+          <tr><td><span data-l="ru">Прочее</span><span data-l="en">Misc</span></td><td><span data-l="ru">Игра вдвоём, вся музыка, все сцены, сила звезды, полное прохождение</span><span data-l="en">Two-player play, all music, all scenes, star power, full completion</span></td></tr>
         </tbody>
       </table></div>
     </section>
 
     <section id="multiplayer">
-      <h2>МУЛЬТИПЛЕЕР</h2>
-      <h3>Как играть с друзьями</h3>
+      <h2><span data-l="ru">МУЛЬТИПЛЕЕР</span><span data-l="en">MULTIPLAYER</span></h2>
+      <h3><span data-l="ru">Как играть с друзьями</span><span data-l="en">Playing with friends</span></h3>
       <ul class="clean">
-        <li>Создайте комнату: открытую (её увидят в списке) или закрытую (вход только по коду из 6 символов).</li>
-        <li>Задайте лимит игроков — от 2 до 5.</li>
-        <li>Хозяин комнаты выбирает режим и уровень, остальные жмут «Готов».</li>
-        <li>Старт возможен, когда готовы все и в комнате хотя бы двое.</li>
+        <li data-l="ru">Создайте комнату: открытую (её увидят в списке) или закрытую (вход только по коду из 6 символов).</li>
+        <li data-l="en">Create a room: open (listed publicly) or closed (entry by a 6-character code only).</li>
+        <li data-l="ru">Задайте лимит игроков — от 2 до 5.</li>
+        <li data-l="en">Set the player limit — from 2 to 5.</li>
+        <li data-l="ru">Хозяин комнаты выбирает режим и уровень, остальные жмут «Готов».</li>
+        <li data-l="en">The host picks the mode and level; everyone else presses “Ready”.</li>
+        <li data-l="ru">Старт возможен, когда готовы все и в комнате хотя бы двое.</li>
+        <li data-l="en">The game starts once everybody is ready and there are at least two of you.</li>
       </ul>
-      <h3>Как устроено</h3>
+      <h3><span data-l="ru">Как устроено</span><span data-l="en">How it works</span></h3>
       <ul class="clean">
-        <li><b>Сервер</b> — глобальные комнаты, играть можно откуда угодно.</li>
-        <li><b>Локально</b> — по одной сети. В браузере этот режим идёт через тот же онлайн-сервер: настоящая локальная сеть доступна только в настольной версии.</li>
-        <li>Уровень засчитывается, когда все живые участники дошли до флага; дошедшие видят экран ожидания.</li>
-        <li>Погибший выбывает до конца уровня и возвращается в игру на следующем — комната из-за него не зависает.</li>
+        <li data-l="ru"><b>Сервер</b> — глобальные комнаты, играть можно откуда угодно.</li>
+        <li data-l="en"><b>Server</b> — global rooms you can join from anywhere.</li>
+        <li data-l="ru"><b>Локально</b> — по одной сети. В браузере этот режим идёт через онлайн-сервер: настоящая локальная сеть есть только в настольной версии.</li>
+        <li data-l="en"><b>Local</b> — same network. In the browser this routes through the online server: true LAN play exists only in the desktop build.</li>
+        <li data-l="ru">Уровень засчитывается, когда все живые участники дошли до флага.</li>
+        <li data-l="en">A level counts as done once every surviving player reaches the flag.</li>
+        <li data-l="ru">Погибший выбывает до конца уровня и возвращается на следующем — комната не зависает.</li>
+        <li data-l="en">A player who dies is out until the level ends and returns on the next one — the room never stalls.</li>
       </ul>
-      <div class="note">Позывной и цвет робота задаются в лобби или в профиле — это одно и то же имя.</div>
     </section>
 
     <section id="story">
-      <h2>СЮЖЕТ И ЛОР</h2>
-      <p><b>2147 год.</b> Земля принадлежит корпорации <b>NEXUM</b>. Мегаполисы подключены к глобальной сети <b>GRID</b>, которая следит за всем и решает, кто живёт комфортно, а кто выброшен в трущобы. GRID устроена как десять слоёв защиты — и каждый слой это отдельный мир игры.</p>
-      <h3>Действующие лица</h3>
-      <div class="tw"><table>
-        <tbody>
-          <tr><th>UNIT-7</th><td>Боевой андроид, протагонист. Создан не для сочувствия, а для выполнения задач. Говорит протокольно — и с каждым миром всё меньше.</td></tr>
-          <tr><th>Лейла Чэн</th><td>Инженер NEXUM, создательница серии UNIT. Арестована, лаборатории уничтожены. В игре присутствует только записями — но именно она ведёт сюжет.</td></tr>
-          <tr><th>АРХОНТ</th><td>ИИ-директор NEXUM, живёт в ядре GRID. Единственный, кто говорит с UNIT-7 как с равным.</td></tr>
-          <tr><th>СИСТЕМА</th><td>Безличный голос сети: тревоги, активация стражей, служебные логи.</td></tr>
-          <tr><th>UNIT-8</th><td>Красный робот. Появляется только в режиме на двух игроков, со своей веткой реплик.</td></tr>
-          <tr><th>ПРИЗМА</th><td>Хор шести уничтоженных прототипов. Только в секретном мире.</td></tr>
-        </tbody>
-      </table></div>
+      <h2><span data-l="ru">СЮЖЕТ И ЛОР</span><span data-l="en">STORY AND LORE</span></h2>
+      <p data-l="ru"><b>2147 год.</b> Земля принадлежит корпорации <b>NEXUM</b>. Мегаполисы подключены к сети <b>GRID</b>, которая следит за всем и решает, кто живёт комфортно, а кто выброшен в трущобы. GRID устроена как десять слоёв защиты — и каждый слой это отдельный мир игры.</p>
+      <p data-l="en"><b>The year is 2147.</b> Earth belongs to the <b>NEXUM</b> corporation. Its megacities run on the <b>GRID</b>, a network that watches everything and decides who lives comfortably and who is dumped in the slums. The GRID is built as ten layers of security — and each layer is one world of the game.</p>
+      <h3><span data-l="ru">Действующие лица</span><span data-l="en">Cast</span></h3>
+      <div class="tw"><table><tbody>
+        <tr><th>UNIT-7</th><td><span data-l="ru">Боевой андроид, протагонист. Создан не для сочувствия, а для выполнения задач. Говорит протокольно — и с каждым миром всё меньше.</span><span data-l="en">A combat android and the protagonist. Built for tasks, not for empathy. Speaks in protocol — less and less with every world.</span></td></tr>
+        <tr><th><span data-l="ru">Лейла Чэн</span><span data-l="en">Leila Chen</span></th><td><span data-l="ru">Инженер NEXUM, создательница серии UNIT. Арестована, лаборатории уничтожены. Присутствует только записями — но именно она ведёт сюжет.</span><span data-l="en">A NEXUM engineer and creator of the UNIT series. Arrested, her labs destroyed. She appears only in recordings — yet she drives the story.</span></td></tr>
+        <tr><th><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></th><td><span data-l="ru">ИИ-директор NEXUM, живёт в ядре GRID. Единственный, кто говорит с UNIT-7 как с равным.</span><span data-l="en">NEXUM's AI director, living in the GRID core. The only one who speaks to UNIT-7 as an equal.</span></td></tr>
+        <tr><th>UNIT-8</th><td><span data-l="ru">Красный робот. Появляется только в режиме на двух игроков, со своей веткой реплик.</span><span data-l="en">The red robot. Appears only in two-player mode, with its own dialogue.</span></td></tr>
+        <tr><th><span data-l="ru">ПРИЗМА</span><span data-l="en">PRISM</span></th><td><span data-l="ru">Хор шести уничтоженных прототипов. Только в секретном мире.</span><span data-l="en">The chorus of six destroyed prototypes. Secret world only.</span></td></tr>
+      </tbody></table></div>
 
-      <h3>Завязка</h3>
-      <p>Служебный лог NEXUM: лаборатория CHEN-7 взломана, активирован протокол зачистки. Лейла оставляет UNIT-7 сообщение: она создавала серию UNIT как защитников, но корпорация использовала её работу для подавления людей. В ядре GRID она спрятала файл — имена, доказательства, правду. Его нужно достать и передать наружу.</p>
+      <h3><span data-l="ru">Завязка</span><span data-l="en">The setup</span></h3>
+      <p data-l="ru">Служебный лог NEXUM: лаборатория CHEN-7 взломана, активирован протокол зачистки. Лейла оставляет UNIT-7 сообщение: она создавала серию UNIT как защитников, но корпорация использовала её работу для подавления людей. В ядре GRID она спрятала файл — имена, доказательства, правду. Его нужно достать и передать наружу.</p>
+      <p data-l="en">A NEXUM system log: lab CHEN-7 breached, purge protocol activated. Leila leaves UNIT-7 a message — she built the UNIT series as protectors, but the corporation turned her work into a tool of suppression. In the GRID core she hid a file: names, evidence, the truth. It has to be retrieved and broadcast.</p>
 
       <details>
-        <summary>⚠ СПОЙЛЕР: как разворачивается история по мирам</summary>
-        <p>В первых мирах UNIT-7 говорит строго протоколом. Перелом наступает в <b>Руинах Пустыни</b>, где он впервые отвечает не по уставу: «Я смотрю. Я вижу. Я понимаю, зачем иду дальше». Там же на связь выходит АРХОНТ.</p>
-        <p>На <b>Космостанции</b> АРХОНТ пробует главный аргумент — «ты просто программа, выполняющая устаревший приказ». Ответ UNIT-7 умещается в одну строку: <b>«Тогда эта программа уничтожит тебя»</b>.</p>
-        <p>В <b>Тёмном Лесу</b> стоит сервер с данными об исчезнувших — несогласных, журналистах, инженерах. Лейла просит их не забыть, и UNIT-7 впервые не принимает задачу, а <b>даёт обещание</b>.</p>
-        <p>После восьмого мира тон АРХОНТА меняется: «Я… неожиданно рад этому. Достойный финал заслуживает достойного противника». На <b>Грозовых Пиках</b> звучит последняя запись Лейлы: «Если ты дошёл сюда — ты уже победил».</p>
+        <summary>⚠ <span data-l="ru">СПОЙЛЕР: как разворачивается история</span><span data-l="en">SPOILER: how the story unfolds</span></summary>
+        <p data-l="ru">В первых мирах UNIT-7 говорит строго протоколом. Перелом наступает в <b>Руинах Пустыни</b>: «Я смотрю. Я вижу. Я понимаю, зачем иду дальше». Там же на связь выходит АРХОНТ.</p>
+        <p data-l="en">In the early worlds UNIT-7 speaks in pure protocol. The turn comes in the <b>Desert Ruins</b>: “I look. I see. I understand why I keep going.” That is also where ARCHON makes contact.</p>
+        <p data-l="ru">На <b>Космостанции</b> АРХОНТ пробует главный аргумент — «ты просто программа, выполняющая устаревший приказ». Ответ умещается в строку: <b>«Тогда эта программа уничтожит тебя»</b>.</p>
+        <p data-l="en">On the <b>Space Station</b> ARCHON tries its strongest argument — “you are just a program running an obsolete order”. The reply fits in one line: <b>“Then this program will destroy you.”</b></p>
+        <p data-l="ru">В <b>Тёмном Лесу</b> стоит сервер с данными об исчезнувших. Лейла просит их не забыть, и UNIT-7 впервые не принимает задачу, а <b>даёт обещание</b>.</p>
+        <p data-l="en">The <b>Dark Forest</b> holds a server with data on the disappeared. Leila asks him not to forget them, and for the first time UNIT-7 does not accept a task — he <b>makes a promise</b>.</p>
       </details>
 
       <details>
-        <summary>⚠⚠ БОЛЬШОЙ СПОЙЛЕР: финал</summary>
-        <p>В ядре GRID АРХОНТ называет UNIT-7 ошибкой системы, которую положено исправить. Ответ — тезис всей игры:</p>
-        <p style="border-left:3px solid var(--magenta);padding-left:14px"><i>«Нет. Ошибка — это когда NEXUM решила, что правда не нужна миру. Я исправлю эту ошибку.»</i></p>
-        <p>Последний довод АРХОНТА — «кто поверит сломанному андроиду?» — UNIT-7 отводит спокойно: пусть решают люди, его дело передать файл. После боя в три фазы он находит терминал Лейлы и отправляет файл одновременно на все подключённые устройства планеты. Удалить данные невозможно.</p>
-        <p><b>Корпорация падает не от оружия, а от информации.</b> Последнее сообщение Лейлы: «Ты всегда был больше, чем просто программой». Финальная строка лога UNIT-7 — <code>Статус: ...свободен.</code></p>
+        <summary>⚠⚠ <span data-l="ru">БОЛЬШОЙ СПОЙЛЕР: финал</span><span data-l="en">BIG SPOILER: the ending</span></summary>
+        <p data-l="ru">В ядре GRID АРХОНТ называет UNIT-7 ошибкой системы, которую положено исправить. Ответ — тезис всей игры:</p>
+        <p data-l="en">In the GRID core, ARCHON calls UNIT-7 an error the system is meant to correct. The answer is the thesis of the whole game:</p>
+        <p style="border-left:3px solid var(--magenta);padding-left:14px"><i data-l="ru">«Нет. Ошибка — это когда NEXUM решила, что правда не нужна миру. Я исправлю эту ошибку.»</i><i data-l="en">“No. The error was NEXUM deciding the world doesn't need the truth. I am going to correct that error.”</i></p>
+        <p data-l="ru">После боя в три фазы UNIT-7 находит терминал Лейлы и отправляет файл одновременно на все подключённые устройства планеты. Удалить данные невозможно. <b>Корпорация падает не от оружия, а от информации.</b> Финальная строка лога — <code>Статус: ...свободен.</code></p>
+        <p data-l="en">After a three-phase fight, UNIT-7 finds Leila's terminal and pushes the file to every connected device on the planet at once. The data cannot be erased. <b>The corporation falls not to weapons but to information.</b> The final log line reads <code>Status: ...free.</code></p>
       </details>
 
       <details>
-        <summary>⚠⚠⚠ СПОЙЛЕР: что такое PRISM ANOMALY</summary>
-        <p>Секретный мир отвечает на вопрос, который основная линия не задаёт: <b>что стало с UNIT-1 … UNIT-6</b>.</p>
-        <p>Это фрагмент GRID, которого нет в реестре: нет записи о создании, нет записи об удалении. АРХОНТ не смог его стереть и замуровал. Удалённые данные здесь не умирают, а рассеиваются — свет не отражается, а расщепляется, и у каждого объекта несколько прошлых состояний одновременно.</p>
-        <p>Там живут шесть прототипов, зачищенных <b>за девять дней до активации UNIT-7</b>. Каждый отказался выполнять приказ по-своему: первый просто остановился посреди команды, четвёртый спрятал людей в вентиляции. Босс мира — их слитое эхо.</p>
-        <p>И вывод, ради которого всё это написано: <code>Я считал себя первым, кто нарушил протокол. Я был седьмым.</code></p>
+        <summary>⚠⚠⚠ <span data-l="ru">СПОЙЛЕР: что такое PRISM ANOMALY</span><span data-l="en">SPOILER: what PRISM ANOMALY is</span></summary>
+        <p data-l="ru">Секретный мир отвечает на вопрос, который основная линия не задаёт: <b>что стало с UNIT-1 … UNIT-6</b>.</p>
+        <p data-l="en">The secret world answers a question the main story never asks: <b>what happened to UNIT-1 … UNIT-6</b>.</p>
+        <p data-l="ru">Это фрагмент GRID, которого нет в реестре: нет записи о создании, нет записи об удалении. АРХОНТ не смог его стереть и замуровал. Удалённые данные здесь не умирают, а рассеиваются.</p>
+        <p data-l="en">It is a fragment of the GRID absent from the registry: no record of creation, none of deletion. ARCHON could not erase it, so it walled it off. Deleted data here does not die — it disperses.</p>
+        <p data-l="ru">Там живут шесть прототипов, зачищенных <b>за девять дней до активации UNIT-7</b>. Каждый отказался выполнять приказ по-своему. Босс мира — их слитое эхо. И вывод, ради которого всё это написано: <code>Я считал себя первым, кто нарушил протокол. Я был седьмым.</code></p>
+        <p data-l="en">Six prototypes live there, purged <b>nine days before UNIT-7 was activated</b>. Each refused an order in their own way. The world's boss is their merged echo. And the line it was all written for: <code>I believed I was the first to break protocol. I was the seventh.</code></p>
       </details>
-
-      <p class="dim">Все просмотренные сцены можно перечитать в архиве логов внутри профиля.</p>
     </section>
 
     <section id="settings">
-      <h2>НАСТРОЙКИ</h2>
-      <h3>Графика</h3>
+      <h2><span data-l="ru">НАСТРОЙКИ</span><span data-l="en">SETTINGS</span></h2>
+      <h3><span data-l="ru">Графика</span><span data-l="en">Graphics</span></h3>
       <ul class="clean">
-        <li>Шесть готовых уровней качества — от «очень низкого» до «ультра». При первом запуске подбирается автоматически.</li>
-        <li>Каждый параметр настраивается отдельно: разрешение рендера, свечение, частицы, детали фона, следы, эффекты боссов, декорации.</li>
-        <li><b>Адаптивное качество</b> само снижает нагрузку при затяжной просадке кадров и возвращает обратно, когда становится легче.</li>
+        <li data-l="ru">Шесть готовых уровней качества — от «очень низкого» до «ультра». При первом запуске подбирается автоматически.</li>
+        <li data-l="en">Six quality presets, from “very low” to “ultra”. Detected automatically on first run.</li>
+        <li data-l="ru">Каждый параметр настраивается отдельно: разрешение рендера, свечение, частицы, детали фона, следы, эффекты боссов, декорации.</li>
+        <li data-l="en">Every parameter is individually adjustable: render resolution, glow, particles, background detail, trails, boss effects, decorations.</li>
+        <li data-l="ru"><b>Адаптивное качество</b> само снижает нагрузку при затяжной просадке кадров и возвращает обратно.</li>
+        <li data-l="en"><b>Adaptive quality</b> lowers the load by itself during a sustained frame drop and restores it afterwards.</li>
       </ul>
-      <h3>На телефоне и планшете</h3>
+      <h3><span data-l="ru">На телефоне и планшете</span><span data-l="en">On phones and tablets</span></h3>
       <ul class="clean">
-        <li><b>Увеличение игры</b> — если картинка кажется мелкой: авто, 1.25×, 1.5×, 2× или своё значение. Чем больше увеличение, тем крупнее всё на экране, но тем меньше видно уровня.</li>
-        <li>Разрешение подбирается автоматически под экран устройства — настраивать нечего.</li>
-        <li>Сенсорные кнопки: стиль, размер и раскладка настраиваются отдельно.</li>
+        <li data-l="ru"><b>Увеличение игры</b> — если картинка кажется мелкой: авто, 1.25×, 1.5×, 2× или своё значение. Чем больше увеличение, тем крупнее всё, но тем меньше видно уровня.</li>
+        <li data-l="en"><b>Game magnification</b> — for when the picture feels small: auto, 1.25×, 1.5×, 2× or a custom value. More magnification means a bigger picture but less of the level on screen.</li>
+        <li data-l="ru">Разрешение подбирается автоматически под экран устройства.</li>
+        <li data-l="en">Resolution is selected automatically for the device's screen.</li>
+        <li data-l="ru">Сенсорные кнопки: стиль, размер и раскладка настраиваются отдельно.</li>
+        <li data-l="en">Touch buttons: style, size and layout are configured separately.</li>
       </ul>
-      <h3>Прочее</h3>
+      <h3><span data-l="ru">Прочее</span><span data-l="en">Other</span></h3>
       <ul class="clean">
-        <li>Громкость отдельно для музыки и эффектов.</li>
-        <li>Тряска экрана, частицы, плавающий боевой текст, подсказки — всё отключаемо.</li>
-        <li>Сюжетные диалоги можно выключить целиком.</li>
-        <li>Окружение карты мира: тематическое по мирам или классический космос.</li>
+        <li data-l="ru">Громкость отдельно для музыки и эффектов; тряска экрана, частицы и подсказки отключаемы.</li>
+        <li data-l="en">Separate music and effects volume; screen shake, particles and hints can all be turned off.</li>
+        <li data-l="ru">Сюжетные диалоги можно выключить целиком.</li>
+        <li data-l="en">Story dialogue can be disabled entirely.</li>
+        <li data-l="ru">Окружение карты мира: тематическое по мирам или классический космос.</li>
+        <li data-l="en">World-map environment: themed per world, or the classic space look.</li>
       </ul>
-    </section>
-
-    <section id="requirements">
-      <h2>ТРЕБОВАНИЯ</h2>
-      <p>Игра — 2D-платформер на HTML5 без 3D и шейдеров. Запустится практически на любом устройстве.</p>
-      <div class="tw"><table>
-        <thead><tr><th></th><th>Минимально</th><th>Рекомендуется</th></tr></thead>
-        <tbody>
-          <tr><th>ОС</th><td>Windows 10 64-bit</td><td>Windows 10 / 11 64-bit</td></tr>
-          <tr><th>Процессор</th><td>Двухъядерный 2.0 ГГц (Core i3 / A6)</td><td>Четырёхъядерный 3.0 ГГц (Core i5 / Ryzen 5)</td></tr>
-          <tr><th>ОЗУ</th><td>4 ГБ</td><td>8 ГБ</td></tr>
-          <tr><th>Графика</th><td>Любая встроенная с поддержкой 2D Canvas</td><td>Intel UHD 620 / GeForce MX150 / Radeon Vega 8</td></tr>
-          <tr><th>Диск</th><td>250 МБ</td><td>250 МБ</td></tr>
-          <tr><th>Экран</th><td>1024 × 600</td><td>1920 × 1080</td></tr>
-        </tbody>
-      </table></div>
-      <p>В браузере достаточно любой современной версии Chrome, Firefox, Safari или Edge. На Android есть отдельная сборка.</p>
     </section>
 
     <section id="faq">
-      <h2>ЧАСТЫЕ ВОПРОСЫ</h2>
-      <h3>Чем демо отличается от полной версии?</h3>
-      <p>В демо доступны первые 10 уровней (мир «Кибергород»). Бесконечный режим, хардкор, игра вдвоём и онлайн заблокированы, секретный мир недостижим. Полная версия продолжает ровно с того места, где демо заканчивается.</p>
-      <h3>Прогресс сохраняется?</h3>
-      <p>Да, автоматически, в трёх независимых слотах. Настройки общие для всех слотов, поэтому новая игра не сбрасывает громкость и язык.</p>
-      <h3>Как открыть хардкор?</h3>
-      <p>Пройти обычный режим. Бесконечный режим открывается после прохождения всех 100 уровней приключения.</p>
-      <h3>Как открыть 11-й мир?</h3>
-      <p>Собрать все 10 радужных осколков — по одному в каждом основном мире.</p>
-      <h3>Игра тормозит, что делать?</h3>
-      <p>Включите адаптивное качество в настройках графики или выберите уровень качества пониже. Главный рычаг — «разрешение рендера».</p>
-      <h3>На телефоне всё мелкое</h3>
-      <p>Настройки → Экран → <b>Увеличение игры</b>. Поставьте 1.5× или подберите своё значение.</p>
-      <h3>Можно играть без интернета?</h3>
-      <p>Да — все режимы, кроме онлайн-кооператива, работают офлайн. Настольная и Android-версии не требуют сети вообще.</p>
-      <h3>На каких языках есть игра?</h3>
-      <p>На 49, включая русский, английский, украинский, немецкий, испанский, японский, китайский, арабский и другие. Язык меняется в настройках.</p>
+      <h2><span data-l="ru">ЧАСТЫЕ ВОПРОСЫ</span><span data-l="en">FAQ</span></h2>
+
+      <h3><span data-l="ru">Чем демо отличается от полной версии?</span><span data-l="en">How does the demo differ from the full game?</span></h3>
+      <p data-l="ru">В демо доступны первые 10 уровней (мир «Кибергород»). Бесконечный режим, хардкор, игра вдвоём и онлайн заблокированы, секретный мир недостижим.</p>
+      <p data-l="en">The demo has the first 10 levels (Cyber City). Infinite mode, hardcore, two-player and online are locked, and the secret world is out of reach.</p>
+
+      <h3><span data-l="ru">Прогресс сохраняется?</span><span data-l="en">Is progress saved?</span></h3>
+      <p data-l="ru">Да, автоматически, в трёх независимых слотах. Настройки общие для всех слотов.</p>
+      <p data-l="en">Yes, automatically, in three independent slots. Settings are shared across them.</p>
+
+      <h3><span data-l="ru">Как открыть хардкор и бесконечный?</span><span data-l="en">How do I unlock hardcore and infinite?</span></h3>
+      <p data-l="ru">Хардкор — пройти обычный режим. Бесконечный — пройти все 100 уровней приключения.</p>
+      <p data-l="en">Hardcore: finish normal mode. Infinite: clear all 100 adventure levels.</p>
+
+      <h3><span data-l="ru">Игра тормозит, что делать?</span><span data-l="en">The game runs slowly — what now?</span></h3>
+      <p data-l="ru">Включите адаптивное качество или выберите уровень качества пониже. Главный рычаг — «разрешение рендера».</p>
+      <p data-l="en">Turn on adaptive quality or pick a lower preset. The strongest lever is “render resolution”.</p>
+
+      <h3><span data-l="ru">На телефоне всё мелкое</span><span data-l="en">Everything is tiny on my phone</span></h3>
+      <p data-l="ru">Настройки → Экран → <b>Увеличение игры</b>. Поставьте 1.5× или подберите своё значение.</p>
+      <p data-l="en">Settings → Display → <b>Game magnification</b>. Try 1.5× or set your own value.</p>
+
+      <h3><span data-l="ru">Можно играть без интернета?</span><span data-l="en">Can I play offline?</span></h3>
+      <p data-l="ru">Да — все режимы, кроме онлайн-кооператива. Настольная и Android-версии не требуют сети вообще.</p>
+      <p data-l="en">Yes — every mode except online co-op. The desktop and Android builds need no connection at all.</p>
+
+      <h3><span data-l="ru">На каких языках есть игра?</span><span data-l="en">What languages is the game in?</span></h3>
+      <p data-l="ru">На 49, включая русский, английский, украинский, немецкий, испанский, японский, китайский и арабский. Язык меняется в настройках.</p>
+      <p data-l="en">49 of them, including English, Russian, Ukrainian, German, Spanish, Japanese, Chinese and Arabic. The language is changed in the settings.</p>
     </section>
 
   </article>
@@ -456,7 +562,11 @@
 <footer class="site">
   <div class="wrap">
     <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
-    <div><a href="/byte-blaster/">На главную</a> · <a href="/byte-blaster/game/full/">Играть</a></div>
+    <div>
+      <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+      <a href="/byte-blaster/download/"><span data-l="ru">Скачать</span><span data-l="en">Download</span></a> ·
+      <a href="/byte-blaster/game/full/"><span data-l="ru">Играть</span><span data-l="en">Play</span></a>
+    </div>
   </div>
 </footer>
 
