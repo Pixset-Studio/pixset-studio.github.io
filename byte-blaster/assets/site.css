@@ -135,6 +135,17 @@ nav.main a:hover, nav.main a[aria-current="page"] { color: var(--cyan); border-c
   padding: 4px 7px; border-radius: 3px; background: rgba(0,255,136,.12);
   color: var(--green); border: 1px solid var(--green); margin-left: 8px; vertical-align: 3px;
 }
+.badge.off { background: rgba(255,136,0,.12); color: var(--orange); border-color: var(--orange); }
+
+/* A platform that isn't shipping yet: shown, but plainly not clickable. */
+.card.soon { opacity: .72; }
+.btn.disabled {
+  display: block; text-align: center; cursor: not-allowed;
+  border-color: var(--line); color: var(--dim); background: #0a0a18;
+  padding: 18px 26px; border-radius: 5px; border-width: 2px; border-style: solid;
+  font-family: var(--pixel); font-size: 12px; letter-spacing: 1px;
+}
+.btn.disabled:hover { transform: none; box-shadow: none; }
 
 /* ── Changelog entries ───────────────────────────────────────────────────── */
 .rel { border-left: 2px solid var(--line); padding: 0 0 6px 22px; margin: 0 0 26px; position: relative; }

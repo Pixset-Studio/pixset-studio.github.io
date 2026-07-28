@@ -3,6 +3,30 @@
 (function () {
   'use strict';
 
+  /* ── Visit counter ─────────────────────────────────────────────────────────
+     GitHub Pages serves static files and cannot count anything, so the page
+     tells the game's relay server that it was opened. Nothing personal is sent:
+     the path, the interface language, and that's it. Failures are ignored —
+     a counter must never break the page. */
+  var STATS_API = window.BB_STATS_API || 'https://byte-blaster-server-production.up.railway.app';
+  try {
+    // One hit per tab per page, so a language switch or a re-render doesn't
+    // inflate the number.
+    if (!sessionStorage.getItem('bbHit:' + location.pathname)) {
+      sessionStorage.setItem('bbHit:' + location.pathname, '1');
+      fetch(STATS_API + '/api/hit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'site',
+          page: location.pathname.replace('/byte-blaster', '') || '/',
+          lang: document.documentElement.getAttribute('data-site-lang') || 'ru',
+        }),
+        keepalive: true,
+      }).catch(function () {});
+    }
+  } catch (e) {}
+
   /* ── Language ──────────────────────────────────────────────────────────────
      Both languages sit in the markup; CSS hides the inactive one based on
      <html data-site-lang>. The choice is: saved preference → browser language →

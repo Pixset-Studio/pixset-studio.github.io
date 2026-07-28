@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru"
+      data-title-ru="О проекте — BYTE BLASTER"
+      data-title-en="About — BYTE BLASTER"
+      data-desc-ru="Как сделана Byte Blaster: технологии, устройство игры, локализация на 50 языков, тестирование, планы и как сообщить об ошибке."
+      data-desc-en="How Byte Blaster is made: technology, architecture, 50-language localisation, testing, plans and how to report a bug.">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>О проекте — BYTE BLASTER</title>
+<meta name="description" content="Как сделана Byte Blaster: технологии, устройство игры, локализация, планы.">
+<meta name="theme-color" content="#04040f">
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/byte-blaster/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<script>
+(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+</script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <nav class="main">
+      <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/updates/"><span data-l="ru">ОБНОВЛЕНИЯ</span><span data-l="en">UPDATES</span></a>
+      <a href="/byte-blaster/about/" aria-current="page"><span data-l="ru">О ПРОЕКТЕ</span><span data-l="en">ABOUT</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="padding-top:34px;padding-bottom:60px">
+
+  <h1><span data-l="ru">О ПРОЕКТЕ</span><span data-l="en">ABOUT</span></h1>
+  <p class="lead" data-l="ru"><b>Byte Blaster</b> — игра студии Pixset Studio. Один платформер, который одинаково работает в браузере, на Windows и на Android, переведён на 50 языков и умещается в 250 МБ.</p>
+  <p class="lead" data-l="en"><b>Byte Blaster</b> is a game by Pixset Studio. One platformer that runs the same in a browser, on Windows and on Android, translated into 50 languages and fitting in 250 MB.</p>
+
+  <section style="padding-top:26px">
+    <h2><span data-l="ru">ЦИФРЫ</span><span data-l="en">BY THE NUMBERS</span></h2>
+    <div class="stats">
+      <div class="stat"><b>110</b><span><span data-l="ru">уровней</span><span data-l="en">levels</span></span></div>
+      <div class="stat"><b>11</b><span><span data-l="ru">боссов</span><span data-l="en">bosses</span></span></div>
+      <div class="stat"><b>63</b><span><span data-l="ru">типа врагов</span><span data-l="en">enemy types</span></span></div>
+      <div class="stat"><b>82</b><span><span data-l="ru">сюжетные сцены</span><span data-l="en">story scenes</span></span></div>
+      <div class="stat"><b>50</b><span><span data-l="ru">языков</span><span data-l="en">languages</span></span></div>
+      <div class="stat"><b>40</b><span><span data-l="ru">достижений</span><span data-l="en">achievements</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">НА ЧЁМ СДЕЛАНА</span><span data-l="en">HOW IT IS BUILT</span></h2>
+    <div class="tw"><table>
+      <thead><tr><th><span data-l="ru">Слой</span><span data-l="en">Layer</span></th><th><span data-l="ru">Технология</span><span data-l="en">Technology</span></th></tr></thead>
+      <tbody>
+        <tr><td><span data-l="ru">Графика игры</span><span data-l="en">Game rendering</span></td><td>HTML5 Canvas 2D</td></tr>
+        <tr><td><span data-l="ru">Интерфейс</span><span data-l="en">Interface</span></td><td><span data-l="ru">DOM + CSS поверх канваса</span><span data-l="en">DOM + CSS over the canvas</span></td></tr>
+        <tr><td><span data-l="ru">Логика</span><span data-l="en">Logic</span></td><td><span data-l="ru">JavaScript без фреймворков и сборщика</span><span data-l="en">JavaScript, no frameworks, no bundler</span></td></tr>
+        <tr><td><span data-l="ru">Звук</span><span data-l="en">Audio</span></td><td><span data-l="ru">Web Audio: mp3-сэмплы поверх процедурного синтеза</span><span data-l="en">Web Audio: mp3 samples over procedural synthesis</span></td></tr>
+        <tr><td><span data-l="ru">Десктоп</span><span data-l="en">Desktop</span></td><td>Electron</td></tr>
+        <tr><td>Android</td><td>Capacitor</td></tr>
+        <tr><td><span data-l="ru">Мультиплеер</span><span data-l="en">Multiplayer</span></td><td><span data-l="ru">WebSocket-relay на Node.js</span><span data-l="en">A Node.js WebSocket relay</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="note cy">
+      <span data-l="ru"><b>Почему без движка и сборщика.</b> Один и тот же набор файлов должен запускаться в Electron через <code>file://</code>, внутри Android-WebView и с обычного веб-сервера. Любой шаг сборки ломает хотя бы один из этих трёх маршрутов — поэтому игра осталась набором обычных скриптов.</span>
+      <span data-l="en"><b>Why no engine and no bundler.</b> The same set of files has to run in Electron over <code>file://</code>, inside an Android WebView and from a plain web server. Any build step breaks at least one of those three paths — so the game stayed a set of ordinary scripts.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">ЧТО ВНУТРИ ИНТЕРЕСНОГО</span><span data-l="en">THE INTERESTING PARTS</span></h2>
+    <div class="grid">
+      <div class="card">
+        <div class="ico">🗺</div>
+        <h3><span data-l="ru">Карта, а не список</span><span data-l="en">A map, not a list</span></h3>
+        <p data-l="ru">Уровни расставлены по координатам и соединены дорогами, робот идёт по ним физически. На узком экране телефона кольцо уровней растягивается по ширине, а на ПК остаётся круглым.</p>
+        <p data-l="en">Levels are placed by coordinates and joined by roads the robot physically walks. On a narrow phone screen the ring stretches to fit the width; on a PC it stays round.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🌍</div>
+        <h3><span data-l="ru">50 языков без пропусков</span><span data-l="en">50 languages, no gaps</span></h3>
+        <p data-l="ru">624 строки в каждом языке. Есть свой инструмент аудита: он ловит недостающие ключи, лишние, несовпадение подстановок и HTML-тегов — и отдельно отличает настоящий пропуск от законного заимствования.</p>
+        <p data-l="en">624 strings per language. A custom audit tool catches missing keys, stale ones, mismatched placeholders and HTML tags — and separately tells a real gap from a legitimate loanword.</p>
+      </div>
+      <div class="card">
+        <div class="ico">⚡</div>
+        <h3><span data-l="ru">Работает на слабом железе</span><span data-l="en">Runs on weak hardware</span></h3>
+        <p data-l="ru">Шесть уровней качества с автоопределением плюс адаптивный режим, который сам снижает нагрузку при просадке кадров. Время кадра доведено с 4 мс до 1.4 мс за счёт кэширования спрайтов и фоновых слоёв.</p>
+        <p data-l="en">Six quality tiers with auto-detection, plus an adaptive mode that lowers the load by itself when frames drop. Frame time went from 4 ms to 1.4 ms through sprite and background-layer caching.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🤝</div>
+        <h3><span data-l="ru">Честный кооператив</span><span data-l="en">Co-op that behaves</span></h3>
+        <p data-l="ru">Сервер не знает правил игры — он только пересылает сообщения. Мир синхронизируется по стабильным идентификаторам с дельта-обновлениями и полным снимком раз в три секунды, чтобы опоздавший игрок сам починился.</p>
+        <p data-l="en">The server knows no game rules — it only forwards messages. The world syncs by stable ids with delta updates plus a full snapshot every three seconds, so a late joiner heals itself.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">КАК ЭТО ТЕСТИРУЕТСЯ</span><span data-l="en">HOW IT IS TESTED</span></h2>
+    <p data-l="ru">Почти всё, что может сломаться, ломается в браузере — поэтому проверки не про «функция вернула 2», а про настоящий запуск:</p>
+    <p data-l="en">Almost everything that can break, breaks in a browser — so the checks are not about “the function returned 2” but about actually running the thing:</p>
+    <ul class="clean">
+      <li data-l="ru">Игра запускается в настоящем окне, проходит уровни, гибнет, ставит паузу и дерётся с боссами — а сценарий смотрит на состояние.</li>
+      <li data-l="en">The game boots in a real window, clears levels, dies, pauses and fights bosses while a script inspects the state.</li>
+      <li data-l="ru">Сетевой протокол проверяется на живых WebSocket-клиентах: комнаты, смена хоста, выход посреди уровня.</li>
+      <li data-l="en">The network protocol is exercised with live WebSocket clients: rooms, host handover, leaving mid-level.</li>
+      <li data-l="ru">Интерфейс замеряется на профилях реальных экранов, включая телефон 20:9 и планшет — в CSS-пикселях, а не в физических.</li>
+      <li data-l="en">The UI is measured against real screen profiles, including a 20:9 phone and a tablet — in CSS pixels, not physical ones.</li>
+      <li data-l="ru">Локализация и отсутствие захардкоженных строк проверяются автоматически перед каждой сборкой.</li>
+      <li data-l="en">Localisation and the absence of hardcoded strings are checked automatically before every build.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">ПЛАНЫ</span><span data-l="en">PLANS</span></h2>
+    <ul class="clean">
+      <li data-l="ru">Раскладка справа налево для арабского, иврита, урду и персидского — сейчас эти языки переведены, но интерфейс не зеркалится.</li>
+      <li data-l="en">Right-to-left layout for Arabic, Hebrew, Urdu and Persian — those languages are translated, but the interface does not mirror yet.</li>
+      <li data-l="ru">Выход настольной версии и публикация в Steam.</li>
+      <li data-l="en">A desktop release and a Steam launch.</li>
+      <li data-l="ru">Больше контента для секретного мира и новые режимы.</li>
+      <li data-l="en">More content for the secret world and new modes.</li>
+    </ul>
+    <div class="note">
+      <span data-l="ru">Точных дат нет — игра делается небольшой командой, и лучше выпустить позже, чем сломанным.</span>
+      <span data-l="en">No firm dates — this is a small team, and shipping later beats shipping broken.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span data-l="ru">НАШЛИ ОШИБКУ?</span><span data-l="en">FOUND A BUG?</span></h2>
+    <p data-l="ru">Большинство исправлений в списке обновлений пришли от игроков. Чтобы сообщение было полезным, укажите:</p>
+    <p data-l="en">Most of the fixes in the update list came from players. To make a report useful, include:</p>
+    <ul class="clean">
+      <li data-l="ru"><b>Что произошло</b> и что вы ожидали вместо этого.</li>
+      <li data-l="en"><b>What happened</b> and what you expected instead.</li>
+      <li data-l="ru"><b>Где</b> — какой уровень, режим и мир.</li>
+      <li data-l="en"><b>Where</b> — which level, mode and world.</li>
+      <li data-l="ru"><b>На чём</b> — браузер, Android или Windows; модель телефона, если он.</li>
+      <li data-l="en"><b>On what</b> — browser, Android or Windows; the phone model if it is one.</li>
+      <li data-l="ru"><b>Повторяется ли</b> — каждый раз или один раз.</li>
+      <li data-l="en"><b>Is it repeatable</b> — every time, or just once.</li>
+    </ul>
+    <p style="margin-top:22px">
+      <a class="btn ghost" href="/byte-blaster/wiki/"><span data-l="ru">📖 ВИКИ</span><span data-l="en">📖 WIKI</span></a>
+      <a class="btn ghost" href="/byte-blaster/updates/"><span data-l="ru">🆕 ОБНОВЛЕНИЯ</span><span data-l="en">🆕 UPDATES</span></a>
+      <a class="btn ghost" href="/byte-blaster/game/full/"><span data-l="ru">▶ ИГРАТЬ</span><span data-l="en">▶ PLAY</span></a>
+    </p>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
+    <div>
+      <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+      <a href="/byte-blaster/download/"><span data-l="ru">Скачать</span><span data-l="en">Download</span></a> ·
+      <a href="/byte-blaster/wiki/"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+    </div>
+  </div>
+</footer>
+
+<script src="/byte-blaster/assets/config.js"></script>
+<script src="/byte-blaster/assets/site.js"></script>
+</body>
+</html>

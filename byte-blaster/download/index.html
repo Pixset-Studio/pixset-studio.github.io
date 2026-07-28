@@ -36,7 +36,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
       <a href="/byte-blaster/download/" aria-current="page"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
       <a href="/byte-blaster/updates/"><span data-l="ru">ОБНОВЛЕНИЯ</span><span data-l="en">UPDATES</span></a>
-      <a href="/byte-blaster/game/full/"><span data-l="ru">ИГРАТЬ</span><span data-l="en">PLAY</span></a>
+      <a href="/byte-blaster/about/"><span data-l="ru">О ПРОЕКТЕ</span><span data-l="en">ABOUT</span></a>
       <span class="langsw">
         <button type="button" data-lang="ru" aria-pressed="true">RU</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
@@ -70,12 +70,12 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <a class="btn" href="https://www.rustore.ru/catalog/app/com.pixsetstudio.byteblaster" target="_blank" rel="noopener"><span data-l="ru">⬇ ОТКРЫТЬ В RuStore</span><span data-l="en">⬇ OPEN IN RuStore</span></a>
       </div>
 
-      <div class="card">
+      <div class="card soon">
         <div class="ico">🪟</div>
-        <h3><span data-l="ru">Windows</span><span data-l="en">Windows</span></h3>
+        <h3><span data-l="ru">Windows<span class="badge off"><span data-l="ru">скоро</span><span data-l="en">soon</span></span></span><span data-l="en">Windows<span class="badge off">soon</span></span></h3>
         <p data-l="ru">Настольная сборка (.exe): полноэкранный режим, игра по локальной сети и запуск без браузера.</p>
         <p data-l="en">Desktop build (.exe): fullscreen mode, LAN play and no browser needed.</p>
-        <a class="btn" href="https://github.com/pixset-studio/byte-blaster/releases" target="_blank" rel="noopener"><span data-l="ru">⬇ GITHUB RELEASES</span><span data-l="en">⬇ GITHUB RELEASES</span></a>
+        <span class="btn disabled" aria-disabled="true"><span data-l="ru">ПОКА НЕДОСТУПНО</span><span data-l="en">NOT AVAILABLE YET</span></span>
       </div>
 
       <div class="card">
@@ -113,10 +113,12 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
     </div>
   </section>
 
-  <section>
+  <section id="req">
     <h2><span data-l="ru">ТРЕБОВАНИЯ</span><span data-l="en">REQUIREMENTS</span></h2>
     <p data-l="ru">Игра — 2D-платформер на HTML5 без 3D и шейдеров, поэтому запускается почти на всём.</p>
     <p data-l="en">The game is an HTML5 2D platformer with no 3D and no shaders, so it runs on almost anything.</p>
+
+    <h3>🪟 Windows</h3>
     <div class="tw">
       <table>
         <thead><tr><th></th>
@@ -132,8 +134,32 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         </tbody>
       </table>
     </div>
-    <p data-l="ru">В браузере достаточно любой современной версии Chrome, Firefox, Safari или Edge.</p>
-    <p data-l="en">In the browser, any recent Chrome, Firefox, Safari or Edge will do.</p>
+
+    <h3>📱 Android</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th></th>
+          <th><span data-l="ru">Минимально</span><span data-l="en">Minimum</span></th>
+          <th><span data-l="ru">Рекомендуется</span><span data-l="en">Recommended</span></th></tr></thead>
+        <tbody>
+          <tr><th><span data-l="ru">Версия Android</span><span data-l="en">Android version</span></th><td>7.0 (API 24)</td><td>10 <span data-l="ru">и новее</span><span data-l="en">or newer</span></td></tr>
+          <tr><th><span data-l="ru">Процессор</span><span data-l="en">CPU</span></th><td><span data-l="ru">4 ядра 1.4 ГГц, arm64</span><span data-l="en">Quad-core 1.4 GHz, arm64</span></td><td><span data-l="ru">8 ядер 2.0 ГГц</span><span data-l="en">Octa-core 2.0 GHz</span></td></tr>
+          <tr><th><span data-l="ru">ОЗУ</span><span data-l="en">RAM</span></th><td>2 GB</td><td>4 GB<span data-l="ru"> и больше</span><span data-l="en"> or more</span></td></tr>
+          <tr><th><span data-l="ru">Память</span><span data-l="en">Storage</span></th><td><span data-l="ru">150 МБ свободно</span><span data-l="en">150 MB free</span></td><td><span data-l="ru">300 МБ свободно</span><span data-l="en">300 MB free</span></td></tr>
+          <tr><th><span data-l="ru">Экран</span><span data-l="en">Screen</span></th><td><span data-l="ru">от 4.5″, 960 × 540</span><span data-l="en">4.5″ and up, 960 × 540</span></td><td><span data-l="ru">от 6″, 1080p и выше</span><span data-l="en">6″ and up, 1080p or better</span></td></tr>
+          <tr><th><span data-l="ru">Качество графики</span><span data-l="en">Graphics quality</span></th><td><span data-l="ru">Низкое — среднее</span><span data-l="en">Low to medium</span></td><td><span data-l="ru">Высокое</span><span data-l="en">High</span></td></tr>
+          <tr><th><span data-l="ru">Интернет</span><span data-l="en">Internet</span></th><td><span data-l="ru">не нужен</span><span data-l="en">not required</span></td><td><span data-l="ru">только для онлайн-кооператива</span><span data-l="en">only for online co-op</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note cy">
+      <span data-l="ru">На слабом телефоне включите «Адаптивное качество» — игра сама снизит нагрузку. На маленьком экране пригодится «Увеличение игры» в настройках экрана. Планшеты поддерживаются, отдельной сборки не требуется.</span>
+      <span data-l="en">On a weak phone turn on “Adaptive quality” — the game lowers the load by itself. On a small screen, “Game magnification” in the display settings helps. Tablets are supported with no separate build.</span>
+    </div>
+
+    <h3>🌐 <span data-l="ru">Браузер</span><span data-l="en">Browser</span></h3>
+    <p data-l="ru">Любая современная версия Chrome, Firefox, Safari или Edge — на ПК, телефоне или планшете. Нужна поддержка Canvas 2D, Web Audio и WebSocket (для онлайна); всё это есть в браузерах с 2017 года.</p>
+    <p data-l="en">Any recent Chrome, Firefox, Safari or Edge — on desktop, phone or tablet. It needs Canvas 2D, Web Audio and WebSocket (for online play); every browser since 2017 has them.</p>
   </section>
 
   <section>
@@ -169,6 +195,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
   </div>
 </footer>
 
+<script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
 </body>
 </html>

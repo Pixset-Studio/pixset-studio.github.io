@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru" data-site-lang="ru"
+      data-title-ru="Админка — BYTE BLASTER"
+      data-title-en="Admin — BYTE BLASTER">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Админка — BYTE BLASTER</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#04040f">
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <nav class="main">
+      <a href="/byte-blaster/">ГЛАВНАЯ</a>
+      <a href="/byte-blaster/wiki/">ВИКИ</a>
+      <a href="/byte-blaster/admin/" aria-current="page">АДМИНКА</a>
+      <button type="button" id="logout" style="display:none;font-family:var(--pixel);font-size:9px;padding:9px 12px;border:1px solid var(--red);border-radius:3px;color:var(--red);background:var(--panel);cursor:pointer">ВЫЙТИ</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="padding-top:34px;padding-bottom:60px">
+
+  <!-- ── Login ─────────────────────────────────────────────────────────── -->
+  <section id="loginView" style="padding-top:20px">
+    <h1 style="font-size:clamp(16px,3.4vw,26px)">ПАНЕЛЬ УПРАВЛЕНИЯ</h1>
+    <p class="lead">Доступ только для администратора проекта.</p>
+    <div class="card" style="max-width:420px">
+      <form id="loginForm" autocomplete="off">
+        <label style="display:block;color:#4af;font-size:11px;margin-bottom:6px">ЛОГИН</label>
+        <input id="u" name="username" autocomplete="username" style="width:100%;padding:10px;margin-bottom:14px;background:var(--bg);border:1px solid var(--line);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:15px">
+        <label style="display:block;color:#4af;font-size:11px;margin-bottom:6px">ПАРОЛЬ</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" style="width:100%;padding:10px;margin-bottom:16px;background:var(--bg);border:1px solid var(--line);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:15px">
+        <button class="btn primary" type="submit" style="width:100%;min-width:0">ВОЙТИ</button>
+        <div id="loginErr" class="note" style="display:none;border-left-color:var(--red);background:rgba(255,85,85,.08);margin-top:14px"></div>
+      </form>
+    </div>
+    <div class="note cy" style="max-width:620px;margin-top:20px">
+      Пароль проверяется <b>на сервере</b>, а не в коде страницы — в исходниках сайта его нет.
+      Сессия живёт 8 часов и сбрасывается при перезапуске сервера.
+    </div>
+  </section>
+
+  <!-- ── Dashboard ─────────────────────────────────────────────────────── -->
+  <section id="dashView" style="display:none;padding-top:20px">
+    <h1 style="font-size:clamp(16px,3.4vw,26px)">СТАТИСТИКА</h1>
+    <p class="dim" id="updated" style="font-size:14px">загрузка…</p>
+
+    <h2 style="margin-top:26px">СЕЙЧАС</h2>
+    <div class="stats">
+      <div class="stat"><b id="onPlayers">—</b><span>игроков онлайн</span></div>
+      <div class="stat"><b id="onRooms">—</b><span>активных комнат</span></div>
+      <div class="stat"><b id="peak">—</b><span>пик онлайна за 30 дней</span></div>
+      <div class="stat"><b id="daysTracked">—</b><span>дней наблюдений</span></div>
+    </div>
+
+    <h2 style="margin-top:34px">ПОСЕЩАЕМОСТЬ САЙТА</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Период</th><th>Визиты</th><th>Посетители</th><th>Запуски игры</th><th>Комнаты</th><th>Матчи</th></tr></thead>
+      <tbody id="periodRows"></tbody>
+    </table></div>
+    <div class="note">
+      «Визиты» — открытия страниц, «посетители» — уникальные за период. Уникальность считается
+      по обезличенному отпечатку (IP + браузер), который хранится <b>только за текущий день</b>:
+      за неделю и больше один и тот же человек, зашедший в разные дни, посчитается несколько раз.
+    </div>
+
+    <h2 style="margin-top:34px">ДИНАМИКА ЗА 30 ДНЕЙ</h2>
+    <div class="card"><canvas id="chart" height="180" style="width:100%;display:block"></canvas>
+      <p class="dim" style="font-size:13px;margin:10px 0 0">
+        <span style="color:var(--cyan)">▬</span> визиты сайта &nbsp;
+        <span style="color:var(--green)">▬</span> запуски игры
+      </p>
+    </div>
+
+    <h2 style="margin-top:34px">РАЗБИВКА ЗА 30 ДНЕЙ</h2>
+    <div class="grid">
+      <div class="card"><h3>Страницы</h3><div id="bdPages"></div></div>
+      <div class="card"><h3>Языки</h3><div id="bdLangs"></div></div>
+      <div class="card"><h3>Платформы</h3><div id="bdPlatforms"></div></div>
+      <div class="card"><h3>Версия игры</h3><div id="bdEditions"></div></div>
+    </div>
+
+    <p style="margin-top:26px">
+      <button class="btn ghost" id="refresh" type="button">↻ ОБНОВИТЬ</button>
+      <span class="dim" style="font-size:13px">обновляется само каждые 30 секунд</span>
+    </p>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
+    <div><a href="/byte-blaster/">На сайт</a></div>
+  </div>
+</footer>
+
+<script src="/byte-blaster/assets/config.js"></script>
+<script>
+/* Admin panel. Everything here is a thin client over the relay server's
+   /api/admin/* endpoints — no credentials and no numbers live in this file. */
+(function () {
+  'use strict';
+  // Read the address at CALL time, not at load time: assets/config.js may be
+  // edited after deployment, and a test harness can point this at a local
+  // server without the page having captured the old value already.
+  function api() {
+    return (typeof window.BB_STATS_API === 'string' && window.BB_STATS_API) ||
+           'https://byte-blaster-server-production.up.railway.app';
+  }
+  var KEY = 'bbAdminToken';
+  var token = null;
+  try { token = sessionStorage.getItem(KEY); } catch (e) {}
+
+  var loginView = document.getElementById('loginView');
+  var dashView  = document.getElementById('dashView');
+  var logoutBtn = document.getElementById('logout');
+  var timer = null;
+
+  function show(authed) {
+    loginView.style.display = authed ? 'none' : '';
+    dashView.style.display  = authed ? '' : 'none';
+    logoutBtn.style.display = authed ? '' : 'none';
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var err = document.getElementById('loginErr');
+    err.style.display = 'none';
+    fetch(api() + '/api/admin/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: document.getElementById('u').value, pass: document.getElementById('p').value }),
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error('Неверный логин или пароль');
+      token = j.token;
+      try { sessionStorage.setItem(KEY, token); } catch (e2) {}
+      document.getElementById('p').value = '';
+      show(true); load(); start();
+    }).catch(function (ex) {
+      err.textContent = ex.message === 'Failed to fetch'
+        ? 'Сервер статистики недоступен. Проверьте, что он запущен и что адрес в BB_STATS_API верный.'
+        : ex.message;
+      err.style.display = '';
+    });
+  });
+
+  logoutBtn.addEventListener('click', function () {
+    token = null;
+    try { sessionStorage.removeItem(KEY); } catch (e) {}
+    stop(); show(false);
+  });
+
+  document.getElementById('refresh').addEventListener('click', load);
+
+  function n(v) { return (v == null ? '—' : String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')); }
+
+  function rows(p) {
+    var order = [['day', 'За сутки'], ['week', 'За неделю'], ['month', 'За месяц'],
+                 ['year', 'За год'], ['all', 'За всё время']];
+    return order.map(function (o) {
+      var v = p[o[0]] || {};
+      return '<tr><td><b>' + o[1] + '</b></td><td>' + n(v.visits) + '</td><td>' + n(v.visitors) +
+             '</td><td>' + n(v.games) + '</td><td>' + n(v.rooms) + '</td><td>' + n(v.matches) + '</td></tr>';
+    }).join('');
+  }
+
+  function list(el, pairs) {
+    if (!pairs || !pairs.length) { el.innerHTML = '<p class="dim" style="margin:0">пока нет данных</p>'; return; }
+    var max = pairs[0][1] || 1;
+    el.innerHTML = pairs.map(function (p) {
+      var pct = Math.round(p[1] / max * 100);
+      // textContent-safe: labels come from our own enum-ish values, but escape anyway.
+      var label = String(p[0] || '—').replace(/[<>&"]/g, '');
+      return '<div style="margin-bottom:9px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:14px"><span>' + label +
+        '</span><span class="dim">' + n(p[1]) + '</span></div>' +
+        '<div style="height:5px;background:#12122a;border-radius:3px;overflow:hidden">' +
+        '<div style="height:100%;width:' + pct + '%;background:var(--cyan)"></div></div></div>';
+    }).join('');
+  }
+
+  function chart(series) {
+    var cv = document.getElementById('chart');
+    var w = cv.clientWidth || 600, h = 180;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = w * dpr; cv.height = h * dpr;
+    var c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    var max = Math.max(1, Math.max.apply(null, series.map(function (s) { return Math.max(s.visits, s.games); })));
+    var stepX = w / Math.max(1, series.length - 1);
+    [['visits', '#0ff'], ['games', '#0f8']].forEach(function (pair) {
+      c.beginPath();
+      series.forEach(function (s, i) {
+        var x = i * stepX, y = h - 18 - (s[pair[0]] / max) * (h - 34);
+        i ? c.lineTo(x, y) : c.moveTo(x, y);
+      });
+      c.strokeStyle = pair[1]; c.lineWidth = 2; c.stroke();
+    });
+    c.fillStyle = '#7788a0'; c.font = '11px "Share Tech Mono", monospace';
+    c.fillText(series[0] ? series[0].d.slice(5) : '', 0, h - 3);
+    var lastLabel = series.length ? series[series.length - 1].d.slice(5) : '';
+    c.fillText(lastLabel, w - c.measureText(lastLabel).width, h - 3);
+    c.fillText('макс ' + max, 0, 12);
+  }
+
+  function load() {
+    if (!token) return;
+    fetch(api() + '/api/admin/stats?token=' + encodeURIComponent(token))
+      .then(function (r) {
+        if (r.status === 401) { logoutBtn.click(); throw new Error('сессия истекла'); }
+        return r.json();
+      })
+      .then(function (j) {
+        var s = j.stats;
+        document.getElementById('onPlayers').textContent = n(s.online.players);
+        document.getElementById('onRooms').textContent   = n(s.online.rooms);
+        document.getElementById('peak').textContent      = n(s.peakOnline);
+        document.getElementById('daysTracked').textContent = n(s.daysTracked);
+        document.getElementById('periodRows').innerHTML  = rows(s.periods);
+        list(document.getElementById('bdPages'), s.breakdown.pages);
+        list(document.getElementById('bdLangs'), s.breakdown.langs);
+        list(document.getElementById('bdPlatforms'), s.breakdown.platforms);
+        list(document.getElementById('bdEditions'), s.breakdown.editions);
+        chart(s.series || []);
+        document.getElementById('updated').textContent =
+          'обновлено ' + new Date().toLocaleTimeString('ru-RU') +
+          ' · сбор данных с ' + new Date(s.since).toLocaleDateString('ru-RU');
+      })
+      .catch(function (e) {
+        document.getElementById('updated').textContent = 'ошибка загрузки: ' + e.message;
+      });
+  }
+
+  function start() { stop(); timer = setInterval(load, 30000); }
+  function stop()  { if (timer) clearInterval(timer); timer = null; }
+
+  if (token) { show(true); load(); start(); } else { show(false); }
+  window.addEventListener('resize', function () { if (token) load(); });
+})();
+</script>
+</body>
+</html>

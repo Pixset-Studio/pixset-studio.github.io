@@ -27,7 +27,7 @@
   const FLAGS = {
     en: '🇬🇧', ru: '🇷🇺',
     'zh-CN': '🇨🇳', 'zh-TW': '🇹🇼', hi: '🇮🇳', es: '🇪🇸', fr: '🇫🇷', ar: '🇸🇦',
-    bn: '🇧🇩', pt: '🇵🇹', ja: '🇯🇵', be: '🇧🇾', uk: '🇺🇦', kk: '🇰🇿', de: '🇩🇪',
+    bn: '🇧🇩', pt: '🇵🇹', 'pt-BR': '🇧🇷', ja: '🇯🇵', be: '🇧🇾', uk: '🇺🇦', kk: '🇰🇿', de: '🇩🇪',
     tr: '🇹🇷', ko: '🇰🇷', ur: '🇵🇰', it: '🇮🇹', hu: '🇭🇺',
     et: '🇪🇪', lt: '🇱🇹', lv: '🇱🇻', hy: '🇦🇲', ka: '🇬🇪', az: '🇦🇿', uz: '🇺🇿',
     tg: '🇹🇯', ky: '🇰🇬', tk: '🇹🇲',
@@ -143,7 +143,7 @@
   const ENGLISH_NAMES = {
     en: 'English', ru: 'Russian',
     'zh-CN': 'Chinese Simplified', 'zh-TW': 'Chinese Traditional', hi: 'Hindi',
-    es: 'Spanish', fr: 'French', ar: 'Arabic', bn: 'Bengali', pt: 'Portuguese',
+    es: 'Spanish', fr: 'French', ar: 'Arabic', bn: 'Bengali', pt: 'Portuguese', 'pt-BR': 'Portuguese (Brazil)',
     ja: 'Japanese', be: 'Belarusian', uk: 'Ukrainian', kk: 'Kazakh', de: 'German',
     tr: 'Turkish', ko: 'Korean', ur: 'Urdu', it: 'Italian', hu: 'Hungarian',
     et: 'Estonian', lt: 'Lithuanian', lv: 'Latvian', hy: 'Armenian', ka: 'Georgian',
