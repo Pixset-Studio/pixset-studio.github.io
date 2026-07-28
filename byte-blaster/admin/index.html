@@ -180,12 +180,18 @@
       var pct = Math.round(p[1] / max * 100);
       // textContent-safe: labels come from our own enum-ish values, but escape anyway.
       var label = String(p[0] || '—').replace(/[<>&"]/g, '');
+      // Bars start at zero width and grow once painted — the CSS transition on
+      // the inner div does the rest.
       return '<div style="margin-bottom:9px">' +
         '<div style="display:flex;justify-content:space-between;font-size:14px"><span>' + label +
         '</span><span class="dim">' + n(p[1]) + '</span></div>' +
         '<div style="height:5px;background:#12122a;border-radius:3px;overflow:hidden">' +
-        '<div style="height:100%;width:' + pct + '%;background:var(--cyan)"></div></div></div>';
+        '<div data-w="' + pct + '" style="height:100%;width:0;background:var(--cyan)"></div></div></div>';
     }).join('');
+    requestAnimationFrame(function () {
+      var bars = el.querySelectorAll('[data-w]');
+      for (var i = 0; i < bars.length; i++) bars[i].style.width = bars[i].dataset.w + '%';
+    });
   }
 
   function chart(series) {

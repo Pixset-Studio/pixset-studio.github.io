@@ -72,7 +72,16 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.langsw button') : null;
     if (!b) return;
-    apply(b.dataset.lang, true);
+    if (b.getAttribute('aria-pressed') === 'true') return;   // already this language
+    // Dip the page's opacity for a moment so the text does not pop from one
+    // alphabet to another; the swap itself happens at the darkest point.
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { apply(b.dataset.lang, true); return; }
+    document.body.classList.remove('langswap');
+    void document.body.offsetWidth;                          // restart the animation
+    document.body.classList.add('langswap');
+    setTimeout(function () { apply(b.dataset.lang, true); }, 130);
+    setTimeout(function () { document.body.classList.remove('langswap'); }, 380);
   });
 
   /* ── Smooth in-page jumps ──────────────────────────────────────────────────
@@ -96,6 +105,144 @@
     window.scrollTo({ top: Math.max(0, y), behavior: reduce ? 'auto' : 'smooth' });
     history.replaceState(null, '', id);
   });
+
+
+  /* ═══ Motion ══════════════════════════════════════════════════════════════
+     Scroll reveals, counting numbers, a reading-progress bar and a back-to-top
+     button. All of it is added from here rather than from the markup, so the
+     seven pages stay free of animation plumbing.
+     Everything below no-ops when the visitor asked for reduced motion. */
+
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── Reveal on scroll ──────────────────────────────────────────────────── */
+  function tagReveals() {
+    // Direct children of a section reveal together with a small stagger; cards
+    // and table rows get their own so a grid does not arrive as one slab.
+    var groups = [
+      ['main > section, article > section, .hero', '', 0],
+      ['.card', 'zoom', 60],
+      ['.stat', '', 45],
+      ['.rel', 'left', 70],
+      ['.tw', '', 0],
+      ['.note', 'left', 0],
+      ['ul.clean', '', 0],
+    ];
+    groups.forEach(function (g) {
+      var els = document.querySelectorAll(g[0]);
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.hasAttribute('data-rv')) continue;
+        // Skip anything inside a collapsed <details>: while it is closed it has
+        // no box, so it never intersects the viewport, the observer never fires
+        // and the content would stay at opacity 0 forever once expanded.
+        if (el.closest('details')) continue;
+        el.setAttribute('data-rv', g[1]);
+        if (g[2]) el.style.setProperty('--d', ((i % 6) * g[2] / 1000) + 's');
+      }
+    });
+  }
+
+  function watchReveals() {
+    var els = document.querySelectorAll('[data-rv]');
+    if (!('IntersectionObserver' in window)) {
+      for (var i = 0; i < els.length; i++) els[i].classList.add('in');
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('in');
+        var h = e.target.querySelector('h2');
+        if (h) h.classList.add('in');
+        io.unobserve(e.target);
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
+    for (var j = 0; j < els.length; j++) io.observe(els[j]);
+
+    // Safety net. An element that is somehow never observed — inside a
+    // container that was hidden at load, or a browser quirk — must not stay
+    // invisible. Anything still untouched after 4 seconds is simply shown.
+    setTimeout(function () {
+      var left = document.querySelectorAll('[data-rv]:not(.in)');
+      for (var k = 0; k < left.length; k++) left[k].classList.add('in');
+    }, 4000);
+  }
+
+  /* ── Counting numbers ──────────────────────────────────────────────────────
+     The stat tiles count up from zero the first time they appear. Only plain
+     integers are touched, so "110" animates and "1.0.2" is left alone. */
+  function countUp(el) {
+    var raw = el.textContent.trim();
+    if (!/^\d{1,7}$/.test(raw)) return;
+    var target = parseInt(raw, 10);
+    if (target < 2) return;
+    var dur = 900, t0 = 0;
+    el.textContent = '0';
+    function step(ts) {
+      if (!t0) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      // easeOutCubic: fast at first, settles gently on the real number.
+      var v = Math.round(target * (1 - Math.pow(1 - p, 3)));
+      el.textContent = String(v);
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = raw;
+    }
+    requestAnimationFrame(step);
+  }
+
+  function watchCounters() {
+    var nums = document.querySelectorAll('.stat b');
+    if (!nums.length || !('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        countUp(e.target);
+        io.unobserve(e.target);
+      });
+    }, { threshold: 0.5 });
+    for (var i = 0; i < nums.length; i++) io.observe(nums[i]);
+  }
+
+  /* ── Reading progress + back to top ────────────────────────────────────── */
+  function chrome() {
+    var bar = document.createElement('div');
+    bar.id = 'readProgress';
+    document.body.appendChild(bar);
+
+    var top = document.createElement('button');
+    top.id = 'toTop';
+    top.type = 'button';
+    top.textContent = '↑';
+    top.setAttribute('aria-label',
+      document.documentElement.getAttribute('data-site-lang') === 'en' ? 'Back to top' : 'Наверх');
+    document.body.appendChild(top);
+    top.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+    });
+
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        var h = document.documentElement.scrollHeight - window.innerHeight;
+        var p = h > 0 ? Math.min(1, window.pageYOffset / h) : 0;
+        bar.style.transform = 'scaleX(' + p + ')';
+        top.classList.toggle('show', window.pageYOffset > 500);
+        ticking = false;
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  if (!reduced) {
+    tagReveals();
+    watchReveals();
+    watchCounters();
+  }
+  chrome();
 
   /* ── Wiki: filter the contents, highlight the current section ────────────── */
   var list = document.getElementById('tocList');

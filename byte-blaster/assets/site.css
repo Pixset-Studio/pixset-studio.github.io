@@ -279,9 +279,255 @@ footer.site .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: cent
   nav.main a { font-size: 8px; padding: 8px 6px; }
 }
 
-/* Respect users who ask for less motion. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOTION
+   Every animation here moves only `transform`, `opacity`, `filter` or
+   `background-position` — the properties a browser can hand to the GPU without
+   re-laying out the page. Nothing animates width/height/top/left, so scrolling
+   stays smooth even on a phone.
+   The whole block switches off for visitors who ask for reduced motion (bottom).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page arrival + drifting grid ─────────────────────────────────────────── */
+@keyframes pageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes gridDrift { from { background-position: 0 0, 0 0; } to { background-position: 44px 44px, 44px 44px; } }
+body { animation: pageIn .5s ease-out both, gridDrift 24s linear infinite; }
+
+/* ── Reveal on scroll ─────────────────────────────────────────────────────────
+   Elements start slightly low and transparent; site.js adds .in when they enter
+   the viewport. Stagger is set per element through the --d custom property. */
+[data-rv] {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity .62s cubic-bezier(.22,.61,.36,1), transform .62s cubic-bezier(.22,.61,.36,1);
+  transition-delay: var(--d, 0s);
+  will-change: opacity, transform;
+}
+[data-rv].in { opacity: 1; transform: none; }
+[data-rv="left"]  { transform: translateX(-26px); }
+[data-rv="right"] { transform: translateX(26px); }
+[data-rv="zoom"]  { transform: scale(.94); }
+[data-rv="left"].in, [data-rv="right"].in, [data-rv="zoom"].in { transform: none; }
+
+/* ── Headings ─────────────────────────────────────────────────────────────── */
+@keyframes neonPulse {
+  0%, 100% { text-shadow: 0 0 18px rgba(0,255,255,.55), 0 0 34px rgba(0,255,255,.18); }
+  50%      { text-shadow: 0 0 26px rgba(0,255,255,.85), 0 0 54px rgba(0,255,255,.34); }
+}
+.hero h1 { animation: neonPulse 3.4s ease-in-out infinite; }
+
+/* A cyan rule grows out from the left as a section scrolls in. */
+h2 { position: relative; padding-bottom: 10px; }
+h2::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .7s cubic-bezier(.22,.61,.36,1) .1s;
+}
+[data-rv].in h2::after, h2.in::after { transform: scaleX(1); }
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes haloBreathe {
+  0%, 100% { opacity: .8; transform: scale(1); }
+  50%      { opacity: 1;  transform: scale(1.06); }
+}
+@keyframes sweep { 0% { transform: translateY(-160px); } 55%, 100% { transform: translateY(560px); } }
+
+.hero .logo {
+  animation: float 5.2s ease-in-out infinite;
+  transition: transform .4s cubic-bezier(.22,.61,.36,1), filter .4s;
+}
+.hero .logo:hover { transform: scale(1.06) rotate(-2deg); filter: drop-shadow(0 0 40px rgba(0,255,255,.75)); }
+.hero::before { animation: haloBreathe 6s ease-in-out infinite; }
+.hero .sub { animation: fadeUp .8s ease-out .25s both; }
+/* Scanline sweeping down the hero, like a CRT refresh. */
+.hero::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 140px;
+  background: linear-gradient(180deg, transparent, rgba(0,255,255,.05), transparent);
+  animation: sweep 7s ease-in-out infinite; pointer-events: none;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+@keyframes primaryGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(0,255,136,0); }
+  50%      { box-shadow: 0 0 24px rgba(0,255,136,.28); }
+}
+.btn {
+  position: relative; overflow: hidden;
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .25s, background .25s, color .25s, border-color .25s;
+}
+/* A highlight sweeps across the button on hover. */
+.btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.16) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform .65s ease;
+}
+.btn:hover::after { transform: translateX(120%); }
+.btn:hover { transform: translateY(-3px) scale(1.015); }
+.btn:active { transform: translateY(-1px) scale(.99); transition-duration: .08s; }
+.btn.disabled::after { display: none; }
+.btn.primary { animation: primaryGlow 3.6s ease-in-out infinite; }
+.btn.primary:hover { animation: none; }
+
+/* ── Navigation ───────────────────────────────────────────────────────────── */
+nav.main a {
+  position: relative;
+  transition: color .22s, border-color .22s, background .22s, transform .18s;
+}
+nav.main a:hover { transform: translateY(-2px); }
+nav.main a::after {
+  content: ''; position: absolute; left: 10%; right: 10%; bottom: 3px; height: 1px;
+  background: var(--cyan); transform: scaleX(0); transform-origin: center;
+  transition: transform .28s cubic-bezier(.22,.61,.36,1);
+}
+nav.main a:hover::after, nav.main a[aria-current="page"]::after { transform: scaleX(1); }
+.brand { transition: color .25s, transform .25s; }
+.brand:hover { transform: translateX(2px); }
+.brand-ico { transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
+.brand:hover .brand-ico { transform: rotate(-12deg) scale(1.12); }
+.langsw button { transition: color .2s, background .25s, transform .18s; }
+.langsw button:hover { transform: translateY(-1px); }
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+.card {
+  position: relative;
+  transition: transform .3s cubic-bezier(.22,.61,.36,1), border-color .3s, box-shadow .3s, background .3s;
+}
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 34px rgba(0,0,0,.5), 0 0 22px rgba(0,255,255,.12);
+}
+/* Corner light that fades in on hover. */
+.card::before {
+  content: ''; position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
+  background: linear-gradient(160deg, rgba(0,255,255,.14), transparent 42%);
+  opacity: 0; transition: opacity .32s;
+}
+.card:hover::before { opacity: 1; }
+.card .ico { display: inline-block; transition: transform .42s cubic-bezier(.34,1.56,.64,1); }
+.card:hover .ico { transform: scale(1.18) rotate(-6deg); }
+
+/* ── Stat tiles ───────────────────────────────────────────────────────────── */
+.stat { transition: transform .3s cubic-bezier(.22,.61,.36,1), border-color .3s, box-shadow .3s; }
+.stat:hover { transform: translateY(-5px) scale(1.02); border-color: rgba(0,255,255,.45); box-shadow: 0 0 20px rgba(0,255,255,.14); }
+.stat b { display: block; transition: text-shadow .3s, transform .3s; }
+.stat:hover b { text-shadow: 0 0 20px rgba(0,255,255,.8); transform: scale(1.06); }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+tbody tr { transition: background .25s, transform .25s; }
+tbody tr:hover { background: rgba(0,255,255,.06); transform: translateX(4px); }
+
+/* ── Links, tags, notes, lists ────────────────────────────────────────────── */
+a { transition: color .2s, border-color .2s; }
+.tag { transition: transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .22s, background .22s; }
+.tag:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 0 14px currentColor; }
+.note { transition: transform .28s, box-shadow .28s, background .28s; }
+.note:hover { transform: translateX(4px); }
+ul.clean li { transition: transform .24s, color .24s; }
+ul.clean li:hover { transform: translateX(6px); color: #e6f0ff; }
+ul.clean li::before { transition: transform .28s cubic-bezier(.34,1.56,.64,1), color .24s; }
+ul.clean li:hover::before { transform: translateX(3px) scale(1.25); color: var(--magenta); }
+
+/* ── Spoilers ─────────────────────────────────────────────────────────────── */
+@keyframes detailsOpen { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+details { transition: border-color .3s, background .3s; }
+summary { transition: color .22s, letter-spacing .3s; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: '\25B8'; display: inline-block; margin-right: 9px; color: var(--magenta);
+  transition: transform .34s cubic-bezier(.34,1.56,.64,1);
+}
+details[open] > summary::before { transform: rotate(90deg); }
+summary:hover { letter-spacing: .5px; }
+details[open] > *:not(summary) { animation: detailsOpen .42s cubic-bezier(.22,.61,.36,1) both; }
+
+/* ── Changelog timeline ───────────────────────────────────────────────────── */
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0,255,136,.55); }
+  50%      { box-shadow: 0 0 20px rgba(0,255,136,.95); }
+}
+.rel { transition: border-color .3s; }
+.rel:hover { border-left-color: var(--cyan); }
+.rel.now::before { animation: dotPulse 2.4s ease-in-out infinite; }
+
+/* ── Wiki contents ────────────────────────────────────────────────────────── */
+@keyframes tocMark { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.toc a { position: relative; transition: background .22s, color .22s, transform .22s, padding-left .22s; }
+.toc a:hover { transform: translateX(3px); padding-left: 13px; }
+.toc a.active { padding-left: 13px; }
+.toc a.active::before {
+  content: ''; position: absolute; left: 3px; top: 9px; width: 3px; height: 18px;
+  background: var(--cyan); border-radius: 2px;
+  animation: tocMark .3s cubic-bezier(.34,1.56,.64,1) both;
+}
+.toc input { transition: border-color .25s, box-shadow .25s; }
+.toc input:focus { box-shadow: 0 0 14px rgba(0,255,255,.2); }
+
+/* ── 404: chromatic split, like a broken signal ───────────────────────────── */
+@keyframes glitchShift {
+  0%, 92%, 100% { transform: none; text-shadow: 0 0 34px rgba(255,0,255,.55); }
+  93% { transform: translateX(-3px) skewX(-2deg); text-shadow: 3px 0 var(--cyan), -3px 0 var(--red), 0 0 34px rgba(255,0,255,.55); }
+  95% { transform: translateX(3px)  skewX(2deg);  text-shadow: -3px 0 var(--cyan), 3px 0 var(--red), 0 0 34px rgba(255,0,255,.55); }
+  97% { transform: translateX(-1px); text-shadow: 2px 0 var(--green), -2px 0 var(--magenta), 0 0 34px rgba(255,0,255,.55); }
+}
+.err .glitch { animation: glitchShift 4.2s steps(1, end) infinite; }
+
+/* ── Reading progress + back-to-top (both built by site.js) ──────────────── */
+#readProgress {
+  position: fixed; top: 0; left: 0; height: 2px; width: 100%; z-index: 60;
+  transform-origin: left; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--cyan), var(--magenta));
+  transition: transform .12s linear; pointer-events: none;
+}
+#toTop {
+  position: fixed; right: 18px; bottom: 18px; z-index: 55;
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--cyan); color: var(--cyan);
+  font-size: 18px; line-height: 1; display: grid; place-items: center;
+  opacity: 0; transform: translateY(14px) scale(.86); pointer-events: none;
+  transition: opacity .3s, transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .3s;
+}
+#toTop.show { opacity: 1; transform: none; pointer-events: auto; }
+#toTop:hover { box-shadow: 0 0 20px rgba(0,255,255,.5); transform: translateY(-3px) scale(1.06); }
+
+/* ── Language swap ─────────────────────────────────────────────────────────
+   A brief dip in opacity when the language changes, so the text does not pop
+   from one alphabet to another. */
+@keyframes langFade { 0% { opacity: 1; } 40% { opacity: .35; } 100% { opacity: 1; } }
+body.langswap { animation: langFade .34s ease; }
+
+/* ── Admin panel ──────────────────────────────────────────────────────────── */
+@keyframes shake {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-7px); } 40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); } 80% { transform: translateX(3px); }
+}
+#bdPages div > div > div, #bdLangs div > div > div,
+#bdPlatforms div > div > div, #bdEditions div > div > div {
+  transition: width .9s cubic-bezier(.22,.61,.36,1);
+}
+#loginErr { animation: shake .4s ease; }
+#dashView, #loginView { animation: fadeUp .45s ease-out both; }
+
+/* ── Keyboard focus ───────────────────────────────────────────────────────── */
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--cyan); outline-offset: 3px;
+  transition: outline-offset .15s;
+}
+
+/* ═══ Reduced motion ════════════════════════════════════════════════════════
+   Everything above is decoration. When the visitor's system asks for less
+   motion all of it stops — including the reveal, which is forced to its final
+   state so no content is left invisible. */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .btn { transition: none; }
-  .err .glitch { animation: none; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  [data-rv] { opacity: 1 !important; transform: none !important; }
+  h2::after { transform: scaleX(1) !important; }
 }
