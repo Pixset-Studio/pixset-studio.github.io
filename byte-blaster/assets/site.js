@@ -244,6 +244,71 @@
   }
   chrome();
 
+
+  /* ── Launch sequence ────────────────────────────────────────────────────────
+     Any link into the game plays a short boot animation before navigating, so
+     starting the game feels like connecting to the GRID rather than following a
+     hyperlink. The navigation still happens for certain — a failed animation or
+     a closed tab must never strand the player on the site. */
+  function launchSequence() {
+    var LINES_RU = ['УСТАНОВКА СВЯЗИ С GRID…', 'АУТЕНТИФИКАЦИЯ UNIT-7…', 'ЗАГРУЗКА МИРА…', 'ГОТОВО'];
+    var LINES_EN = ['CONNECTING TO GRID…', 'AUTHENTICATING UNIT-7…', 'LOADING WORLD…', 'READY'];
+
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest ? e.target.closest('a[href]') : null;
+      if (!a) return;
+      // Only links that actually enter the game, and only plain left clicks —
+      // ctrl/cmd-click and middle click must keep opening a new tab as usual.
+      if (!/\/game\/(full|demo)\//.test(a.getAttribute('href') || '')) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      if (a.target && a.target !== '_self') return;
+
+      e.preventDefault();
+      var href = a.href;
+      var lang = document.documentElement.getAttribute('data-site-lang') === 'en' ? 'en' : 'ru';
+      var lines = lang === 'en' ? LINES_EN : LINES_RU;
+      var demo = /\/demo\//.test(href);
+
+      var fx = document.createElement('div');
+      fx.id = 'launchFx';
+      fx.innerHTML =
+        '<div class="fxInner">' +
+          '<img class="fxLogo" src="/byte-blaster/assets/logo-512.png" alt="">' +
+          '<div class="fxTitle">BYTE BLASTER' + (demo ? ' · DEMO' : '') + '</div>' +
+          '<div class="fxLog"></div>' +
+          '<div class="fxBar"><i></i></div>' +
+        '</div>';
+      document.body.appendChild(fx);
+      // Force a reflow so the .on transition actually runs from its start state.
+      void fx.offsetWidth;
+      fx.classList.add('on');
+
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var log = fx.querySelector('.fxLog');
+      var i = 0;
+      var step = reduce ? 90 : 330;
+      var tick = setInterval(function () {
+        log.textContent = lines[i] || '';
+        i++;
+        if (i >= lines.length) clearInterval(tick);
+      }, step);
+      log.textContent = lines[0];
+
+      // Navigate when the sequence ends. The timer is the single source of
+      // truth — if anything above throws, this still fires.
+      setTimeout(function () { window.location.href = href; }, reduce ? 260 : 1450);
+    });
+
+    // Coming back from the game via the Back button leaves the overlay in the
+    // bfcache-restored page; clear it so the site is usable again.
+    window.addEventListener('pageshow', function (ev) {
+      if (!ev.persisted) return;
+      var old = document.getElementById('launchFx');
+      if (old) old.remove();
+    });
+  }
+  launchSequence();
+
   /* ── Wiki: filter the contents, highlight the current section ────────────── */
   var list = document.getElementById('tocList');
   if (!list) return;

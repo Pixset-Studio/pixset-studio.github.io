@@ -20,6 +20,34 @@
   --maxw:    1180px;
 }
 
+/* ── Scrollbars ───────────────────────────────────────────────────────────────
+   Browsers draw light-grey scrollbars by default, which on a near-black page
+   look like someone taped white strips to the edges. `color-scheme: dark` tells
+   the browser this is a dark UI (it also darkens form controls and the overscroll
+   area); the rules under it restyle the bars themselves on engines that allow it. */
+:root { color-scheme: dark; }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: #1f2b4a var(--bg); }
+
+/* Chromium / Safari */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #16305a, #0f2140);
+  border: 2px solid var(--bg);           /* inset, so the bar reads as slim */
+  border-radius: 8px;
+  transition: background .25s;
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #1d4a7a, #14315c); }
+::-webkit-scrollbar-thumb:active { background: linear-gradient(180deg, var(--cyan), #0a6b7a); }
+::-webkit-scrollbar-corner { background: var(--bg); }
+
+/* The horizontal bars inside wide tables and the wiki sidebar are thinner still:
+   they sit inside a panel, so a full-size bar would dominate the box. */
+.tw::-webkit-scrollbar, .toc::-webkit-scrollbar { width: 8px; height: 8px; }
+.tw::-webkit-scrollbar-track, .toc::-webkit-scrollbar-track { background: transparent; }
+
 * { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
@@ -289,7 +317,12 @@ footer.site .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: cent
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Page arrival + drifting grid ─────────────────────────────────────────── */
-@keyframes pageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* Opacity only, deliberately: an animation on <body> that touches 
+   makes body the containing block for every position:fixed child, and the
+   launch overlay, the progress bar and the back-to-top button then anchor to
+   the whole document instead of the viewport (measured: the overlay landed
+   2119px below the screen). */
+@keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes gridDrift { from { background-position: 0 0, 0 0; } to { background-position: 44px 44px, 44px 44px; } }
 body { animation: pageIn .5s ease-out both, gridDrift 24s linear infinite; }
 
@@ -515,6 +548,82 @@ body.langswap { animation: langFade .34s ease; }
 a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 3px;
   transition: outline-offset .15s;
+}
+
+/* ── Launch transition ────────────────────────────────────────────────────────
+   Clicking a "play" link plays a short boot sequence over the whole page before
+   the browser navigates: the screen closes in, a GRID-connection log types out,
+   and a scanline wipes across. It is built by site.js, so no page carries any
+   markup for it. Total run time ~1.4s — long enough to feel deliberate, short
+   enough that nobody taps twice. */
+#launchFx {
+  position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center;
+  background: radial-gradient(ellipse at 50% 50%, #06122a 0%, #04040f 70%);
+  opacity: 0; pointer-events: none;
+}
+#launchFx.on { opacity: 1; pointer-events: all; animation: fxIn .22s ease-out both; }
+@keyframes fxIn { from { opacity: 0; } to { opacity: 1; } }
+
+#launchFx .fxInner { text-align: center; transform: scale(.94); animation: fxPop .5s cubic-bezier(.34,1.56,.64,1) .05s both; }
+@keyframes fxPop { to { transform: scale(1); } }
+
+#launchFx .fxLogo {
+  width: 108px; height: 108px; border-radius: 20%; display: block; margin: 0 auto 22px;
+  filter: drop-shadow(0 0 30px rgba(0,255,255,.6));
+  animation: fxSpin 1.4s cubic-bezier(.5,0,.2,1) both;
+}
+@keyframes fxSpin {
+  0%   { transform: scale(.7) rotate(-14deg); opacity: 0; }
+  45%  { transform: scale(1.06) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+#launchFx .fxTitle {
+  font-family: var(--pixel); font-size: clamp(13px, 3vw, 20px); color: var(--cyan);
+  letter-spacing: 3px; text-shadow: 0 0 22px rgba(0,255,255,.7); margin-bottom: 16px;
+}
+#launchFx .fxLog {
+  font-family: var(--mono); font-size: 13px; color: var(--green);
+  min-height: 22px; letter-spacing: 1px;
+}
+#launchFx .fxLog::after {
+  content: '_'; animation: caret .55s steps(1) infinite; color: var(--green);
+}
+@keyframes caret { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+/* Loading rail that fills as the sequence runs. */
+#launchFx .fxBar {
+  width: min(320px, 68vw); height: 4px; margin: 22px auto 0;
+  background: #0d1730; border-radius: 3px; overflow: hidden;
+}
+#launchFx .fxBar i {
+  display: block; height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--cyan), var(--magenta));
+  animation: fxFill 1.25s cubic-bezier(.4,0,.2,1) .1s forwards;
+}
+@keyframes fxFill { to { width: 100%; } }
+
+/* Two shutters closing in from the edges, then a scanline wipe. */
+#launchFx::before, #launchFx::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 50%;
+  background: linear-gradient(180deg, #04040f, #061024);
+  border-color: var(--cyan); border-style: solid; border-width: 0;
+  pointer-events: none;
+}
+#launchFx::before, #launchFx::after { z-index: 1; }   /* shutters stay under the text */
+#launchFx::before { top: 0;    border-bottom-width: 1px; transform: translateY(-101%); animation: shutterTop 1.4s cubic-bezier(.6,0,.3,1) .28s forwards; }
+#launchFx::after  { bottom: 0; border-top-width: 1px;    transform: translateY(101%);  animation: shutterBot 1.4s cubic-bezier(.6,0,.3,1) .28s forwards; }
+@keyframes shutterTop { 0% { transform: translateY(-101%); } 70%, 100% { transform: translateY(0); } }
+@keyframes shutterBot { 0% { transform: translateY(101%); }  70%, 100% { transform: translateY(0); } }
+
+/* The text sits above the shutters until the very end. */
+#launchFx .fxInner { position: relative; z-index: 3; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* No sequence at all: a plain fade, then straight to the game. */
+  #launchFx .fxLogo, #launchFx .fxInner, #launchFx .fxBar i,
+  #launchFx::before, #launchFx::after { animation: none !important; }
+  #launchFx::before, #launchFx::after { transform: none; }
 }
 
 /* ═══ Reduced motion ════════════════════════════════════════════════════════
