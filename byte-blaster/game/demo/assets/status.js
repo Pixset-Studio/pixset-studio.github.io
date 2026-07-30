@@ -116,10 +116,13 @@
   }
 
   // ── Questions game.js asks ───────────────────────────────────────────────
+  // CHILL makes you SLIDE and CORRODE makes you SLOW — swapped from the
+  // original pairing because ice being slippery and acid gumming up the servos
+  // is what a player expects; the reverse read as arbitrary.
   const has = (p, id) => !!(p && p.stId === id && p.stT > 0);
-  function speedMul(p)      { return has(p, 'chill') ? 0.62 : 1; }
-  function jumpMul(p)       { return has(p, 'chill') ? 0.88 : 1; }
-  function slippery(p)      { return has(p, 'corrode'); }
+  function speedMul(p)      { return has(p, 'corrode') ? 0.75 : 1; }
+  function jumpMul(p)       { return has(p, 'corrode') ? 0.88 : 1; }
+  function slippery(p)      { return has(p, 'chill'); }
   function blasterBlocked(p){ return has(p, 'emp'); }
   function noDoubleJump(p)  { return has(p, 'emp'); }
   // Extra whole seconds of level time burned away per real second.

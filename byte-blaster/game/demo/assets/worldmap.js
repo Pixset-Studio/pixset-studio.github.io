@@ -311,7 +311,12 @@
     // screen — a phone in landscape, where safeH falls to ~150px — earns the
     // wide one. Interpolated rather than switched, so resizing a window doesn't
     // make the ring jump at a threshold.
-    const RATIO_MAX = clampN(1 + (420 - Math.min(safeH, safeW)) / 220, 1, 2.2);
+    // Keep the ring ROUND — the same shape a PC shows. The ellipse this used to
+    // stretch into filled a phone's width better, but it made the map read as a
+    // different screen depending on the device, which is exactly what the
+    // player objected to. A slight give (1.15) absorbs awkward aspect ratios
+    // without the shape visibly changing.
+    const RATIO_MAX = 1.15;
     if (rx > ry * RATIO_MAX) rx = ry * RATIO_MAX;
     if (ry > rx * RATIO_MAX) ry = rx * RATIO_MAX;
 
@@ -465,6 +470,7 @@
       <div id="mapWorldTitle" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); transform-origin: top center; z-index: 10; pointer-events: none; text-align: center;">
         <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: 20px; letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
         <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
+        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
       </div>
       <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
       <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
@@ -1497,6 +1503,22 @@
     if (nameEl) {
       nameEl.textContent = wName(activeW);
       nameEl.style.color = worldAccent(activeW);
+    }
+    // Rainbow shard status for THIS world. A tick or a cross, no words: the
+    // shard is the one collectible players hunt world by world, and adding two
+    // more strings to fifty locales for it would be waste.
+    const shardEl = document.getElementById('mapWorldShard');
+    if (shardEl) {
+      if (activeW.secret) {
+        shardEl.style.display = 'none';           // the secret world has none
+      } else {
+        const got = (typeof window.rainbowHasShard === 'function')
+          ? window.rainbowHasShard(activeW.id) : false;
+        shardEl.style.display = '';
+        shardEl.textContent = got ? '🌈 ✓' : '🌈 ✗';
+        shardEl.style.color = got ? '#0f8' : '#556';
+        shardEl.style.textShadow = got ? '0 0 12px rgba(0,255,136,.8)' : 'none';
+      }
     }
     const anyUnlockedInWorld = LEVELS.some(l => l.worldId === MAP_STATE.activeWorld && l.unlocked);
     const arrL = document.getElementById('mapArrowLeft'), arrR = document.getElementById('mapArrowRight');

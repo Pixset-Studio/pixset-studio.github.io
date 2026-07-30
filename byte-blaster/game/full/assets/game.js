@@ -1086,6 +1086,9 @@ function loadRainbow(){
 }
 function saveRainbow(){try{localStorage.setItem('bbRainbow',JSON.stringify(rainbowCollected));}catch(e){}}
 function rainbowCount(){return Object.keys(rainbowCollected).filter(k=>rainbowCollected[k]).length;}
+// Read-only accessor for the world map: has THIS world's shard been found?
+// worldmap.js cannot see the top-level `rainbowCollected` binding directly.
+window.rainbowHasShard=function(w){try{return !!rainbowCollected[w];}catch(e){return false;}};
 function markRainbowCollected(worldIdx){rainbowCollected[worldIdx]=true;saveRainbow();if(typeof AchTrack!=='undefined')AchTrack.rainbow(rainbowCount());}
 let jumpPads=[];           // Jump pads
 let conveyors=[];          // Conveyor belts
@@ -4624,6 +4627,19 @@ function updatePlayer(){
             p.x+=(dx<0?-ox:ox);
             e._iceVX=ICE_PUSH*dir;
             if(!e._icePushSfx){e._icePushSfx=1;SFX.hit();}
+          } else if(p.y<e.y&&p.vy>=ICE_SMASH_VY){
+            // Landing hard on the block smashes it and kills what is inside.
+            // A gentle touchdown still just stands on it (the last branch), so
+            // the ice keeps working as a platform.
+            p.vy=-6;p.onGnd=false;camShake=Math.max(camShake,10);
+            floatTxt(e.x+e.w/2,e.y-8,T('iceSmashed'),'#aff');
+            _shatterIce(e,true);
+          } else if(p.y>e.y&&p.vy<-ICE_SMASH_VY*0.5){
+            // Jumping up into it from below cracks it open the same way —
+            // headbutting a frozen enemy reads exactly like hitting a block.
+            p.vy=1;camShake=Math.max(camShake,8);
+            floatTxt(e.x+e.w/2,e.y+e.h+6,T('iceSmashed'),'#aff');
+            _shatterIce(e,true);
           } else {
             if(p.y<e.y){p.y-=oy;p.vy=0;p.onGnd=true;}
             else{p.y+=oy;if(p.vy<0)p.vy=0;}
@@ -5056,6 +5072,19 @@ function updatePlayer2(){
             p.x+=(dx<0?-ox:ox);
             e._iceVX=ICE_PUSH*dir;
             if(!e._icePushSfx){e._icePushSfx=1;SFX.hit();}
+          } else if(p.y<e.y&&p.vy>=ICE_SMASH_VY){
+            // Landing hard on the block smashes it and kills what is inside.
+            // A gentle touchdown still just stands on it (the last branch), so
+            // the ice keeps working as a platform.
+            p.vy=-6;p.onGnd=false;camShake=Math.max(camShake,10);
+            floatTxt(e.x+e.w/2,e.y-8,T('iceSmashed'),'#aff');
+            _shatterIce(e,true);
+          } else if(p.y>e.y&&p.vy<-ICE_SMASH_VY*0.5){
+            // Jumping up into it from below cracks it open the same way —
+            // headbutting a frozen enemy reads exactly like hitting a block.
+            p.vy=1;camShake=Math.max(camShake,8);
+            floatTxt(e.x+e.w/2,e.y+e.h+6,T('iceSmashed'),'#aff');
+            _shatterIce(e,true);
           } else {
             if(p.y<e.y){p.y-=oy;p.vy=0;p.onGnd=true;}
             else{p.y+=oy;if(p.vy<0)p.vy=0;}
@@ -5537,7 +5566,11 @@ function _immuneFx(x,y,elem){
 // or another enemy) and shatters, or runs off a ledge and falls out of the
 // world. Anything it collides with on the way is destroyed too, so freezing a
 // runner in a corridor becomes a usable weapon rather than just a pause button.
-const ICE_PUSH=3.4, ICE_FRICTION=0.985;
+// ICE_SMASH_VY: how fast you must be falling for a landing to smash the block
+// instead of standing on it. Tuned so a deliberate drop from roughly one
+// platform height breaks it, while stepping across from the side does not —
+// otherwise the ice would stop working as a platform at all.
+const ICE_PUSH=3.4, ICE_FRICTION=0.985, ICE_SMASH_VY=5.5;
 function _updateIceSlide(e){
   // The shove itself is applied in updatePlayer's frozen-enemy branch, where the
   // overlap has already been resolved; this only advances the slide.
