@@ -1,11 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-<link rel="manifest" href="site.webmanifest">
-<link rel="icon" type="image/x-icon" href="favicon.ico">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pixset Studio</title>
@@ -883,6 +878,35 @@
     background: linear-gradient(90deg, transparent, rgba(57,255,20,0.15), transparent);
     margin-bottom: 32px;
   }
+  .footer-brand { display: flex; flex-direction: column; gap: 10px; }
+  .footer-legal {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    line-height: 1.9;
+    color: rgba(57,255,20,0.42);
+    letter-spacing: 1px;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .footer-legal strong { color: rgba(255,215,0,0.75); font-weight: 400; }
+  .footer-legal .dim { color: rgba(57,255,20,0.26); }
+  .footer-links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+  .footer-links a {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: rgba(57,255,20,0.55);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(57,255,20,0.2);
+    transition: color .2s, border-color .2s;
+  }
+  .footer-links a:hover { color: var(--neon-yellow); border-color: rgba(255,215,0,0.5); }
+  @media (max-width: 760px) {
+    .footer-inner { flex-direction: column; align-items: flex-start; gap: 22px; }
+    .footer-legal { font-size: 10.5px; }
+  }
 
   /* ANIMATIONS */
   @keyframes fadeInDown {
@@ -1271,8 +1295,25 @@
 <footer>
   <div class="footer-line"></div>
   <div class="footer-inner">
-    <div class="footer-logo">PIXSET STUDIO</div>
-    <div class="footer-copy">© 2024 PIXSET STUDIO // ALL RIGHTS RESERVED</div>
+    <div class="footer-brand">
+      <div class="footer-logo">PIXSET STUDIO</div>
+      <div class="footer-copy">A GAME &amp; SOFTWARE DEVELOPMENT STUDIO</div>
+      <div class="footer-links">
+        <a href="https://github.com/Pixset-Studio/pixset-studio.github.io/blob/main/LICENSE">Лицензия</a>
+        <a href="https://github.com/Pixset-Studio/pixset-studio.github.io/blob/main/COPYRIGHT.md">Авторские права</a>
+        <a href="https://github.com/Pixset-Studio">GitHub</a>
+      </div>
+    </div>
+    <div class="footer-legal">
+      <span><strong>© 2024–2026 Pixset Studio.</strong> Все права защищены.</span>
+      <span>Исходный код сайта и проектов © 2026 Pixset Studio,
+        <a href="https://github.com/Pixset-Studio/pixset-studio.github.io/blob/main/LICENSE"
+           style="color:inherit;text-decoration:underline">проприетарная лицензия</a>.</span>
+      <span>Все проекты студии — PixTool, Byte Blaster, Brawl Legends, Pixset AI Studio,
+        Smehotvoriki — являются самостоятельными объектами авторского права.</span>
+      <span class="dim">Названия проектов и логотип студии принадлежат Pixset Studio.</span>
+      <span class="dim">Сторонние библиотеки используются по лицензиям MIT, Apache 2.0 и SIL OFL 1.1.</span>
+    </div>
   </div>
 </footer>
 

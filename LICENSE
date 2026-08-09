@@ -1,0 +1,207 @@
+PIXSET STUDIO — ЛИЦЕНЗИОННОЕ СОГЛАШЕНИЕ
+Proprietary License — All Rights Reserved
+
+Copyright © 2026 Pixset Studio. Все права защищены. All rights reserved.
+
+================================================================================
+РУССКАЯ ВЕРСИЯ
+================================================================================
+
+1. ПРАВООБЛАДАТЕЛЬ
+
+   Правообладателем всех материалов данного репозитория является автор,
+   выступающий под обозначением «Pixset Studio» (далее — Правообладатель).
+
+   Исключительные права возникают у автора в силу самого факта создания
+   произведения и не требуют регистрации, депонирования или иных формальностей
+   (статья 1259 Гражданского кодекса РФ, статья 5(2) Бернской конвенции об
+   охране литературных и художественных произведений).
+
+2. ОБЪЕКТ ОХРАНЫ
+
+   Настоящая лицензия распространяется на всё содержимое репозитория
+   pixset-studio.github.io и опубликованного из него сайта
+   https://pixset-studio.github.io, включая, помимо прочего:
+
+   — исходный код (HTML, CSS, JavaScript, конфигурации, сценарии сборки);
+   — дизайн, макеты, компоновку страниц, цветовые и типографические решения;
+   — тексты, документацию и справочные материалы;
+   — графику, логотипы, иконки, изображения и иные визуальные материалы;
+   — звуковые материалы и анимации;
+   — структуру и организацию данных.
+
+   Охрана распространяется на все проекты, размещённые в репозитории, в том
+   числе (список не является исчерпывающим):
+
+     PixTool             — набор браузерных инструментов
+     Byte Blaster        — компьютерная игра
+     Brawl Legends       — игровой проект
+     Pixset AI Studio    — программное обеспечение
+     Smehotvoriki        — проект студии
+     Wikipedia (раздел)  — справочные материалы студии
+     Сайт студии         — главная страница и связанные разделы
+
+   Каждый из перечисленных проектов является самостоятельным объектом
+   авторского права. Появление новых проектов в репозитории автоматически
+   подчиняет их условиям настоящей лицензии, если в папке проекта не размещён
+   собственный файл LICENSE.
+
+3. ПРИОРИТЕТ ЛИЦЕНЗИЙ ОТДЕЛЬНЫХ ПРОЕКТОВ
+
+   Если в папке конкретного проекта находится собственный файл LICENSE, то в
+   отношении этого проекта действуют условия такого файла. Настоящая лицензия
+   применяется ко всему остальному содержимому репозитория.
+
+4. ЧТО РАЗРЕШЕНО
+
+   Без отдельного согласия Правообладателя разрешается:
+
+   а) просматривать сайт и пользоваться опубликованными приложениями по их
+      прямому назначению в личных целях;
+   б) изучать исходный код в образовательных целях;
+   в) использовать средства GitHub для просмотра и создания форков в пределах,
+      предусмотренных Условиями обслуживания GitHub;
+   г) цитировать небольшие фрагменты кода или текста в обучающих, научных и
+      критических материалах с обязательным указанием авторства и ссылкой на
+      источник (статья 1274 ГК РФ);
+   д) ссылаться на проекты и сайт студии.
+
+5. ЧТО ЗАПРЕЩЕНО
+
+   Без предварительного письменного разрешения Правообладателя запрещается:
+
+   а) копировать, воспроизводить и распространять материалы полностью или в
+      существенной части, в том числе в составе других проектов;
+   б) использовать материалы в коммерческих целях, включая продажу, оказание
+      услуг и включение в платные продукты;
+   в) публиковать копии сайта или приложений на других адресах и площадках;
+   г) перерабатывать материалы, создавать производные произведения и выдавать
+      их за собственную разработку;
+   д) удалять, скрывать или изменять уведомления об авторских правах;
+   е) использовать название «Pixset Studio», логотип студии и названия проектов
+      для обозначения собственных продуктов, а также способом, создающим
+      впечатление одобрения или связи с Правообладателем;
+   ж) использовать материалы для обучения моделей машинного обучения и
+      наполнения наборов данных.
+
+6. ОБОЗНАЧЕНИЯ
+
+   «Pixset Studio», логотип студии и названия проектов являются обозначениями
+   Правообладателя. Права на них принадлежат Правообладателю независимо от
+   наличия регистрации товарного знака.
+
+7. СТОРОННИЕ КОМПОНЕНТЫ
+
+   Проекты используют библиотеки, шрифты и иные материалы третьих лиц,
+   распространяемые по собственным лицензиям (в том числе MIT, Apache 2.0,
+   SIL Open Font License). Условия настоящей лицензии не изменяют и не
+   ограничивают права, предоставленные такими лицензиями. Перечень компонентов
+   приводится в файле COPYRIGHT.md и в документации соответствующих проектов.
+
+8. ОТСУТСТВИЕ ГАРАНТИЙ
+
+   Материалы предоставляются «как есть», без каких-либо гарантий, явных или
+   подразумеваемых, включая гарантии пригодности для конкретных целей и
+   отсутствия ошибок. Правообладатель не несёт ответственности за любой ущерб,
+   возникший в связи с использованием или невозможностью использования
+   материалов.
+
+9. РАЗРЕШЕНИЯ И КОНТАКТЫ
+
+   Запросы на использование материалов за пределами раздела 4 направляйте
+   Правообладателю через раздел Issues репозитория или по контактам, указанным
+   на сайте студии. Отсутствие ответа не означает согласия.
+
+10. ИЗМЕНЕНИЕ УСЛОВИЙ
+
+   Правообладатель вправе изменять условия настоящей лицензии. Изменения
+   действуют с момента публикации новой редакции в репозитории и не имеют
+   обратной силы в отношении ранее полученных письменных разрешений.
+
+================================================================================
+ENGLISH VERSION
+================================================================================
+
+1. RIGHTS HOLDER
+
+   All materials in this repository are the property of the author operating
+   under the name "Pixset Studio" (the "Rights Holder").
+
+   Copyright arises automatically upon creation of a work and requires no
+   registration, deposit or other formality (Berne Convention, Article 5(2)).
+
+2. SCOPE
+
+   This license covers the entire contents of the pixset-studio.github.io
+   repository and the website published from it at
+   https://pixset-studio.github.io, including but not limited to source code,
+   design, layout, texts, documentation, graphics, logos, icons, images, audio,
+   animations and data structures.
+
+   It applies to every project in the repository, including PixTool,
+   Byte Blaster, Brawl Legends, Pixset AI Studio, Smehotvoriki, the Wikipedia
+   section and the studio website. Each project is a separate copyrighted work.
+   Projects added later are covered automatically unless their folder contains
+   its own LICENSE file.
+
+3. PROJECT-SPECIFIC LICENSES
+
+   Where a project folder contains its own LICENSE file, that file governs the
+   project. This license governs everything else.
+
+4. PERMITTED
+
+   Without separate permission you may: use the website and published
+   applications for their intended purpose for personal use; study the source
+   code for educational purposes; view and fork the repository through GitHub's
+   own features under the GitHub Terms of Service; quote short excerpts in
+   educational, scientific or critical works with attribution and a link to the
+   source; link to the projects and the studio website.
+
+5. PROHIBITED
+
+   Without prior written permission you may not: copy, reproduce or distribute
+   the materials in whole or in substantial part, including as part of other
+   projects; use them commercially, including resale, services and paid
+   products; republish copies of the website or applications elsewhere; create
+   derivative works or present the materials as your own; remove, obscure or
+   alter copyright notices; use the name "Pixset Studio", the studio logo or
+   project names for your own products or in a way that suggests endorsement or
+   affiliation; use the materials to train machine learning models or to build
+   datasets.
+
+6. NAMES AND MARKS
+
+   "Pixset Studio", the studio logo and the project names are designations of
+   the Rights Holder. Rights in them belong to the Rights Holder regardless of
+   trademark registration.
+
+7. THIRD-PARTY COMPONENTS
+
+   The projects include third-party libraries, fonts and materials distributed
+   under their own licenses (including MIT, Apache 2.0 and the SIL Open Font
+   License). Nothing in this license limits the rights granted by those
+   licenses. See COPYRIGHT.md for the list.
+
+8. NO WARRANTY
+
+   THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE RIGHTS HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE MATERIALS.
+
+9. PERMISSIONS
+
+   Requests beyond Section 4 may be sent through the repository Issues section
+   or the contacts listed on the studio website. Silence does not constitute
+   consent.
+
+10. CHANGES
+
+   The Rights Holder may amend this license. Amendments take effect upon
+   publication in the repository and do not retroactively affect permissions
+   already granted in writing.
+
+================================================================================
+
+Дата последней редакции: 9 августа 2026 года.
+Last revised: 9 August 2026.
