@@ -89,7 +89,7 @@ kbd{color:var(--dim);}
 .brand-mark i:nth-child(1),.brand-mark i:nth-child(4),.brand-mark i:nth-child(13),.brand-mark i:nth-child(16){background:transparent;}
 .brand-mark i:nth-child(6),.brand-mark i:nth-child(11){background:var(--teal);}
 .brand-name{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:0.3px;}
-.brand-name span{color:var(--dim);font-weight:400;font-size:11px;}
+.brand-name span{color:var(--dim);font-weight:400;font-size:11px;margin-left:6px;letter-spacing:0;}
 .side-search{
   margin-top:12px;width:100%;display:flex;align-items:center;gap:8px;
   background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);
@@ -423,6 +423,10 @@ table.data tr:hover td{background:var(--surface-2);}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .split textarea{min-height:270px;}
 
+.font-picker{display:flex;gap:8px;align-items:center;}
+.font-picker select{flex:1;min-width:0;}
+.font-picker .btn{flex:none;white-space:nowrap;}
+
 /* ---------- нейросети ---------- */
 .mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
 .mode-btn{
@@ -452,7 +456,10 @@ table.data tr:hover td{background:var(--surface-2);}
 .chat-msg.bot.pending{color:var(--faint);font-style:italic;}
 
 .foot{padding:22px 26px 34px;color:var(--faint);font-family:var(--mono);font-size:11.5px;border-top:1px solid var(--line);
-  margin-top:auto;display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+  margin-top:auto;display:flex;flex-direction:column;gap:10px;}
+.foot-main{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+.foot-legal{display:flex;flex-direction:column;gap:3px;line-height:1.5;opacity:.85;}
+.foot-legal span:first-child{color:var(--dim);}
 .foot a{color:var(--dim);text-decoration:none;}
 .foot a:hover{color:var(--accent);}
 

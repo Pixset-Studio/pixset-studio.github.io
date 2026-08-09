@@ -1,5 +1,5 @@
 /* PixTool service worker — v2.0.0 (2026-08-09) */
-const CACHE = 'pixtool-2.0.0-27f02c2ea6';
+const CACHE = 'pixtool-2.0.0-2e3f13e977';
 const PRECACHE = [
   "./",
   "./assets/app.css",

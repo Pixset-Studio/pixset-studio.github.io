@@ -8,6 +8,7 @@
 const PT = window.PT = {
   version: '2.0.0',
   build: '2026-08-09',
+  years: '2026',          // период для копирайта, подставляется сборщиком
   mode: 'web',            // 'offline' | 'web'
   tools: [],
   cats: [],
@@ -602,7 +603,9 @@ ui.progress = function(){
 function makeControl(spec){
   const t = spec.type || 'text';
   let node;
-  if (t === 'select'){
+  if (t === 'font'){
+    node = ui.fontControl(spec);
+  } else if (t === 'select'){
     node = el('select');
     (spec.options || []).forEach(o => {
       const [val, label] = Array.isArray(o) ? o : [o, o];
@@ -977,7 +980,8 @@ function buildShell(){
     el('div', { class: 'side-head' }, [
       el('a', { class: 'brand', href: PT.hrefFor(null), onclick: linkNav }, [
         el('span', { class: 'brand-mark', html: '<i></i>'.repeat(16) }),
-        el('span', { class: 'brand-name' }, ['PixTool', el('span', { text: PT.mode === 'offline' ? '.local' : '.online' })])
+        el('span', { class: 'brand-name' }, ['PixTool',
+          el('span', { text: PT.mode === 'offline' ? 'офлайн' : 'v' + PT.version })])
       ]),
       el('button', { class: 'side-search', onclick: () => PT.palette() }, [
         el('span', { text: '⌕ Найти инструмент' }),
@@ -1002,9 +1006,17 @@ function buildShell(){
     ]),
     el('div', { class: 'view', id: 'view' }),
     el('footer', { class: 'foot' }, [
-      el('span', { text: 'PIXTOOL — всё считается локально, файлы никуда не отправляются' }),
-      el('a', { href: PT.hrefFor(null), onclick: linkNav, text: 'Все инструменты' }),
-      el('span', { text: 'v' + PT.version + ' · ' + PT.build })
+      el('div', { class: 'foot-main' }, [
+        el('span', { text: 'PixTool — всё считается локально, файлы никуда не отправляются.' }),
+        el('a', { href: PT.hrefFor(null), onclick: linkNav, text: 'Все инструменты' }),
+        el('a', { href: '#', onclick: e => { e.preventDefault(); showAbout(); }, text: 'О программе и лицензии' })
+      ]),
+      el('div', { class: 'foot-legal' }, [
+        el('span', { text: '© ' + PT.years + ' Pixset Studio. Все права защищены.' }),
+        el('span', { text: 'Исходный код распространяется по лицензии MIT, © ' + PT.years + ' Pixset Studio.' }),
+        el('span', { text: 'Встроенные библиотеки принадлежат их авторам и используются по лицензиям MIT и Apache 2.0.' }),
+        el('span', { text: 'Версия ' + PT.version + ' от ' + PT.build + '.' })
+      ])
     ])
   ]);
 
@@ -1331,6 +1343,47 @@ function showHelp(){
   ]));
 }
 PT.showHelp = showHelp;
+
+/* ---------- о программе и лицензиях ---------- */
+const LIBRARIES = [
+  ['SheetJS (xlsx)', 'Apache 2.0', 'чтение и запись Excel'],
+  ['pdf-lib', 'MIT', 'создание и редактирование PDF'],
+  ['pdf.js', 'Apache 2.0', 'просмотр и разбор PDF'],
+  ['marked', 'MIT', 'разбор Markdown'],
+  ['Turndown', 'MIT', 'HTML в Markdown'],
+  ['qrcode-generator', 'MIT', 'генерация QR-кодов'],
+  ['jsQR', 'Apache 2.0', 'чтение QR-кодов'],
+  ['Transformers.js', 'Apache 2.0', 'запуск нейросетей в браузере'],
+  ['Inter, Space Mono', 'SIL Open Font License 1.1', 'шрифты интерфейса']
+];
+
+function showAbout(){
+  ui.modal('О программе', el('div', {}, [
+    el('h4', { text: 'PixTool ' + PT.version }),
+    ui.spacer(6),
+    ui.muted(PT.tools.length + ' инструментов, которые работают прямо в браузере. Сборка от ' + PT.build +
+             (PT.mode === 'offline' ? '. Автономная версия: один файл, интернет не нужен.'
+                                    : '. Веб-версия: устанавливается как приложение и работает офлайн.')),
+    el('hr', { class: 'sep' }),
+    el('h4', { text: 'Авторские права' }), ui.spacer(8),
+    ui.kv([
+      ['Продукт', 'PixTool © ' + PT.years + ' Pixset Studio'],
+      ['Права', 'Все права защищены'],
+      ['Исходный код', 'Лицензия MIT, © ' + PT.years + ' Pixset Studio'],
+      ['Обработка данных', 'Полностью на устройстве пользователя'],
+      ['Файлы пользователя', 'Не передаются и не сохраняются авторами']
+    ]),
+    el('hr', { class: 'sep' }),
+    el('h4', { text: 'Сторонние библиотеки' }), ui.spacer(8),
+    ui.kv(LIBRARIES.map(([name, license, purpose]) => [name + ' — ' + purpose, license])),
+    ui.spacer(10),
+    ui.muted('Модели нейросетей загружаются с Hugging Face и остаются собственностью их авторов; ' +
+             'условия использования указаны на страницах моделей.'),
+    el('hr', { class: 'sep' }),
+    ui.muted('Название PixTool и знак Pixset Studio принадлежат Pixset Studio.')
+  ]));
+}
+PT.showAbout = showAbout;
 
 /** Просим service worker сложить в кэш все внешние модули — тогда офлайн полный. */
 function prefetchVendor(){
@@ -2020,6 +2073,109 @@ ai.clearCache = async function(){
 };
 
 
+/* ===== core/06-fonts.js ===== */
+/* ======================================================================
+   PIXTOOL CORE — шрифты
+   Общий список для всех инструментов, которые рисуют текст на холсте,
+   плюс загрузка своих файлов .ttf / .otf / .woff / .woff2.
+====================================================================== */
+const fonts = PT.fonts = {};
+
+fonts.system = [
+  ["'Inter', system-ui, sans-serif", 'Inter — интерфейсный'],
+  ["'Space Mono', monospace", 'Space Mono — моноширинный'],
+  ['Arial, sans-serif', 'Arial'],
+  ['"Helvetica Neue", Helvetica, sans-serif', 'Helvetica'],
+  ['Verdana, sans-serif', 'Verdana'],
+  ['Tahoma, sans-serif', 'Tahoma'],
+  ['"Trebuchet MS", sans-serif', 'Trebuchet MS'],
+  ['Georgia, serif', 'Georgia'],
+  ['"Times New Roman", Times, serif', 'Times New Roman'],
+  ['Garamond, serif', 'Garamond'],
+  ['"Courier New", monospace', 'Courier New'],
+  ['Consolas, monospace', 'Consolas'],
+  ['Impact, sans-serif', 'Impact — плакатный'],
+  ['"Comic Sans MS", cursive', 'Comic Sans MS'],
+  ['cursive', 'Рукописный (системный)'],
+  ['fantasy', 'Декоративный (системный)']
+];
+
+/** Загруженные пользователем шрифты: [{ family, name, size }] */
+fonts.custom = [];
+
+/**
+ * Регистрирует файл шрифта в браузере — после этого его можно рисовать на холсте.
+ * Поддерживаются .ttf, .otf, .woff, .woff2.
+ */
+fonts.add = async function(file){
+  const ext = extOf(file.name);
+  if (!['ttf', 'otf', 'woff', 'woff2'].includes(ext)){
+    throw new Error('Нужен файл .ttf, .otf, .woff или .woff2');
+  }
+  const buffer = await file.arrayBuffer();
+  const family = 'PTUser-' + baseName(file.name).replace(/[^\w-]+/g, '-').slice(0, 40) + '-' + fonts.custom.length;
+  const face = new FontFace(family, buffer);
+  await face.load();
+  document.fonts.add(face);
+  const entry = { family: `'${family}'`, name: baseName(file.name), size: file.size, ext };
+  fonts.custom.push(entry);
+  return entry;
+};
+
+/** Полный список для выпадающего меню. */
+fonts.options = function(){
+  const custom = fonts.custom.map(f => [f.family, f.name + ' (свой)']);
+  return custom.concat(fonts.system);
+};
+
+/** CSS-строка шрифта для canvas: PT.fonts.css(700, 48, family) */
+fonts.css = (weight, sizePx, family) => `${weight || 400} ${Math.round(sizePx)}px ${family || fonts.system[0][0]}`;
+
+/**
+ * Поле выбора шрифта для PT.ui.form: { id, type: 'font', label }.
+ * Рядом с меню — кнопка загрузки своего файла; после загрузки он сразу выбирается.
+ */
+ui.fontControl = function(spec){
+  const select = el('select');
+  const wrap = el('div', { class: 'font-picker' }, [select]);
+  const fileInput = el('input', { type: 'file', accept: '.ttf,.otf,.woff,.woff2,font/*', style: { display: 'none' } });
+  const button = el('button', { class: 'btn ghost small', type: 'button', title: 'Загрузить свой шрифт' }, '＋ Свой шрифт');
+
+  function fill(selected){
+    select.innerHTML = '';
+    fonts.options().forEach(([value, label]) => select.appendChild(el('option', { value, text: label })));
+    select.value = selected || spec.value || fonts.system[0][0];
+  }
+  fill();
+
+  button.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    try{
+      const entry = await fonts.add(file);
+      fill(entry.family);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      PT.toast(`Шрифт «${entry.name}» загружен`, 'ok');
+    } catch(err){
+      PT.toast('Не удалось загрузить шрифт: ' + err.message, 'err');
+    }
+  });
+
+  wrap.appendChild(button);
+  wrap.appendChild(fileInput);
+  // форма читает значение через .value — прокидываем его на контейнер
+  Object.defineProperty(wrap, 'value', {
+    get: () => select.value,
+    set: v => { select.value = v; }
+  });
+  wrap.type = 'font';
+  wrap._select = select;
+  return wrap;
+};
+
+
 /* ===== tools/10-image.js ===== */
 /* ======================================================================
    ИНСТРУМЕНТЫ: ИЗОБРАЖЕНИЯ
@@ -2473,6 +2629,10 @@ PT.tool({
       actionLabel: 'Нанести знак →',
       form: [
         { id: 'text', type: 'text', label: 'Текст', col: 6, value: '© Pixset Studio' },
+        { id: 'font', type: 'font', label: 'Шрифт', col: 6 },
+        { id: 'weight', type: 'select', label: 'Начертание', col: 3, value: '700', options: [
+          ['400', 'Обычное'], ['600', 'Полужирное'], ['700', 'Жирное']
+        ] },
         { id: 'pos', type: 'select', label: 'Положение', col: 3, value: 'br', options: [
           ['br', 'Снизу справа'], ['bl', 'Снизу слева'], ['tr', 'Сверху справа'], ['tl', 'Сверху слева'],
           ['c', 'По центру'], ['tile', 'Плиткой по всей картинке']
@@ -2504,7 +2664,7 @@ PT.tool({
           mh = markH * 1.6;
           mw = mh * (logo.naturalWidth / logo.naturalHeight);
         } else {
-          ctx.font = `700 ${markH}px 'Space Mono', monospace`;
+          ctx.font = PT.fonts.css(v.weight, markH, v.font);
           ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
           ctx.fillStyle = v.color;
           mw = ctx.measureText(v.text).width;
@@ -2996,7 +3156,9 @@ PT.tool({
       { id: 'style', type: 'select', label: 'Стиль', col: 3, options: [
         ['cross', 'Диагонали'], ['grid', 'Сетка'], ['dots', 'Точки'], ['plain', 'Без узора'], ['noise', 'Шум']
       ] },
-      { id: 'fmt', type: 'select', label: 'Формат', col: 3, options: [['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']] }
+      { id: 'fmt', type: 'select', label: 'Формат', col: 3, options: [['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']] },
+      { id: 'font', type: 'font', label: 'Шрифт надписи', col: 6 },
+      { id: 'fontScale', type: 'range', label: 'Размер надписи', col: 6, min: 4, max: 30, value: 12, unit: '%' }
     ], () => draw());
 
     const presets = el('div', { class: 'pillbar' }, [
@@ -3040,11 +3202,11 @@ PT.tool({
       ctx.globalAlpha = 1;
       ctx.fillStyle = v.fg;
       const label = v.text || `${w} × ${h}`;
-      let fontSize = Math.min(w, h) / 8;
-      ctx.font = `700 ${fontSize}px 'Space Mono', monospace`;
+      let fontSize = Math.min(w, h) * v.fontScale / 100;
+      ctx.font = PT.fonts.css(700, fontSize, v.font);
       while (ctx.measureText(label).width > w * 0.84 && fontSize > 8){
         fontSize *= 0.92;
-        ctx.font = `700 ${fontSize}px 'Space Mono', monospace`;
+        ctx.font = PT.fonts.css(700, fontSize, v.font);
       }
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(label, w / 2, h / 2);
@@ -3655,9 +3817,9 @@ PT.tool({
       const form = ui.form([
         { id: 'text', type: 'text', label: 'Текст', value: 'PixTool' },
         { id: 'size', type: 'range', label: 'Размер', min: 8, max: 400, value: Math.round(canvas.width / 12), unit: 'px' },
-        { id: 'font', type: 'select', label: 'Шрифт', options: [
-          ["'Space Mono', monospace", 'Space Mono'], ["'Inter', sans-serif", 'Inter'],
-          ['Georgia, serif', 'Georgia'], ['Impact, sans-serif', 'Impact'], ['Arial, sans-serif', 'Arial']
+        { id: 'font', type: 'font', label: 'Шрифт' },
+        { id: 'weight', type: 'select', label: 'Начертание', options: [
+          ['700', 'Жирное'], ['600', 'Полужирное'], ['400', 'Обычное']
         ] },
         { id: 'color', type: 'color', label: 'Цвет', value: '#e8a33d', col: 6 },
         { id: 'stroke', type: 'color', label: 'Обводка', value: '#101216', col: 6 },
@@ -3673,7 +3835,7 @@ PT.tool({
         const p = pos(e);
         const v = form.values();
         ctx.save();
-        ctx.font = `700 ${v.size}px ${v.font}`;
+        ctx.font = PT.fonts.css(v.weight, v.size, v.font);
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
         if (v.shadow){ ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = v.size * 0.18; ctx.shadowOffsetY = v.size * 0.04; }
@@ -4819,20 +4981,25 @@ PT.tool({
 
         const indent = v.indent === '\t' ? '\t' : Number(v.indent);
         const stats = summarize(data);
-        if (v.to === 'pretty') return { text: JSON.stringify(data, null, indent), status: 'Валидный JSON · ' + stats };
+        // в статусе называем именно тот формат, который разобрали, а не всегда JSON
+        const FROM_NAME = { json: 'JSON', yaml: 'YAML', csv: 'CSV' };
+        const source = FROM_NAME[from] + (v.from === 'auto' ? ' (определён автоматически)' : '');
+
+        if (v.to === 'pretty') return { text: JSON.stringify(data, null, indent), status: `${source} разобран · ${stats} · на выходе JSON` };
         if (v.to === 'min'){
           const min = JSON.stringify(data);
           const saved = text.length ? Math.round((1 - min.length / text.length) * 100) : 0;
-          return { text: min, status: `Сжато на ${saved}% · ${fmtBytes(min.length)}` };
+          return { text: min, status: `${source} → JSON в одну строку · сжато на ${saved}% · ${fmtBytes(min.length)}` };
         }
-        if (v.to === 'yaml') return { text: toYaml(data), status: 'YAML готов · ' + stats };
-        if (v.to === 'xml') return { text: '<?xml version="1.0" encoding="UTF-8"?>\n' + toXml(data, 'root'), status: 'XML готов' };
+        if (v.to === 'yaml') return { text: toYaml(data), status: `${source} → YAML · ${stats}` };
+        if (v.to === 'xml') return { text: '<?xml version="1.0" encoding="UTF-8"?>\n' + toXml(data, 'root'),
+                                     status: `${source} → XML · ${stats}` };
         if (v.to === 'csv'){
           const rows = Array.isArray(data) ? data : [data];
           if (typeof rows[0] !== 'object') throw new Error('В CSV можно превратить только массив объектов');
-          return { text: objectsToCSV(rows), status: rows.length + ' строк' };
+          return { text: objectsToCSV(rows), status: `${source} → CSV · ${rows.length} строк` };
         }
-        return { text: paths(data).join('\n'), status: paths(data).length + ' путей' };
+        return { text: paths(data).join('\n'), status: `${source} · путей: ${paths(data).length}` };
       }
     });
 
@@ -9590,7 +9757,8 @@ PT.tool({
       { id: 'shadow', type: 'range', label: 'Тень', col: 4, min: 0, max: 90, value: 40 },
       { id: 'tilt', type: 'range', label: 'Наклон', col: 4, min: -15, max: 15, value: 0, unit: '°' },
       { id: 'bar', type: 'checkbox', label: 'Полоса окна с кнопками', col: 6, value: true },
-      { id: 'title', type: 'text', label: 'Заголовок окна', col: 6, value: 'pixset.dev' }
+      { id: 'title', type: 'text', label: 'Заголовок окна', col: 6, value: 'pixset.dev' },
+      { id: 'font', type: 'font', label: 'Шрифт заголовка', col: 12, value: "'Space Mono', monospace" }
     ], () => { if (img) draw(); });
 
     const drop = ui.drop({
@@ -9647,7 +9815,7 @@ PT.tool({
         });
         if (v.title){
           ctx.fillStyle = '#989da6';
-          ctx.font = `${Math.round(barH * 0.42)}px 'Space Mono', monospace`;
+          ctx.font = PT.fonts.css(400, barH * 0.42, v.font);
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(v.title, x + iw / 2, y + barH / 2);
           ctx.textAlign = 'start';
@@ -11827,7 +11995,8 @@ PT.tool({
       { id: 'radius', type: 'range', label: 'Скругление', col: 4, min: 0, max: 50, value: 20, unit: '%' },
       { id: 'palette', type: 'select', label: 'Палитра', col: 4, options: [
         ['auto', 'Из имени'], ['pixset', 'Pixset'], ['pastel', 'Пастель'], ['dark', 'Тёмная'], ['vivid', 'Яркая']
-      ] }
+      ] },
+      { id: 'font', type: 'font', label: 'Шрифт инициалов', col: 12 }
     ], draw);
 
     const PALETTES = {
@@ -11905,7 +12074,7 @@ PT.tool({
         const words = seed.trim().split(/[\s@._-]+/).filter(Boolean);
         const initials = (words.length > 1 ? words[0][0] + words[1][0] : seed.slice(0, 2)).toUpperCase();
         ctx.fillStyle = Color.readableOn(bg);
-        ctx.font = `600 ${size * 0.4}px 'Inter', sans-serif`;
+        ctx.font = PT.fonts.css(600, size * 0.4, v.font);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(initials, size / 2, size / 2 + size * 0.02);
       }
@@ -11979,7 +12148,10 @@ PT.tool({
         ['dark', 'Тёмный с сеткой'], ['gradient', 'Градиент'], ['light', 'Светлый'], ['mesh', 'Цветные пятна']
       ] },
       { id: 'accent', type: 'color', label: 'Акцент', col: 4, value: '#e8a33d' },
-      { id: 'align', type: 'select', label: 'Выравнивание', col: 4, options: [['left', 'По левому краю'], ['center', 'По центру']] }
+      { id: 'align', type: 'select', label: 'Выравнивание', col: 4, options: [['left', 'По левому краю'], ['center', 'По центру']] },
+      { id: 'font', type: 'font', label: 'Шрифт заголовка', col: 6 },
+      { id: 'fontBadge', type: 'font', label: 'Шрифт метки и подписи', col: 6, value: "'Space Mono', monospace" },
+      { id: 'titleScale', type: 'range', label: 'Размер заголовка', col: 6, min: 6, max: 22, value: 11, unit: '%' }
     ], draw);
 
     function wrapText(ctx, text, maxWidth){
@@ -12044,7 +12216,7 @@ PT.tool({
 
       let y = pad + h * 0.06;
       if (v.badge){
-        ctx.font = `700 ${Math.round(h * 0.035)}px 'Space Mono', monospace`;
+        ctx.font = PT.fonts.css(700, h * 0.035, v.fontBadge);
         ctx.fillStyle = accent;
         ctx.fillText(v.badge.toUpperCase(), x, y);
         y += h * 0.06;
@@ -12055,8 +12227,8 @@ PT.tool({
         y += size * 0.9;
       }
 
-      const titleSize = Math.round(h * (v.size === '1500x500' ? 0.16 : 0.11));
-      ctx.font = `700 ${titleSize}px 'Inter', sans-serif`;
+      const titleSize = Math.round(h * v.titleScale / 100 * (v.size === '1500x500' ? 1.45 : 1));
+      ctx.font = PT.fonts.css(700, titleSize, v.font);
       ctx.fillStyle = textColor;
       const lines = wrapText(ctx, v.title, w - pad * 2);
       const blockH = lines.length * titleSize * 1.18;
@@ -12065,7 +12237,7 @@ PT.tool({
 
       if (v.subtitle){
         const subSize = Math.round(titleSize * 0.42);
-        ctx.font = `400 ${subSize}px 'Inter', sans-serif`;
+        ctx.font = PT.fonts.css(400, subSize, v.font);
         ctx.fillStyle = v.theme === 'light' ? '#5d626b' : 'rgba(255,255,255,0.72)';
         wrapText(ctx, v.subtitle, w - pad * 2).forEach(line => { ty += subSize * 1.35; ctx.fillText(line, x, ty); });
       }
