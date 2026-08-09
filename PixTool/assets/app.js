@@ -1,4 +1,4 @@
-/* PixTool v2.0.0 (2026-08-08) — сборка: web */
+/* PixTool v2.0.0 (2026-08-09) — сборка: web */
 
 /* ===== core/01-utils.js ===== */
 /* ======================================================================
@@ -7,7 +7,7 @@
 ====================================================================== */
 const PT = window.PT = {
   version: '2.0.0',
-  build: '2026-08-08',
+  build: '2026-08-09',
   mode: 'web',            // 'offline' | 'web'
   tools: [],
   cats: [],
@@ -864,6 +864,7 @@ ui.guard = function(statusNode, fn){
 
 /* ---------- категории ---------- */
 PT.cats = [
+  { id: 'ai',     title: 'Нейросети',     icon: '✦', desc: 'Модели работают на вашем устройстве: распознавание, речь, перевод, генерация' },
   { id: 'image',  title: 'Изображения',   icon: '▣', desc: 'Конвертация, сжатие, редактирование и подготовка графики' },
   { id: 'media',  title: 'Медиа',         icon: '▶', desc: 'Видео, аудио, GIF и запись экрана — прямо в браузере' },
   { id: 'doc',    title: 'Документы',     icon: '▤', desc: 'PDF, таблицы, Markdown и конвертация текстовых форматов' },
@@ -1045,7 +1046,8 @@ function renderNav(){
 function navItem(t){
   return el('a', { class: 'nav-item', href: PT.hrefFor(t.id), 'data-id': t.id, onclick: linkNav }, [
     el('span', { class: 'ico', text: t.icon || '·' }),
-    el('span', { text: t.title })
+    el('span', { text: t.title }),
+    t.ai && t.cat !== 'ai' ? el('span', { class: 'star on', text: '✦', title: 'Есть режим нейросети' }) : null
   ]);
 }
 
@@ -1217,7 +1219,8 @@ function toolGrid(tools){
         el('span', { class: 'tc-ico', text: t.icon || '·' }),
         el('h3', { text: t.title })
       ]),
-      el('p', { text: t.desc })
+      el('p', { text: t.desc }),
+      t.ai ? el('span', { class: 'ai-badge', text: '✦ нейросеть' }) : null
     ]);
     const star = el('span', { class: 'fav' + (favs.has(t.id) ? ' on' : ''), text: favs.has(t.id) ? '★' : '☆',
       onclick: e => {
@@ -1235,7 +1238,8 @@ function toolGrid(tools){
 function searchTools(q){
   const words = q.split(/\s+/).filter(Boolean);
   return PT.tools.map(t => {
-    const hay = (t.title + ' ' + t.desc + ' ' + t.keywords.join(' ') + ' ' + t.id).toLowerCase();
+    const hay = (t.title + ' ' + t.desc + ' ' + t.keywords.join(' ') + ' ' + t.id +
+                 (t.ai ? ' нейросеть ии ai искусственный интеллект' : '')).toLowerCase();
     let score = 0;
     words.forEach(w => {
       if (t.title.toLowerCase().startsWith(w)) score += 12;
@@ -1411,7 +1415,9 @@ PT.imageBatch = function(root, opts){
   const resultBox = ui.result();
 
   const card = ui.card([
+    opts.before || null,
     drop, list,
+    opts.afterDrop || null,
     form ? el('div', {}, [el('hr', { class: 'sep' }), form]) : null,
     opts.note ? el('p', { class: 'hint', text: opts.note }) : null,
     ui.spacer(14),
@@ -1623,6 +1629,397 @@ PT.exportRow = function(getters){
 };
 
 
+/* ===== core/05-ai.js ===== */
+/* ======================================================================
+   PIXTOOL CORE — локальные нейросети
+   Модели скачиваются один раз и работают на устройстве пользователя:
+   ни картинки, ни текст, ни звук никуда не отправляются.
+====================================================================== */
+const ai = PT.ai = {};
+
+ai.LIB_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5/dist/transformers.min.js';
+
+/** Реестр моделей: размеры указаны для квантованных версий. */
+ai.MODELS = {
+  bgremove:   { repo: 'briaai/RMBG-1.4',                            task: 'background-removal',
+                name: 'RMBG 1.4', size: 44, dtype: 'q8', device: 'wasm',
+                note: 'Отделяет любой объект от фона — людей, товары, животных.' },
+  matting:    { repo: 'Xenova/modnet',                              task: 'background-removal',
+                name: 'MODNet (портреты)', size: 25, dtype: 'q8', device: 'wasm',
+                note: 'Легче и быстрее, заточена под людей и волосы.' },
+  upscale:    { repo: 'Xenova/swin2SR-classical-sr-x2-64',          task: 'image-to-image',
+                name: 'Swin2SR ×2', size: 47, dtype: 'q8', device: 'wasm',
+                note: 'Дорисовывает детали при увеличении вдвое.' },
+  depth:      { repo: 'onnx-community/depth-anything-v2-small',     task: 'depth-estimation',
+                name: 'Depth Anything v2', size: 50, dtype: 'q8', device: 'wasm',
+                note: 'Строит карту глубины по одной фотографии.' },
+  detect:     { repo: 'Xenova/detr-resnet-50',                      task: 'object-detection',
+                name: 'DETR ResNet-50', size: 43, dtype: 'q8', device: 'wasm',
+                note: 'Находит на снимке до 91 типа объектов.' },
+  classify:   { repo: 'Xenova/vit-base-patch16-224',                task: 'image-classification',
+                name: 'ViT Base', size: 88, dtype: 'q8', device: 'wasm',
+                note: 'Определяет, что изображено, из 1000 категорий.' },
+  caption:    { repo: 'Xenova/vit-gpt2-image-captioning',           task: 'image-to-text',
+                name: 'ViT-GPT2 Captioning', size: 130, dtype: 'q8', device: 'wasm',
+                note: 'Описывает картинку предложением (по-английски).' },
+  ocr:        { repo: 'Xenova/trocr-small-printed',                 task: 'image-to-text',
+                name: 'TrOCR Small', size: 62, dtype: 'q8', device: 'wasm',
+                note: 'Читает печатный текст с картинки (латиница).' },
+  segment:    { repo: 'Xenova/segformer_b0_clothes',                task: 'image-segmentation',
+                name: 'SegFormer Clothes', size: 15, dtype: 'q8', device: 'wasm',
+                note: 'Разделяет человека на части: волосы, лицо, одежда.' },
+  whisper:    { repo: 'Xenova/whisper-tiny',                        task: 'automatic-speech-recognition',
+                name: 'Whisper Tiny', size: 42, dtype: 'q8', device: 'wasm',
+                note: 'Расшифровывает речь на 90+ языках, включая русский.' },
+  whisperBase:{ repo: 'Xenova/whisper-base',                        task: 'automatic-speech-recognition',
+                name: 'Whisper Base', size: 78, dtype: 'q8', device: 'wasm',
+                note: 'Точнее Tiny, но требует больше времени.' },
+  tts:        { repo: 'Xenova/speecht5_tts',                        task: 'text-to-speech',
+                name: 'SpeechT5', size: 130, dtype: 'q8', device: 'wasm',
+                note: 'Синтезирует речь по тексту (английский голос).' },
+  translateRu:{ repo: 'Xenova/opus-mt-ru-en',                       task: 'translation',
+                name: 'OPUS ru→en', size: 78, dtype: 'q8', device: 'wasm',
+                note: 'Перевод с русского на английский.' },
+  translateEn:{ repo: 'Xenova/opus-mt-en-ru',                       task: 'translation',
+                name: 'OPUS en→ru', size: 78, dtype: 'q8', device: 'wasm',
+                note: 'Перевод с английского на русский.' },
+  summarize:  { repo: 'Xenova/distilbart-cnn-6-6',                  task: 'summarization',
+                name: 'DistilBART CNN', size: 120, dtype: 'q8', device: 'wasm',
+                note: 'Сжимает длинный текст до сути (английский).' },
+  sentiment:  { repo: 'Xenova/bert-base-multilingual-uncased-sentiment', task: 'text-classification',
+                name: 'BERT multilingual', size: 135, dtype: 'q8', device: 'wasm',
+                note: 'Оценивает тональность на русском и ещё пяти языках.' },
+  embed:      { repo: 'Xenova/all-MiniLM-L6-v2',                    task: 'feature-extraction',
+                name: 'MiniLM L6', size: 23, dtype: 'q8', device: 'wasm',
+                note: 'Превращает текст в вектор для поиска по смыслу.' },
+  embedMulti: { repo: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', task: 'feature-extraction',
+                name: 'MiniLM multilingual', size: 120, dtype: 'q8', device: 'wasm',
+                note: 'То же самое, но хорошо понимает русский.' },
+  chat:       { repo: 'onnx-community/Qwen2.5-0.5B-Instruct',       task: 'text-generation',
+                name: 'Qwen2.5 0.5B Instruct', size: 500, dtype: 'q4f16', device: 'auto',
+                note: 'Небольшая языковая модель: отвечает на вопросы, пишет тексты. Понимает русский.' },
+  chatTiny:   { repo: 'Xenova/LaMini-Flan-T5-77M',                  task: 'text2text-generation',
+                name: 'LaMini-Flan 77M', size: 40, dtype: 'q8', device: 'wasm',
+                note: 'Очень лёгкая модель для простых инструкций (английский).' },
+  ner:        { repo: 'Xenova/bert-base-multilingual-cased-ner-hrl', task: 'token-classification',
+                name: 'BERT NER', size: 180, dtype: 'q8', device: 'wasm',
+                note: 'Находит в тексте имена, организации и места.' },
+  zeroshot:   { repo: 'Xenova/nli-deberta-v3-xsmall',               task: 'zero-shot-classification',
+                name: 'DeBERTa xsmall NLI', size: 90, dtype: 'q8', device: 'wasm',
+                note: 'Раскладывает тексты по вашим собственным категориям.' }
+};
+
+ai.state = { lib: null, loading: null, pipes: {}, device: null };
+
+/** Поддерживается ли запуск моделей в этом браузере. */
+ai.supported = () => typeof WebAssembly === 'object';
+
+/** Загрузка самой библиотеки (один раз за сессию). */
+ai.lib = function(){
+  if (ai.state.lib) return Promise.resolve(ai.state.lib);
+  if (ai.state.loading) return ai.state.loading;
+  ai.state.loading = import(/* webpackIgnore: true */ ai.LIB_URL).then(mod => {
+    mod.env.allowLocalModels = false;
+    mod.env.useBrowserCache = true;
+    ai.state.lib = mod;
+    return mod;
+  }).catch(err => {
+    ai.state.loading = null;
+    throw new Error('Не удалось загрузить движок нейросетей. Нужен интернет при первом запуске.');
+  });
+  return ai.state.loading;
+};
+
+/**
+ * Получить готовый пайплайн модели.
+ * PT.ai.get('bgremove', onProgress) → функция для вызова
+ */
+ai.get = async function(key, onProgress){
+  const spec = typeof key === 'string' ? ai.MODELS[key] : key;
+  if (!spec) throw new Error('Неизвестная модель: ' + key);
+  const cacheKey = spec.repo + '|' + spec.task;
+  if (ai.state.pipes[cacheKey]) return ai.state.pipes[cacheKey];
+
+  const mod = await ai.lib();
+  const device = spec.device === 'auto' && navigator.gpu ? 'webgpu' : 'wasm';
+  ai.state.device = device;
+
+  const options = {
+    dtype: spec.dtype,
+    device,
+    progress_callback: info => {
+      if (!onProgress) return;
+      if (info.status === 'progress' && info.progress != null){
+        onProgress(info.progress / 100, `${spec.name}: ${Math.round(info.progress)}%`);
+      } else if (info.status === 'ready'){
+        onProgress(1, 'Модель готова');
+      } else if (info.status === 'initiate'){
+        onProgress(0, 'Скачиваю ' + spec.name + ' (' + spec.size + ' МБ)…');
+      }
+    }
+  };
+
+  let pipe;
+  try{
+    pipe = await mod.pipeline(spec.task, spec.repo, options);
+  } catch(err){
+    if (device === 'webgpu'){
+      // видеокарта не потянула — повторяем на процессоре
+      pipe = await mod.pipeline(spec.task, spec.repo, Object.assign({}, options, { device: 'wasm', dtype: 'q8' }));
+      ai.state.device = 'wasm';
+    } else throw err;
+  }
+  ai.state.pipes[cacheKey] = pipe;
+  return pipe;
+};
+
+/** Канвас → объект RawImage библиотеки (без пересохранения в файл). */
+ai.toRaw = async function(canvasOrImage){
+  const mod = await ai.lib();
+  const canvas = canvasOrImage instanceof HTMLCanvasElement ? canvasOrImage : imgToCanvas(canvasOrImage);
+  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+  return new mod.RawImage(new Uint8ClampedArray(data.data), canvas.width, canvas.height, 4);
+};
+
+/** RawImage → канвас. */
+ai.fromRaw = function(raw){
+  const canvas = makeCanvas(raw.width, raw.height);
+  const ctx = canvas.getContext('2d');
+  const out = ctx.createImageData(raw.width, raw.height);
+  const ch = raw.channels;
+  for (let i = 0, p = 0; i < raw.width * raw.height; i++){
+    if (ch === 4){
+      out.data[p++] = raw.data[i * 4]; out.data[p++] = raw.data[i * 4 + 1];
+      out.data[p++] = raw.data[i * 4 + 2]; out.data[p++] = raw.data[i * 4 + 3];
+    } else if (ch === 3){
+      out.data[p++] = raw.data[i * 3]; out.data[p++] = raw.data[i * 3 + 1];
+      out.data[p++] = raw.data[i * 3 + 2]; out.data[p++] = 255;
+    } else {
+      const v = raw.data[i];
+      out.data[p++] = v; out.data[p++] = v; out.data[p++] = v; out.data[p++] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  return canvas;
+};
+
+/** Канвас → data URL, который понимают пайплайны библиотеки. */
+ai.canvasUrl = canvas => canvas.toDataURL('image/png');
+
+/* ---------------------------------------------------------------- UI */
+
+/**
+ * Карточка модели: объясняет, что будет скачано, показывает прогресс.
+ * PT.ai.card('bgremove') → { node, run(fn), progress, status }
+ */
+ai.card = function(key, opts){
+  opts = opts || {};
+  const spec = ai.MODELS[key];
+  const status = ui.status();
+  const progress = ui.progress();
+  const badge = el('span', { class: 'badge', text: 'не загружена' });
+
+  const info = el('div', { class: 'ai-card' }, [
+    el('div', { class: 'row between' }, [
+      el('div', {}, [
+        el('b', { text: spec.name }),
+        el('span', { class: 'muted', text: '  ·  ' + spec.size + ' МБ  ·  ' + (navigator.gpu ? 'WebGPU / CPU' : 'CPU') })
+      ]),
+      badge
+    ]),
+    el('p', { class: 'hint', text: spec.note }),
+    progress, status
+  ]);
+
+  const api = {
+    node: info, status, progress, spec,
+    /** Гарантирует, что модель загружена, и возвращает пайплайн. */
+    async ensure(){
+      badge.textContent = 'загрузка';
+      badge.className = 'badge warn';
+      const pipe = await ai.get(key, (frac, text) => {
+        progress.set(frac);
+        status.set(text, 'busy');
+      });
+      progress.hide();
+      badge.textContent = 'готова · ' + (ai.state.device === 'webgpu' ? 'видеокарта' : 'процессор');
+      badge.className = 'badge ok';
+      status.ok('Модель в памяти — дальше работает без сети');
+      return pipe;
+    }
+  };
+  return api;
+};
+
+/**
+ * Переключатель «обычный алгоритм / нейросеть» для инструментов с двумя режимами.
+ * PT.ai.modeSwitch({ onChange }) → { node, value(), isAi() }
+ */
+ai.modeSwitch = function(opts){
+  opts = opts || {};
+  const classic = el('button', { class: 'mode-btn active', type: 'button' }, [
+    el('b', { text: opts.classicTitle || 'Обычный режим' }),
+    el('span', { text: opts.classicNote || 'мгновенно, без загрузок' })
+  ]);
+  const smart = el('button', { class: 'mode-btn', type: 'button' }, [
+    el('b', { text: (opts.aiTitle || 'Нейросеть') + '  ✦' }),
+    el('span', { text: opts.aiNote || 'умнее, нужна разовая загрузка модели' })
+  ]);
+  let mode = 'classic';
+  const node = el('div', { class: 'mode-switch' }, [classic, smart]);
+  function set(next){
+    mode = next;
+    classic.classList.toggle('active', next === 'classic');
+    smart.classList.toggle('active', next === 'ai');
+    if (opts.onChange) opts.onChange(next);
+  }
+  classic.addEventListener('click', () => set('classic'));
+  smart.addEventListener('click', () => set('ai'));
+  return { node, value: () => mode, isAi: () => mode === 'ai', set };
+};
+
+/** Единая подпись о приватности — используется во всех ИИ-инструментах. */
+ai.privacyNote = () => ui.muted(
+  'Модель скачивается один раз с Hugging Face и остаётся в браузере — дальше всё считается на вашем устройстве офлайн. ' +
+  'Сами файлы, тексты и записи никуда не отправляются.'
+);
+
+/**
+ * Отделение фона нейросетью.
+ * Модель считает по уменьшенной копии, а полученная маска применяется
+ * к оригиналу — так результат остаётся в полном разрешении, но втрое быстрее.
+ */
+ai.cutout = async function(source, opts){
+  opts = opts || {};
+  const pipe = opts.pipe || await ai.get(opts.model || 'bgremove', opts.onProgress);
+  const full = source instanceof HTMLCanvasElement ? source : imgToCanvas(source);
+  const limit = opts.workSize || 512;
+  const scale = Math.min(1, limit / Math.max(full.width, full.height));
+  const work = scale < 1 ? smartResize(full, full.width * scale, full.height * scale) : full;
+
+  const result = await pipe(ai.canvasUrl(work));
+  const raw = Array.isArray(result) ? result[0] : result;
+
+  // достаём альфу и растягиваем её обратно на исходный размер
+  const maskCanvas = makeCanvas(raw.width, raw.height);
+  const mctx = maskCanvas.getContext('2d');
+  const mdata = mctx.createImageData(raw.width, raw.height);
+  const ch = raw.channels;
+  for (let i = 0; i < raw.width * raw.height; i++){
+    const alpha = ch === 4 ? raw.data[i * 4 + 3] : raw.data[i * ch];
+    mdata.data[i * 4] = 255; mdata.data[i * 4 + 1] = 255; mdata.data[i * 4 + 2] = 255;
+    mdata.data[i * 4 + 3] = alpha;
+  }
+  mctx.putImageData(mdata, 0, 0);
+
+  const out = makeCanvas(full.width, full.height);
+  const octx = out.getContext('2d');
+  octx.drawImage(full, 0, 0);
+  octx.globalCompositeOperation = 'destination-in';
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(maskCanvas, 0, 0, out.width, out.height);
+  octx.globalCompositeOperation = 'source-over';
+  return { canvas: out, mask: maskCanvas };
+};
+
+/**
+ * Увеличение нейросетью. Большие картинки режутся на тайлы с перекрытием,
+ * иначе модель не помещается в память.
+ */
+ai.superResolution = async function(source, opts){
+  opts = opts || {};
+  const pipe = opts.pipe || await ai.get('upscale', opts.onProgress);
+  const src = source instanceof HTMLCanvasElement ? source : imgToCanvas(source);
+  const tile = opts.tile || 192;
+  const overlap = 16;
+  const factor = 2;
+
+  if (src.width <= tile && src.height <= tile){
+    const r = await pipe(ai.canvasUrl(src));
+    return ai.fromRaw(Array.isArray(r) ? r[0] : r);
+  }
+
+  const out = makeCanvas(src.width * factor, src.height * factor);
+  const octx = out.getContext('2d');
+  const stepX = tile - overlap, stepY = tile - overlap;
+  const cols = Math.ceil(src.width / stepX), rows = Math.ceil(src.height / stepY);
+  let done = 0;
+  for (let row = 0; row < rows; row++){
+    for (let col = 0; col < cols; col++){
+      const sx = col * stepX, sy = row * stepY;
+      const sw = Math.min(tile, src.width - sx), sh = Math.min(tile, src.height - sy);
+      if (sw <= 0 || sh <= 0) continue;
+      const part = makeCanvas(sw, sh);
+      part.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+      const r = await pipe(ai.canvasUrl(part));
+      const big = ai.fromRaw(Array.isArray(r) ? r[0] : r);
+      // внутренние края обрезаем, чтобы не было видно швов
+      const cutL = col > 0 ? overlap * factor / 2 : 0;
+      const cutT = row > 0 ? overlap * factor / 2 : 0;
+      octx.drawImage(big, cutL, cutT, big.width - cutL, big.height - cutT,
+        sx * factor + cutL, sy * factor + cutT, big.width - cutL, big.height - cutT);
+      done++;
+      if (opts.onTile) opts.onTile(done / (cols * rows));
+    }
+  }
+  return out;
+};
+
+/** Аудио или видео → моно Float32 с частотой 16 кГц: именно это ждут речевые модели. */
+ai.decodeAudio = async function(file, rate){
+  rate = rate || 16000;
+  const ctx = new AudioContext();
+  const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+  await ctx.close();
+  const offline = new OfflineAudioContext(1, Math.ceil(buffer.duration * rate), rate);
+  const src = offline.createBufferSource();
+  src.buffer = buffer;
+  src.connect(offline.destination);
+  src.start();
+  const rendered = await offline.startRendering();
+  return { data: rendered.getChannelData(0), duration: buffer.duration, sourceRate: buffer.sampleRate };
+};
+
+/** Разбивка длинного текста на куски, которые модель успевает обработать. */
+ai.chunkText = function(text, maxChars){
+  maxChars = maxChars || 900;
+  const sentences = text.replace(/\s+/g, ' ').split(/(?<=[.!?…])\s+/);
+  const chunks = [];
+  let current = '';
+  sentences.forEach(s => {
+    if ((current + ' ' + s).length > maxChars && current){ chunks.push(current.trim()); current = s; }
+    else current += ' ' + s;
+  });
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.length ? chunks : [text];
+};
+
+/** Сколько занято кэшем моделей. */
+ai.cacheInfo = async function(){
+  if (!('caches' in window)) return { supported: false };
+  try{
+    const cache = await caches.open('transformers-cache');
+    const keys = await cache.keys();
+    let bytes = 0;
+    const files = [];
+    for (const req of keys){
+      const res = await cache.match(req);
+      const size = Number(res.headers.get('content-length') || 0) ||
+                   (await res.clone().blob()).size;
+      bytes += size;
+      files.push({ url: req.url, size });
+    }
+    return { supported: true, count: keys.length, bytes, files };
+  } catch(e){ return { supported: false, error: e.message }; }
+};
+
+ai.clearCache = async function(){
+  await caches.delete('transformers-cache');
+  ai.state.pipes = {};
+};
+
+
 /* ===== tools/10-image.js ===== */
 /* ======================================================================
    ИНСТРУМЕНТЫ: ИЗОБРАЖЕНИЯ
@@ -1819,13 +2216,39 @@ PT.tool({
    Размер и апскейл
 ====================================================================== */
 PT.tool({
-  id: 'image-resize', cat: 'image', icon: '⤢',
+  id: 'image-resize', cat: 'image', icon: '⤢', ai: true,
   title: 'Размер и апскейл',
-  desc: 'Увеличение с пошаговым сглаживанием и резкостью, точные размеры, вписывание и обрезка.',
-  keywords: ['resize', 'апскейл', 'увеличить', 'уменьшить', 'разрешение', 'px', 'обрезать', 'пиксель-арт'],
+  desc: 'Обычное масштабирование или увеличение нейросетью, которая дорисовывает детали локально.',
+  keywords: ['resize', 'апскейл', 'увеличить', 'уменьшить', 'разрешение', 'px', 'обрезать', 'пиксель-арт',
+             'нейросеть', 'ии', 'upscale', 'super resolution'],
   render(root){
-    PT.imageBatch(root, {
+    const aiCard = ai.card('upscale');
+    const aiBox = el('div', {}, [
+      aiCard.node,
+      ui.muted('Swin2SR увеличивает вдвое и восстанавливает детали, которых нет при обычном растягивании. ' +
+               'Картинка режется на фрагменты — на процессоре это занимает от полуминуты, поэтому начни с небольшого снимка.'),
+      ui.spacer(10), ai.privacyNote(), ui.spacer(6)
+    ]);
+    aiBox.style.display = 'none';
+
+    const modes = ai.modeSwitch({
+      classicTitle: 'Обычный режим',
+      classicNote: 'мгновенно, любой размер и пропорции',
+      aiTitle: 'Нейросеть ×2',
+      aiNote: 'дорисовывает детали, работает локально',
+      onChange: mode => {
+        aiBox.style.display = mode === 'ai' ? '' : 'none';
+        const isAi = mode === 'ai';
+        ['mode', 'factor', 'w', 'h', 'algo'].forEach(id => api.form.show(id, !isAi));
+        api.form.show('aiFactor', isAi);
+        api.form.show('aiSharpen', isAi);
+      }
+    });
+
+    const api = PT.imageBatch(root, {
       zipName: 'resized',
+      before: modes.node,
+      afterDrop: aiBox,
       form: [
         { id: 'mode', type: 'select', label: 'Режим', col: 4, options: [
           ['scale', 'Множитель'], ['exact', 'Точный размер'], ['fit', 'Вписать в размер'], ['cover', 'Заполнить и обрезать']
@@ -1838,11 +2261,16 @@ PT.tool({
         { id: 'algo', type: 'select', label: 'Алгоритм', col: 4, options: [
           ['smooth', 'Плавный (фото)'], ['sharp', 'Плавный + резкость'], ['pixel', 'Без сглаживания (пиксель-арт)']
         ] },
+        { id: 'aiFactor', type: 'select', label: 'Увеличение нейросетью', col: 4, value: '2', options: [
+          ['2', '×2 — один проход'], ['4', '×4 — два прохода (дольше)']
+        ] },
+        { id: 'aiSharpen', type: 'checkbox', label: 'Добавить резкости после нейросети', col: 4, value: false },
         { id: 'fmt', type: 'select', label: 'Формат', col: 4, options: [
           ['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']
         ] }
       ],
       onChange(id, v, api){
+        if (modes.isAi()) return;
         api.form.show('factor', v.mode === 'scale');
         api.form.show('w', v.mode !== 'scale');
         api.form.show('h', v.mode !== 'scale');
@@ -1856,9 +2284,35 @@ PT.tool({
           }).catch(() => {});
         }
       },
-      async process(img, v, file){
+      async process(img, v, file, api){
         const iw = img.naturalWidth, ih = img.naturalHeight;
         let canvas;
+
+        if (modes.isAi()){
+          if (iw * ih > 4000000) throw new Error('Для нейросети картинка слишком большая — уменьши её до 2000×2000');
+          api.status.busy('Готовлю модель');
+          const pipe = await ai.get('upscale', (frac, text) => { aiCard.progress.set(frac); aiCard.status.set(text, 'busy'); });
+          aiCard.progress.hide();
+          aiCard.status.ok('Модель готова · ' + (ai.state.device === 'webgpu' ? 'видеокарта' : 'процессор'));
+          const passes = v.aiFactor === '4' ? 2 : 1;
+          let work = imgToCanvas(img);
+          const t0 = performance.now();
+          for (let pass = 0; pass < passes; pass++){
+            api.status.busy(`Увеличиваю нейросетью (проход ${pass + 1} из ${passes})`);
+            work = await ai.superResolution(work, {
+              pipe,
+              onTile: frac => api.progress.set((pass + frac) / passes)
+            });
+          }
+          if (v.aiSharpen) unsharpMask(work, 0.4);
+          const blob = await encodeCanvas(v.fmt === 'image/jpeg' ? flatten(work) : work, v.fmt, 0.95);
+          return {
+            blob,
+            name: baseName(file.name) + `-ai-${work.width}x${work.height}.` + PT.mimeExt(v.fmt),
+            meta: `${iw}×${ih} → ${work.width}×${work.height} · нейросеть · ${((performance.now() - t0) / 1000).toFixed(1)} с`
+          };
+        }
+
         const opts = { smooth: v.algo !== 'pixel', sharpen: v.algo === 'sharp' ? 0.55 : 0 };
         if (v.mode === 'scale'){
           const f = parseFloat(v.factor);
@@ -1884,6 +2338,8 @@ PT.tool({
         };
       }
     });
+    api.form.show('aiFactor', false);
+    api.form.show('aiSharpen', false);
   }
 });
 
@@ -2089,10 +2545,10 @@ PT.tool({
    Удаление фона по цвету
 ====================================================================== */
 PT.tool({
-  id: 'image-bgremove', cat: 'image', icon: '◌',
+  id: 'image-bgremove', cat: 'image', icon: '◌', ai: true,
   title: 'Удаление фона',
-  desc: 'Убирает однотонный фон: кликни по нему пипеткой и подбери допуск.',
-  keywords: ['фон', 'прозрачность', 'background', 'chroma', 'хромакей', 'вырезать', 'png'],
+  desc: 'Два режима: быстрый по цвету и нейросеть, которая вырезает объект с любого фона локально.',
+  keywords: ['фон', 'прозрачность', 'background', 'chroma', 'хромакей', 'вырезать', 'png', 'нейросеть', 'ии'],
   render(root){
     let img = null, picked = '#ffffff';
     const status = ui.status();
@@ -2100,6 +2556,91 @@ PT.tool({
     const wrap = el('div', { class: 'canvas-wrap' }, [canvas,
       el('div', { class: 'canvas-hud', text: 'клик по картинке — взять цвет фона' })]);
     wrap.style.display = 'none';
+
+    /* ---------- режим нейросети ---------- */
+    const aiCard = ai.card('bgremove');
+    const aiForm = ui.form([
+      { id: 'model', type: 'select', label: 'Модель', col: 4, options: [
+        ['bgremove', 'RMBG 1.4 — любые объекты (44 МБ)'], ['matting', 'MODNet — портреты (25 МБ)']
+      ] },
+      { id: 'quality', type: 'select', label: 'Точность обработки', col: 4, value: '512', options: [
+        ['384', 'Быстро (384 px)'], ['512', 'Обычная (512 px)'], ['768', 'Высокая (768 px)'], ['1024', 'Максимум (1024 px)']
+      ] },
+      { id: 'fill', type: 'select', label: 'Чем заменить фон', col: 4, options: [
+        ['none', 'Прозрачность'], ['color', 'Сплошной цвет'], ['blur', 'Размытая копия фото']
+      ] },
+      { id: 'fillColor', type: 'color', label: 'Цвет замены', col: 4, value: '#ffffff' },
+      { id: 'edge', type: 'range', label: 'Уточнение края', col: 4, min: 0, max: 100, value: 0, unit: '%' }
+    ]);
+    const aiBox = el('div', {}, [
+      aiCard.node, aiForm, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Вырезать объект →', runAi),
+        ui.btn('Только маска', () => runAi(true), { ghost: true, small: true })
+      ]),
+      ui.spacer(10), ai.privacyNote()
+    ]);
+    aiBox.style.display = 'none';
+
+    async function runAi(maskOnly){
+      if (!img){ status.err('Сначала загрузи изображение'); return; }
+      const v = aiForm.values();
+      try{
+        status.busy('Готовлю модель');
+        const pipe = await ai.get(v.model, (frac, text) => { aiCard.progress.set(frac); aiCard.status.set(text, 'busy'); });
+        aiCard.progress.hide();
+        aiCard.status.ok('Модель готова · ' + (ai.state.device === 'webgpu' ? 'видеокарта' : 'процессор'));
+        status.busy('Отделяю объект от фона');
+        const t0 = performance.now();
+        const { canvas: cut, mask } = await ai.cutout(img, { pipe, workSize: Number(v.quality) });
+
+        let out = maskOnly ? mask : cut;
+        if (!maskOnly && v.edge > 0){
+          // лёгкая эрозия края: убирает светлую кайму от старого фона
+          const ctx2 = out.getContext('2d');
+          const d = ctx2.getImageData(0, 0, out.width, out.height);
+          const shift = v.edge / 100 * 60;
+          for (let i = 3; i < d.data.length; i += 4){
+            const a = d.data[i];
+            if (a > 0 && a < 255) d.data[i] = clamp((a - shift) * 255 / (255 - shift), 0, 255);
+          }
+          ctx2.putImageData(d, 0, 0);
+        }
+        if (!maskOnly && v.fill !== 'none'){
+          const filled = makeCanvas(out.width, out.height);
+          const fctx = filled.getContext('2d');
+          if (v.fill === 'color'){ fctx.fillStyle = v.fillColor; fctx.fillRect(0, 0, filled.width, filled.height); }
+          else {
+            fctx.filter = 'blur(' + Math.max(8, out.width / 45) + 'px)';
+            fctx.drawImage(img, 0, 0, filled.width, filled.height);
+            fctx.filter = 'none';
+          }
+          fctx.drawImage(out, 0, 0);
+          out = filled;
+        }
+        canvas.width = out.width; canvas.height = out.height;
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        canvas.getContext('2d').drawImage(out, 0, 0);
+        canvas._result = out;
+        wrap.style.display = 'flex';
+        status.ok(`Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с · ${out.width}×${out.height}`);
+      } catch(err){
+        console.error(err);
+        status.err('Ошибка: ' + err.message);
+      }
+    }
+
+    const modes = ai.modeSwitch({
+      classicTitle: 'По цвету фона',
+      classicNote: 'мгновенно, для однотонных фонов',
+      aiTitle: 'Нейросеть',
+      aiNote: 'любой фон, модель работает локально',
+      onChange: mode => {
+        classicBox.style.display = mode === 'classic' ? '' : 'none';
+        aiBox.style.display = mode === 'ai' ? '' : 'none';
+        if (mode === 'classic' && img) apply();
+      }
+    });
 
     const form = ui.form([
       { id: 'color', type: 'color', label: 'Цвет фона', col: 3, value: '#ffffff' },
@@ -2117,6 +2658,13 @@ PT.tool({
       onFiles: async files => {
         img = await loadImage(files[0]);
         wrap.style.display = 'flex';
+        if (modes.isAi()){
+          status.ok(`${files[0].name} — ${img.naturalWidth}×${img.naturalHeight}. Нажми «Вырезать объект».`);
+          canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          canvas._result = imgToCanvas(img);
+          return;
+        }
         if (form.get('corners')) autoPick();
         apply();
         status.ok(`${files[0].name} — ${img.naturalWidth}×${img.naturalHeight}`);
@@ -2172,7 +2720,7 @@ PT.tool({
     }
 
     canvas.addEventListener('click', e => {
-      if (!img) return;
+      if (!img || modes.isAi()) return;
       const r = canvas.getBoundingClientRect();
       const x = Math.floor((e.clientX - r.left) * canvas.width / r.width);
       const y = Math.floor((e.clientY - r.top) * canvas.height / r.height);
@@ -2182,17 +2730,23 @@ PT.tool({
       apply();
     });
 
+    const classicBox = el('div', {}, [
+      form, ui.spacer(14),
+      ui.btn('Взять цвет из углов', () => { autoPick(); apply(); }, { ghost: true, small: true }),
+      ui.spacer(10),
+      ui.muted('Подходит для однотонных фонов: студийные снимки, скриншоты, логотипы. ' +
+               'Для сложных сцен переключись на нейросеть.')
+    ]);
+
     root.appendChild(ui.card([
-      drop, ui.spacer(14), form, ui.spacer(14),
-      el('div', { class: 'row gap' }, [
-        ui.btn('Скачать PNG', async () => {
-          if (!canvas._result) { status.err('Сначала загрузи изображение'); return; }
-          downloadBlob(await canvasToBlob(canvas._result, 'image/png'), 'no-bg.png');
-        }),
-        ui.btn('Взять цвет из углов', () => { autoPick(); apply(); }, { ghost: true, small: true })
-      ]),
-      status,
-      ui.muted('Работает для однотонных фонов: студийные снимки, скриншоты, логотипы. Для сложных сцен нужен ручной редактор.')
+      modes.node, drop, ui.spacer(14),
+      classicBox, aiBox,
+      ui.spacer(14),
+      ui.btn('Скачать PNG', async () => {
+        if (!canvas._result) { status.err('Сначала загрузи изображение'); return; }
+        downloadBlob(await canvasToBlob(canvas._result, 'image/png'), 'no-bg.png');
+      }),
+      status
     ]));
     root.appendChild(wrap);
   }
@@ -2745,10 +3299,10 @@ PT.tool({
    ИНСТРУМЕНТ: РЕДАКТОР ИЗОБРАЖЕНИЙ
 ====================================================================== */
 PT.tool({
-  id: 'image-editor', cat: 'image', icon: '✎',
+  id: 'image-editor', cat: 'image', icon: '✎', ai: true,
   title: 'Редактор изображений',
-  desc: 'Обрезка, повороты, фильтры, надписи, кисть, фигуры и замазывание — с историей отмен.',
-  keywords: ['редактор', 'editor', 'рисовать', 'фильтры', 'текст', 'стрелка', 'замазать', 'скриншот'],
+  desc: 'Обрезка, повороты, фильтры, надписи, кисть, фигуры, замазывание и удаление фона нейросетью.',
+  keywords: ['редактор', 'editor', 'рисовать', 'фильтры', 'текст', 'стрелка', 'замазать', 'скриншот', 'нейросеть'],
   render(root){
     const MAX_DIM = 2400;
     let canvas = null, ctx = null;
@@ -2772,7 +3326,8 @@ PT.tool({
       ['draw', '✎ Кисть'],
       ['shape', '◇ Фигуры'],
       ['blur', '▨ Замазать'],
-      ['resize', '⤢ Размер']
+      ['resize', '⤢ Размер'],
+      ['ai', '✦ Нейросеть']
     ];
 
     /* ---------- загрузка ---------- */
@@ -2882,7 +3437,69 @@ PT.tool({
       clearHandlers();
       panel.innerHTML = '';
       ({ crop: cropPanel, transform: transformPanel, filters: filtersPanel, text: textPanel,
-         draw: drawPanel, shape: shapePanel, blur: blurPanel, resize: resizePanel }[id] || (() => {}))();
+         draw: drawPanel, shape: shapePanel, blur: blurPanel, resize: resizePanel, ai: aiPanel }[id] || (() => {}))();
+    }
+
+    /* ---------- НЕЙРОСЕТЬ ---------- */
+    function aiPanel(){
+      const card = ai.card('bgremove');
+      const status = ui.status();
+      const form = ui.form([
+        { id: 'action', type: 'select', label: 'Что сделать', options: [
+          ['cutout', 'Убрать фон'], ['bgcolor', 'Заменить фон цветом'], ['upscale', 'Увеличить вдвое']
+        ] },
+        { id: 'color', type: 'color', label: 'Цвет нового фона', value: '#ffffff' },
+        { id: 'quality', type: 'select', label: 'Точность', value: '512', options: [
+          ['384', 'Быстро'], ['512', 'Обычная'], ['768', 'Высокая']
+        ] }
+      ]);
+      panel.appendChild(ui.h('Нейросеть', 'Модель считает на этом устройстве'));
+      panel.appendChild(card.node);
+      panel.appendChild(form);
+      panel.appendChild(ui.spacer(12));
+      panel.appendChild(ui.btn('Применить', run, { wide: true }));
+      panel.appendChild(status);
+      panel.appendChild(ui.spacer(10));
+      panel.appendChild(ui.muted('Первый запуск скачивает модель (44 МБ), дальше она берётся из кэша браузера.'));
+
+      async function run(){
+        const v = form.values();
+        try{
+          status.busy('Готовлю модель');
+          const source = snapCanvas();
+          if (v.action === 'upscale'){
+            if (canvas.width * canvas.height > 1500000){
+              status.err('Слишком большая картинка — сначала уменьши её');
+              return;
+            }
+            const pipe = await ai.get('upscale', (frac, t) => { card.progress.set(frac); card.status.set(t, 'busy'); });
+            card.progress.hide(); card.status.ok('Модель готова');
+            status.busy('Увеличиваю');
+            const out = await ai.superResolution(source, { pipe, onTile: f => card.progress.set(f) });
+            card.progress.hide();
+            applyCanvas(out); commit();
+            status.ok('Готово: ' + out.width + '×' + out.height);
+            return;
+          }
+          const pipe = await ai.get('bgremove', (frac, t) => { card.progress.set(frac); card.status.set(t, 'busy'); });
+          card.progress.hide(); card.status.ok('Модель готова');
+          status.busy('Отделяю объект от фона');
+          const { canvas: cut } = await ai.cutout(source, { pipe, workSize: Number(v.quality) });
+          let out = cut;
+          if (v.action === 'bgcolor'){
+            out = makeCanvas(cut.width, cut.height);
+            const octx = out.getContext('2d');
+            octx.fillStyle = v.color;
+            octx.fillRect(0, 0, out.width, out.height);
+            octx.drawImage(cut, 0, 0);
+          }
+          applyCanvas(out); commit();
+          status.ok('Готово');
+        } catch(err){
+          console.error(err);
+          status.err('Ошибка: ' + err.message);
+        }
+      }
     }
 
     /* ---------- ОБРЕЗКА ---------- */
@@ -6455,14 +7072,45 @@ PT.tool({
    Текст из PDF
 ====================================================================== */
 PT.tool({
-  id: 'doc-pdf-text', cat: 'doc', icon: '⌸',
+  id: 'doc-pdf-text', cat: 'doc', icon: '⌸', ai: true,
   title: 'Текст из PDF',
-  desc: 'Извлекает текстовый слой документа постранично — с поиском и выгрузкой в TXT.',
-  keywords: ['pdf', 'текст', 'извлечь', 'копировать', 'распознать', 'ocr', 'выгрузить'],
+  desc: 'Забирает текстовый слой документа, а для сканов подключает распознавание нейросетью.',
+  keywords: ['pdf', 'текст', 'извлечь', 'копировать', 'распознать', 'ocr', 'выгрузить', 'скан', 'нейросеть'],
   render(root){
     const status = ui.status();
     const out = ui.copyBox('', { label: 'Текст документа', rows: 20, editable: true });
     const info = el('div');
+    let lastPdfData = null;
+
+    /** Резервный путь для сканов: страницы рендерятся в картинки и читаются моделью. */
+    async function ocrScan(ctxOut){
+      if (!lastPdfData){ status.err('Сначала загрузи документ'); return; }
+      const card = ai.card('ocr');
+      ctxOut.innerHTML = '';
+      ctxOut.appendChild(ui.card([ui.h('Распознавание сканов'), card.node]));
+      status.busy('Готовлю модель распознавания');
+      const pipe = await ai.get('ocr', (frac, text) => { card.progress.set(frac); card.status.set(text, 'busy'); });
+      card.progress.hide();
+      card.status.ok('Модель готова');
+
+      const doc = await pdfjsLib.getDocument({ data: lastPdfData.slice() }).promise;
+      const parts = [];
+      for (let i = 1; i <= Math.min(doc.numPages, 20); i++){
+        status.busy(`Распознаю страницу ${i} из ${Math.min(doc.numPages, 20)}`);
+        const page = await doc.getPage(i);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = makeCanvas(viewport.width, viewport.height);
+        const c = canvas.getContext('2d');
+        c.fillStyle = '#fff'; c.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: c, viewport }).promise;
+        const r = await pipe(ai.canvasUrl(canvas));
+        const text = (Array.isArray(r) ? r[0] : r).generated_text;
+        parts.push(`\n───── Страница ${i} ─────\n` + (text || '').trim());
+      }
+      out.setValue(parts.join('\n'));
+      status.ok('Распознавание завершено');
+      if (doc.numPages > 20) PT.toast('Обработаны первые 20 страниц', 'ok');
+    }
 
     PT.fileTool(root, {
       accept: 'application/pdf,.pdf',
@@ -6473,7 +7121,8 @@ PT.tool({
         ctx.status.busy('Загружаю движок PDF');
         await PT.need('pdfjs');
         const data = new Uint8Array(await file.arrayBuffer());
-        const doc = await pdfjsLib.getDocument({ data }).promise;
+        lastPdfData = data;
+        const doc = await pdfjsLib.getDocument({ data: data.slice() }).promise;
         ctx.status.busy('Читаю страницы');
         const parts = [];
         for (let i = 1; i <= doc.numPages; i++){
@@ -6505,11 +7154,20 @@ PT.tool({
             ['Слов', fmtNum(text.trim().split(/\s+/).filter(Boolean).length, 0)]
           ])
         ]));
+        const ocrBox = el('div');
         ctx.out.appendChild(ui.card([
           out, ui.spacer(12),
-          ui.btn('Скачать TXT', () => downloadText(out.getValue(), baseName(file.name) + '.txt'), { ghost: true })
+          el('div', { class: 'row gap' }, [
+            ui.btn('Скачать TXT', () => downloadText(out.getValue(), baseName(file.name) + '.txt'), { ghost: true }),
+            ui.btn('✦ Распознать как скан (нейросеть)', () =>
+              ocrScan(ocrBox).catch(e => ctx.status.err('Ошибка распознавания: ' + e.message)), { ghost: true })
+          ]),
+          ui.spacer(10),
+          ui.muted('Кнопка распознавания пригодится, если документ — картинка без текстового слоя. ' +
+                   'Модель работает локально и понимает латиницу; кириллицу распознаёт плохо.')
         ]));
-        if (!text.trim()) ctx.status.err('Текстового слоя нет — похоже, это скан');
+        ctx.out.appendChild(ocrBox);
+        if (!text.trim()) ctx.status.err('Текстового слоя нет — похоже, это скан. Попробуй распознавание нейросетью.');
         else ctx.status.ok('Извлечено ' + fmtNum(text.length, 0) + ' символов');
       }
     });
@@ -7611,5 +8269,4775 @@ PT.tool({
       ]))
     ]));
     open(currentId);
+  }
+});
+
+
+/* ===== tools/70-ai.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: НЕЙРОСЕТИ (модели считают на устройстве пользователя)
+====================================================================== */
+
+/** Общий каркас: карточка модели + дропзона + кнопка + вывод. */
+function aiImageTool(root, opts){
+  let img = null, fileName = 'image';
+  const card = ai.card(opts.model);
+  const status = ui.status();
+  const out = el('div');
+  const preview = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--line)' } });
+  const previewBox = el('div', { style: { display: 'none' } }, preview);
+
+  const drop = ui.drop({
+    accept: 'image/*',
+    title: opts.dropTitle || 'Перетащи изображение',
+    hint: opts.dropHint || 'JPG, PNG, WebP — можно вставить из буфера',
+    onFiles: async files => {
+      img = await loadImage(files[0]);
+      fileName = baseName(files[0].name);
+      const c = smartResize(img, Math.min(img.naturalWidth, 900), Math.min(img.naturalWidth, 900) * img.naturalHeight / img.naturalWidth);
+      preview.width = c.width; preview.height = c.height;
+      preview.getContext('2d').drawImage(c, 0, 0);
+      previewBox.style.display = 'block';
+      status.ok(`${files[0].name} — ${img.naturalWidth}×${img.naturalHeight}`);
+      if (opts.auto) run();
+    }
+  });
+
+  async function run(){
+    if (!img){ status.err('Сначала загрузи изображение'); return; }
+    try{
+      status.busy('Готовлю модель');
+      const pipe = await ai.get(opts.model, (frac, text) => { card.progress.set(frac); card.status.set(text, 'busy'); });
+      card.progress.hide();
+      card.status.ok('Модель готова · ' + (ai.state.device === 'webgpu' ? 'видеокарта' : 'процессор'));
+      status.busy(opts.busy || 'Думаю');
+      const t0 = performance.now();
+      out.innerHTML = '';
+      await opts.run({ pipe, img, out, preview, status, fileName, form });
+      status.ok(`Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с`);
+    } catch(err){
+      console.error(err);
+      status.err('Ошибка: ' + err.message);
+    }
+  }
+
+  const form = opts.form ? ui.form(opts.form) : null;
+  root.appendChild(ui.card([
+    card.node,
+    drop,
+    form ? el('div', {}, [ui.spacer(14), form]) : null,
+    ui.spacer(14),
+    el('div', { class: 'row gap' }, [ui.btn(opts.action || 'Запустить →', run)].concat(opts.extraButtons ? opts.extraButtons(() => ({ img, fileName, preview })) : [])),
+    status,
+    ui.spacer(10), ai.privacyNote()
+  ]));
+  root.appendChild(previewBox);
+  root.appendChild(out);
+  return { run, getImg: () => img };
+}
+
+/** Общий каркас для текстовых моделей. */
+function aiTextTool(root, opts){
+  const card = ai.card(opts.model);
+  const status = ui.status();
+  const input = el('textarea', { rows: 10, placeholder: opts.placeholder || 'Вставь текст…', spellcheck: 'false',
+    value: opts.sample || '' });
+  const output = el('textarea', { rows: 10, readonly: true, spellcheck: 'false' });
+  const extra = el('div');
+  const form = opts.form ? ui.form(opts.form) : null;
+
+  async function run(){
+    if (!input.value.trim()){ status.err('Введи текст'); return; }
+    try{
+      status.busy('Готовлю модель');
+      const modelKey = opts.pickModel ? opts.pickModel(form ? form.values() : {}) : opts.model;
+      const pipe = await ai.get(modelKey, (frac, text) => { card.progress.set(frac); card.status.set(text, 'busy'); });
+      card.progress.hide();
+      card.status.ok('Модель готова · ' + (ai.state.device === 'webgpu' ? 'видеокарта' : 'процессор'));
+      status.busy(opts.busy || 'Обрабатываю');
+      extra.innerHTML = '';
+      const t0 = performance.now();
+      const result = await opts.run({ pipe, text: input.value, values: form ? form.values() : {}, extra, status });
+      if (typeof result === 'string') output.value = result;
+      status.ok(`Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с`);
+    } catch(err){
+      console.error(err);
+      status.err('Ошибка: ' + err.message);
+    }
+  }
+
+  root.appendChild(ui.card([
+    card.node,
+    form ? el('div', {}, [form, ui.spacer(14)]) : null,
+    el('div', { class: 'split' }, [
+      el('div', {}, [el('label', { text: opts.inputLabel || 'Текст' }), input]),
+      el('div', {}, [el('label', { text: opts.outputLabel || 'Результат' }), output])
+    ]),
+    ui.spacer(12),
+    el('div', { class: 'row gap' }, [
+      ui.btn(opts.action || 'Запустить →', run),
+      ui.btn('Копировать', () => copy(output.value), { ghost: true, small: true }),
+      ui.btn('Скачать', () => downloadText(output.value, 'result.txt'), { ghost: true, small: true })
+    ]),
+    status, extra,
+    ui.spacer(10), ai.privacyNote()
+  ]));
+  return { run, input, output };
+}
+
+/* ======================================================================
+   Текст с картинки (OCR)
+====================================================================== */
+PT.tool({
+  id: 'ai-ocr', cat: 'ai', icon: '⌶', ai: true,
+  title: 'Текст с картинки (OCR)',
+  desc: 'Распознаёт печатный текст на фото и скриншотах моделью, работающей на вашем устройстве.',
+  keywords: ['ocr', 'распознавание', 'текст с фото', 'сканирование', 'скриншот', 'нейросеть'],
+  render(root){
+    aiImageTool(root, {
+      model: 'ocr',
+      action: 'Распознать текст →',
+      busy: 'Читаю текст',
+      dropHint: 'лучше всего — ровный печатный текст крупным планом',
+      async run({ pipe, img, out }){
+        // строка за строкой: модель обучена на отдельных строках, поэтому режем по горизонтали
+        const canvas = imgToCanvas(img);
+        const lines = splitLines(canvas);
+        const texts = [];
+        for (const line of lines){
+          const r = await pipe(ai.canvasUrl(line));
+          const text = (Array.isArray(r) ? r[0] : r).generated_text;
+          if (text && text.trim()) texts.push(text.trim());
+        }
+        const full = texts.join('\n');
+        out.appendChild(ui.card([
+          ui.h('Распознано строк: ' + texts.length),
+          ui.copyBox(full || '(текст не найден)', { rows: Math.min(20, Math.max(4, texts.length + 1)), editable: true }),
+          ui.spacer(12),
+          ui.btn('Скачать TXT', () => downloadText(full, 'ocr.txt'), { ghost: true, small: true }),
+          ui.spacer(10),
+          ui.muted('Модель TrOCR обучена на латинице — русский текст она распознаёт плохо. ' +
+                   'Для кириллицы лучше подходят специализированные сервисы.')
+        ]));
+      }
+    });
+
+    /** Грубая разбивка изображения на строки по горизонтальным пробелам. */
+    function splitLines(canvas){
+      const ctx = canvas.getContext('2d');
+      const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const rowDark = new Array(canvas.height).fill(0);
+      for (let y = 0; y < canvas.height; y++){
+        let dark = 0;
+        for (let x = 0; x < canvas.width; x += 2){
+          const i = (y * canvas.width + x) * 4;
+          if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 140) dark++;
+        }
+        rowDark[y] = dark;
+      }
+      const threshold = Math.max(2, canvas.width / 200);
+      const bands = [];
+      let start = -1;
+      for (let y = 0; y < canvas.height; y++){
+        if (rowDark[y] > threshold && start < 0) start = y;
+        else if (rowDark[y] <= threshold && start >= 0){
+          if (y - start > canvas.height / 90) bands.push([start, y]);
+          start = -1;
+        }
+      }
+      if (start >= 0) bands.push([start, canvas.height]);
+      if (!bands.length || bands.length > 60) return [canvas];
+      return bands.map(([top, bottom]) => {
+        const pad = Math.round((bottom - top) * 0.2);
+        const y0 = Math.max(0, top - pad), y1 = Math.min(canvas.height, bottom + pad);
+        const part = makeCanvas(canvas.width, y1 - y0);
+        part.getContext('2d').drawImage(canvas, 0, y0, canvas.width, y1 - y0, 0, 0, canvas.width, y1 - y0);
+        return part;
+      });
+    }
+  }
+});
+
+/* ======================================================================
+   Описание изображения
+====================================================================== */
+PT.tool({
+  id: 'ai-caption', cat: 'ai', icon: '❞', ai: true,
+  title: 'Описание изображения',
+  desc: 'Модель смотрит на фото и пишет, что на нём происходит — удобно для alt-текста.',
+  keywords: ['описание', 'caption', 'alt', 'подпись', 'нейросеть', 'что на фото'],
+  render(root){
+    aiImageTool(root, {
+      model: 'caption',
+      action: 'Описать фото →',
+      busy: 'Разглядываю картинку',
+      async run({ pipe, img, out }){
+        const r = await pipe(ai.canvasUrl(smartResize(img, 384, 384 * img.naturalHeight / img.naturalWidth)));
+        const text = (Array.isArray(r) ? r[0] : r).generated_text.trim();
+        out.appendChild(ui.card([
+          ui.h('Что увидела модель'),
+          el('p', { style: { fontSize: '17px', lineHeight: '1.5' }, text: text }),
+          ui.spacer(12),
+          ui.copyBox(`alt="${text}"`, { label: 'Готовый alt для картинки', rows: 2 }),
+          ui.spacer(12),
+          ui.muted('Описание генерируется по-английски: модель обучена на английском корпусе. ' +
+                   'Перевести его можно инструментом «Перевод текста» — он тоже работает локально.')
+        ]));
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Поиск объектов
+====================================================================== */
+PT.tool({
+  id: 'ai-detect', cat: 'ai', icon: '⊡', ai: true,
+  title: 'Поиск объектов на фото',
+  desc: 'Находит людей, машины, животных и ещё 88 типов объектов — с рамками и возможностью замазать.',
+  keywords: ['детекция', 'объекты', 'распознавание', 'люди', 'лица', 'замазать', 'нейросеть'],
+  render(root){
+    let lastResult = null;
+    aiImageTool(root, {
+      model: 'detect',
+      action: 'Найти объекты →',
+      busy: 'Ищу объекты',
+      form: [
+        { id: 'threshold', type: 'range', label: 'Порог уверенности', col: 6, min: 10, max: 95, value: 60, unit: '%' },
+        { id: 'action', type: 'select', label: 'Что сделать с найденным', col: 6, options: [
+          ['box', 'Обвести рамками'], ['blur', 'Замазать (размытие)'], ['crop', 'Вырезать в отдельные файлы']
+        ] }
+      ],
+      async run({ pipe, img, out, form }){
+        const v = form.values();
+        const result = await pipe(ai.canvasUrl(img), { threshold: v.threshold / 100, percentage: false });
+        lastResult = result;
+        if (!result.length){
+          out.appendChild(ui.card([ui.muted('Ничего не нашлось. Попробуй снизить порог уверенности.')]));
+          return;
+        }
+        const canvas = imgToCanvas(img);
+        const ctx = canvas.getContext('2d');
+        const crops = [];
+        result.forEach((item, i) => {
+          const b = item.box;
+          const x = b.xmin, y = b.ymin, w = b.xmax - b.xmin, h = b.ymax - b.ymin;
+          if (v.action === 'blur'){
+            const part = makeCanvas(Math.max(1, w), Math.max(1, h));
+            part.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, w, h);
+            const small = smartResize(part, Math.max(2, w / 14), Math.max(2, h / 14));
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(small, 0, 0, small.width, small.height, x, y, w, h);
+            ctx.imageSmoothingEnabled = true;
+          } else if (v.action === 'crop'){
+            const part = makeCanvas(Math.max(1, w), Math.max(1, h));
+            part.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, w, h);
+            crops.push({ canvas: part, label: item.label, i });
+          } else {
+            ctx.strokeStyle = '#e8a33d';
+            ctx.lineWidth = Math.max(2, canvas.width / 350);
+            ctx.strokeRect(x, y, w, h);
+            const label = `${item.label} ${Math.round(item.score * 100)}%`;
+            ctx.font = `600 ${Math.max(13, canvas.width / 55)}px 'Inter', sans-serif`;
+            const tw = ctx.measureText(label).width;
+            const th = Math.max(18, canvas.width / 42);
+            ctx.fillStyle = '#e8a33d';
+            ctx.fillRect(x, Math.max(0, y - th), tw + 12, th);
+            ctx.fillStyle = '#14161a';
+            ctx.fillText(label, x + 6, Math.max(th - 6, y - 6));
+          }
+        });
+
+        const resultCanvas = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px' } });
+        resultCanvas.width = canvas.width; resultCanvas.height = canvas.height;
+        resultCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+        const counts = {};
+        result.forEach(r => { counts[r.label] = (counts[r.label] || 0) + 1; });
+
+        out.appendChild(ui.card([
+          ui.h('Найдено объектов: ' + result.length),
+          ui.kv(Object.entries(counts).map(([label, n]) => [label, String(n)])),
+          ui.spacer(14),
+          v.action === 'crop' ? null : resultCanvas,
+          ui.spacer(12),
+          el('div', { class: 'row gap' }, [
+            v.action === 'crop'
+              ? ui.btn('Скачать вырезанные объекты (ZIP)', async () => {
+                  const entries = [];
+                  for (const c of crops){
+                    entries.push({ name: `${String(c.i + 1).padStart(2, '0')}-${c.label}.png`,
+                                   data: await canvasToBlob(c.canvas, 'image/png') });
+                  }
+                  downloadBlob(await zip(entries), 'objects.zip');
+                })
+              : ui.btn('Скачать результат', async () => downloadBlob(await canvasToBlob(canvas, 'image/png'), 'detected.png')),
+            ui.btn('Скачать список (JSON)', () => downloadText(JSON.stringify(result, null, 2), 'objects.json'), { ghost: true, small: true })
+          ])
+        ]));
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Классификация изображения
+====================================================================== */
+PT.tool({
+  id: 'ai-classify', cat: 'ai', icon: '⊙', ai: true,
+  title: 'Что изображено',
+  desc: 'Определяет содержимое снимка из тысячи категорий и показывает уверенность модели.',
+  keywords: ['классификация', 'распознать', 'что это', 'теги', 'нейросеть'],
+  render(root){
+    aiImageTool(root, {
+      model: 'classify',
+      action: 'Определить →',
+      busy: 'Классифицирую',
+      auto: false,
+      async run({ pipe, img, out }){
+        const r = await pipe(ai.canvasUrl(img), { top_k: 8 });
+        out.appendChild(ui.card([
+          ui.h('Наиболее вероятные варианты'),
+          el('div', {}, r.map(item => {
+            const pct = Math.round(item.score * 100);
+            return el('div', { style: { marginBottom: '10px' } }, [
+              el('div', { class: 'row between' }, [
+                el('span', { text: item.label }),
+                el('b', { class: 'mono', text: pct + '%' })
+              ]),
+              el('div', { class: 'progress', style: { display: 'block', marginTop: '4px' } },
+                el('i', { style: { width: pct + '%' } }))
+            ]);
+          })),
+          ui.spacer(10),
+          ui.copyBox(r.map(i => i.label).join(', '), { label: 'Теги для описания', rows: 2 })
+        ]));
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Карта глубины
+====================================================================== */
+PT.tool({
+  id: 'ai-depth', cat: 'ai', icon: '◱', ai: true,
+  title: 'Карта глубины',
+  desc: 'Понимает, что на фото ближе, а что дальше — для размытия фона и 3D-эффектов.',
+  keywords: ['глубина', 'depth', 'боке', 'размытие фона', '3d', 'нейросеть'],
+  render(root){
+    aiImageTool(root, {
+      model: 'depth',
+      action: 'Построить карту →',
+      busy: 'Считаю глубину',
+      form: [
+        { id: 'mode', type: 'select', label: 'Результат', col: 6, options: [
+          ['map', 'Карта глубины'], ['bokeh', 'Размытие дальнего плана'], ['color', 'Цветная карта']
+        ] },
+        { id: 'strength', type: 'range', label: 'Сила эффекта', col: 6, min: 1, max: 30, value: 12 }
+      ],
+      async run({ pipe, img, out, form }){
+        const v = form.values();
+        const r = await pipe(ai.canvasUrl(img));
+        const depth = ai.fromRaw(r.depth);
+        const full = imgToCanvas(img);
+        let result;
+
+        if (v.mode === 'map'){
+          result = smartResize(depth, full.width, full.height);
+        } else if (v.mode === 'color'){
+          const scaled = smartResize(depth, full.width, full.height);
+          const ctx = scaled.getContext('2d');
+          const d = ctx.getImageData(0, 0, scaled.width, scaled.height);
+          for (let i = 0; i < d.data.length; i += 4){
+            const t = d.data[i] / 255;
+            const c = Color.hslToRgb(250 - t * 250, 85, 25 + t * 40);
+            d.data[i] = c.r; d.data[i + 1] = c.g; d.data[i + 2] = c.b;
+          }
+          ctx.putImageData(d, 0, 0);
+          result = scaled;
+        } else {
+          // боке: смешиваем резкий и размытый кадр по карте глубины
+          const mask = smartResize(depth, full.width, full.height);
+          const blurred = makeCanvas(full.width, full.height);
+          const bctx = blurred.getContext('2d');
+          bctx.filter = `blur(${v.strength}px)`;
+          bctx.drawImage(full, 0, 0);
+          bctx.filter = 'none';
+
+          const sharp = full.getContext('2d').getImageData(0, 0, full.width, full.height);
+          const soft = bctx.getImageData(0, 0, full.width, full.height);
+          const m = mask.getContext('2d').getImageData(0, 0, full.width, full.height);
+          const outData = sharp;
+          for (let i = 0; i < outData.data.length; i += 4){
+            const near = m.data[i] / 255;          // чем ярче, тем ближе объект
+            for (let c = 0; c < 3; c++){
+              outData.data[i + c] = sharp.data[i + c] * near + soft.data[i + c] * (1 - near);
+            }
+          }
+          result = makeCanvas(full.width, full.height);
+          result.getContext('2d').putImageData(outData, 0, 0);
+        }
+
+        const view = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px' } });
+        view.width = result.width; view.height = result.height;
+        view.getContext('2d').drawImage(result, 0, 0);
+        out.appendChild(ui.card([
+          ui.h('Результат'),
+          view, ui.spacer(12),
+          ui.btn('Скачать PNG', async () => downloadBlob(await canvasToBlob(result, 'image/png'), 'depth.png'))
+        ]));
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Речь в текст
+====================================================================== */
+PT.tool({
+  id: 'ai-speech', cat: 'ai', icon: '⌇', ai: true,
+  title: 'Речь в текст и субтитры',
+  desc: 'Расшифровывает аудио и видео на 90 языках, включая русский, и делает файл субтитров.',
+  keywords: ['whisper', 'расшифровка', 'субтитры', 'srt', 'транскрипция', 'речь', 'диктофон', 'нейросеть'],
+  render(root){
+    let audio = null, fileName = 'audio';
+    const card = ai.card('whisper');
+    const status = ui.status();
+    const out = el('div');
+    const player = el('audio', { controls: true, style: { width: '100%', marginTop: '12px', display: 'none' } });
+
+    const form = ui.form([
+      { id: 'model', type: 'select', label: 'Модель', col: 4, options: [
+        ['whisper', 'Whisper Tiny — быстрая (42 МБ)'], ['whisperBase', 'Whisper Base — точнее (78 МБ)']
+      ] },
+      { id: 'lang', type: 'select', label: 'Язык записи', col: 4, value: 'russian', options: [
+        ['russian', 'Русский'], ['english', 'Английский'], ['ukrainian', 'Украинский'],
+        ['german', 'Немецкий'], ['french', 'Французский'], ['spanish', 'Испанский'], ['auto', 'Определить самостоятельно']
+      ] },
+      { id: 'task', type: 'select', label: 'Задача', col: 4, options: [
+        ['transcribe', 'Расшифровать как есть'], ['translate', 'Перевести на английский']
+      ] }
+    ]);
+
+    const drop = ui.drop({
+      accept: 'audio/*,video/*',
+      title: 'Перетащи аудио или видео',
+      hint: 'MP3, WAV, M4A, MP4 — звук будет извлечён автоматически',
+      onFiles: async files => {
+        fileName = baseName(files[0].name);
+        status.busy('Готовлю звук');
+        try{
+          audio = await ai.decodeAudio(files[0]);
+          player.src = URL.createObjectURL(files[0]);
+          player.style.display = 'block';
+          status.ok(`${files[0].name} — ${fmtDuration(audio.duration)}`);
+        } catch(e){ status.err('Не удалось прочитать звук: ' + e.message); }
+      }
+    });
+
+    let recorder = null, chunks = [];
+    async function toggleRecord(){
+      if (recorder && recorder.state === 'recording'){ recorder.stop(); return; }
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+        recorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(chunks, { type: chunks[0] ? chunks[0].type : 'audio/webm' });
+          fileName = 'запись';
+          audio = await ai.decodeAudio(new File([blob], 'rec.webm', { type: blob.type }));
+          player.src = URL.createObjectURL(blob);
+          player.style.display = 'block';
+          recBtn.textContent = '● Записать с микрофона';
+          status.ok('Запись готова — ' + fmtDuration(audio.duration));
+        };
+        recorder.start();
+        recBtn.textContent = '■ Остановить запись';
+        status.busy('Идёт запись');
+      } catch(e){ status.err('Микрофон недоступен: ' + e.message); }
+    }
+    const recBtn = ui.btn('● Записать с микрофона', toggleRecord, { ghost: true });
+    PT.onCleanup(() => { if (recorder && recorder.state === 'recording') recorder.stop(); });
+
+    async function run(){
+      if (!audio){ status.err('Сначала загрузи запись'); return; }
+      const v = form.values();
+      try{
+        status.busy('Готовлю модель');
+        const pipe = await ai.get(v.model, (frac, text) => { card.progress.set(frac); card.status.set(text, 'busy'); });
+        card.progress.hide();
+        card.status.ok('Модель готова');
+        status.busy('Расшифровываю (примерно треть длительности записи)');
+        const t0 = performance.now();
+        const result = await pipe(audio.data, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          return_timestamps: true,
+          language: v.lang === 'auto' ? undefined : v.lang,
+          task: v.task
+        });
+        const text = (result.text || '').trim();
+        const chunksList = result.chunks || [];
+        out.innerHTML = '';
+        out.appendChild(ui.card([
+          ui.h('Расшифровка'),
+          ui.copyBox(text, { rows: 12, editable: true }),
+          ui.spacer(12),
+          el('div', { class: 'row gap' }, [
+            ui.btn('Скачать TXT', () => downloadText(text, fileName + '.txt'), { ghost: true, small: true }),
+            chunksList.length ? ui.btn('Скачать субтитры SRT', () => downloadText(toSrt(chunksList), fileName + '.srt'), { ghost: true, small: true }) : null,
+            chunksList.length ? ui.btn('Скачать субтитры VTT', () => downloadText(toVtt(chunksList), fileName + '.vtt', 'text/vtt'), { ghost: true, small: true }) : null
+          ]),
+          chunksList.length ? ui.spacer(14) : null,
+          chunksList.length ? ui.kv(chunksList.slice(0, 40).map(c => [
+            fmtDuration(c.timestamp[0] || 0) + ' – ' + fmtDuration(c.timestamp[1] || 0), c.text.trim()
+          ])) : null
+        ]));
+        status.ok(`Готово за ${((performance.now() - t0) / 1000).toFixed(1)} с · ${text.split(/\s+/).length} слов`);
+      } catch(err){
+        console.error(err);
+        status.err('Ошибка: ' + err.message);
+      }
+    }
+
+    function stamp(sec, comma){
+      const h = String(Math.floor(sec / 3600)).padStart(2, '0');
+      const m = String(Math.floor(sec % 3600 / 60)).padStart(2, '0');
+      const s = String(Math.floor(sec % 60)).padStart(2, '0');
+      const ms = String(Math.round(sec % 1 * 1000)).padStart(3, '0');
+      return `${h}:${m}:${s}${comma ? ',' : '.'}${ms}`;
+    }
+    const toSrt = list => list.map((c, i) =>
+      `${i + 1}\n${stamp(c.timestamp[0] || 0, true)} --> ${stamp(c.timestamp[1] || c.timestamp[0] + 2, true)}\n${c.text.trim()}\n`).join('\n');
+    const toVtt = list => 'WEBVTT\n\n' + list.map(c =>
+      `${stamp(c.timestamp[0] || 0)} --> ${stamp(c.timestamp[1] || c.timestamp[0] + 2)}\n${c.text.trim()}\n`).join('\n');
+
+    root.appendChild(ui.card([
+      card.node, drop, player, ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [ui.btn('Расшифровать →', run), recBtn]),
+      status, ui.spacer(10), ai.privacyNote()
+    ]));
+    root.appendChild(out);
+  }
+});
+
+/* ======================================================================
+   Синтез речи
+====================================================================== */
+PT.tool({
+  id: 'ai-tts', cat: 'ai', icon: '♫', ai: true,
+  title: 'Текст в речь',
+  desc: 'Озвучивает текст голосом нейросети и сохраняет результат в WAV.',
+  keywords: ['tts', 'озвучка', 'синтез речи', 'голос', 'аудио', 'нейросеть'],
+  render(root){
+    const card = ai.card('tts');
+    const status = ui.status();
+    const input = el('textarea', { rows: 6, spellcheck: 'false',
+      value: 'PixTool runs neural networks right inside your browser.' });
+    const player = el('audio', { controls: true, style: { width: '100%', marginTop: '14px', display: 'none' } });
+    let lastBlob = null;
+
+    const SPEAKERS = {
+      'Женский (US)': 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin',
+      'Мужской (US)': 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/cmu_us_bdl_arctic-wav-arctic_a0009.bin',
+      'Женский, мягкий': 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/cmu_us_slt_arctic-wav-arctic_a0508.bin'
+    };
+    const form = ui.form([
+      { id: 'voice', type: 'select', label: 'Голос', col: 12, options: Object.keys(SPEAKERS) }
+    ]);
+
+    async function run(){
+      if (!input.value.trim()){ status.err('Введи текст'); return; }
+      try{
+        status.busy('Готовлю модель');
+        const pipe = await ai.get('tts', (frac, text) => { card.progress.set(frac); card.status.set(text, 'busy'); });
+        card.progress.hide();
+        card.status.ok('Модель готова');
+        status.busy('Синтезирую речь');
+        const result = await pipe(input.value.slice(0, 600), { speaker_embeddings: SPEAKERS[form.get('voice')] });
+        const buffer = new AudioContext().createBuffer(1, result.audio.length, result.sampling_rate);
+        buffer.copyToChannel(result.audio, 0);
+        lastBlob = audioBufferToWav(buffer);
+        player.src = URL.createObjectURL(lastBlob);
+        player.style.display = 'block';
+        status.ok('Готово · ' + fmtDuration(result.audio.length / result.sampling_rate) + ' · ' + fmtBytes(lastBlob.size));
+      } catch(err){
+        console.error(err);
+        status.err('Ошибка: ' + err.message);
+      }
+    }
+
+    root.appendChild(ui.card([
+      card.node,
+      el('label', { text: 'Текст для озвучки' }), input,
+      ui.spacer(12), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Озвучить →', run),
+        ui.btn('Скачать WAV', () => lastBlob ? downloadBlob(lastBlob, 'speech.wav') : status.err('Сначала озвучь текст'), { ghost: true })
+      ]),
+      player, status,
+      ui.spacer(10),
+      ui.muted('Модель SpeechT5 обучена на английском — русский текст она прочитает с сильным акцентом. ' +
+               'Для русской озвучки лучше подойдёт встроенный синтезатор системы.'),
+      ui.spacer(6), ai.privacyNote()
+    ]));
+  }
+});
+
+/* ======================================================================
+   Перевод
+====================================================================== */
+PT.tool({
+  id: 'ai-translate', cat: 'ai', icon: '⇄', ai: true,
+  title: 'Перевод текста',
+  desc: 'Русский ↔ английский моделью OPUS: работает без интернета и не отправляет текст в чужие сервисы.',
+  keywords: ['перевод', 'translate', 'английский', 'русский', 'переводчик', 'нейросеть'],
+  render(root){
+    aiTextTool(root, {
+      model: 'translateRu',
+      pickModel: v => v.dir === 'ru-en' ? 'translateRu' : 'translateEn',
+      action: 'Перевести →',
+      busy: 'Перевожу',
+      inputLabel: 'Исходный текст',
+      outputLabel: 'Перевод',
+      sample: 'PixTool — это набор инструментов, которые работают прямо в браузере.',
+      form: [
+        { id: 'dir', type: 'select', label: 'Направление', col: 12, options: [
+          ['ru-en', 'Русский → английский'], ['en-ru', 'Английский → русский']
+        ] }
+      ],
+      async run({ pipe, text, status }){
+        const chunks = ai.chunkText(text, 400);
+        const parts = [];
+        for (let i = 0; i < chunks.length; i++){
+          status.busy(`Перевожу часть ${i + 1} из ${chunks.length}`);
+          const r = await pipe(chunks[i]);
+          parts.push((Array.isArray(r) ? r[0] : r).translation_text);
+        }
+        return parts.join(' ');
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Пересказ
+====================================================================== */
+PT.tool({
+  id: 'ai-summarize', cat: 'ai', icon: '≡', ai: true,
+  title: 'Краткий пересказ',
+  desc: 'Сжимает статью или переписку до главного — целиком на вашем устройстве.',
+  keywords: ['пересказ', 'summary', 'конспект', 'сократить', 'выжимка', 'нейросеть'],
+  render(root){
+    aiTextTool(root, {
+      model: 'summarize',
+      action: 'Пересказать →',
+      busy: 'Читаю текст',
+      inputLabel: 'Длинный текст',
+      outputLabel: 'Краткое содержание',
+      form: [
+        { id: 'length', type: 'select', label: 'Длина пересказа', col: 12, options: [
+          ['short', 'Коротко (1–2 предложения)'], ['medium', 'Средне (абзац)'], ['long', 'Подробно']
+        ] }
+      ],
+      async run({ pipe, text, values, status }){
+        const limits = { short: [20, 55], medium: [45, 130], long: [90, 240] }[values.length];
+        const chunks = ai.chunkText(text, 2500);
+        const parts = [];
+        for (let i = 0; i < chunks.length; i++){
+          status.busy(`Обрабатываю часть ${i + 1} из ${chunks.length}`);
+          const r = await pipe(chunks[i], { min_length: limits[0], max_length: limits[1] });
+          parts.push((Array.isArray(r) ? r[0] : r).summary_text.trim());
+        }
+        return parts.join('\n\n');
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Тональность
+====================================================================== */
+PT.tool({
+  id: 'ai-sentiment', cat: 'ai', icon: '☺', ai: true,
+  title: 'Тональность текста',
+  desc: 'Оценивает отзывы и комментарии по шкале от одной до пяти звёзд, понимает русский.',
+  keywords: ['тональность', 'sentiment', 'отзывы', 'настроение', 'оценка', 'нейросеть'],
+  render(root){
+    aiTextTool(root, {
+      model: 'sentiment',
+      action: 'Оценить →',
+      busy: 'Оцениваю',
+      inputLabel: 'Тексты (по одному в строке)',
+      outputLabel: 'Оценки',
+      sample: 'Отличный сервис, всё работает быстро!\nЗаказ пришёл с опозданием на неделю.\nНормально, но могло быть лучше.',
+      async run({ pipe, text, extra, status }){
+        const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+        const rows = [];
+        for (let i = 0; i < lines.length; i++){
+          status.busy(`Строка ${i + 1} из ${lines.length}`);
+          const r = await pipe(lines[i]);
+          const item = Array.isArray(r) ? r[0] : r;
+          const stars = parseInt(item.label) || 3;
+          rows.push({ text: lines[i], stars, score: item.score });
+        }
+        const avg = rows.reduce((a, r) => a + r.stars, 0) / rows.length;
+        extra.appendChild(ui.spacer(14));
+        extra.appendChild(ui.kv([
+          ['Средняя оценка', avg.toFixed(2) + ' из 5'],
+          ['Позитивных (4–5)', String(rows.filter(r => r.stars >= 4).length)],
+          ['Нейтральных (3)', String(rows.filter(r => r.stars === 3).length)],
+          ['Негативных (1–2)', String(rows.filter(r => r.stars <= 2).length)]
+        ]));
+        return rows.map(r => `${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}  (${Math.round(r.score * 100)}%)  ${r.text}`).join('\n');
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Имена, места, организации
+====================================================================== */
+PT.tool({
+  id: 'ai-entities', cat: 'ai', icon: '⌖', ai: true,
+  title: 'Имена и организации в тексте',
+  desc: 'Вытаскивает из текста людей, компании и географию — удобно для разбора документов.',
+  keywords: ['ner', 'сущности', 'имена', 'организации', 'города', 'извлечение', 'нейросеть'],
+  render(root){
+    aiTextTool(root, {
+      model: 'ner',
+      action: 'Найти сущности →',
+      busy: 'Разбираю текст',
+      inputLabel: 'Текст',
+      outputLabel: 'Найденное',
+      sample: 'Иван Петров из компании Яндекс приехал в Москву на встречу с Google.',
+      async run({ pipe, text, extra }){
+        const r = await pipe(text);
+        const TYPES = { PER: 'Люди', ORG: 'Организации', LOC: 'Места', MISC: 'Прочее' };
+        const groups = {};
+        let current = null;
+        r.forEach(item => {
+          const type = String(item.entity).replace(/^[BI]-/, '');
+          const isStart = String(item.entity).startsWith('B-') || !current || current.type !== type;
+          const word = item.word.replace(/^##/, '');
+          if (isStart && !item.word.startsWith('##')){
+            current = { type, text: word, score: item.score };
+            (groups[type] = groups[type] || []).push(current);
+          } else if (current){
+            current.text += item.word.startsWith('##') ? word : ' ' + word;
+          }
+        });
+        Object.keys(groups).forEach(type => {
+          const unique = Array.from(new Set(groups[type].map(g => g.text.trim())));
+          extra.appendChild(ui.spacer(12));
+          extra.appendChild(ui.h(TYPES[type] || type, unique.length + ' шт.'));
+          extra.appendChild(ui.kv(unique.map(u => [u, type])));
+        });
+        return Object.entries(groups).map(([type, list]) =>
+          `${TYPES[type] || type}:\n` + Array.from(new Set(list.map(l => l.text.trim()))).map(t => '  · ' + t).join('\n')
+        ).join('\n\n');
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Классификация по своим категориям
+====================================================================== */
+PT.tool({
+  id: 'ai-zeroshot', cat: 'ai', icon: '⋔', ai: true,
+  title: 'Разбор по своим категориям',
+  desc: 'Раскладывает письма, заявки и отзывы по категориям, которые вы придумали сами.',
+  keywords: ['классификация', 'категории', 'zero-shot', 'сортировка', 'теги', 'нейросеть'],
+  render(root){
+    aiTextTool(root, {
+      model: 'zeroshot',
+      action: 'Разложить →',
+      busy: 'Сопоставляю категории',
+      inputLabel: 'Тексты (по одному в строке)',
+      outputLabel: 'Категории',
+      sample: 'Не приходит письмо для восстановления пароля\nХочу вернуть деньги за подписку\nПредлагаю добавить тёмную тему',
+      form: [
+        { id: 'labels', type: 'text', label: 'Категории через запятую', col: 12,
+          value: 'техническая проблема, оплата и возврат, предложение, жалоба' }
+      ],
+      async run({ pipe, text, values, status, extra }){
+        const labels = values.labels.split(',').map(s => s.trim()).filter(Boolean);
+        if (labels.length < 2) throw new Error('Нужно минимум две категории');
+        const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+        const rows = [];
+        for (let i = 0; i < lines.length; i++){
+          status.busy(`Строка ${i + 1} из ${lines.length}`);
+          const r = await pipe(lines[i], labels);
+          rows.push({ text: lines[i], label: r.labels[0], score: r.scores[0] });
+        }
+        const counts = {};
+        rows.forEach(r => { counts[r.label] = (counts[r.label] || 0) + 1; });
+        extra.appendChild(ui.spacer(14));
+        extra.appendChild(ui.kv(Object.entries(counts).map(([l, n]) => [l, String(n)])));
+        return rows.map(r => `[${r.label}] (${Math.round(r.score * 100)}%) ${r.text}`).join('\n');
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Семантический поиск
+====================================================================== */
+PT.tool({
+  id: 'ai-search', cat: 'ai', icon: '⌕', ai: true,
+  title: 'Поиск по смыслу',
+  desc: 'Ищет в ваших заметках и документах по смыслу, а не по точному совпадению слов.',
+  keywords: ['поиск', 'семантический', 'embedding', 'похожие', 'смысл', 'нейросеть'],
+  render(root){
+    const card = ai.card('embedMulti');
+    const status = ui.status();
+    const corpus = el('textarea', { rows: 12, spellcheck: 'false',
+      value: 'Кот спит на подоконнике\nСобака гуляет во дворе\nКурс доллара вырос на два процента\nВ офисе сломался кондиционер\nНа кухне закончился кофе\nБанк повысил ставку по вкладам' });
+    const query = el('input', { type: 'text', placeholder: 'Что ищем?', value: 'домашние животные' });
+    const out = el('div');
+    let vectors = null, lines = [];
+
+    const form = ui.form([
+      { id: 'model', type: 'select', label: 'Модель', col: 6, options: [
+        ['embedMulti', 'Многоязычная — понимает русский (120 МБ)'], ['embed', 'MiniLM — быстрая, английский (23 МБ)']
+      ] },
+      { id: 'top', type: 'number', label: 'Сколько результатов', col: 6, value: 5, min: 1, max: 50 }
+    ]);
+
+    const cos = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+
+    async function index(){
+      lines = corpus.value.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!lines.length){ status.err('Добавь строки для поиска'); return null; }
+      status.busy('Готовлю модель');
+      const pipe = await ai.get(form.get('model'), (frac, text) => { card.progress.set(frac); card.status.set(text, 'busy'); });
+      card.progress.hide();
+      card.status.ok('Модель готова');
+      status.busy(`Индексирую ${lines.length} строк`);
+      vectors = [];
+      for (const line of lines){
+        const t = await pipe(line, { pooling: 'mean', normalize: true });
+        vectors.push(Array.from(t.data));
+      }
+      status.ok('Проиндексировано строк: ' + lines.length);
+      return pipe;
+    }
+
+    async function search(){
+      try{
+        const pipe = vectors ? await ai.get(form.get('model')) : await index();
+        if (!pipe) return;
+        if (!query.value.trim()){ status.err('Введи запрос'); return; }
+        status.busy('Ищу');
+        const q = await pipe(query.value, { pooling: 'mean', normalize: true });
+        const qv = Array.from(q.data);
+        const ranked = lines.map((line, i) => ({ line, score: cos(qv, vectors[i]) }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, form.get('top'));
+        out.innerHTML = '';
+        out.appendChild(ui.card([
+          ui.h('Самое близкое по смыслу'),
+          el('div', {}, ranked.map(r => {
+            const pct = Math.round(clamp(r.score, 0, 1) * 100);
+            return el('div', { style: { marginBottom: '10px' } }, [
+              el('div', { class: 'row between' }, [el('span', { text: r.line }), el('b', { class: 'mono', text: pct + '%' })]),
+              el('div', { class: 'progress', style: { display: 'block', marginTop: '4px' } }, el('i', { style: { width: pct + '%' } }))
+            ]);
+          }))
+        ]));
+        status.ok('Найдено совпадений: ' + ranked.length);
+      } catch(err){ status.err('Ошибка: ' + err.message); }
+    }
+
+    corpus.addEventListener('input', () => { vectors = null; });
+    query.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+    root.appendChild(ui.card([
+      card.node, form, ui.spacer(14),
+      el('label', { text: 'Строки для поиска (по одной)' }), corpus,
+      ui.spacer(14),
+      el('label', { text: 'Запрос' }), query,
+      ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Искать →', search),
+        ui.btn('Переиндексировать', () => { vectors = null; index().catch(e => status.err(e.message)); }, { ghost: true, small: true })
+      ]),
+      status, ui.spacer(10), ai.privacyNote()
+    ]));
+    root.appendChild(out);
+  }
+});
+
+/* ======================================================================
+   Локальный чат
+====================================================================== */
+PT.tool({
+  id: 'ai-chat', cat: 'ai', icon: '✧', ai: true,
+  title: 'Чат с локальной моделью',
+  desc: 'Небольшая языковая модель отвечает на вопросы и пишет тексты прямо в браузере, без сервера.',
+  keywords: ['чат', 'llm', 'qwen', 'ассистент', 'генерация текста', 'нейросеть', 'gpt'],
+  render(root){
+    const card = ai.card('chat');
+    const status = ui.status();
+    const log = el('div', { class: 'chat-log' });
+    const input = el('textarea', { rows: 3, placeholder: 'Спроси что-нибудь… (Ctrl+Enter — отправить)', spellcheck: 'false' });
+    let messages = [{ role: 'system', content: 'Ты полезный помощник. Отвечай кратко и по делу, на языке пользователя.' }];
+    let busy = false;
+
+    const form = ui.form([
+      { id: 'model', type: 'select', label: 'Модель', col: 6, options: [
+        ['chat', 'Qwen2.5 0.5B — понимает русский (500 МБ)'],
+        ['chatTiny', 'LaMini-Flan 77M — очень лёгкая, английский (40 МБ)']
+      ] },
+      { id: 'tokens', type: 'range', label: 'Максимум слов в ответе', col: 6, min: 32, max: 512, value: 160 }
+    ]);
+
+    function addMsg(role, text){
+      const node = el('div', { class: 'chat-msg ' + (role === 'user' ? 'user' : 'bot'), text });
+      log.appendChild(node);
+      log.scrollTop = log.scrollHeight;
+      return node;
+    }
+
+    async function send(){
+      const text = input.value.trim();
+      if (!text || busy) return;
+      busy = true;
+      input.value = '';
+      addMsg('user', text);
+      const pending = addMsg('bot', 'думаю…');
+      pending.classList.add('pending');
+      try{
+        const key = form.get('model');
+        status.busy('Готовлю модель');
+        const pipe = await ai.get(key, (frac, t) => { card.progress.set(frac); card.status.set(t, 'busy'); });
+        card.progress.hide();
+        card.status.ok('Модель готова · ' + (ai.state.device === 'webgpu' ? 'видеокарта' : 'процессор'));
+        status.busy('Генерирую ответ');
+        const t0 = performance.now();
+        let answer;
+        if (key === 'chat'){
+          messages.push({ role: 'user', content: text });
+          const result = await pipe(messages, { max_new_tokens: form.get('tokens'), do_sample: true, temperature: 0.7, top_p: 0.9 });
+          const generated = result[0].generated_text;
+          answer = Array.isArray(generated) ? generated[generated.length - 1].content : String(generated);
+          messages.push({ role: 'assistant', content: answer });
+          if (messages.length > 11) messages = [messages[0], ...messages.slice(-10)];
+        } else {
+          const result = await pipe(text, { max_new_tokens: form.get('tokens') });
+          answer = (Array.isArray(result) ? result[0] : result).generated_text;
+        }
+        pending.classList.remove('pending');
+        pending.textContent = answer.trim();
+        status.ok(`Ответ за ${((performance.now() - t0) / 1000).toFixed(1)} с`);
+      } catch(err){
+        console.error(err);
+        pending.remove();
+        status.err('Ошибка: ' + err.message);
+      } finally { busy = false; }
+    }
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); }
+    });
+
+    root.appendChild(ui.card([
+      card.node, form, ui.spacer(14), log, ui.spacer(14),
+      input, ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Отправить', send),
+        ui.btn('Очистить диалог', () => {
+          log.innerHTML = '';
+          messages = [messages[0]];
+        }, { ghost: true, small: true }),
+        ui.btn('Сохранить переписку', () => downloadText(
+          Array.from(log.children).map(n => (n.classList.contains('user') ? 'Вы: ' : 'Модель: ') + n.textContent).join('\n\n'),
+          'chat.txt'), { ghost: true, small: true })
+      ]),
+      status, ui.spacer(10),
+      ui.muted('Модель на 0.5 млрд параметров — она заметно слабее облачных сервисов и может ошибаться в фактах. ' +
+               'Зато переписка никогда не покидает ваш компьютер.'),
+      ui.spacer(6), ai.privacyNote()
+    ]));
+  }
+});
+
+/* ======================================================================
+   Менеджер моделей
+====================================================================== */
+PT.tool({
+  id: 'ai-models', cat: 'ai', icon: '⛁',
+  title: 'Загруженные модели',
+  desc: 'Показывает, какие нейросети уже скачаны, сколько занимают и позволяет очистить кэш.',
+  keywords: ['модели', 'кэш', 'место', 'очистить', 'загрузки', 'нейросеть'],
+  render(root){
+    const status = ui.status();
+    const out = el('div');
+    const catalog = el('div');
+
+    async function refresh(){
+      status.busy('Считаю кэш');
+      const info = await ai.cacheInfo();
+      out.innerHTML = '';
+      if (!info.supported){
+        out.appendChild(ui.muted('Браузер не поддерживает просмотр кэша моделей.'));
+        status.set('');
+        return;
+      }
+      const byModel = {};
+      info.files.forEach(f => {
+        const m = f.url.match(/huggingface\.co\/([^/]+\/[^/]+)/);
+        const key = m ? m[1] : 'прочее';
+        byModel[key] = (byModel[key] || 0) + f.size;
+      });
+      out.appendChild(ui.kv([
+        ['Файлов в кэше', String(info.count)],
+        ['Занято места', fmtBytes(info.bytes)],
+        ['Моделей', String(Object.keys(byModel).length)]
+      ]));
+      if (Object.keys(byModel).length){
+        out.appendChild(ui.spacer(14));
+        out.appendChild(ui.kv(Object.entries(byModel).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, fmtBytes(v)])));
+      }
+      if ('storage' in navigator && navigator.storage.estimate){
+        const est = await navigator.storage.estimate();
+        out.appendChild(ui.spacer(14));
+        out.appendChild(ui.kv([
+          ['Всего занято сайтом', fmtBytes(est.usage || 0)],
+          ['Доступно браузеру', fmtBytes(est.quota || 0)]
+        ]));
+      }
+      status.ok('Обновлено');
+    }
+
+    function renderCatalog(){
+      catalog.innerHTML = '';
+      const rows = Object.entries(ai.MODELS).map(([key, spec]) => {
+        const users = PT.tools.filter(t => t.ai).length;
+        return el('div', { class: 'res-kv' }, [
+          el('span', {}, [el('b', { text: spec.name }), el('span', { class: 'muted', text: '  ' + spec.note })]),
+          el('b', { text: spec.size + ' МБ' })
+        ]);
+      });
+      catalog.appendChild(el('div', {}, rows));
+    }
+
+    root.appendChild(ui.card([
+      ui.h('Кэш моделей', 'Скачанные модели хранятся в браузере и работают офлайн'),
+      out, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Обновить', refresh),
+        ui.btn('Очистить кэш моделей', async () => {
+          if (!await ui.confirm('Удалить скачанные модели?',
+              'Освободится место, но при следующем запуске нейросети придётся качать заново.')) return;
+          await ai.clearCache();
+          PT.toast('Кэш моделей очищен', 'ok');
+          refresh();
+        }, { danger: true })
+      ]),
+      status
+    ]));
+    root.appendChild(ui.card([
+      ui.h('Каталог моделей', 'Всё скачивается один раз с Hugging Face и дальше работает локально'),
+      catalog,
+      ui.spacer(12),
+      ui.muted('Устройство: ' + (navigator.gpu ? 'доступен WebGPU — тяжёлые модели пойдут на видеокарте'
+                                               : 'WebGPU недоступен, расчёты идут на процессоре — это медленнее'))
+    ]));
+    renderCatalog();
+    refresh();
+  }
+});
+
+
+/* ===== tools/80-image2.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: ИЗОБРАЖЕНИЯ, ЧАСТЬ 2
+====================================================================== */
+
+/* ======================================================================
+   Коллаж
+====================================================================== */
+PT.tool({
+  id: 'image-collage', cat: 'image', icon: '⊞',
+  title: 'Коллаж из фотографий',
+  desc: 'Собирает снимки в сетку или мозаику с полями, фоном и скруглением углов.',
+  keywords: ['коллаж', 'сетка', 'collage', 'несколько фото', 'мозаика', 'альбом'],
+  render(root){
+    let images = [];
+    const status = ui.status();
+    const preview = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--line)' } });
+    const list = ui.fileList(i => { images.splice(i, 1); redraw(); });
+
+    const form = ui.form([
+      { id: 'layout', type: 'select', label: 'Раскладка', col: 4, options: [
+        ['grid', 'Ровная сетка'], ['row', 'В один ряд'], ['column', 'В столбец'], ['mosaic', 'Мозаика (первый — крупный)']
+      ] },
+      { id: 'cols', type: 'number', label: 'Колонок', col: 4, value: 3, min: 1, max: 8 },
+      { id: 'cell', type: 'number', label: 'Размер ячейки, px', col: 4, value: 500, min: 100, step: 50 },
+      { id: 'gap', type: 'range', label: 'Промежуток', col: 4, min: 0, max: 80, value: 14, unit: 'px' },
+      { id: 'pad', type: 'range', label: 'Поля вокруг', col: 4, min: 0, max: 120, value: 20, unit: 'px' },
+      { id: 'radius', type: 'range', label: 'Скругление', col: 4, min: 0, max: 60, value: 10, unit: 'px' },
+      { id: 'bg', type: 'color', label: 'Фон', col: 4, value: '#101216' },
+      { id: 'fit', type: 'select', label: 'Как вписывать', col: 4, options: [['cover', 'Заполнить и обрезать'], ['contain', 'Целиком с полями']] }
+    ], redraw);
+
+    const drop = ui.drop({
+      accept: 'image/*', multiple: true,
+      title: 'Перетащи фотографии',
+      hint: 'порядок — как в списке ниже',
+      onFiles: async files => {
+        for (const f of files){
+          const img = await loadImage(f);
+          img._name = f.name; img._size = f.size;
+          images.push(img);
+        }
+        redraw();
+      }
+    });
+
+    function drawIn(ctx, img, x, y, w, h, v){
+      ctx.save();
+      if (v.radius > 0 && ctx.roundRect){
+        ctx.beginPath(); ctx.roundRect(x, y, w, h, v.radius); ctx.clip();
+      } else { ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); }
+      const ratio = img.naturalWidth / img.naturalHeight;
+      let dw = w, dh = h;
+      if (v.fit === 'cover'){
+        if (ratio > w / h){ dh = h; dw = h * ratio; } else { dw = w; dh = w / ratio; }
+      } else {
+        if (ratio > w / h){ dw = w; dh = w / ratio; } else { dh = h; dw = h * ratio; }
+      }
+      ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      ctx.restore();
+    }
+
+    function redraw(){
+      list.render(images.map(i => ({ name: i._name, size: i._size })));
+      if (!images.length){ status.set('Добавь хотя бы одну фотографию'); return; }
+      const v = form.values();
+      const cell = v.cell, gap = v.gap, pad = v.pad;
+      let cols = clamp(v.cols, 1, 8), rows;
+      if (v.layout === 'row'){ cols = images.length; rows = 1; }
+      else if (v.layout === 'column'){ cols = 1; rows = images.length; }
+      else rows = Math.ceil(images.length / cols);
+
+      const width = pad * 2 + cols * cell + (cols - 1) * gap;
+      const height = pad * 2 + rows * cell + (rows - 1) * gap;
+      preview.width = width; preview.height = height;
+      const ctx = preview.getContext('2d');
+      ctx.fillStyle = v.bg; ctx.fillRect(0, 0, width, height);
+
+      if (v.layout === 'mosaic' && images.length > 1){
+        const bigSpan = Math.min(2, cols);
+        const big = bigSpan * cell + (bigSpan - 1) * gap;
+        drawIn(ctx, images[0], pad, pad, big, big, v);
+        let idx = 1;
+        for (let r = 0; r < rows && idx < images.length; r++){
+          for (let c = 0; c < cols && idx < images.length; c++){
+            if (r < bigSpan && c < bigSpan) continue;
+            drawIn(ctx, images[idx++], pad + c * (cell + gap), pad + r * (cell + gap), cell, cell, v);
+          }
+        }
+      } else {
+        images.forEach((img, i) => {
+          const c = i % cols, r = Math.floor(i / cols);
+          drawIn(ctx, img, pad + c * (cell + gap), pad + r * (cell + gap), cell, cell, v);
+        });
+      }
+      status.ok(`${images.length} фото · ${width}×${height}px`);
+    }
+
+    root.appendChild(ui.card([
+      drop, list, ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать коллаж', async () => {
+          if (!images.length){ status.err('Сначала добавь фотографии'); return; }
+          downloadBlob(await canvasToBlob(preview, 'image/jpeg', 0.93), 'collage.jpg');
+        }),
+        ui.btn('Перемешать', () => {
+          for (let i = images.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [images[i], images[j]] = [images[j], images[i]]; }
+          redraw();
+        }, { ghost: true, small: true }),
+        ui.btn('Очистить', () => { images = []; redraw(); }, { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(ui.card([ui.h('Предпросмотр'), preview]));
+  }
+});
+
+/* ======================================================================
+   Нарезка на части
+====================================================================== */
+PT.tool({
+  id: 'image-split', cat: 'image', icon: '⊟',
+  title: 'Нарезка изображения',
+  desc: 'Режет картинку на сетку одинаковых частей — для лент Instagram, пазлов и раскладок.',
+  keywords: ['нарезать', 'разрезать', 'сетка', 'instagram', 'части', 'плитка', 'split'],
+  render(root){
+    let img = null, name = 'image';
+    const status = ui.status();
+    const preview = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--line)' } });
+    const grid = ui.thumbGrid();
+    let parts = [];
+
+    const form = ui.form([
+      { id: 'cols', type: 'number', label: 'Колонок', col: 3, value: 3, min: 1, max: 12 },
+      { id: 'rows', type: 'number', label: 'Строк', col: 3, value: 3, min: 1, max: 12 },
+      { id: 'square', type: 'checkbox', label: 'Обрезать до квадрата', col: 3, value: true },
+      { id: 'fmt', type: 'select', label: 'Формат', col: 3, options: [['image/jpeg', 'JPEG'], ['image/png', 'PNG']] }
+    ], () => { if (img) drawPreview(); });
+
+    const drop = ui.drop({
+      accept: 'image/*',
+      onFiles: async files => {
+        img = await loadImage(files[0]);
+        name = baseName(files[0].name);
+        drawPreview();
+        status.ok(`${files[0].name} — ${img.naturalWidth}×${img.naturalHeight}`);
+      }
+    });
+
+    function source(){
+      const v = form.values();
+      if (!v.square) return imgToCanvas(img);
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const c = makeCanvas(side, side);
+      c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2,
+        side, side, 0, 0, side, side);
+      return c;
+    }
+
+    function drawPreview(){
+      const v = form.values();
+      const src = source();
+      preview.width = src.width; preview.height = src.height;
+      const ctx = preview.getContext('2d');
+      ctx.drawImage(src, 0, 0);
+      ctx.strokeStyle = '#e8a33d';
+      ctx.lineWidth = Math.max(2, src.width / 300);
+      for (let c = 1; c < v.cols; c++){
+        ctx.beginPath(); ctx.moveTo(src.width / v.cols * c, 0); ctx.lineTo(src.width / v.cols * c, src.height); ctx.stroke();
+      }
+      for (let r = 1; r < v.rows; r++){
+        ctx.beginPath(); ctx.moveTo(0, src.height / v.rows * r); ctx.lineTo(src.width, src.height / v.rows * r); ctx.stroke();
+      }
+    }
+
+    async function cut(){
+      if (!img){ status.err('Сначала загрузи картинку'); return; }
+      const v = form.values();
+      const src = source();
+      const pw = Math.floor(src.width / v.cols), ph = Math.floor(src.height / v.rows);
+      parts = []; grid.clear();
+      for (let r = 0; r < v.rows; r++){
+        for (let c = 0; c < v.cols; c++){
+          const part = makeCanvas(pw, ph);
+          part.getContext('2d').drawImage(src, c * pw, r * ph, pw, ph, 0, 0, pw, ph);
+          const blob = await encodeCanvas(v.fmt === 'image/jpeg' ? flatten(part) : part, v.fmt, 0.93);
+          const fileName = `${name}-${r + 1}-${c + 1}.${PT.mimeExt(v.fmt)}`;
+          parts.push({ name: fileName, data: blob });
+          grid.add(URL.createObjectURL(blob), `${r + 1}×${c + 1}`, () => downloadBlob(blob, fileName));
+        }
+      }
+      status.ok(`Нарезано частей: ${parts.length} по ${pw}×${ph}px`);
+    }
+
+    root.appendChild(ui.card([
+      drop, ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Нарезать →', cut),
+        ui.btn('Скачать архивом', async () => {
+          if (!parts.length){ status.err('Сначала нарежь картинку'); return; }
+          downloadBlob(await zip(parts), name + '-parts.zip');
+        }, { ghost: true })
+      ]),
+      status,
+      ui.muted('Для ленты Instagram части выкладывают справа налево и снизу вверх — начинай с последней.')
+    ]));
+    root.appendChild(ui.card([ui.h('Разметка'), preview]));
+    root.appendChild(grid);
+  }
+});
+
+/* ======================================================================
+   Красивая рамка для скриншота
+====================================================================== */
+PT.tool({
+  id: 'image-frame', cat: 'image', icon: '❏',
+  title: 'Рамка для скриншота',
+  desc: 'Кладёт снимок на градиентную подложку с тенью и скруглением — для постов и презентаций.',
+  keywords: ['рамка', 'скриншот', 'подложка', 'тень', 'обложка', 'красиво', 'presentation'],
+  render(root){
+    let img = null;
+    const status = ui.status();
+    const preview = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px' } });
+
+    const PRESETS = {
+      'Закат': ['#f6d365', '#fda085'], 'Океан': ['#4facfe', '#00f2fe'], 'Ночь': ['#232526', '#414345'],
+      'Pixset': ['#e8a33d', '#5fb3a3'], 'Лаванда': ['#a18cd1', '#fbc2eb'], 'Мята': ['#43e97b', '#38f9d7']
+    };
+    const form = ui.form([
+      { id: 'preset', type: 'select', label: 'Подложка', col: 4, options: Object.keys(PRESETS) },
+      { id: 'angle', type: 'range', label: 'Угол градиента', col: 4, min: 0, max: 360, value: 135, unit: '°' },
+      { id: 'pad', type: 'range', label: 'Поля', col: 4, min: 10, max: 200, value: 70, unit: 'px' },
+      { id: 'radius', type: 'range', label: 'Скругление', col: 4, min: 0, max: 60, value: 14, unit: 'px' },
+      { id: 'shadow', type: 'range', label: 'Тень', col: 4, min: 0, max: 90, value: 40 },
+      { id: 'tilt', type: 'range', label: 'Наклон', col: 4, min: -15, max: 15, value: 0, unit: '°' },
+      { id: 'bar', type: 'checkbox', label: 'Полоса окна с кнопками', col: 6, value: true },
+      { id: 'title', type: 'text', label: 'Заголовок окна', col: 6, value: 'pixset.dev' }
+    ], () => { if (img) draw(); });
+
+    const drop = ui.drop({
+      accept: 'image/*',
+      title: 'Перетащи скриншот',
+      hint: 'или вставь из буфера (Ctrl+V)',
+      onFiles: async files => { img = await loadImage(files[0]); draw(); status.ok('Готово к оформлению'); }
+    });
+
+    function draw(){
+      const v = form.values();
+      const pad = v.pad;
+      const barH = v.bar ? Math.max(26, img.naturalWidth / 34) : 0;
+      const w = img.naturalWidth + pad * 2;
+      const h = img.naturalHeight + barH + pad * 2;
+      preview.width = w; preview.height = h;
+      const ctx = preview.getContext('2d');
+
+      const [c1, c2] = PRESETS[v.preset];
+      const rad = (v.angle - 90) * Math.PI / 180;
+      const len = Math.abs(w * Math.cos(rad)) + Math.abs(h * Math.sin(rad));
+      const grad = ctx.createLinearGradient(w / 2 - Math.cos(rad) * len / 2, h / 2 - Math.sin(rad) * len / 2,
+                                            w / 2 + Math.cos(rad) * len / 2, h / 2 + Math.sin(rad) * len / 2);
+      grad.addColorStop(0, c1); grad.addColorStop(1, c2);
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(v.tilt * Math.PI / 180);
+      ctx.translate(-w / 2, -h / 2);
+      if (v.shadow > 0){
+        ctx.shadowColor = 'rgba(0,0,0,' + (v.shadow / 130).toFixed(2) + ')';
+        ctx.shadowBlur = v.shadow;
+        ctx.shadowOffsetY = v.shadow / 2.5;
+      }
+      const x = pad, y = pad, iw = img.naturalWidth, ih = img.naturalHeight + barH;
+      ctx.fillStyle = '#1d2127';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, iw, ih, v.radius); else ctx.rect(x, y, iw, ih);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, iw, ih, v.radius); else ctx.rect(x, y, iw, ih);
+      ctx.clip();
+      if (v.bar){
+        ctx.fillStyle = '#23272e';
+        ctx.fillRect(x, y, iw, barH);
+        ['#e0685c', '#e8a33d', '#5fb3a3'].forEach((color, i) => {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(x + barH * 0.6 + i * barH * 0.62, y + barH / 2, barH * 0.16, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        if (v.title){
+          ctx.fillStyle = '#989da6';
+          ctx.font = `${Math.round(barH * 0.42)}px 'Space Mono', monospace`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(v.title, x + iw / 2, y + barH / 2);
+          ctx.textAlign = 'start';
+        }
+      }
+      ctx.drawImage(img, x, y + barH);
+      ctx.restore();
+      ctx.restore();
+      status.ok(`${w}×${h}px`);
+    }
+
+    root.appendChild(ui.card([
+      drop, ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать PNG', async () => {
+          if (!img){ status.err('Сначала загрузи скриншот'); return; }
+          downloadBlob(await canvasToBlob(preview, 'image/png'), 'framed.png');
+        }),
+        ui.btn('Копировать в буфер', async () => {
+          try{
+            const blob = await canvasToBlob(preview, 'image/png');
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            PT.toast('Скопировано', 'ok');
+          } catch(e){ PT.toast('Браузер не разрешил копирование', 'err'); }
+        }, { ghost: true })
+      ]),
+      status
+    ]));
+    root.appendChild(ui.card([ui.h('Предпросмотр'), preview]));
+  }
+});
+
+/* ======================================================================
+   Спрайт-лист
+====================================================================== */
+PT.tool({
+  id: 'image-sprite', cat: 'image', icon: '⁘',
+  title: 'Спрайт-лист',
+  desc: 'Собирает кадры в один атлас с CSS-разметкой или, наоборот, режет готовый атлас на кадры.',
+  keywords: ['спрайт', 'sprite', 'атлас', 'анимация', 'css', 'игры', 'кадры'],
+  render(root){
+    const status = ui.status();
+    const out = el('div');
+
+    /* сборка */
+    let frames = [];
+    const buildForm = ui.form([
+      { id: 'cols', type: 'number', label: 'Кадров в ряду', col: 4, value: 8, min: 1, max: 40 },
+      { id: 'size', type: 'number', label: 'Размер кадра, px', col: 4, value: 64, min: 8, max: 512 },
+      { id: 'pad', type: 'number', label: 'Отступ между кадрами', col: 4, value: 0, min: 0, max: 32 }
+    ]);
+    const buildDrop = ui.drop({
+      accept: 'image/*', multiple: true,
+      title: 'Кадры → спрайт-лист',
+      hint: 'порядок по именам файлов',
+      onFiles: async files => {
+        const sorted = files.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }));
+        frames = await Promise.all(sorted.map(loadImage));
+        status.ok('Кадров загружено: ' + frames.length);
+      }
+    });
+    async function build(){
+      if (!frames.length){ status.err('Добавь кадры'); return; }
+      const v = buildForm.values();
+      const cols = Math.min(v.cols, frames.length);
+      const rows = Math.ceil(frames.length / cols);
+      const cell = v.size, pad = v.pad;
+      const canvas = makeCanvas(cols * cell + (cols - 1) * pad, rows * cell + (rows - 1) * pad);
+      const ctx = canvas.getContext('2d');
+      frames.forEach((img, i) => {
+        const c = i % cols, r = Math.floor(i / cols);
+        ctx.drawImage(img, c * (cell + pad), r * (cell + pad), cell, cell);
+      });
+      const blob = await canvasToBlob(canvas, 'image/png');
+      const css = `.sprite {\n  width: ${cell}px;\n  height: ${cell}px;\n  background-image: url('sprite.png');\n}\n` +
+        frames.map((_, i) => {
+          const c = i % cols, r = Math.floor(i / cols);
+          return `.sprite-${i} { background-position: -${c * (cell + pad)}px -${r * (cell + pad)}px; }`;
+        }).join('\n') +
+        `\n\n@keyframes play {\n  from { background-position: 0 0; }\n  to { background-position: -${cols * (cell + pad)}px 0; }\n}\n` +
+        `.animated {\n  animation: play ${(frames.length / 12).toFixed(2)}s steps(${cols}) infinite;\n}`;
+      out.innerHTML = '';
+      out.appendChild(ui.card([
+        ui.h('Атлас собран', `${frames.length} кадров · ${canvas.width}×${canvas.height}px`),
+        el('img', { src: URL.createObjectURL(blob), style: { maxWidth: '100%', border: '1px solid var(--line)', borderRadius: '6px' } }),
+        ui.spacer(12),
+        ui.btn('Скачать PNG', () => downloadBlob(blob, 'sprite.png')),
+        ui.spacer(14),
+        ui.copyBox(css, { label: 'CSS для использования', rows: 10 })
+      ]));
+      status.ok('Готово');
+    }
+
+    /* нарезка */
+    const cutForm = ui.form([
+      { id: 'cols', type: 'number', label: 'Колонок в атласе', col: 6, value: 8, min: 1, max: 40 },
+      { id: 'rows', type: 'number', label: 'Строк в атласе', col: 6, value: 1, min: 1, max: 40 }
+    ]);
+    const cutDrop = ui.drop({
+      accept: 'image/*',
+      title: 'Спрайт-лист → отдельные кадры',
+      onFiles: async files => {
+        const img = await loadImage(files[0]);
+        const v = cutForm.values();
+        const cw = Math.floor(img.naturalWidth / v.cols), chh = Math.floor(img.naturalHeight / v.rows);
+        const entries = [];
+        const grid = ui.thumbGrid();
+        for (let r = 0; r < v.rows; r++){
+          for (let c = 0; c < v.cols; c++){
+            const part = makeCanvas(cw, chh);
+            part.getContext('2d').drawImage(img, c * cw, r * chh, cw, chh, 0, 0, cw, chh);
+            const blob = await canvasToBlob(part, 'image/png');
+            const nm = `frame-${String(r * v.cols + c + 1).padStart(3, '0')}.png`;
+            entries.push({ name: nm, data: blob });
+            grid.add(URL.createObjectURL(blob), nm.replace('frame-', '').replace('.png', ''), () => downloadBlob(blob, nm));
+          }
+        }
+        out.innerHTML = '';
+        out.appendChild(ui.card([
+          ui.h('Нарезано кадров: ' + entries.length, `по ${cw}×${chh}px`),
+          grid, ui.spacer(12),
+          ui.btn('Скачать архивом', async () => downloadBlob(await zip(entries), 'frames.zip'))
+        ]));
+        status.ok('Готово');
+      }
+    });
+
+    root.appendChild(ui.card([ui.h('Собрать атлас'), buildDrop, ui.spacer(14), buildForm, ui.spacer(14),
+      ui.btn('Собрать →', build), status]));
+    root.appendChild(ui.card([ui.h('Разобрать атлас'), cutForm, ui.spacer(14), cutDrop]));
+    root.appendChild(out);
+  }
+});
+
+/* ======================================================================
+   SVG: оптимизация и растеризация
+====================================================================== */
+PT.tool({
+  id: 'image-svg', cat: 'image', icon: '◈',
+  title: 'SVG: чистка и экспорт',
+  desc: 'Убирает лишнее из SVG, показывает экономию и превращает вектор в PNG нужного размера.',
+  keywords: ['svg', 'вектор', 'оптимизация', 'растеризация', 'иконка', 'минификация'],
+  render(root){
+    const status = ui.status();
+    const input = el('textarea', { rows: 12, spellcheck: 'false',
+      placeholder: '<svg xmlns="http://www.w3.org/2000/svg" …>' });
+    const output = el('textarea', { rows: 12, readonly: true, spellcheck: 'false' });
+    const preview = el('div', { style: { minHeight: '150px', display: 'grid', placeItems: 'center',
+      border: '1px solid var(--line)', borderRadius: '8px', padding: '14px', background: 'var(--surface-2)' } });
+
+    const form = ui.form([
+      { id: 'comments', type: 'checkbox', label: 'Удалять комментарии и метаданные', col: 4, value: true },
+      { id: 'space', type: 'checkbox', label: 'Убирать лишние пробелы', col: 4, value: true },
+      { id: 'digits', type: 'number', label: 'Знаков после запятой', col: 4, value: 2, min: 0, max: 6 },
+      { id: 'size', type: 'number', label: 'Размер PNG, px', col: 4, value: 512, min: 16, max: 4096 }
+    ], optimize);
+
+    function optimize(){
+      const src = input.value.trim();
+      if (!src){ output.value = ''; preview.innerHTML = ''; status.set(''); return; }
+      const v = form.values();
+      let svg = src;
+      if (v.comments){
+        svg = svg.replace(/<!--[\s\S]*?-->/g, '')
+                 .replace(/<metadata[\s\S]*?<\/metadata>/gi, '')
+                 .replace(/<desc[\s\S]*?<\/desc>/gi, '')
+                 .replace(/<title[\s\S]*?<\/title>/gi, '')
+                 .replace(/\s(inkscape|sodipodi|xmlns:inkscape|xmlns:sodipodi)[^\s=]*="[^"]*"/g, '');
+      }
+      if (v.digits >= 0){
+        svg = svg.replace(/-?\d+\.\d+/g, m => String(parseFloat(parseFloat(m).toFixed(v.digits))));
+      }
+      if (v.space){
+        svg = svg.replace(/>\s+</g, '><').replace(/\s{2,}/g, ' ').trim();
+      }
+      output.value = svg;
+      preview.innerHTML = '';
+      const holder = el('div', { html: svg, style: { maxWidth: '100%', maxHeight: '280px' } });
+      const svgEl = holder.querySelector('svg');
+      if (svgEl){ svgEl.style.maxWidth = '100%'; svgEl.style.maxHeight = '280px'; }
+      preview.appendChild(holder);
+      const saved = src.length ? Math.round((1 - svg.length / src.length) * 100) : 0;
+      status.ok(`${fmtBytes(src.length)} → ${fmtBytes(svg.length)} (−${saved}%)`);
+    }
+
+    async function toPng(){
+      const svg = output.value || input.value;
+      if (!svg.trim()){ status.err('Вставь SVG-код'); return; }
+      const size = form.get('size');
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const img = await loadImage(blob);
+      const ratio = (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1;
+      const canvas = makeCanvas(size, Math.round(size / ratio));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      downloadBlob(await canvasToBlob(canvas, 'image/png'), 'icon-' + size + '.png');
+    }
+
+    input.addEventListener('input', debounce(optimize, 250));
+
+    root.appendChild(ui.card([
+      ui.drop({
+        accept: '.svg,image/svg+xml', title: 'Перетащи SVG-файл',
+        onFiles: async files => { input.value = await files[0].text(); optimize(); }
+      }),
+      ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'split' }, [
+        el('div', {}, [el('label', { text: 'Исходный код' }), input]),
+        el('div', {}, [el('label', { text: 'Оптимизированный' }), output])
+      ]),
+      ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать SVG', () => downloadText(output.value, 'optimized.svg', 'image/svg+xml')),
+        ui.btn('Экспорт в PNG', toPng, { ghost: true }),
+        ui.btn('Копировать', () => copy(output.value), { ghost: true, small: true }),
+        ui.btn('Как Data URI', () => copy('data:image/svg+xml,' + encodeURIComponent(output.value)), { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(ui.card([ui.h('Предпросмотр'), preview]));
+  }
+});
+
+/* ======================================================================
+   Тонирование и дуотон
+====================================================================== */
+PT.tool({
+  id: 'image-duotone', cat: 'image', icon: '◑',
+  title: 'Дуотон и тонирование',
+  desc: 'Перекрашивает фото в два цвета — модный приём для обложек и баннеров.',
+  keywords: ['дуотон', 'duotone', 'тонирование', 'перекрасить', 'цвет', 'обложка'],
+  render(root){
+    PT.imageBatch(root, {
+      zipName: 'duotone',
+      actionLabel: 'Применить →',
+      form: [
+        { id: 'dark', type: 'color', label: 'Цвет теней', col: 3, value: '#101216' },
+        { id: 'light', type: 'color', label: 'Цвет светов', col: 3, value: '#e8a33d' },
+        { id: 'contrast', type: 'range', label: 'Контраст', col: 3, min: 50, max: 200, value: 110, unit: '%' },
+        { id: 'mix', type: 'range', label: 'Сила эффекта', col: 3, min: 10, max: 100, value: 100, unit: '%' },
+        { id: 'preset', type: 'select', label: 'Готовые сочетания', col: 6, options: [
+          ['custom', 'Свои цвета'], ['sunset', 'Закат (фиолетовый → оранжевый)'],
+          ['cyber', 'Кибер (синий → розовый)'], ['forest', 'Лес (тёмно-зелёный → лайм)'],
+          ['mono', 'Классика (чёрный → белый)'], ['pixset', 'Pixset (графит → янтарь)']
+        ] }
+      ],
+      onChange(id, v, api){
+        if (id !== 'preset' || v.preset === 'custom') return;
+        const P = {
+          sunset: ['#2d1b4e', '#ff9a56'], cyber: ['#0f2027', '#ff2e93'],
+          forest: ['#0b2818', '#a8e063'], mono: ['#000000', '#ffffff'], pixset: ['#101216', '#e8a33d']
+        }[v.preset];
+        api.form.set('dark', P[0]); api.form.set('light', P[1]);
+      },
+      async process(img, v, file){
+        const canvas = imgToCanvas(img);
+        const ctx = canvas.getContext('2d');
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = data.data;
+        const dark = Color.hexToRgb(v.dark), light = Color.hexToRgb(v.light);
+        const mix = v.mix / 100;
+        for (let i = 0; i < d.length; i += 4){
+          let lum = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+          lum = clamp((lum - 0.5) * (v.contrast / 100) + 0.5, 0, 1);
+          const r = dark.r + (light.r - dark.r) * lum;
+          const g = dark.g + (light.g - dark.g) * lum;
+          const b = dark.b + (light.b - dark.b) * lum;
+          d[i] = d[i] * (1 - mix) + r * mix;
+          d[i + 1] = d[i + 1] * (1 - mix) + g * mix;
+          d[i + 2] = d[i + 2] * (1 - mix) + b * mix;
+        }
+        ctx.putImageData(data, 0, 0);
+        const blob = await encodeCanvas(canvas, 'image/jpeg', 0.93);
+        return { blob, name: baseName(file.name) + '-duotone.jpg' };
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Наложение изображений
+====================================================================== */
+PT.tool({
+  id: 'image-blend', cat: 'image', icon: '◍',
+  title: 'Наложение изображений',
+  desc: 'Соединяет два снимка режимами наложения — умножение, экран, разница и другие.',
+  keywords: ['наложение', 'blend', 'смешать', 'двойная экспозиция', 'режимы', 'слои'],
+  render(root){
+    let base = null, over = null;
+    const status = ui.status();
+    const preview = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--line)' } });
+
+    const form = ui.form([
+      { id: 'mode', type: 'select', label: 'Режим наложения', col: 4, options: [
+        ['multiply', 'Умножение'], ['screen', 'Экран'], ['overlay', 'Перекрытие'], ['darken', 'Замена тёмным'],
+        ['lighten', 'Замена светлым'], ['color-dodge', 'Осветление основы'], ['difference', 'Разница'],
+        ['exclusion', 'Исключение'], ['hue', 'Цветовой тон'], ['saturation', 'Насыщенность'],
+        ['color', 'Цвет'], ['luminosity', 'Свечение'], ['source-over', 'Обычное']
+      ] },
+      { id: 'opacity', type: 'range', label: 'Прозрачность верхнего', col: 4, min: 0, max: 100, value: 100, unit: '%' },
+      { id: 'fit', type: 'select', label: 'Подгонка размера', col: 4, options: [
+        ['stretch', 'Растянуть на весь кадр'], ['center', 'По центру'], ['tile', 'Замостить']
+      ] }
+    ], draw);
+
+    const dropA = ui.drop({ accept: 'image/*', title: 'Нижний слой', onFiles: async f => { base = await loadImage(f[0]); draw(); } });
+    const dropB = ui.drop({ accept: 'image/*', title: 'Верхний слой', onFiles: async f => { over = await loadImage(f[0]); draw(); } });
+
+    function draw(){
+      if (!base){ status.set('Загрузи хотя бы нижний слой'); return; }
+      const v = form.values();
+      preview.width = base.naturalWidth; preview.height = base.naturalHeight;
+      const ctx = preview.getContext('2d');
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.drawImage(base, 0, 0);
+      if (over){
+        ctx.globalCompositeOperation = v.mode;
+        ctx.globalAlpha = v.opacity / 100;
+        if (v.fit === 'stretch') ctx.drawImage(over, 0, 0, preview.width, preview.height);
+        else if (v.fit === 'center'){
+          ctx.drawImage(over, (preview.width - over.naturalWidth) / 2, (preview.height - over.naturalHeight) / 2);
+        } else {
+          for (let y = 0; y < preview.height; y += over.naturalHeight)
+            for (let x = 0; x < preview.width; x += over.naturalWidth) ctx.drawImage(over, x, y);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+      status.ok(`${preview.width}×${preview.height}px`);
+    }
+
+    root.appendChild(ui.card([
+      el('div', { class: 'grid cols-2' }, [dropA, dropB]),
+      ui.spacer(14), form, ui.spacer(14),
+      ui.btn('Скачать результат', async () => {
+        if (!base){ status.err('Нужен хотя бы один слой'); return; }
+        downloadBlob(await canvasToBlob(preview, 'image/png'), 'blend.png');
+      }),
+      status
+    ]));
+    root.appendChild(ui.card([ui.h('Результат'), preview]));
+  }
+});
+
+
+/* ===== tools/81-media2.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: МЕДИА, ЧАСТЬ 2
+====================================================================== */
+
+/** Перекодирование видео через канвас и MediaRecorder (без внешних библиотек). */
+async function reencodeVideo(file, opts){
+  opts = opts || {};
+  const video = document.createElement('video');
+  video.src = URL.createObjectURL(file);
+  video.muted = true;
+  video.playsInline = true;
+  await new Promise((res, rej) => { video.onloadedmetadata = res; video.onerror = () => rej(new Error('Не удалось открыть видео')); });
+
+  const start = opts.start || 0;
+  const end = Math.min(opts.end || video.duration, video.duration);
+  const scale = opts.width ? opts.width / video.videoWidth : 1;
+  const canvas = makeCanvas(Math.round(video.videoWidth * scale / 2) * 2, Math.round(video.videoHeight * scale / 2) * 2);
+  const ctx = canvas.getContext('2d');
+
+  const stream = canvas.captureStream(opts.fps || 30);
+  let audioCtx = null;
+  if (!opts.mute){
+    try{
+      audioCtx = new AudioContext();
+      const source = audioCtx.createMediaElementSource(video);
+      const dest = audioCtx.createMediaStreamDestination();
+      source.connect(dest);
+      dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+    } catch(e){ /* без звука — не критично */ }
+  }
+
+  const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: opts.bitrate || 3000000 });
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+
+  video.currentTime = start;
+  await new Promise(res => { video.onseeked = res; });
+
+  return new Promise((resolve, reject) => {
+    recorder.onstop = async () => {
+      if (audioCtx) await audioCtx.close().catch(() => {});
+      URL.revokeObjectURL(video.src);
+      resolve(new Blob(chunks, { type: mime || 'video/webm' }));
+    };
+    recorder.onerror = e => reject(new Error('Ошибка записи: ' + e.message));
+    recorder.start(500);
+    video.play().catch(reject);
+
+    const paint = () => {
+      if (video.currentTime >= end || video.ended){
+        video.pause();
+        setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 250);
+        return;
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (opts.onProgress) opts.onProgress((video.currentTime - start) / (end - start));
+      requestAnimationFrame(paint);
+    };
+    paint();
+  });
+}
+
+/* ======================================================================
+   Обрезка и сжатие видео
+====================================================================== */
+PT.tool({
+  id: 'media-video', cat: 'media', icon: '⧉',
+  title: 'Обрезка и сжатие видео',
+  desc: 'Вырезает нужный отрезок, уменьшает разрешение и вес, убирает звук — прямо в браузере.',
+  keywords: ['видео', 'обрезать', 'сжать', 'trim', 'уменьшить вес', 'без звука', 'конвертация'],
+  render(root){
+    let file = null, video = null;
+    const status = ui.status();
+    const progress = ui.progress();
+    const resultBox = ui.result();
+    const player = el('video', { controls: true, style: { width: '100%', maxHeight: '340px', borderRadius: '8px',
+      background: '#000', display: 'none' } });
+
+    const form = ui.form([
+      { id: 'start', type: 'number', label: 'Начало, сек', col: 3, value: 0, min: 0, step: 0.5 },
+      { id: 'end', type: 'number', label: 'Конец, сек', col: 3, value: 10, min: 0, step: 0.5 },
+      { id: 'width', type: 'select', label: 'Разрешение', col: 3, value: '0', options: [
+        ['0', 'Как в оригинале'], ['1920', '1920 (Full HD)'], ['1280', '1280 (HD)'], ['854', '854 (480p)'], ['640', '640 (360p)']
+      ] },
+      { id: 'bitrate', type: 'select', label: 'Качество', col: 3, value: '3000000', options: [
+        ['8000000', 'Высокое'], ['3000000', 'Среднее'], ['1200000', 'Экономное'], ['600000', 'Минимальное']
+      ] },
+      { id: 'fps', type: 'select', label: 'Кадров в секунду', col: 3, value: '30', options: [['60', '60'], ['30', '30'], ['24', '24'], ['15', '15']] },
+      { id: 'mute', type: 'checkbox', label: 'Убрать звук', col: 3 }
+    ]);
+
+    const drop = ui.drop({
+      accept: 'video/*',
+      title: 'Перетащи видео',
+      hint: 'MP4, WebM, MOV — результат сохранится в WebM',
+      onFiles: async files => {
+        file = files[0];
+        video = document.createElement('video');
+        video.src = URL.createObjectURL(file);
+        await new Promise(res => { video.onloadedmetadata = res; });
+        player.src = video.src;
+        player.style.display = 'block';
+        form.set('end', Math.round(video.duration * 10) / 10);
+        status.ok(`${file.name} — ${fmtDuration(video.duration)}, ${video.videoWidth}×${video.videoHeight}, ${fmtBytes(file.size)}`);
+      }
+    });
+
+    async function run(){
+      if (!file){ status.err('Сначала загрузи видео'); return; }
+      const v = form.values();
+      status.busy('Обрабатываю — идёт в реальном времени, наберись терпения');
+      try{
+        const blob = await reencodeVideo(file, {
+          start: v.start, end: v.end,
+          width: Number(v.width) || 0,
+          bitrate: Number(v.bitrate),
+          fps: Number(v.fps),
+          mute: v.mute,
+          onProgress: p => progress.set(p)
+        });
+        progress.hide();
+        resultBox.clear();
+        const saved = Math.round((1 - blob.size / file.size) * 100);
+        resultBox.file(blob, baseName(file.name) + '-edit.webm',
+          fmtDuration(v.end - v.start) + (saved > 0 ? ` · меньше на ${saved}%` : ''));
+        status.ok('Готово: ' + fmtBytes(blob.size));
+      } catch(err){
+        progress.hide();
+        status.err('Ошибка: ' + err.message);
+      }
+    }
+
+    root.appendChild(ui.card([
+      drop, player, ui.spacer(14), form, ui.spacer(14),
+      ui.btn('Обработать →', run),
+      progress, status,
+      ui.muted('Браузер пересобирает видео в реальном времени: минута исходника обрабатывается примерно минуту. ' +
+               'Результат — WebM (VP9), его понимают все современные плееры и Telegram.')
+    ]));
+    root.appendChild(resultBox);
+  }
+});
+
+/* ======================================================================
+   Камера
+====================================================================== */
+PT.tool({
+  id: 'media-camera', cat: 'media', icon: '⊚',
+  title: 'Снимки с камеры',
+  desc: 'Фотографирует с веб-камеры с таймером, зеркалом и фильтрами — для аватарок и документов.',
+  keywords: ['камера', 'вебкамера', 'фото', 'селфи', 'таймер', 'аватарка', 'снимок'],
+  render(root){
+    let stream = null;
+    const status = ui.status();
+    const video = el('video', { autoplay: true, playsinline: true, muted: true,
+      style: { width: '100%', maxHeight: '420px', background: '#000', borderRadius: '8px', objectFit: 'contain' } });
+    const grid = ui.thumbGrid();
+    const shots = [];
+
+    const form = ui.form([
+      { id: 'timer', type: 'select', label: 'Таймер', col: 3, value: '0', options: [['0', 'Без задержки'], ['3', '3 секунды'], ['5', '5 секунд'], ['10', '10 секунд']] },
+      { id: 'mirror', type: 'checkbox', label: 'Зеркально', col: 3, value: true },
+      { id: 'filter', type: 'select', label: 'Фильтр', col: 3, options: [
+        ['none', 'Без фильтра'], ['grayscale(1)', 'Чёрно-белый'], ['sepia(0.7)', 'Сепия'],
+        ['contrast(1.25) saturate(1.2)', 'Яркий'], ['blur(1px) brightness(1.05)', 'Мягкий']
+      ] },
+      { id: 'shape', type: 'select', label: 'Кадр', col: 3, options: [['full', 'Как есть'], ['square', 'Квадрат'], ['circle', 'Круг']] }
+    ], () => { video.style.filter = form.get('filter'); video.style.transform = form.get('mirror') ? 'scaleX(-1)' : 'none'; });
+
+    async function start(){
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1920, height: 1080 }, audio: false });
+        video.srcObject = stream;
+        status.ok('Камера включена');
+      } catch(e){ status.err('Камера недоступна: ' + e.message); }
+    }
+    function stop(){
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      video.srcObject = null;
+      status.set('Камера выключена');
+    }
+    PT.onCleanup(stop);
+
+    async function shoot(){
+      if (!stream){ status.err('Сначала включи камеру'); return; }
+      const delay = Number(form.get('timer'));
+      for (let i = delay; i > 0; i--){ status.busy('Снимаю через ' + i); await sleep(1000); }
+      const v = form.values();
+      const w = video.videoWidth, h = video.videoHeight;
+      const side = Math.min(w, h);
+      const isCrop = v.shape !== 'full';
+      const canvas = makeCanvas(isCrop ? side : w, isCrop ? side : h);
+      const ctx = canvas.getContext('2d');
+      ctx.filter = v.filter === 'none' ? 'none' : v.filter;
+      if (v.mirror){ ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+      if (isCrop) ctx.drawImage(video, (w - side) / 2, (h - side) / 2, side, side, 0, 0, side, side);
+      else ctx.drawImage(video, 0, 0, w, h);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.filter = 'none';
+      if (v.shape === 'circle'){
+        const out = makeCanvas(canvas.width, canvas.height);
+        const octx = out.getContext('2d');
+        octx.beginPath();
+        octx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
+        octx.clip();
+        octx.drawImage(canvas, 0, 0);
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        canvas.getContext('2d').drawImage(out, 0, 0);
+      }
+      const blob = await canvasToBlob(canvas, 'image/png');
+      const name = 'photo-' + (shots.length + 1) + '.png';
+      shots.push({ name, data: blob });
+      grid.add(URL.createObjectURL(blob), name, () => downloadBlob(blob, name));
+      status.ok('Снято кадров: ' + shots.length);
+    }
+
+    root.appendChild(ui.card([
+      video, ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Включить камеру', start),
+        ui.btn('Сделать снимок', shoot, { teal: true }),
+        ui.btn('Выключить', stop, { ghost: true, small: true }),
+        ui.btn('Скачать все (ZIP)', async () => {
+          if (!shots.length){ status.err('Нет снимков'); return; }
+          downloadBlob(await zip(shots), 'photos.zip');
+        }, { ghost: true, small: true })
+      ]),
+      status,
+      ui.muted('Изображение с камеры не покидает устройство: браузер рисует его на холсте, а снимки сохраняются вручную.')
+    ]));
+    root.appendChild(grid);
+  }
+});
+
+/* ======================================================================
+   Субтитры
+====================================================================== */
+PT.tool({
+  id: 'media-subtitles', cat: 'media', icon: '⌷',
+  title: 'Редактор субтитров',
+  desc: 'Открывает SRT и VTT, сдвигает тайминги, меняет скорость и конвертирует между форматами.',
+  keywords: ['субтитры', 'srt', 'vtt', 'тайминг', 'сдвиг', 'перевод', 'титры'],
+  render(root){
+    let cues = [];
+    const status = ui.status();
+    const editor = el('textarea', { rows: 18, spellcheck: 'false',
+      placeholder: '1\n00:00:01,000 --> 00:00:04,000\nПервая реплика…' });
+    const table = el('div');
+
+    const form = ui.form([
+      { id: 'shift', type: 'number', label: 'Сдвиг, сек (может быть отрицательным)', col: 4, value: 0, step: 0.1 },
+      { id: 'speed', type: 'number', label: 'Множитель скорости', col: 4, value: 1, step: 0.01, min: 0.1 },
+      { id: 'fmt', type: 'select', label: 'Формат сохранения', col: 4, options: [['srt', 'SRT'], ['vtt', 'WebVTT'], ['txt', 'Только текст']] }
+    ]);
+
+    function parseTime(s){
+      const m = s.trim().match(/(\d+):(\d+):(\d+)[.,](\d+)/) || s.trim().match(/(\d+):(\d+)[.,](\d+)/);
+      if (!m) return 0;
+      return m.length === 5
+        ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000
+        : Number(m[1]) * 60 + Number(m[2]) + Number(m[3]) / 1000;
+    }
+    function fmtTime(sec, comma){
+      sec = Math.max(0, sec);
+      const h = String(Math.floor(sec / 3600)).padStart(2, '0');
+      const m = String(Math.floor(sec % 3600 / 60)).padStart(2, '0');
+      const s = String(Math.floor(sec % 60)).padStart(2, '0');
+      const ms = String(Math.round(sec % 1 * 1000)).padStart(3, '0');
+      return `${h}:${m}:${s}${comma ? ',' : '.'}${ms}`;
+    }
+    function parse(text){
+      const blocks = text.replace(/^WEBVTT.*\n+/i, '').split(/\n\s*\n/);
+      const out = [];
+      blocks.forEach(block => {
+        const lines = block.trim().split('\n');
+        if (!lines.length) return;
+        const timeLine = lines.find(l => l.includes('-->'));
+        if (!timeLine) return;
+        const [from, to] = timeLine.split('-->');
+        const textLines = lines.slice(lines.indexOf(timeLine) + 1);
+        out.push({ start: parseTime(from), end: parseTime(to), text: textLines.join('\n') });
+      });
+      return out;
+    }
+    function build(v){
+      const shifted = cues.map(c => ({
+        start: c.start * v.speed + v.shift,
+        end: c.end * v.speed + v.shift,
+        text: c.text
+      }));
+      if (v.fmt === 'txt') return shifted.map(c => c.text).join('\n');
+      if (v.fmt === 'vtt'){
+        return 'WEBVTT\n\n' + shifted.map(c => `${fmtTime(c.start)} --> ${fmtTime(c.end)}\n${c.text}\n`).join('\n');
+      }
+      return shifted.map((c, i) => `${i + 1}\n${fmtTime(c.start, true)} --> ${fmtTime(c.end, true)}\n${c.text}\n`).join('\n');
+    }
+    function refresh(){
+      cues = parse(editor.value);
+      table.innerHTML = '';
+      if (!cues.length){ status.err('Не удалось разобрать субтитры'); return; }
+      const v = form.values();
+      table.appendChild(ui.kv(cues.slice(0, 60).map(c =>
+        [fmtDuration(c.start * v.speed + v.shift) + ' – ' + fmtDuration(c.end * v.speed + v.shift), c.text.replace(/\n/g, ' ')])));
+      const dur = cues[cues.length - 1].end;
+      status.ok(`${cues.length} реплик · длительность ${fmtDuration(dur)}`);
+    }
+
+    editor.addEventListener('input', debounce(refresh, 350));
+
+    root.appendChild(ui.card([
+      ui.drop({
+        accept: '.srt,.vtt,.txt', title: 'Перетащи файл субтитров',
+        hint: 'SRT или WebVTT',
+        onFiles: async files => { editor.value = await files[0].text(); refresh(); }
+      }),
+      ui.spacer(14), form, ui.spacer(14), editor, ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Применить и скачать', () => {
+          if (!cues.length){ status.err('Сначала загрузи субтитры'); return; }
+          const v = form.values();
+          downloadText(build(v), 'subtitles.' + v.fmt, v.fmt === 'vtt' ? 'text/vtt' : 'text/plain');
+        }),
+        ui.btn('Показать результат', () => { const v = form.values(); editor.value = build(v); refresh(); }, { ghost: true }),
+        ui.btn('Обновить разбор', refresh, { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(ui.card([ui.h('Реплики'), table]));
+  }
+});
+
+/* ======================================================================
+   Микс аудио
+====================================================================== */
+PT.tool({
+  id: 'media-audio-mix', cat: 'media', icon: '⊕',
+  title: 'Склейка и микс аудио',
+  desc: 'Соединяет дорожки друг за другом или накладывает их с регулировкой громкости.',
+  keywords: ['аудио', 'склеить', 'соединить', 'микс', 'наложить', 'подкаст', 'музыка'],
+  render(root){
+    const files = [];
+    const status = ui.status();
+    const list = ui.fileList(i => { files.splice(i, 1); list.render(files); });
+    const resultBox = ui.result();
+
+    const form = ui.form([
+      { id: 'mode', type: 'select', label: 'Как соединять', col: 4, options: [
+        ['concat', 'Друг за другом'], ['mix', 'Наложить одновременно']
+      ] },
+      { id: 'gap', type: 'number', label: 'Пауза между дорожками, сек', col: 4, value: 0, min: 0, step: 0.1 },
+      { id: 'fade', type: 'number', label: 'Плавный переход, сек', col: 4, value: 0, min: 0, max: 5, step: 0.1 },
+      { id: 'volume', type: 'range', label: 'Громкость второй и далее', col: 4, min: 10, max: 200, value: 100, unit: '%' },
+      { id: 'normalize', type: 'checkbox', label: 'Нормализовать результат', col: 4, value: true }
+    ]);
+
+    const drop = ui.drop({
+      accept: 'audio/*,video/*', multiple: true,
+      title: 'Перетащи аудиофайлы',
+      hint: 'порядок — как в списке',
+      onFiles: newFiles => { newFiles.forEach(f => files.push(f)); list.render(files); status.ok('Дорожек: ' + files.length); }
+    });
+
+    async function run(){
+      if (files.length < 1){ status.err('Добавь хотя бы один файл'); return; }
+      const v = form.values();
+      status.busy('Декодирую дорожки');
+      const ctx = new AudioContext();
+      const buffers = [];
+      for (const f of files){
+        try { buffers.push(await ctx.decodeAudioData(await f.arrayBuffer())); }
+        catch(e){ status.err('Не удалось прочитать ' + f.name); }
+      }
+      await ctx.close();
+      if (!buffers.length) return;
+
+      const rate = buffers[0].sampleRate;
+      const channels = Math.max(...buffers.map(b => b.numberOfChannels));
+      let totalLength;
+      if (v.mode === 'concat'){
+        totalLength = buffers.reduce((a, b) => a + b.length, 0) + Math.round(v.gap * rate) * (buffers.length - 1);
+      } else {
+        totalLength = Math.max(...buffers.map(b => b.length));
+      }
+
+      status.busy('Собираю дорожку');
+      const offline = new OfflineAudioContext(channels, totalLength, rate);
+      let cursor = 0;
+      buffers.forEach((buffer, i) => {
+        const src = offline.createBufferSource();
+        src.buffer = buffer;
+        const gain = offline.createGain();
+        gain.gain.value = i === 0 ? 1 : v.volume / 100;
+        if (v.fade > 0){
+          const at = v.mode === 'concat' ? cursor / rate : 0;
+          gain.gain.setValueAtTime(0, at);
+          gain.gain.linearRampToValueAtTime(i === 0 ? 1 : v.volume / 100, at + v.fade);
+          const endAt = at + buffer.duration;
+          gain.gain.setValueAtTime(i === 0 ? 1 : v.volume / 100, Math.max(at + v.fade, endAt - v.fade));
+          gain.gain.linearRampToValueAtTime(0, endAt);
+        }
+        src.connect(gain); gain.connect(offline.destination);
+        src.start(v.mode === 'concat' ? cursor / rate : 0);
+        if (v.mode === 'concat') cursor += buffer.length + Math.round(v.gap * rate);
+      });
+
+      const rendered = await offline.startRendering();
+      if (v.normalize){
+        let peak = 0;
+        for (let c = 0; c < rendered.numberOfChannels; c++){
+          const d = rendered.getChannelData(c);
+          for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > peak) peak = Math.abs(d[i]);
+        }
+        if (peak > 0){
+          const k = 0.98 / peak;
+          for (let c = 0; c < rendered.numberOfChannels; c++){
+            const d = rendered.getChannelData(c);
+            for (let i = 0; i < d.length; i++) d[i] *= k;
+          }
+        }
+      }
+      const blob = audioBufferToWav(rendered);
+      resultBox.clear();
+      resultBox.file(blob, 'mix.wav', fmtDuration(rendered.duration) + ' · ' + files.length + ' дорожек');
+      status.ok('Готово: ' + fmtDuration(rendered.duration));
+    }
+
+    root.appendChild(ui.card([
+      drop, list, ui.spacer(14), form, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Собрать →', () => run().catch(e => status.err(e.message))),
+        ui.btn('Очистить', () => { files.length = 0; list.render(files); }, { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(resultBox);
+  }
+});
+
+
+/* ===== tools/82-doc2.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: ДОКУМЕНТЫ, ЧАСТЬ 2
+====================================================================== */
+
+/* ======================================================================
+   Нумерация и колонтитулы PDF
+====================================================================== */
+PT.tool({
+  id: 'doc-pdf-numbers', cat: 'doc', icon: '№',
+  title: 'Нумерация страниц PDF',
+  desc: 'Проставляет номера страниц, колонтитулы и дату — с выбором положения и шрифта.',
+  keywords: ['pdf', 'нумерация', 'номера страниц', 'колонтитул', 'футер', 'печать'],
+  render(root){
+    let file = null;
+    const status = ui.status();
+    const form = ui.form([
+      { id: 'format', type: 'select', label: 'Формат номера', col: 4, options: [
+        ['n', '1, 2, 3…'], ['n_of_m', '1 из 12'], ['page_n', 'Страница 1'], ['dash', '— 1 —']
+      ] },
+      { id: 'pos', type: 'select', label: 'Положение', col: 4, options: [
+        ['bc', 'Снизу по центру'], ['br', 'Снизу справа'], ['bl', 'Снизу слева'],
+        ['tc', 'Сверху по центру'], ['tr', 'Сверху справа']
+      ] },
+      { id: 'size', type: 'number', label: 'Размер шрифта', col: 4, value: 10, min: 6, max: 32 },
+      { id: 'start', type: 'number', label: 'Начать с числа', col: 4, value: 1, min: 0 },
+      { id: 'skipFirst', type: 'checkbox', label: 'Не нумеровать первую страницу', col: 4 },
+      { id: 'header', type: 'text', label: 'Текст колонтитула (необязательно)', col: 4, value: '' }
+    ]);
+
+    PT.fileTool(root, {
+      accept: 'application/pdf,.pdf',
+      title: 'Перетащи PDF',
+      async onFiles(f, ctx){
+        file = f;
+        ctx.status.ok(f.name + ' — ' + fmtBytes(f.size) + '. Настрой параметры и нажми «Проставить номера».');
+      }
+    });
+
+    async function run(){
+      if (!file){ status.err('Сначала загрузи PDF'); return; }
+      await PT.need('pdflib');
+      const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+      const v = form.values();
+      status.busy('Расставляю номера');
+      const doc = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const pages = doc.getPages();
+      const total = pages.length;
+      const translit = s => s.replace(/[а-яё]/gi, ch => {
+        const map = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',
+          о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
+        const lower = ch.toLowerCase();
+        const rep = map[lower] || ch;
+        return ch === lower ? rep : rep.toUpperCase();
+      });
+
+      pages.forEach((page, i) => {
+        if (v.skipFirst && i === 0) return;
+        const num = v.start + i;
+        const label = { n: String(num), n_of_m: `${num} / ${total}`, page_n: `Page ${num}`, dash: `— ${num} —` }[v.format];
+        const { width, height } = page.getSize();
+        const textWidth = font.widthOfTextAtSize(label, v.size);
+        const margin = 28;
+        const positions = {
+          bc: [(width - textWidth) / 2, margin], br: [width - textWidth - margin, margin], bl: [margin, margin],
+          tc: [(width - textWidth) / 2, height - margin - v.size], tr: [width - textWidth - margin, height - margin - v.size]
+        };
+        const [x, y] = positions[v.pos];
+        page.drawText(label, { x, y, size: v.size, font, color: rgb(0.35, 0.35, 0.35) });
+        if (v.header){
+          const head = translit(v.header);
+          const hw = font.widthOfTextAtSize(head, v.size);
+          page.drawText(head, { x: (width - hw) / 2, y: height - margin, size: v.size, font, color: rgb(0.55, 0.55, 0.55) });
+        }
+      });
+      downloadBlob(new Blob([await doc.save()], { type: 'application/pdf' }), baseName(file.name) + '-numbered.pdf');
+      status.ok('Готово: ' + total + ' страниц');
+    }
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14),
+      ui.btn('Проставить номера →', () => run().catch(e => status.err(e.message))),
+      status,
+      ui.muted('Кириллица в колонтитуле заменяется латиницей — встроенные шрифты PDF не содержат русских букв.')
+    ]));
+  }
+});
+
+/* ======================================================================
+   Подпись и штамп на PDF
+====================================================================== */
+PT.tool({
+  id: 'doc-pdf-stamp', cat: 'doc', icon: '✍',
+  title: 'Подпись и штамп на PDF',
+  desc: 'Ставит картинку подписи или печати на нужные страницы с выбором места и прозрачности.',
+  keywords: ['подпись', 'печать', 'штамп', 'pdf', 'документ', 'договор', 'скан'],
+  render(root){
+    let pdfFile = null, stampImg = null;
+    const status = ui.status();
+    const pad = el('canvas', { width: 600, height: 200,
+      style: { width: '100%', background: '#fff', borderRadius: '8px', border: '1px solid var(--line)', cursor: 'crosshair', touchAction: 'none' } });
+
+    const form = ui.form([
+      { id: 'pages', type: 'text', label: 'Страницы (пусто — все)', col: 4, value: '' },
+      { id: 'pos', type: 'select', label: 'Положение', col: 4, options: [
+        ['br', 'Снизу справа'], ['bl', 'Снизу слева'], ['bc', 'Снизу по центру'], ['tr', 'Сверху справа'], ['c', 'По центру']
+      ] },
+      { id: 'width', type: 'range', label: 'Ширина подписи', col: 4, min: 10, max: 60, value: 28, unit: '%' },
+      { id: 'opacity', type: 'range', label: 'Прозрачность', col: 4, min: 20, max: 100, value: 100, unit: '%' },
+      { id: 'margin', type: 'range', label: 'Отступ от края', col: 4, min: 0, max: 15, value: 5, unit: '%' }
+    ]);
+
+    /* рисование подписи мышью */
+    const ctx = pad.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, pad.width, pad.height);
+    let drawing = false, last = null;
+    const pos = e => {
+      const r = pad.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * pad.width / r.width, y: (e.clientY - r.top) * pad.height / r.height };
+    };
+    pad.addEventListener('pointerdown', e => { drawing = true; last = pos(e); pad.setPointerCapture(e.pointerId); });
+    pad.addEventListener('pointermove', e => {
+      if (!drawing) return;
+      const p = pos(e);
+      ctx.strokeStyle = '#10131a'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      last = p;
+    });
+    ['pointerup', 'pointerleave'].forEach(t => pad.addEventListener(t, () => { drawing = false; }));
+
+    async function usePad(){
+      // делаем белый фон прозрачным, чтобы подпись легла на документ
+      const data = ctx.getImageData(0, 0, pad.width, pad.height);
+      const d = data.data;
+      for (let i = 0; i < d.length; i += 4){
+        const lum = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        if (lum > 200) d[i + 3] = 0;
+        else d[i + 3] = clamp(255 - lum, 0, 255);
+      }
+      const out = makeCanvas(pad.width, pad.height);
+      out.getContext('2d').putImageData(data, 0, 0);
+      stampImg = out;
+      status.ok('Нарисованная подпись готова к вставке');
+    }
+
+    async function run(){
+      if (!pdfFile){ status.err('Загрузи PDF'); return; }
+      if (!stampImg){ status.err('Нарисуй подпись или загрузи картинку'); return; }
+      await PT.need('pdflib');
+      const { PDFDocument } = window.PDFLib;
+      const v = form.values();
+      status.busy('Ставлю подпись');
+      const doc = await PDFDocument.load(await pdfFile.arrayBuffer(), { ignoreEncryption: true });
+      const pngBlob = await canvasToBlob(stampImg, 'image/png');
+      const embedded = await doc.embedPng(await pngBlob.arrayBuffer());
+      const targets = PT.parseRanges(v.pages, doc.getPageCount());
+      targets.forEach(i => {
+        const page = doc.getPage(i);
+        const { width, height } = page.getSize();
+        const w = width * v.width / 100;
+        const h = w * embedded.height / embedded.width;
+        const m = Math.min(width, height) * v.margin / 100;
+        const positions = {
+          br: [width - w - m, m], bl: [m, m], bc: [(width - w) / 2, m],
+          tr: [width - w - m, height - h - m], c: [(width - w) / 2, (height - h) / 2]
+        };
+        const [x, y] = positions[v.pos];
+        page.drawImage(embedded, { x, y, width: w, height: h, opacity: v.opacity / 100 });
+      });
+      downloadBlob(new Blob([await doc.save()], { type: 'application/pdf' }), baseName(pdfFile.name) + '-signed.pdf');
+      status.ok('Подпись поставлена на ' + targets.length + ' страниц');
+    }
+
+    root.appendChild(ui.card([
+      ui.h('Документ'),
+      ui.drop({ accept: 'application/pdf,.pdf', title: 'Перетащи PDF',
+        onFiles: f => { pdfFile = f[0]; status.ok(f[0].name + ' — ' + fmtBytes(f[0].size)); } })
+    ]));
+    root.appendChild(ui.card([
+      ui.h('Подпись', 'Нарисуй мышью или загрузи готовую картинку с прозрачным фоном'),
+      pad, ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Использовать нарисованное', usePad, { small: true }),
+        ui.btn('Очистить', () => { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, pad.width, pad.height); }, { ghost: true, small: true })
+      ]),
+      ui.spacer(14),
+      ui.drop({ accept: 'image/*', title: 'Или загрузи картинку подписи/печати',
+        onFiles: async f => { const img = await loadImage(f[0]); stampImg = imgToCanvas(img); status.ok('Картинка подписи загружена'); } })
+    ]));
+    root.appendChild(ui.card([
+      form, ui.spacer(14),
+      ui.btn('Поставить подпись →', () => run().catch(e => status.err(e.message))),
+      status
+    ]));
+  }
+});
+
+/* ======================================================================
+   Сжатие PDF
+====================================================================== */
+PT.tool({
+  id: 'doc-pdf-compress', cat: 'doc', icon: '⤈',
+  title: 'Сжатие PDF',
+  desc: 'Пересобирает документ через растеризацию страниц — уменьшает вес тяжёлых сканов в разы.',
+  keywords: ['pdf', 'сжать', 'уменьшить', 'вес', 'оптимизация', 'скан', 'почта'],
+  render(root){
+    let file = null;
+    const status = ui.status();
+    const progress = ui.progress();
+    const resultBox = ui.result();
+
+    const form = ui.form([
+      { id: 'dpi', type: 'select', label: 'Плотность', col: 4, value: '1.2', options: [
+        ['2', 'Высокая (150 dpi)'], ['1.2', 'Средняя (90 dpi)'], ['0.9', 'Экономная (70 dpi)'], ['0.6', 'Максимальное сжатие']
+      ] },
+      { id: 'quality', type: 'range', label: 'Качество JPEG', col: 4, min: 30, max: 95, value: 65, unit: '%' },
+      { id: 'gray', type: 'checkbox', label: 'Перевести в оттенки серого', col: 4 }
+    ]);
+
+    PT.fileTool(root, {
+      accept: 'application/pdf,.pdf',
+      title: 'Перетащи PDF',
+      hint: 'лучше всего работает со сканами и презентациями',
+      async onFiles(f, ctx){ file = f; ctx.status.ok(f.name + ' — ' + fmtBytes(f.size)); }
+    });
+
+    async function run(){
+      if (!file){ status.err('Сначала загрузи PDF'); return; }
+      const v = form.values();
+      status.busy('Загружаю движок PDF');
+      await PT.need('pdfjs', 'pdflib');
+      const { PDFDocument } = window.PDFLib;
+      const data = new Uint8Array(await file.arrayBuffer());
+      const src = await pdfjsLib.getDocument({ data }).promise;
+      const out = await PDFDocument.create();
+      status.busy('Пересобираю страницы');
+      for (let i = 1; i <= src.numPages; i++){
+        const page = await src.getPage(i);
+        const viewport = page.getViewport({ scale: Number(v.dpi) });
+        const canvas = makeCanvas(viewport.width, viewport.height);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        if (v.gray){
+          const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          for (let p = 0; p < d.data.length; p += 4){
+            const lum = 0.299 * d.data[p] + 0.587 * d.data[p + 1] + 0.114 * d.data[p + 2];
+            d.data[p] = d.data[p + 1] = d.data[p + 2] = lum;
+          }
+          ctx.putImageData(d, 0, 0);
+        }
+        const jpeg = await canvasToBlob(canvas, 'image/jpeg', v.quality / 100);
+        const embedded = await out.embedJpg(await jpeg.arrayBuffer());
+        const newPage = out.addPage([viewport.width / Number(v.dpi) * 1, viewport.height / Number(v.dpi) * 1]);
+        newPage.drawImage(embedded, { x: 0, y: 0, width: newPage.getWidth(), height: newPage.getHeight() });
+        progress.set(i / src.numPages);
+      }
+      progress.hide();
+      const blob = new Blob([await out.save()], { type: 'application/pdf' });
+      const saved = Math.round((1 - blob.size / file.size) * 100);
+      resultBox.clear();
+      resultBox.file(blob, baseName(file.name) + '-compressed.pdf',
+        `было ${fmtBytes(file.size)} → стало ${fmtBytes(blob.size)}` + (saved > 0 ? ` (−${saved}%)` : ''));
+      status.ok(saved > 0 ? `Сжато на ${saved}%` : 'Документ уже хорошо сжат — стало не меньше');
+    }
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14),
+      ui.btn('Сжать →', () => run().catch(e => { progress.hide(); status.err(e.message); })),
+      progress, status,
+      ui.muted('Страницы превращаются в картинки — текст перестанет выделяться и искаться. ' +
+               'Для документов с текстовым слоем это подходит только если нужен именно маленький вес.')
+    ]));
+    root.appendChild(resultBox);
+  }
+});
+
+/* ======================================================================
+   EPUB
+====================================================================== */
+PT.tool({
+  id: 'doc-epub', cat: 'doc', icon: '▥',
+  title: 'Чтение и разбор EPUB',
+  desc: 'Открывает электронную книгу, показывает оглавление и выгружает текст в TXT или Markdown.',
+  keywords: ['epub', 'книга', 'читалка', 'fb2', 'текст', 'конвертация', 'оглавление'],
+  render(root){
+    const status = ui.status();
+    const out = el('div');
+
+    PT.fileTool(root, {
+      accept: '.epub,application/epub+zip',
+      title: 'Перетащи файл EPUB',
+      hint: 'книга распаковывается прямо в браузере',
+      async onFiles(file, ctx){
+        const files = await unzip(file);
+        const decoder = new TextDecoder();
+        const htmlFiles = Object.keys(files)
+          .filter(n => /\.(x?html|htm)$/i.test(n))
+          .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+        if (!htmlFiles.length) throw new Error('Не нашёл текстовых файлов внутри книги');
+
+        // метаданные
+        const opfName = Object.keys(files).find(n => n.endsWith('.opf'));
+        let meta = { title: baseName(file.name), author: '—', lang: '—' };
+        if (opfName){
+          const opf = decoder.decode(files[opfName]);
+          const pick = tag => { const m = opf.match(new RegExp('<dc:' + tag + '[^>]*>([\\s\\S]*?)</dc:' + tag + '>', 'i')); return m ? m[1].trim() : null; };
+          meta = { title: pick('title') || meta.title, author: pick('creator') || '—', lang: pick('language') || '—' };
+        }
+
+        const chapters = htmlFiles.map(name => {
+          const html = decoder.decode(files[name]);
+          const titleMatch = html.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
+          const text = html
+            .replace(/<head[\s\S]*?<\/head>/gi, '')
+            .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+            .replace(/<\/(p|div|h[1-6]|li|br)>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&#(\d+);/g, (m, code) => String.fromCharCode(code))
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+          return { name, title: titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : baseName(name), text };
+        }).filter(c => c.text.length > 40);
+
+        const fullText = chapters.map(c => '# ' + c.title + '\n\n' + c.text).join('\n\n');
+        const words = fullText.split(/\s+/).length;
+
+        ctx.out.innerHTML = '';
+        ctx.out.appendChild(ui.card([
+          ui.h('Книга'),
+          ui.kv([
+            ['Название', meta.title], ['Автор', meta.author], ['Язык', meta.lang],
+            ['Глав найдено', String(chapters.length)],
+            ['Слов', fmtNum(words, 0)],
+            ['Время чтения', '≈ ' + Math.round(words / 180) + ' мин']
+          ]),
+          ui.spacer(14),
+          el('div', { class: 'row gap' }, [
+            ui.btn('Скачать весь текст (TXT)', () => downloadText(fullText.replace(/^# /gm, ''), baseName(file.name) + '.txt')),
+            ui.btn('Скачать как Markdown', () => downloadText(fullText, baseName(file.name) + '.md', 'text/markdown'), { ghost: true }),
+            ui.btn('Скачать главы архивом', async () => {
+              downloadBlob(await zip(chapters.map((c, i) =>
+                ({ name: `${String(i + 1).padStart(2, '0')}-${c.title.slice(0, 40).replace(/[\\/:*?"<>|]/g, '')}.txt`, data: c.text }))),
+                baseName(file.name) + '-chapters.zip');
+            }, { ghost: true, small: true })
+          ])
+        ]));
+
+        const reader = el('div', { style: { maxHeight: '520px', overflow: 'auto', padding: '16px',
+          background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: '8px', whiteSpace: 'pre-wrap',
+          lineHeight: '1.65' } });
+        const chapterSel = el('select', {}, chapters.map((c, i) => el('option', { value: String(i), text: (i + 1) + '. ' + c.title })));
+        chapterSel.addEventListener('change', () => { reader.textContent = chapters[Number(chapterSel.value)].text; });
+        reader.textContent = chapters[0].text;
+        ctx.out.appendChild(ui.card([ui.h('Чтение'), chapterSel, ui.spacer(12), reader]));
+        ctx.status.ok('Разобрано глав: ' + chapters.length);
+      }
+    });
+    root.appendChild(out);
+  }
+});
+
+/* ======================================================================
+   Объединение таблиц
+====================================================================== */
+PT.tool({
+  id: 'doc-table-merge', cat: 'doc', icon: '⋈',
+  title: 'Объединение таблиц',
+  desc: 'Соединяет две таблицы по общему столбцу — то же, что ВПР в Excel, только быстрее.',
+  keywords: ['впр', 'vlookup', 'объединить', 'таблицы', 'join', 'ключ', 'слияние', 'csv'],
+  render(root){
+    let left = [], right = [];
+    const status = ui.status();
+    const out = el('div');
+    const keyForm = ui.form([
+      { id: 'leftKey', type: 'select', label: 'Ключ в первой таблице', col: 4, options: [['', '—']] },
+      { id: 'rightKey', type: 'select', label: 'Ключ во второй', col: 4, options: [['', '—']] },
+      { id: 'type', type: 'select', label: 'Тип объединения', col: 4, options: [
+        ['left', 'Все строки первой (LEFT JOIN)'], ['inner', 'Только совпадения (INNER)'],
+        ['full', 'Все строки обеих (FULL)'], ['anti', 'Только несовпадения']
+      ] }
+    ]);
+
+    async function readTable(file){
+      const ext = extOf(file.name);
+      if (ext === 'xlsx' || ext === 'xls'){
+        await PT.need('xlsx');
+        const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+        return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      }
+      if (ext === 'json') return JSON.parse(await file.text());
+      return csvToObjects(await file.text());
+    }
+    function refreshKeys(){
+      const lk = keyForm.ctrl('leftKey'), rk = keyForm.ctrl('rightKey');
+      lk.innerHTML = ''; rk.innerHTML = '';
+      Object.keys(left[0] || {}).forEach(k => lk.appendChild(el('option', { value: k, text: k })));
+      Object.keys(right[0] || {}).forEach(k => rk.appendChild(el('option', { value: k, text: k })));
+      const common = Object.keys(left[0] || {}).find(k => Object.keys(right[0] || {}).includes(k));
+      if (common){ lk.value = common; rk.value = common; }
+    }
+
+    function merge(){
+      if (!left.length || !right.length){ status.err('Загрузи обе таблицы'); return; }
+      const v = keyForm.values();
+      if (!v.leftKey || !v.rightKey){ status.err('Выбери ключевые столбцы'); return; }
+      const index = {};
+      right.forEach(r => {
+        const key = String(r[v.rightKey]).trim();
+        (index[key] = index[key] || []).push(r);
+      });
+      const used = new Set();
+      const rows = [];
+      left.forEach(l => {
+        const key = String(l[v.leftKey]).trim();
+        const matches = index[key];
+        if (matches){
+          used.add(key);
+          if (v.type === 'anti') return;
+          matches.forEach(r => {
+            const merged = Object.assign({}, l);
+            Object.keys(r).forEach(k => { merged[k === v.rightKey ? k + '_2' : (l[k] !== undefined ? k + '_2' : k)] = r[k]; });
+            rows.push(merged);
+          });
+        } else if (v.type === 'left' || v.type === 'full' || v.type === 'anti'){
+          rows.push(Object.assign({}, l));
+        }
+      });
+      if (v.type === 'full'){
+        right.forEach(r => { if (!used.has(String(r[v.rightKey]).trim())) rows.push(Object.assign({}, r)); });
+      }
+
+      out.innerHTML = '';
+      const headers = Array.from(rows.reduce((s, r) => { Object.keys(r).forEach(k => s.add(k)); return s; }, new Set()));
+      out.appendChild(ui.card([
+        ui.h('Результат: ' + rows.length + ' строк'),
+        el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+          el('thead', {}, el('tr', {}, headers.map(h => el('th', { text: h })))),
+          el('tbody', {}, rows.slice(0, 200).map(r => el('tr', {}, headers.map(h =>
+            el('td', { text: r[h] == null ? '' : String(r[h]) })))))
+        ])),
+        ui.spacer(12),
+        el('div', { class: 'row gap' }, [
+          ui.btn('Скачать CSV', () => downloadText(objectsToCSV(rows), 'merged.csv', 'text/csv')),
+          ui.btn('Скачать JSON', () => downloadText(JSON.stringify(rows, null, 2), 'merged.json'), { ghost: true, small: true }),
+          ui.btn('Скачать XLSX', async () => {
+            await PT.need('xlsx');
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Merged');
+            downloadBlob(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })]), 'merged.xlsx');
+          }, { ghost: true, small: true })
+        ])
+      ]));
+      status.ok(`Совпало ключей: ${used.size} · строк на выходе: ${rows.length}`);
+    }
+
+    root.appendChild(ui.card([
+      el('div', { class: 'grid cols-2' }, [
+        ui.drop({ accept: '.csv,.json,.xlsx,.xls', title: 'Первая таблица',
+          onFiles: async f => { left = await readTable(f[0]); refreshKeys(); status.ok('Первая: ' + left.length + ' строк'); } }),
+        ui.drop({ accept: '.csv,.json,.xlsx,.xls', title: 'Вторая таблица',
+          onFiles: async f => { right = await readTable(f[0]); refreshKeys(); status.ok('Вторая: ' + right.length + ' строк'); } })
+      ]),
+      ui.spacer(14), keyForm, ui.spacer(14),
+      ui.btn('Объединить →', merge),
+      status
+    ]));
+    root.appendChild(out);
+  }
+});
+
+/* ======================================================================
+   Счёт и акт
+====================================================================== */
+PT.tool({
+  id: 'doc-invoice', cat: 'doc', icon: '₽',
+  title: 'Счёт на оплату',
+  desc: 'Заполняешь позиции — получаешь готовый PDF со всеми суммами и НДС.',
+  keywords: ['счёт', 'invoice', 'акт', 'документ', 'оплата', 'ндс', 'бухгалтерия', 'фриланс'],
+  render(root){
+    const status = ui.status();
+    const itemsBox = el('div');
+    let items = [{ name: 'Разработка сайта', qty: 1, price: 50000 }];
+
+    const form = ui.form([
+      { id: 'number', type: 'text', label: 'Номер счёта', col: 3, value: '1' },
+      { id: 'date', type: 'text', label: 'Дата', col: 3, value: new Date().toLocaleDateString('ru-RU') },
+      { id: 'currency', type: 'select', label: 'Валюта', col: 3, options: [['RUB', 'рубли'], ['USD', 'доллары'], ['EUR', 'евро']] },
+      { id: 'vat', type: 'select', label: 'НДС', col: 3, value: '0', options: [['0', 'Без НДС'], ['20', '20%'], ['10', '10%'], ['5', '5%']] },
+      { id: 'seller', type: 'textarea', label: 'Исполнитель', rows: 3, value: 'Pixset Studio\nИНН 000000000000\nр/с 40802810000000000000' },
+      { id: 'buyer', type: 'textarea', label: 'Заказчик', rows: 3, value: 'ООО «Ромашка»\nИНН 111111111111' },
+      { id: 'note', type: 'text', label: 'Назначение платежа', col: 12, value: 'Оплата по договору оферты' }
+    ], renderItems);
+
+    function renderItems(){
+      itemsBox.innerHTML = '';
+      items.forEach((item, i) => {
+        const name = el('input', { type: 'text', value: item.name });
+        const qty = el('input', { type: 'number', value: item.qty, min: 0, step: 0.01 });
+        const price = el('input', { type: 'number', value: item.price, min: 0, step: 0.01 });
+        name.addEventListener('input', () => { item.name = name.value; total(); });
+        qty.addEventListener('input', () => { item.qty = Number(qty.value); total(); });
+        price.addEventListener('input', () => { item.price = Number(price.value); total(); });
+        itemsBox.appendChild(el('div', { class: 'row gap', style: { marginBottom: '8px' } }, [
+          el('div', { style: { flex: '3', minWidth: '160px' } }, name),
+          el('div', { style: { flex: '1', minWidth: '70px' } }, qty),
+          el('div', { style: { flex: '1.4', minWidth: '90px' } }, price),
+          ui.iconBtn('✕', 'Удалить', () => { items.splice(i, 1); renderItems(); })
+        ]));
+      });
+      total();
+    }
+    const totalBox = el('div');
+    function total(){
+      const v = form.values();
+      const sum = items.reduce((a, i) => a + i.qty * i.price, 0);
+      const vat = sum * Number(v.vat) / 100;
+      const symbols = { RUB: '₽', USD: '$', EUR: '€' };
+      totalBox.innerHTML = '';
+      totalBox.appendChild(ui.kv([
+        ['Позиций', String(items.length)],
+        ['Сумма', fmtNum(sum) + ' ' + symbols[v.currency]],
+        ['НДС ' + v.vat + '%', fmtNum(vat) + ' ' + symbols[v.currency]],
+        ['Итого к оплате', fmtNum(sum + vat) + ' ' + symbols[v.currency]],
+        ['Прописью', numberToWords(Math.round(sum + vat)) + (v.currency === 'RUB' ? ' рублей' : '')]
+      ]));
+    }
+
+    function numberToWords(n){
+      if (n === 0) return 'ноль';
+      const ones = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять',
+        'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать',
+        'семнадцать', 'восемнадцать', 'девятнадцать'];
+      const tens = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+      const hundreds = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+      const chunk = (num, female) => {
+        const parts = [];
+        if (num >= 100){ parts.push(hundreds[Math.floor(num / 100)]); num %= 100; }
+        if (num >= 20){ parts.push(tens[Math.floor(num / 10)]); num %= 10; }
+        if (num > 0){
+          let word = ones[num];
+          if (female && num === 1) word = 'одна';
+          if (female && num === 2) word = 'две';
+          parts.push(word);
+        }
+        return parts.filter(Boolean).join(' ');
+      };
+      const plural = (num, forms) => {
+        const mod10 = num % 10, mod100 = num % 100;
+        if (mod10 === 1 && mod100 !== 11) return forms[0];
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
+        return forms[2];
+      };
+      const parts = [];
+      const millions = Math.floor(n / 1000000);
+      const thousands = Math.floor(n % 1000000 / 1000);
+      const rest = n % 1000;
+      if (millions) parts.push(chunk(millions) + ' ' + plural(millions, ['миллион', 'миллиона', 'миллионов']));
+      if (thousands) parts.push(chunk(thousands, true) + ' ' + plural(thousands, ['тысяча', 'тысячи', 'тысяч']));
+      if (rest) parts.push(chunk(rest));
+      const s = parts.join(' ');
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+
+    async function makePdf(){
+      await PT.need('pdflib');
+      const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+      const v = form.values();
+      const doc = await PDFDocument.create();
+      const page = doc.addPage([595.28, 841.89]);
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+      const tr = s => String(s).replace(/[а-яё]/gi, ch => {
+        const map = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',
+          о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
+        const lower = ch.toLowerCase();
+        const rep = map[lower] || ch;
+        return ch === lower ? rep : rep.toUpperCase();
+      });
+      let y = 790;
+      const line = (text, size, useBold) => {
+        page.drawText(tr(text), { x: 45, y, size, font: useBold ? bold : font, color: rgb(0.1, 0.11, 0.13) });
+        y -= size + 6;
+      };
+      line(`Invoice / Schet No ${v.number} ot ${v.date}`, 17, true);
+      y -= 6;
+      line('Ispolnitel:', 10, true);
+      v.seller.split('\n').forEach(l => line(l, 10));
+      y -= 4;
+      line('Zakazchik:', 10, true);
+      v.buyer.split('\n').forEach(l => line(l, 10));
+      y -= 10;
+
+      page.drawRectangle({ x: 45, y: y - 4, width: 505, height: 20, color: rgb(0.93, 0.93, 0.9) });
+      page.drawText(tr('Naimenovanie'), { x: 50, y: y + 2, size: 10, font: bold });
+      page.drawText(tr('Kol-vo'), { x: 350, y: y + 2, size: 10, font: bold });
+      page.drawText(tr('Cena'), { x: 410, y: y + 2, size: 10, font: bold });
+      page.drawText(tr('Summa'), { x: 480, y: y + 2, size: 10, font: bold });
+      y -= 22;
+
+      const symbols = { RUB: 'RUB', USD: 'USD', EUR: 'EUR' };
+      items.forEach(item => {
+        page.drawText(tr(item.name).slice(0, 52), { x: 50, y, size: 10, font });
+        page.drawText(String(item.qty), { x: 350, y, size: 10, font });
+        page.drawText(fmtNum(item.price), { x: 410, y, size: 10, font });
+        page.drawText(fmtNum(item.qty * item.price), { x: 480, y, size: 10, font });
+        y -= 18;
+      });
+
+      const sum = items.reduce((a, i) => a + i.qty * i.price, 0);
+      const vat = sum * Number(v.vat) / 100;
+      y -= 10;
+      line(`Itogo: ${fmtNum(sum)} ${symbols[v.currency]}`, 11, true);
+      if (Number(v.vat)) line(`NDS ${v.vat}%: ${fmtNum(vat)} ${symbols[v.currency]}`, 11);
+      line(`K oplate: ${fmtNum(sum + vat)} ${symbols[v.currency]}`, 13, true);
+      y -= 6;
+      line(numberToWords(Math.round(sum + vat)), 10);
+      y -= 10;
+      line(`Naznachenie: ${v.note}`, 10);
+
+      downloadBlob(new Blob([await doc.save()], { type: 'application/pdf' }), `schet-${v.number}.pdf`);
+      status.ok('Счёт сохранён');
+    }
+
+    root.appendChild(ui.card([form]));
+    root.appendChild(ui.card([
+      ui.h('Позиции', 'Название · количество · цена'),
+      itemsBox, ui.spacer(10),
+      ui.btn('+ Добавить строку', () => { items.push({ name: '', qty: 1, price: 0 }); renderItems(); }, { ghost: true, small: true })
+    ]));
+    root.appendChild(ui.card([
+      ui.h('Итоги'), totalBox, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать PDF', () => makePdf().catch(e => status.err(e.message))),
+        ui.btn('Скопировать реквизиты', () => copy(form.get('seller')), { ghost: true, small: true })
+      ]),
+      status,
+      ui.muted('В PDF русский текст записывается латиницей: встроенные шрифты стандарта не содержат кириллицы. ' +
+               'Для официальных документов лучше подставить текст в свой шаблон.')
+    ]));
+    renderItems();
+  }
+});
+
+
+/* ===== tools/83-data2.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: ДАННЫЕ И КОД, ЧАСТЬ 2
+====================================================================== */
+
+/* ---------- простые форматтеры без внешних библиотек ---------- */
+function formatCss(css, indentUnit){
+  let out = '', depth = 0, i = 0;
+  const pad = () => indentUnit.repeat(depth);
+  css = css.replace(/\s+/g, ' ').trim();
+  while (i < css.length){
+    const ch = css[i];
+    if (ch === '{'){ out += ' {\n'; depth++; out += pad(); i++; while (css[i] === ' ') i++; }
+    else if (ch === '}'){ depth = Math.max(0, depth - 1); out = out.replace(/\s+$/, '') + '\n' + pad() + '}\n' + pad(); i++; while (css[i] === ' ') i++; }
+    else if (ch === ';'){ out += ';\n' + pad(); i++; while (css[i] === ' ') i++; }
+    else { out += ch; i++; }
+  }
+  return out.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+$/gm, '').trim() + '\n';
+}
+
+function formatHtml(html, indentUnit){
+  const VOID = ['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'];
+  const tokens = html.replace(/>\s+</g, '><').split(/(<[^>]+>)/).filter(t => t.trim());
+  let depth = 0, out = [];
+  tokens.forEach(token => {
+    if (/^<\//.test(token)){
+      depth = Math.max(0, depth - 1);
+      out.push(indentUnit.repeat(depth) + token);
+    } else if (/^<[^!?]/.test(token)){
+      const name = (token.match(/^<\s*([\w-]+)/) || [, ''])[1].toLowerCase();
+      out.push(indentUnit.repeat(depth) + token);
+      if (!VOID.includes(name) && !/\/>$/.test(token)) depth++;
+    } else {
+      out.push(indentUnit.repeat(depth) + token.trim());
+    }
+  });
+  return out.join('\n');
+}
+
+function formatSql(sql){
+  const keywords = ['SELECT', 'FROM', 'WHERE', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'JOIN', 'GROUP BY',
+    'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION ALL', 'UNION', 'INSERT INTO', 'VALUES', 'UPDATE',
+    'SET', 'DELETE FROM', 'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'ON', 'AND', 'OR'];
+  let out = sql.replace(/\s+/g, ' ').trim();
+  keywords.forEach(kw => {
+    const re = new RegExp('\\b' + kw.replace(/ /g, '\\s+') + '\\b', 'gi');
+    out = out.replace(re, m => '\n' + m.toUpperCase());
+  });
+  return out.replace(/\n(AND|OR|ON)\b/g, '\n  $1').replace(/,\s*/g, ',\n  ').replace(/^\n/, '').trim() + ';';
+}
+
+function minifyCss(css){
+  return css.replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\s*([{}:;,>+~])\s*/g, '$1')
+            .replace(/;}/g, '}')
+            .replace(/\s+/g, ' ')
+            .trim();
+}
+function minifyJs(js){
+  // безопасная чистка: комментарии и лишние переводы строк, без переименования
+  return js.replace(/\/\*[\s\S]*?\*\//g, '')
+           .replace(/(^|[^:"'`\\])\/\/[^\n]*/g, '$1')
+           .replace(/\n\s*\n/g, '\n')
+           .split('\n').map(l => l.trim()).filter(Boolean).join('\n');
+}
+function minifyHtml(html){
+  return html.replace(/<!--[\s\S]*?-->/g, '')
+             .replace(/>\s+</g, '><')
+             .replace(/\s{2,}/g, ' ')
+             .trim();
+}
+
+/* ======================================================================
+   Форматирование кода
+====================================================================== */
+PT.tool({
+  id: 'code-format', cat: 'data', icon: '⌥',
+  title: 'Форматирование кода',
+  desc: 'Приводит в порядок JSON, CSS, HTML, XML и SQL — с выбором отступа.',
+  keywords: ['форматирование', 'beautify', 'prettify', 'css', 'html', 'sql', 'xml', 'отступы', 'красиво'],
+  render(root){
+    PT.textTool(root, {
+      inputLabel: 'Исходный код',
+      outputLabel: 'Отформатированный',
+      placeholder: 'Вставь код…',
+      live: false,
+      actionLabel: 'Отформатировать →',
+      downloadName: 'formatted.txt',
+      form: [
+        { id: 'lang', type: 'select', label: 'Язык', col: 6, options: [
+          ['auto', 'Определить автоматически'], ['json', 'JSON'], ['css', 'CSS'], ['html', 'HTML'], ['xml', 'XML'], ['sql', 'SQL']
+        ] },
+        { id: 'indent', type: 'select', label: 'Отступ', col: 6, value: '2', options: [
+          ['2', '2 пробела'], ['4', '4 пробела'], ['\t', 'Табуляция']
+        ] }
+      ],
+      run(text, v){
+        const unit = v.indent === '\t' ? '\t' : ' '.repeat(Number(v.indent));
+        let lang = v.lang;
+        if (lang === 'auto'){
+          const t = text.trim();
+          if (t.startsWith('{') || t.startsWith('[')) lang = 'json';
+          else if (/^\s*<\?xml/.test(t)) lang = 'xml';
+          else if (/^\s*</.test(t)) lang = 'html';
+          else if (/\bselect\b|\binsert\b|\bupdate\b/i.test(t)) lang = 'sql';
+          else lang = 'css';
+        }
+        if (lang === 'json'){
+          const data = JSON.parse(text);
+          return { text: JSON.stringify(data, null, v.indent === '\t' ? '\t' : Number(v.indent)),
+                   status: 'JSON корректен' };
+        }
+        if (lang === 'css') return { text: formatCss(text, unit), status: 'CSS отформатирован' };
+        if (lang === 'sql') return { text: formatSql(text), status: 'SQL отформатирован' };
+        return { text: formatHtml(text, unit), status: (lang === 'xml' ? 'XML' : 'HTML') + ' отформатирован' };
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Минификация
+====================================================================== */
+PT.tool({
+  id: 'code-minify', cat: 'data', icon: '⇥',
+  title: 'Минификация кода',
+  desc: 'Сжимает CSS, HTML, JS и JSON, показывая, сколько удалось сэкономить.',
+  keywords: ['минификация', 'minify', 'сжать', 'css', 'js', 'html', 'вес', 'оптимизация'],
+  render(root){
+    PT.textTool(root, {
+      inputLabel: 'Исходный код',
+      outputLabel: 'Сжатый',
+      live: false,
+      actionLabel: 'Сжать →',
+      form: [
+        { id: 'lang', type: 'select', label: 'Что сжимаем', col: 12, options: [
+          ['css', 'CSS'], ['html', 'HTML'], ['js', 'JavaScript (безопасно)'], ['json', 'JSON']
+        ] }
+      ],
+      run(text, v){
+        let out;
+        if (v.lang === 'css') out = minifyCss(text);
+        else if (v.lang === 'html') out = minifyHtml(text);
+        else if (v.lang === 'json') out = JSON.stringify(JSON.parse(text));
+        else out = minifyJs(text);
+        const saved = text.length ? Math.round((1 - out.length / text.length) * 100) : 0;
+        return { text: out, status: `${fmtBytes(text.length)} → ${fmtBytes(out.length)} (−${saved}%)` };
+      }
+    });
+    root.appendChild(ui.card([ui.muted(
+      'JavaScript сжимается консервативно: удаляются комментарии и пустые строки, но имена не переименовываются — ' +
+      'так код точно не сломается. Для продакшена используй сборщик проекта.')]));
+  }
+});
+
+/* ======================================================================
+   Схемы и типы из JSON
+====================================================================== */
+PT.tool({
+  id: 'data-schema', cat: 'data', icon: '⊹',
+  title: 'Типы и схема из JSON',
+  desc: 'Превращает пример данных в TypeScript-интерфейсы, JSON Schema или структуры Go.',
+  keywords: ['typescript', 'json schema', 'типы', 'интерфейс', 'go', 'генератор', 'модель'],
+  render(root){
+    PT.textTool(root, {
+      inputLabel: 'Пример JSON',
+      outputLabel: 'Результат',
+      sample: '{"id":1,"name":"PixTool","tags":["web","tools"],"meta":{"stars":120,"public":true},"updated":"2026-08-09"}',
+      form: [
+        { id: 'target', type: 'select', label: 'Что сгенерировать', col: 6, options: [
+          ['ts', 'TypeScript interface'], ['schema', 'JSON Schema'], ['go', 'Go struct'], ['python', 'Python dataclass']
+        ] },
+        { id: 'root', type: 'text', label: 'Имя корневого типа', col: 6, value: 'Root' }
+      ],
+      run(text, v){
+        const data = JSON.parse(text);
+        if (v.target === 'schema') return JSON.stringify(toSchema(data), null, 2);
+        if (v.target === 'ts') return toTs(data, v.root);
+        if (v.target === 'go') return toGo(data, v.root);
+        return toPython(data, v.root);
+      }
+    });
+
+    const typeOf = value => Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
+    const cap = s => s.charAt(0).toUpperCase() + s.slice(1).replace(/[^\w]/g, '');
+
+    function toSchema(value){
+      const t = typeOf(value);
+      if (t === 'array'){
+        return { type: 'array', items: value.length ? toSchema(value[0]) : {} };
+      }
+      if (t === 'object'){
+        const properties = {};
+        Object.keys(value).forEach(k => { properties[k] = toSchema(value[k]); });
+        return { type: 'object', properties, required: Object.keys(value) };
+      }
+      if (t === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return { type: 'string', format: 'date-time' };
+      return { type: t === 'number' ? (Number.isInteger(value) ? 'integer' : 'number') : t };
+    }
+
+    function toTs(value, name){
+      const lines = [];
+      const walk = (obj, typeName) => {
+        const fields = Object.keys(obj).map(key => {
+          const val = obj[key];
+          const t = typeOf(val);
+          let type;
+          if (t === 'object'){ type = cap(key); walk(val, type); }
+          else if (t === 'array'){
+            if (!val.length) type = 'unknown[]';
+            else if (typeOf(val[0]) === 'object'){ type = cap(key.replace(/s$/, '')) + '[]'; walk(val[0], cap(key.replace(/s$/, ''))); }
+            else type = typeOf(val[0]) + '[]';
+          }
+          else if (t === 'null') type = 'null';
+          else type = t;
+          return `  ${/^[a-zA-Z_$][\w$]*$/.test(key) ? key : `'${key}'`}: ${type};`;
+        });
+        lines.unshift(`export interface ${typeName} {\n${fields.join('\n')}\n}`);
+      };
+      walk(Array.isArray(value) ? (value[0] || {}) : value, name);
+      return lines.join('\n\n');
+    }
+
+    function toGo(value, name){
+      const goType = val => {
+        const t = typeOf(val);
+        if (t === 'number') return Number.isInteger(val) ? 'int' : 'float64';
+        if (t === 'boolean') return 'bool';
+        if (t === 'array') return '[]' + (val.length ? goType(val[0]) : 'interface{}');
+        if (t === 'object') return 'map[string]interface{}';
+        if (t === 'null') return 'interface{}';
+        return 'string';
+      };
+      const obj = Array.isArray(value) ? (value[0] || {}) : value;
+      const fields = Object.keys(obj).map(k =>
+        `\t${cap(k)} ${goType(obj[k])} \`json:"${k}"\``);
+      return `type ${name} struct {\n${fields.join('\n')}\n}`;
+    }
+
+    function toPython(value, name){
+      const pyType = val => {
+        const t = typeOf(val);
+        if (t === 'number') return Number.isInteger(val) ? 'int' : 'float';
+        if (t === 'boolean') return 'bool';
+        if (t === 'array') return 'list[' + (val.length ? pyType(val[0]) : 'Any') + ']';
+        if (t === 'object') return 'dict';
+        if (t === 'null') return 'Any';
+        return 'str';
+      };
+      const obj = Array.isArray(value) ? (value[0] || {}) : value;
+      const fields = Object.keys(obj).map(k => `    ${k}: ${pyType(obj[k])}`);
+      return `from dataclasses import dataclass\nfrom typing import Any\n\n\n@dataclass\nclass ${name}:\n${fields.join('\n')}`;
+    }
+  }
+});
+
+/* ======================================================================
+   Cron
+====================================================================== */
+PT.tool({
+  id: 'data-cron', cat: 'data', icon: '⏱',
+  title: 'Расписание cron',
+  desc: 'Объясняет выражение по-русски, показывает ближайшие запуски и собирает своё расписание.',
+  keywords: ['cron', 'расписание', 'планировщик', 'crontab', 'задача', 'запуск'],
+  render(root){
+    const input = el('input', { type: 'text', value: '0 9 * * 1-5', spellcheck: 'false' });
+    const out = el('div');
+    const status = ui.status();
+
+    const PRESETS = [
+      ['Каждую минуту', '* * * * *'], ['Каждый час', '0 * * * *'], ['Каждый день в 9:00', '0 9 * * *'],
+      ['По будням в 9:00', '0 9 * * 1-5'], ['Каждый понедельник', '0 10 * * 1'],
+      ['1-го числа месяца', '0 0 1 * *'], ['Каждые 15 минут', '*/15 * * * *'], ['Каждые 6 часов', '0 */6 * * *']
+    ];
+
+    function parseField(field, min, max){
+      const values = new Set();
+      field.split(',').forEach(part => {
+        const step = part.includes('/') ? Number(part.split('/')[1]) : 1;
+        const range = part.split('/')[0];
+        let from = min, to = max;
+        if (range !== '*'){
+          if (range.includes('-')){ const [a, b] = range.split('-').map(Number); from = a; to = b; }
+          else { from = to = Number(range); }
+        }
+        for (let i = from; i <= to; i += step) if (i >= min && i <= max) values.add(i);
+      });
+      return Array.from(values).sort((a, b) => a - b);
+    }
+
+    function describe(expr){
+      const parts = expr.trim().split(/\s+/);
+      if (parts.length !== 5) throw new Error('Нужно ровно пять частей: минуты, часы, день месяца, месяц, день недели');
+      const [min, hour, dom, mon, dow] = parts;
+      const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+      const DAYS = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
+      const parseSimple = (f, unit) => f === '*' ? 'каждую ' + unit : f.includes('/') ? 'каждые ' + f.split('/')[1] + ' ' + unit : f;
+
+      let text = 'Запуск ';
+      if (min === '*' && hour === '*') text += 'каждую минуту';
+      else if (hour === '*') text += `в ${parseSimple(min, 'минуту')} минут каждого часа`;
+      else {
+        const hours = parseField(hour, 0, 23);
+        const mins = parseField(min, 0, 59);
+        text += 'в ' + hours.map(h => mins.map(m => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`).join(', ')).join(', ');
+      }
+      if (dow !== '*') text += ', по дням недели: ' + parseField(dow, 0, 6).map(d => DAYS[d % 7]).join(', ');
+      if (dom !== '*') text += ', числа месяца: ' + parseField(dom, 1, 31).join(', ');
+      if (mon !== '*') text += ', месяцы: ' + parseField(mon, 1, 12).map(m => MONTHS[m - 1]).join(', ');
+      return text;
+    }
+
+    function nextRuns(expr, count){
+      const parts = expr.trim().split(/\s+/);
+      const mins = parseField(parts[0], 0, 59);
+      const hours = parseField(parts[1], 0, 23);
+      const doms = parseField(parts[2], 1, 31);
+      const mons = parseField(parts[3], 1, 12);
+      const dows = parseField(parts[4], 0, 6);
+      const runs = [];
+      const date = new Date();
+      date.setSeconds(0, 0);
+      date.setMinutes(date.getMinutes() + 1);
+      for (let i = 0; i < 527040 && runs.length < count; i++){
+        if (mins.includes(date.getMinutes()) && hours.includes(date.getHours()) &&
+            mons.includes(date.getMonth() + 1) &&
+            (parts[2] === '*' || doms.includes(date.getDate())) &&
+            (parts[4] === '*' || dows.includes(date.getDay()))){
+          runs.push(new Date(date));
+        }
+        date.setMinutes(date.getMinutes() + 1);
+      }
+      return runs;
+    }
+
+    function refresh(){
+      out.innerHTML = '';
+      try{
+        const expr = input.value.trim();
+        const text = describe(expr);
+        const runs = nextRuns(expr, 8);
+        out.appendChild(ui.card([
+          ui.h('Что это значит'),
+          el('p', { style: { fontSize: '15.5px' }, text }),
+          ui.spacer(12),
+          ui.h('Ближайшие запуски'),
+          ui.kv(runs.map(d => [d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' }),
+                               d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })])),
+          ui.spacer(12),
+          ui.copyBox(expr, { label: 'Выражение', rows: 1 })
+        ]));
+        status.ok('Разобрано');
+      } catch(err){ status.err(err.message); }
+    }
+    input.addEventListener('input', debounce(refresh, 250));
+
+    root.appendChild(ui.card([
+      el('div', { class: 'pillbar' }, PRESETS.map(([label, expr]) =>
+        el('button', { class: 'pill', type: 'button', text: label, onclick: () => { input.value = expr; refresh(); } }))),
+      el('label', { text: 'Cron-выражение (минуты часы день месяц день-недели)' }),
+      input, status
+    ]));
+    root.appendChild(out);
+    refresh();
+  }
+});
+
+/* ======================================================================
+   Подсети IP
+====================================================================== */
+PT.tool({
+  id: 'data-ip', cat: 'data', icon: '⌗',
+  title: 'Калькулятор подсетей',
+  desc: 'Считает диапазон адресов, маску и количество хостов по записи CIDR.',
+  keywords: ['ip', 'подсеть', 'cidr', 'маска', 'сеть', 'адрес', 'калькулятор'],
+  render(root){
+    const input = el('input', { type: 'text', value: '192.168.1.0/24', spellcheck: 'false' });
+    const out = el('div');
+    const status = ui.status();
+
+    const toInt = ip => ip.split('.').reduce((acc, part) => (acc << 8) + Number(part), 0) >>> 0;
+    const toIp = n => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+
+    function calc(){
+      out.innerHTML = '';
+      const raw = input.value.trim();
+      const m = raw.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?:\/(\d{1,2}))?$/);
+      if (!m){ status.err('Введи адрес вида 192.168.1.0/24'); return; }
+      const ip = m[1];
+      if (ip.split('.').some(p => Number(p) > 255)){ status.err('Октет не может быть больше 255'); return; }
+      const bits = m[2] === undefined ? 32 : Number(m[2]);
+      if (bits > 32){ status.err('Префикс не может быть больше 32'); return; }
+      const mask = bits === 0 ? 0 : (0xFFFFFFFF << (32 - bits)) >>> 0;
+      const network = (toInt(ip) & mask) >>> 0;
+      const broadcast = (network | (~mask >>> 0)) >>> 0;
+      const hosts = bits >= 31 ? (bits === 32 ? 1 : 2) : broadcast - network - 1;
+      const isPrivate = /^10\./.test(toIp(network)) || /^192\.168\./.test(toIp(network)) ||
+                        /^172\.(1[6-9]|2\d|3[01])\./.test(toIp(network));
+
+      out.appendChild(ui.card([
+        ui.h('Сеть ' + toIp(network) + '/' + bits),
+        ui.kv([
+          ['Адрес сети', toIp(network)],
+          ['Широковещательный', toIp(broadcast)],
+          ['Маска подсети', toIp(mask)],
+          ['Обратная маска', toIp(~mask >>> 0)],
+          ['Префикс', '/' + bits],
+          ['Первый хост', bits >= 31 ? toIp(network) : toIp(network + 1)],
+          ['Последний хост', bits >= 31 ? toIp(broadcast) : toIp(broadcast - 1)],
+          ['Адресов всего', fmtNum(Math.pow(2, 32 - bits), 0)],
+          ['Доступно хостов', fmtNum(hosts, 0)],
+          ['Тип', isPrivate ? 'частная сеть (локальная)' : 'публичный адрес'],
+          ['Двоичная маска', mask.toString(2).padStart(32, '0').replace(/(.{8})/g, '$1.').slice(0, -1)]
+        ]),
+        ui.spacer(14),
+        ui.h('Деление на подсети'),
+        ui.kv([2, 4, 8, 16].map(n => {
+          const newBits = bits + Math.log2(n);
+          if (newBits > 32) return ['÷' + n, 'не помещается'];
+          const size = Math.pow(2, 32 - newBits);
+          return ['÷' + n + ' → /' + newBits, `${n} сетей по ${fmtNum(size - 2, 0)} хостов`];
+        }))
+      ]));
+      status.ok('Посчитано');
+    }
+    input.addEventListener('input', debounce(calc, 200));
+
+    root.appendChild(ui.card([
+      el('div', { class: 'pillbar' }, ['192.168.1.0/24', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '8.8.8.8/32'].map(p =>
+        el('button', { class: 'pill', type: 'button', text: p, onclick: () => { input.value = p; calc(); } }))),
+      el('label', { text: 'Адрес и префикс' }), input, status
+    ]));
+    root.appendChild(out);
+    calc();
+  }
+});
+
+/* ======================================================================
+   HEX-просмотр файла
+====================================================================== */
+PT.tool({
+  id: 'data-hex', cat: 'data', icon: '⊞',
+  title: 'HEX-просмотр файла',
+  desc: 'Показывает байты файла с ASCII-колонкой и определяет настоящий формат по сигнатуре.',
+  keywords: ['hex', 'дамп', 'байты', 'бинарный', 'сигнатура', 'формат', 'анализ'],
+  render(root){
+    const SIGNATURES = [
+      { hex: '89504E47', name: 'PNG — изображение' }, { hex: 'FFD8FF', name: 'JPEG — фотография' },
+      { hex: '47494638', name: 'GIF — анимация' }, { hex: '25504446', name: 'PDF — документ' },
+      { hex: '504B0304', name: 'ZIP (или docx, xlsx, epub, apk)' }, { hex: '52617221', name: 'RAR — архив' },
+      { hex: '7F454C46', name: 'ELF — исполняемый файл Linux' }, { hex: '4D5A', name: 'EXE/DLL — Windows' },
+      { hex: '1F8B', name: 'GZIP — архив' }, { hex: '424D', name: 'BMP — изображение' },
+      { hex: '52494646', name: 'RIFF (WAV, AVI, WebP)' }, { hex: '00000018', name: 'MP4 — видео' },
+      { hex: '494433', name: 'MP3 — аудио' }, { hex: '4F676753', name: 'OGG — аудио' },
+      { hex: '3C737667', name: 'SVG — вектор' }, { hex: '7B', name: 'JSON или текст' }
+    ];
+    PT.fileTool(root, {
+      accept: '',
+      title: 'Перетащи любой файл',
+      hint: 'показываются первые 64 КБ',
+      async onFiles(file, ctx){
+        const buffer = await file.slice(0, 65536).arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const head = toHex(bytes.slice(0, 8)).toUpperCase();
+        const match = SIGNATURES.find(s => head.startsWith(s.hex));
+
+        const lines = [];
+        for (let i = 0; i < Math.min(bytes.length, 4096); i += 16){
+          const chunk = bytes.slice(i, i + 16);
+          const hex = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join(' ').padEnd(47, ' ');
+          const ascii = Array.from(chunk).map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+          lines.push(i.toString(16).padStart(8, '0') + '  ' + hex + '  |' + ascii + '|');
+        }
+
+        ctx.out.innerHTML = '';
+        ctx.out.appendChild(ui.card([
+          ui.h('Файл'),
+          ui.kv([
+            ['Имя', file.name],
+            ['Размер', fmtBytes(file.size)],
+            ['Тип по расширению', file.type || 'неизвестен'],
+            ['Сигнатура (первые байты)', head],
+            ['Настоящий формат', match ? match.name : 'не определён'],
+            ['Совпадает с расширением', match ? (match.name.toLowerCase().includes(extOf(file.name)) ? 'да' : 'проверь — возможно несоответствие') : '—']
+          ]),
+          ui.spacer(14),
+          el('div', { class: 'code-out', style: { maxHeight: '440px', fontSize: '11.6px' }, text: lines.join('\n') }),
+          ui.spacer(12),
+          ui.btn('Скачать дамп', () => downloadText(lines.join('\n'), file.name + '.hex.txt'), { ghost: true, small: true })
+        ]));
+        ctx.status.ok('Показано ' + Math.min(bytes.length, 4096) + ' байт');
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   .env
+====================================================================== */
+PT.tool({
+  id: 'data-env', cat: 'data', icon: '⚿',
+  title: 'Переменные окружения',
+  desc: 'Конвертирует .env в JSON, YAML, docker-compose и обратно, подсвечивая секреты.',
+  keywords: ['env', 'переменные', 'docker', 'конфиг', 'секреты', 'настройки', 'deploy'],
+  render(root){
+    PT.textTool(root, {
+      inputLabel: '.env или JSON',
+      outputLabel: 'Результат',
+      sample: 'DATABASE_URL=postgres://user:pass@localhost:5432/db\nAPI_KEY=sk-secret-value\nDEBUG=true\nPORT=3000',
+      form: [
+        { id: 'to', type: 'select', label: 'Во что превратить', col: 6, options: [
+          ['json', 'JSON'], ['yaml', 'YAML'], ['env', '.env'], ['compose', 'docker-compose'], ['shell', 'export для shell']
+        ] },
+        { id: 'mask', type: 'checkbox', label: 'Скрыть значения секретов', col: 6 }
+      ],
+      run(text, v){
+        let vars = {};
+        if (text.trim().startsWith('{')){
+          vars = JSON.parse(text);
+        } else {
+          text.split('\n').forEach(line => {
+            const clean = line.trim();
+            if (!clean || clean.startsWith('#')) return;
+            const idx = clean.indexOf('=');
+            if (idx < 0) return;
+            const key = clean.slice(0, idx).trim().replace(/^export\s+/, '');
+            let value = clean.slice(idx + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))){
+              value = value.slice(1, -1);
+            }
+            vars[key] = value;
+          });
+        }
+        const isSecret = key => /key|secret|token|password|pass|pwd|private|credential/i.test(key);
+        const show = (key, value) => v.mask && isSecret(key) ? '***скрыто***' : value;
+        const secrets = Object.keys(vars).filter(isSecret);
+
+        let out;
+        if (v.to === 'json') out = JSON.stringify(Object.fromEntries(Object.entries(vars).map(([k, val]) => [k, show(k, val)])), null, 2);
+        else if (v.to === 'yaml') out = Object.entries(vars).map(([k, val]) => `${k}: ${JSON.stringify(show(k, val))}`).join('\n');
+        else if (v.to === 'env') out = Object.entries(vars).map(([k, val]) => `${k}=${show(k, val)}`).join('\n');
+        else if (v.to === 'shell') out = Object.entries(vars).map(([k, val]) => `export ${k}="${show(k, val)}"`).join('\n');
+        else out = 'services:\n  app:\n    environment:\n' +
+          Object.entries(vars).map(([k, val]) => `      - ${k}=${show(k, val)}`).join('\n');
+
+        return { text: out,
+          status: `Переменных: ${Object.keys(vars).length}` +
+                  (secrets.length ? ` · похоже на секреты: ${secrets.join(', ')}` : ''),
+          kind: secrets.length && !v.mask ? 'err' : 'ok' };
+      }
+    });
+    root.appendChild(ui.card([ui.muted(
+      'Файл разбирается прямо в браузере и никуда не отправляется. Всё же не вставляй боевые ключи в чужие онлайн-сервисы — ' +
+      'привычка важнее конкретного инструмента.')]));
+  }
+});
+
+/* ======================================================================
+   User-Agent
+====================================================================== */
+PT.tool({
+  id: 'data-useragent', cat: 'data', icon: '☍',
+  title: 'Разбор User-Agent',
+  desc: 'Определяет браузер, движок, систему и устройство по строке — и показывает вашу собственную.',
+  keywords: ['user-agent', 'браузер', 'ос', 'устройство', 'аналитика', 'логи'],
+  render(root){
+    const input = el('textarea', { rows: 3, spellcheck: 'false', value: navigator.userAgent });
+    const out = el('div');
+    const status = ui.status();
+
+    function parse(ua){
+      const test = (re, s) => { const m = ua.match(re); return m ? (s ? m[s] : m[0]) : null; };
+      const browsers = [
+        [/Edg\/([\d.]+)/, 'Microsoft Edge'], [/OPR\/([\d.]+)/, 'Opera'], [/YaBrowser\/([\d.]+)/, 'Яндекс.Браузер'],
+        [/Chrome\/([\d.]+)/, 'Chrome'], [/Firefox\/([\d.]+)/, 'Firefox'], [/Version\/([\d.]+).*Safari/, 'Safari'],
+        [/MSIE ([\d.]+)/, 'Internet Explorer'], [/Electron\/([\d.]+)/, 'Electron']
+      ];
+      let browser = 'неизвестен', version = '';
+      for (const [re, name] of browsers){
+        const m = ua.match(re);
+        if (m){ browser = name; version = m[1]; break; }
+      }
+      const os = /Windows NT 10/.test(ua) ? 'Windows 10 или 11'
+        : /Windows NT 6.3/.test(ua) ? 'Windows 8.1'
+        : /Mac OS X ([\d_]+)/.test(ua) ? 'macOS ' + (test(/Mac OS X ([\d_]+)/, 1) || '').replace(/_/g, '.')
+        : /Android ([\d.]+)/.test(ua) ? 'Android ' + test(/Android ([\d.]+)/, 1)
+        : /(iPhone|iPad).*OS ([\d_]+)/.test(ua) ? 'iOS ' + (test(/OS ([\d_]+)/, 1) || '').replace(/_/g, '.')
+        : /Linux/.test(ua) ? 'Linux' : 'неизвестна';
+      const engine = /Gecko\/|Firefox/.test(ua) && !/like Gecko/.test(ua) ? 'Gecko'
+        : /AppleWebKit/.test(ua) ? (/Chrome|Edg|OPR/.test(ua) ? 'Blink' : 'WebKit') : 'неизвестен';
+      const mobile = /Mobile|Android|iPhone|iPad/.test(ua);
+      const bot = /bot|crawler|spider|yandex|google|bing/i.test(ua);
+      return { browser, version, os, engine,
+               device: bot ? 'поисковый робот' : mobile ? (/iPad|Tablet/.test(ua) ? 'планшет' : 'телефон') : 'компьютер',
+               bot };
+    }
+
+    function refresh(){
+      const info = parse(input.value);
+      out.innerHTML = '';
+      out.appendChild(ui.card([
+        ui.h('Что удалось определить'),
+        ui.kv([
+          ['Браузер', info.browser + (info.version ? ' ' + info.version : '')],
+          ['Движок', info.engine],
+          ['Операционная система', info.os],
+          ['Тип устройства', info.device],
+          ['Робот', info.bot ? 'да' : 'нет'],
+          ['Длина строки', input.value.length + ' символов']
+        ])
+      ]));
+      if (input.value === navigator.userAgent){
+        const nav = [
+          ['Язык', navigator.language],
+          ['Ядер процессора', String(navigator.hardwareConcurrency || '—')],
+          ['Памяти (примерно)', navigator.deviceMemory ? navigator.deviceMemory + ' ГБ' : '—'],
+          ['Экран', `${screen.width}×${screen.height}, ${window.devicePixelRatio}x`],
+          ['Часовой пояс', Intl.DateTimeFormat().resolvedOptions().timeZone],
+          ['Сенсорный ввод', navigator.maxTouchPoints > 0 ? 'да' : 'нет'],
+          ['WebGPU', navigator.gpu ? 'поддерживается' : 'нет'],
+          ['Онлайн', navigator.onLine ? 'да' : 'нет']
+        ];
+        out.appendChild(ui.card([ui.h('Ваше устройство'), ui.kv(nav)]));
+      }
+      status.ok('Разобрано');
+    }
+    input.addEventListener('input', debounce(refresh, 250));
+
+    root.appendChild(ui.card([
+      el('label', { text: 'Строка User-Agent' }), input, ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Разобрать', refresh),
+        ui.btn('Моя строка', () => { input.value = navigator.userAgent; refresh(); }, { ghost: true, small: true }),
+        ui.btn('Копировать', () => copy(input.value), { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(out);
+    refresh();
+  }
+});
+
+/* ======================================================================
+   Символы Unicode
+====================================================================== */
+PT.tool({
+  id: 'data-unicode', cat: 'data', icon: '∮',
+  title: 'Символы и Unicode',
+  desc: 'Показывает коды символов, экранирует строки и помогает найти невидимые знаки.',
+  keywords: ['unicode', 'символы', 'escape', 'эмодзи', 'коды', 'utf-8', 'невидимые символы'],
+  render(root){
+    const input = el('textarea', { rows: 4, spellcheck: 'false', value: 'Привет, PixTool! ✦ 你好' });
+    const out = el('div');
+    const status = ui.status();
+
+    const form = ui.form([
+      { id: 'view', type: 'select', label: 'Что показать', col: 12, options: [
+        ['table', 'Таблица символов'], ['js', 'JS-экранирование (\\uXXXX)'], ['html', 'HTML-сущности'],
+        ['url', 'Percent-encoding'], ['utf8', 'Байты UTF-8'], ['clean', 'Убрать невидимые символы']
+      ] }
+    ], refresh);
+
+    const INVISIBLE = { 0x00A0: 'неразрывный пробел', 0x200B: 'нулевой пробел', 0x200C: 'несоединитель',
+      0x200D: 'соединитель', 0x2060: 'слово-соединитель', 0xFEFF: 'BOM', 0x00AD: 'мягкий перенос',
+      0x2028: 'разделитель строк', 0x2029: 'разделитель абзацев' };
+
+    function refresh(){
+      const text = input.value;
+      const v = form.values();
+      out.innerHTML = '';
+      const chars = Array.from(text);
+
+      if (v.view === 'table'){
+        const rows = chars.slice(0, 200).map(ch => {
+          const code = ch.codePointAt(0);
+          const hidden = INVISIBLE[code];
+          return [
+            hidden ? `«${hidden}»` : ch,
+            `U+${code.toString(16).toUpperCase().padStart(4, '0')} · ${code} · ${new Blob([ch]).size} байт`
+          ];
+        });
+        out.appendChild(ui.card([ui.h('Символы: ' + chars.length), ui.kv(rows)]));
+        const found = chars.filter(ch => INVISIBLE[ch.codePointAt(0)]);
+        status.set(found.length ? `Найдены невидимые символы: ${found.length} — они часто ломают поиск и сравнение`
+                                : 'Невидимых символов не найдено', found.length ? 'err' : 'ok');
+        return;
+      }
+
+      let result;
+      if (v.view === 'js') result = chars.map(ch => ch.codePointAt(0) > 127
+        ? '\\u' + ch.codePointAt(0).toString(16).padStart(4, '0') : ch).join('');
+      else if (v.view === 'html') result = chars.map(ch => ch.codePointAt(0) > 127
+        ? '&#' + ch.codePointAt(0) + ';' : esc(ch)).join('');
+      else if (v.view === 'url') result = encodeURIComponent(text);
+      else if (v.view === 'utf8') result = Array.from(new TextEncoder().encode(text))
+        .map(b => b.toString(16).padStart(2, '0')).join(' ');
+      else result = chars.filter(ch => !INVISIBLE[ch.codePointAt(0)] || ch === ' ').join('')
+        .replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+
+      out.appendChild(ui.card([ui.copyBox(result, { label: 'Результат', rows: 8 })]));
+      status.ok(`${chars.length} символов · ${new TextEncoder().encode(text).length} байт в UTF-8`);
+    }
+    input.addEventListener('input', debounce(refresh, 250));
+
+    root.appendChild(ui.card([
+      el('label', { text: 'Текст' }), input, ui.spacer(12), form, status
+    ]));
+    root.appendChild(out);
+    refresh();
+  }
+});
+
+
+/* ===== tools/84-design2.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: ДИЗАЙН, ЧАСТЬ 2
+====================================================================== */
+
+/* ======================================================================
+   Аватарки
+====================================================================== */
+PT.tool({
+  id: 'design-avatar', cat: 'design', icon: '☻',
+  title: 'Генератор аватарок',
+  desc: 'Делает уникальную картинку из имени или почты: инициалы, узор или геометрический identicon.',
+  keywords: ['аватар', 'avatar', 'identicon', 'инициалы', 'профиль', 'заглушка', 'gravatar'],
+  render(root){
+    const canvas = el('canvas', { style: { width: '220px', height: '220px', borderRadius: '12px', border: '1px solid var(--line)' } });
+    const grid = ui.thumbGrid();
+    const status = ui.status();
+
+    const form = ui.form([
+      { id: 'seed', type: 'text', label: 'Имя, ник или почта', col: 6, value: 'Pixset Studio' },
+      { id: 'style', type: 'select', label: 'Стиль', col: 6, options: [
+        ['initials', 'Инициалы'], ['identicon', 'Identicon (пиксельный узор)'],
+        ['rings', 'Кольца'], ['bauhaus', 'Баухаус'], ['gradient', 'Градиент']
+      ] },
+      { id: 'size', type: 'number', label: 'Размер, px', col: 4, value: 512, min: 32, max: 2048, step: 32 },
+      { id: 'radius', type: 'range', label: 'Скругление', col: 4, min: 0, max: 50, value: 20, unit: '%' },
+      { id: 'palette', type: 'select', label: 'Палитра', col: 4, options: [
+        ['auto', 'Из имени'], ['pixset', 'Pixset'], ['pastel', 'Пастель'], ['dark', 'Тёмная'], ['vivid', 'Яркая']
+      ] }
+    ], draw);
+
+    const PALETTES = {
+      pixset: ['#e8a33d', '#5fb3a3', '#e0685c', '#101216', '#e9e7e1'],
+      pastel: ['#ffd6a5', '#caffbf', '#9bf6ff', '#bdb2ff', '#ffc6ff'],
+      dark: ['#22333b', '#0a0908', '#5e503f', '#a9927d', '#eae0d5'],
+      vivid: ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec', '#3a86ff']
+    };
+
+    function hash(str){
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return h >>> 0;
+    }
+
+    function draw(){
+      const v = form.values();
+      const size = clamp(v.size, 32, 2048);
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const seed = v.seed || 'pixtool';
+      const h = hash(seed);
+      const rnd = (n) => ((h >> (n % 24)) & 0xFF) / 255;
+
+      const palette = v.palette === 'auto'
+        ? [Color.hslToHex(h % 360, 65, 52), Color.hslToHex((h % 360 + 40) % 360, 60, 62),
+           Color.hslToHex((h % 360 + 180) % 360, 55, 45), '#ffffff', '#101216']
+        : PALETTES[v.palette];
+
+      const bg = palette[h % palette.length];
+      ctx.save();
+      const r = size * v.radius / 100;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(0, 0, size, size, r); else ctx.rect(0, 0, size, size);
+      ctx.clip();
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, size, size);
+
+      if (v.style === 'gradient'){
+        const g = ctx.createLinearGradient(0, 0, size, size);
+        g.addColorStop(0, palette[h % palette.length]);
+        g.addColorStop(1, palette[(h >> 5) % palette.length]);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+      } else if (v.style === 'identicon'){
+        const cells = 5, cell = size / cells;
+        ctx.fillStyle = palette[(h >> 3) % palette.length];
+        for (let x = 0; x < Math.ceil(cells / 2); x++){
+          for (let y = 0; y < cells; y++){
+            if ((h >> ((x * cells + y) % 30)) & 1){
+              ctx.fillRect(x * cell, y * cell, cell, cell);
+              ctx.fillRect((cells - 1 - x) * cell, y * cell, cell, cell);
+            }
+          }
+        }
+      } else if (v.style === 'rings'){
+        for (let i = 5; i > 0; i--){
+          ctx.fillStyle = palette[(h >> (i * 2)) % palette.length];
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath();
+          ctx.arc(size * (0.3 + rnd(i) * 0.4), size * (0.3 + rnd(i + 7) * 0.4), size * 0.1 * i, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      } else if (v.style === 'bauhaus'){
+        const shapes = 4;
+        for (let i = 0; i < shapes; i++){
+          ctx.fillStyle = palette[(h >> (i * 3)) % palette.length];
+          const x = rnd(i) * size, y = rnd(i + 3) * size, s = size * (0.25 + rnd(i + 9) * 0.4);
+          const kind = (h >> (i * 5)) % 3;
+          if (kind === 0) ctx.fillRect(x - s / 2, y - s / 2, s, s);
+          else if (kind === 1){ ctx.beginPath(); ctx.arc(x, y, s / 2, 0, Math.PI * 2); ctx.fill(); }
+          else { ctx.beginPath(); ctx.moveTo(x, y - s / 2); ctx.lineTo(x + s / 2, y + s / 2); ctx.lineTo(x - s / 2, y + s / 2); ctx.closePath(); ctx.fill(); }
+        }
+      } else {
+        const words = seed.trim().split(/[\s@._-]+/).filter(Boolean);
+        const initials = (words.length > 1 ? words[0][0] + words[1][0] : seed.slice(0, 2)).toUpperCase();
+        ctx.fillStyle = Color.readableOn(bg);
+        ctx.font = `600 ${size * 0.4}px 'Inter', sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(initials, size / 2, size / 2 + size * 0.02);
+      }
+      ctx.restore();
+      status.ok(`${size}×${size}px`);
+    }
+
+    async function batch(){
+      const names = prompt('Введи имена через запятую:', 'Анна Смирнова, Иван Петров, support@pixset.dev');
+      if (!names) return;
+      const list = names.split(',').map(s => s.trim()).filter(Boolean);
+      grid.clear();
+      const entries = [];
+      for (const name of list){
+        form.set('seed', name);
+        draw();
+        const blob = await canvasToBlob(canvas, 'image/png');
+        const file = name.replace(/[^\wа-яА-Я]+/g, '-').toLowerCase() + '.png';
+        entries.push({ name: file, data: blob });
+        grid.add(URL.createObjectURL(blob), name.slice(0, 14), () => downloadBlob(blob, file));
+      }
+      grid._entries = entries;
+      status.ok('Сгенерировано аватарок: ' + entries.length);
+    }
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14),
+      el('div', { style: { display: 'grid', placeItems: 'center' } }, canvas),
+      ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать PNG', async () => downloadBlob(await canvasToBlob(canvas, 'image/png'), 'avatar.png')),
+        ui.btn('Случайное имя', () => {
+          form.set('seed', Math.random().toString(36).slice(2, 10));
+          draw();
+        }, { ghost: true, small: true }),
+        ui.btn('Пачкой из списка', batch, { ghost: true, small: true }),
+        ui.btn('Скачать пачку (ZIP)', async () => {
+          if (!grid._entries) { status.err('Сначала сгенерируй пачку'); return; }
+          downloadBlob(await zip(grid._entries), 'avatars.zip');
+        }, { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(grid);
+    draw();
+  }
+});
+
+/* ======================================================================
+   Картинка для соцсетей
+====================================================================== */
+PT.tool({
+  id: 'design-social', cat: 'design', icon: '▭',
+  title: 'Обложка для соцсетей',
+  desc: 'Собирает OG-картинку с заголовком, подписью и фоном — 1200×630 и другие форматы.',
+  keywords: ['og', 'обложка', 'превью', 'соцсети', 'баннер', 'заголовок', 'telegram', 'открытый граф'],
+  render(root){
+    const canvas = el('canvas', { style: { maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--line)' } });
+    const status = ui.status();
+    let logo = null;
+
+    const form = ui.form([
+      { id: 'size', type: 'select', label: 'Формат', col: 4, options: [
+        ['1200x630', 'OG 1200×630'], ['1280x720', 'YouTube 1280×720'], ['1080x1080', 'Пост 1080×1080'],
+        ['1080x1920', 'Сторис 1080×1920'], ['1500x500', 'Шапка 1500×500']
+      ] },
+      { id: 'title', type: 'text', label: 'Заголовок', col: 8, value: '49 инструментов в браузере' },
+      { id: 'subtitle', type: 'text', label: 'Подпись', col: 8, value: 'Конвертеры, редактор, нейросети — всё локально' },
+      { id: 'badge', type: 'text', label: 'Метка сверху', col: 4, value: 'PIXTOOL' },
+      { id: 'theme', type: 'select', label: 'Фон', col: 4, options: [
+        ['dark', 'Тёмный с сеткой'], ['gradient', 'Градиент'], ['light', 'Светлый'], ['mesh', 'Цветные пятна']
+      ] },
+      { id: 'accent', type: 'color', label: 'Акцент', col: 4, value: '#e8a33d' },
+      { id: 'align', type: 'select', label: 'Выравнивание', col: 4, options: [['left', 'По левому краю'], ['center', 'По центру']] }
+    ], draw);
+
+    function wrapText(ctx, text, maxWidth){
+      const words = text.split(' ');
+      const lines = [];
+      let line = '';
+      words.forEach(word => {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line){ lines.push(line); line = word; }
+        else line = test;
+      });
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    function draw(){
+      const v = form.values();
+      const [w, h] = v.size.split('x').map(Number);
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const accent = v.accent;
+      const dark = v.theme !== 'light';
+
+      if (v.theme === 'gradient'){
+        const g = ctx.createLinearGradient(0, 0, w, h);
+        g.addColorStop(0, accent);
+        g.addColorStop(1, Color.hslToHex((Color.hexToHsl(accent).h + 150) % 360, 60, 35));
+        ctx.fillStyle = g;
+      } else if (v.theme === 'mesh'){
+        ctx.fillStyle = '#101216'; ctx.fillRect(0, 0, w, h);
+        [[0.2, 0.25, accent], [0.8, 0.3, '#5fb3a3'], [0.5, 0.85, '#8b5cf6']].forEach(([x, y, color]) => {
+          const g = ctx.createRadialGradient(w * x, h * y, 0, w * x, h * y, Math.max(w, h) * 0.55);
+          g.addColorStop(0, color + 'cc');
+          g.addColorStop(1, '#10121600');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, w, h);
+        });
+        ctx.fillStyle = 'transparent';
+      } else {
+        ctx.fillStyle = dark ? '#101216' : '#f4f2ee';
+      }
+      if (v.theme !== 'mesh') ctx.fillRect(0, 0, w, h);
+
+      if (v.theme === 'dark'){
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.lineWidth = 1;
+        const step = Math.round(w / 34);
+        for (let x = 0; x < w; x += step){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for (let y = 0; y < h; y += step){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+        const glow = ctx.createRadialGradient(w * 0.15, 0, 0, w * 0.15, 0, w * 0.6);
+        glow.addColorStop(0, accent + '33');
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      const pad = w * 0.075;
+      const textColor = v.theme === 'light' ? '#101216' : '#ffffff';
+      const centered = v.align === 'center';
+      ctx.textAlign = centered ? 'center' : 'left';
+      const x = centered ? w / 2 : pad;
+
+      let y = pad + h * 0.06;
+      if (v.badge){
+        ctx.font = `700 ${Math.round(h * 0.035)}px 'Space Mono', monospace`;
+        ctx.fillStyle = accent;
+        ctx.fillText(v.badge.toUpperCase(), x, y);
+        y += h * 0.06;
+      }
+      if (logo){
+        const size = h * 0.12;
+        ctx.drawImage(logo, centered ? (w - size) / 2 : pad, y - h * 0.02, size, size * logo.naturalHeight / logo.naturalWidth);
+        y += size * 0.9;
+      }
+
+      const titleSize = Math.round(h * (v.size === '1500x500' ? 0.16 : 0.11));
+      ctx.font = `700 ${titleSize}px 'Inter', sans-serif`;
+      ctx.fillStyle = textColor;
+      const lines = wrapText(ctx, v.title, w - pad * 2);
+      const blockH = lines.length * titleSize * 1.18;
+      let ty = Math.max(y + titleSize, h / 2 - blockH / 2 + titleSize * 0.7);
+      lines.forEach(line => { ctx.fillText(line, x, ty); ty += titleSize * 1.18; });
+
+      if (v.subtitle){
+        const subSize = Math.round(titleSize * 0.42);
+        ctx.font = `400 ${subSize}px 'Inter', sans-serif`;
+        ctx.fillStyle = v.theme === 'light' ? '#5d626b' : 'rgba(255,255,255,0.72)';
+        wrapText(ctx, v.subtitle, w - pad * 2).forEach(line => { ty += subSize * 1.35; ctx.fillText(line, x, ty); });
+      }
+
+      ctx.fillStyle = accent;
+      ctx.fillRect(0, h - Math.max(6, h * 0.012), w, Math.max(6, h * 0.012));
+      status.ok(`${w}×${h}px`);
+    }
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14),
+      ui.drop({ accept: 'image/*', title: 'Логотип (необязательно)',
+        onFiles: async f => { logo = await loadImage(f[0]); draw(); } }),
+      ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать PNG', async () => {
+          downloadBlob(await canvasToBlob(canvas, 'image/png'), 'social-cover.png');
+        }),
+        ui.btn('Скачать JPEG', async () => {
+          downloadBlob(await canvasToBlob(flatten(canvas), 'image/jpeg', 0.92), 'social-cover.jpg');
+        }, { ghost: true, small: true }),
+        ui.btn('Убрать логотип', () => { logo = null; draw(); }, { ghost: true, small: true })
+      ]),
+      status
+    ]));
+    root.appendChild(ui.card([ui.h('Предпросмотр'), canvas]));
+    draw();
+  }
+});
+
+/* ======================================================================
+   SVG-фигуры
+====================================================================== */
+PT.tool({
+  id: 'design-blob', cat: 'design', icon: '❍',
+  title: 'Волны и пятна SVG',
+  desc: 'Генерирует органические фигуры и волнистые разделители для секций сайта.',
+  keywords: ['blob', 'волна', 'svg', 'фигура', 'разделитель', 'фон', 'декор'],
+  render(root){
+    const preview = el('div', { style: { minHeight: '260px', display: 'grid', placeItems: 'center',
+      border: '1px solid var(--line)', borderRadius: '8px', background: 'var(--surface-2)', padding: '16px' } });
+    const code = ui.copyBox('', { label: 'SVG-код', rows: 6 });
+
+    const form = ui.form([
+      { id: 'type', type: 'select', label: 'Что генерируем', col: 4, options: [
+        ['blob', 'Пятно (blob)'], ['wave', 'Волна-разделитель'], ['corner', 'Угловая фигура']
+      ] },
+      { id: 'points', type: 'range', label: 'Точек', col: 4, min: 3, max: 12, value: 6 },
+      { id: 'randomness', type: 'range', label: 'Неровность', col: 4, min: 0, max: 60, value: 24, unit: '%' },
+      { id: 'color', type: 'color', label: 'Цвет', col: 4, value: '#e8a33d' },
+      { id: 'color2', type: 'color', label: 'Второй цвет', col: 4, value: '#5fb3a3' },
+      { id: 'gradient', type: 'checkbox', label: 'Заливать градиентом', col: 4, value: true }
+    ], generate);
+
+    let seed = Math.random();
+
+    function generate(){
+      const v = form.values();
+      const size = 500;
+      let path;
+      if (v.type === 'blob'){
+        const cx = size / 2, cy = size / 2, radius = size * 0.36;
+        const points = [];
+        for (let i = 0; i < v.points; i++){
+          const angle = (i / v.points) * Math.PI * 2;
+          const wobble = 1 + (Math.sin(i * 12.9898 + seed * 78.233) * 0.5) * (v.randomness / 100) * 2;
+          points.push([cx + Math.cos(angle) * radius * wobble, cy + Math.sin(angle) * radius * wobble]);
+        }
+        path = 'M' + points[0][0].toFixed(1) + ',' + points[0][1].toFixed(1);
+        for (let i = 0; i < points.length; i++){
+          const cur = points[i], next = points[(i + 1) % points.length];
+          const mid = [(cur[0] + next[0]) / 2, (cur[1] + next[1]) / 2];
+          path += ` Q${cur[0].toFixed(1)},${cur[1].toFixed(1)} ${mid[0].toFixed(1)},${mid[1].toFixed(1)}`;
+        }
+        path += ' Z';
+      } else if (v.type === 'wave'){
+        const h = 160, w = 1440;
+        const segments = v.points;
+        let d = `M0,${h * 0.6}`;
+        for (let i = 0; i < segments; i++){
+          const x1 = w / segments * (i + 0.5), x2 = w / segments * (i + 1);
+          const y1 = h * (0.6 + (i % 2 ? 1 : -1) * v.randomness / 100 * 0.7);
+          d += ` Q${x1.toFixed(0)},${y1.toFixed(0)} ${x2.toFixed(0)},${(h * 0.6).toFixed(0)}`;
+        }
+        d += ` L${w},${h} L0,${h} Z`;
+        path = d;
+      } else {
+        path = `M0,0 L${size},0 Q${size * 0.5},${size * (0.3 + v.randomness / 200)} 0,${size * 0.7} Z`;
+      }
+
+      const viewBox = v.type === 'wave' ? '0 0 1440 160' : `0 0 ${500} ${500}`;
+      const fill = v.gradient ? 'url(#g)' : v.color;
+      const defs = v.gradient
+        ? `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+          `<stop offset="0%" stop-color="${v.color}"/><stop offset="100%" stop-color="${v.color2}"/>` +
+          `</linearGradient></defs>` : '';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${defs}<path d="${path}" fill="${fill}"/></svg>`;
+      code.setValue(svg);
+      preview.innerHTML = '';
+      const holder = el('div', { html: svg, style: { width: '100%', maxWidth: '460px' } });
+      const svgEl = holder.querySelector('svg');
+      if (svgEl){ svgEl.style.width = '100%'; svgEl.style.height = 'auto'; }
+      preview.appendChild(holder);
+    }
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14), preview, ui.spacer(14), code, ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Другой вариант', () => { seed = Math.random(); generate(); }),
+        ui.btn('Скачать SVG', () => downloadText(code.getValue(), 'shape.svg', 'image/svg+xml'), { ghost: true }),
+        ui.btn('Как CSS-фон', () => copy(`background-image: url("data:image/svg+xml,${encodeURIComponent(code.getValue())}");`),
+          { ghost: true, small: true })
+      ])
+    ]));
+    generate();
+  }
+});
+
+/* ======================================================================
+   CSS-анимации
+====================================================================== */
+PT.tool({
+  id: 'design-animation', cat: 'design', icon: '➤',
+  title: 'Конструктор CSS-анимаций',
+  desc: 'Собирает keyframes для появлений, пульсаций и бесконечных движений с живым показом.',
+  keywords: ['анимация', 'css', 'keyframes', 'animation', 'появление', 'transition', 'эффект'],
+  render(root){
+    const box = el('div', { style: { width: '110px', height: '110px', borderRadius: '14px',
+      background: 'var(--accent)', display: 'grid', placeItems: 'center', color: 'var(--on-accent)',
+      fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: '700' } }, 'PIX');
+    const stage = el('div', { style: { display: 'grid', placeItems: 'center', minHeight: '230px',
+      border: '1px solid var(--line)', borderRadius: '8px', background: 'var(--surface-2)', overflow: 'hidden' } }, box);
+    const code = ui.copyBox('', { label: 'CSS', rows: 12 });
+    const styleTag = el('style');
+    document.head.appendChild(styleTag);
+    PT.onCleanup(() => styleTag.remove());
+
+    const ANIMATIONS = {
+      fadeIn: { name: 'Появление', frames: { '0%': 'opacity: 0;', '100%': 'opacity: 1;' } },
+      slideUp: { name: 'Выезд снизу', frames: { '0%': 'opacity: 0; transform: translateY(40px);', '100%': 'opacity: 1; transform: translateY(0);' } },
+      slideLeft: { name: 'Выезд справа', frames: { '0%': 'opacity: 0; transform: translateX(60px);', '100%': 'opacity: 1; transform: translateX(0);' } },
+      zoomIn: { name: 'Приближение', frames: { '0%': 'opacity: 0; transform: scale(0.6);', '100%': 'opacity: 1; transform: scale(1);' } },
+      pulse: { name: 'Пульсация', frames: { '0%, 100%': 'transform: scale(1);', '50%': 'transform: scale(1.12);' } },
+      shake: { name: 'Тряска', frames: { '0%, 100%': 'transform: translateX(0);', '20%, 60%': 'transform: translateX(-10px);', '40%, 80%': 'transform: translateX(10px);' } },
+      bounce: { name: 'Прыжок', frames: { '0%, 100%': 'transform: translateY(0);', '50%': 'transform: translateY(-32px);' } },
+      spin: { name: 'Вращение', frames: { '0%': 'transform: rotate(0deg);', '100%': 'transform: rotate(360deg);' } },
+      flip: { name: 'Переворот', frames: { '0%': 'transform: perspective(600px) rotateY(0);', '100%': 'transform: perspective(600px) rotateY(360deg);' } },
+      float: { name: 'Парение', frames: { '0%, 100%': 'transform: translateY(0) rotate(0);', '50%': 'transform: translateY(-18px) rotate(3deg);' } },
+      glow: { name: 'Свечение', frames: { '0%, 100%': 'box-shadow: 0 0 0 rgba(232,163,61,0.6);', '50%': 'box-shadow: 0 0 40px rgba(232,163,61,0.9);' } },
+      wobble: { name: 'Качание', frames: { '0%, 100%': 'transform: rotate(0);', '25%': 'transform: rotate(-6deg);', '75%': 'transform: rotate(6deg);' } }
+    };
+
+    const form = ui.form([
+      { id: 'anim', type: 'select', label: 'Анимация', col: 4, options: Object.entries(ANIMATIONS).map(([k, a]) => [k, a.name]) },
+      { id: 'duration', type: 'range', label: 'Длительность', col: 4, min: 2, max: 50, value: 12 },
+      { id: 'delay', type: 'range', label: 'Задержка', col: 4, min: 0, max: 30, value: 0 },
+      { id: 'easing', type: 'select', label: 'Плавность', col: 4, options: [
+        ['ease', 'ease'], ['linear', 'linear'], ['ease-in-out', 'ease-in-out'],
+        ['cubic-bezier(0.34, 1.56, 0.64, 1)', 'пружина'], ['steps(6)', 'ступеньками']
+      ] },
+      { id: 'iterations', type: 'select', label: 'Повторы', col: 4, options: [
+        ['infinite', 'Бесконечно'], ['1', 'Один раз'], ['2', 'Дважды'], ['3', 'Трижды']
+      ] },
+      { id: 'direction', type: 'select', label: 'Направление', col: 4, options: [
+        ['normal', 'Обычное'], ['alternate', 'Туда-обратно'], ['reverse', 'Обратное']
+      ] }
+    ], update);
+
+    function update(){
+      const v = form.values();
+      const anim = ANIMATIONS[v.anim];
+      const keyframes = Object.entries(anim.frames).map(([stop, css]) => `  ${stop} { ${css} }`).join('\n');
+      const duration = (v.duration / 10).toFixed(1);
+      const delay = (v.delay / 10).toFixed(1);
+      const cssText = `@keyframes ${v.anim} {\n${keyframes}\n}\n\n.element {\n  animation: ${v.anim} ${duration}s ${v.easing} ${delay}s ${v.iterations} ${v.direction};\n}`;
+      code.setValue(cssText);
+      styleTag.textContent = `@keyframes pt-preview {\n${keyframes}\n}`;
+      box.style.animation = 'none';
+      void box.offsetWidth;
+      box.style.animation = `pt-preview ${duration}s ${v.easing} ${delay}s ${v.iterations} ${v.direction}`;
+    }
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14), stage, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Проиграть заново', update),
+        ui.btn('Копировать CSS', () => copy(code.getValue()), { ghost: true }),
+        ui.btn('Скачать .css', () => downloadText(code.getValue(), 'animation.css', 'text/css'), { ghost: true, small: true })
+      ]),
+      ui.spacer(14), code
+    ]));
+    update();
+  }
+});
+
+
+/* ===== tools/85-util2.js ===== */
+/* ======================================================================
+   ИНСТРУМЕНТЫ: УТИЛИТЫ, ЧАСТЬ 2
+====================================================================== */
+
+/* ======================================================================
+   Таймер и секундомер
+====================================================================== */
+PT.tool({
+  id: 'util-timer', cat: 'util', icon: '◔',
+  title: 'Таймер, секундомер, помодоро',
+  desc: 'Обратный отсчёт со звуком, секундомер с кругами и рабочие интервалы по методу помодоро.',
+  keywords: ['таймер', 'секундомер', 'помидор', 'pomodoro', 'отсчёт', 'будильник', 'время'],
+  render(root){
+    let mode = 'timer', running = false, remaining = 0, elapsed = 0, tickId = null, laps = [];
+    let pomodoroPhase = 'work', pomodoroCount = 0;
+
+    const display = el('div', { style: { fontFamily: 'var(--mono)', fontSize: 'clamp(38px, 12vw, 84px)',
+      textAlign: 'center', padding: '18px', letterSpacing: '2px' }, text: '00:00' });
+    const phaseLabel = el('div', { class: 'muted', style: { textAlign: 'center', fontFamily: 'var(--mono)' } });
+    const bar = el('div', { class: 'progress', style: { display: 'block' } }, el('i'));
+    const lapsBox = el('div');
+    const status = ui.status();
+
+    const form = ui.form([
+      { id: 'minutes', type: 'number', label: 'Минут', col: 3, value: 5, min: 0, max: 999 },
+      { id: 'seconds', type: 'number', label: 'Секунд', col: 3, value: 0, min: 0, max: 59 },
+      { id: 'work', type: 'number', label: 'Работа, мин', col: 3, value: 25, min: 1, max: 120 },
+      { id: 'rest', type: 'number', label: 'Отдых, мин', col: 3, value: 5, min: 1, max: 60 },
+      { id: 'sound', type: 'checkbox', label: 'Звуковой сигнал в конце', col: 6, value: true }
+    ]);
+
+    function beep(times){
+      if (!form.get('sound')) return;
+      const ctx = new AudioContext();
+      for (let i = 0; i < (times || 3); i++){
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 880;
+        osc.connect(gain); gain.connect(ctx.destination);
+        const at = ctx.currentTime + i * 0.45;
+        gain.gain.setValueAtTime(0, at);
+        gain.gain.linearRampToValueAtTime(0.35, at + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, at + 0.35);
+        osc.start(at); osc.stop(at + 0.4);
+      }
+      setTimeout(() => ctx.close(), 2500);
+    }
+
+    function fmt(ms){
+      const total = Math.max(0, Math.round(ms / 100) / 10);
+      const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = Math.floor(total % 60);
+      const tenths = Math.floor(total * 10 % 10);
+      if (mode === 'stopwatch') return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${tenths}`;
+      return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+               : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function setMode(next){
+      stop();
+      mode = next;
+      $$('.pill', modeBar).forEach(p => p.classList.toggle('active', p.dataset.mode === next));
+      form.show('minutes', next === 'timer');
+      form.show('seconds', next === 'timer');
+      form.show('work', next === 'pomodoro');
+      form.show('rest', next === 'pomodoro');
+      lapsBox.style.display = next === 'stopwatch' ? '' : 'none';
+      reset();
+    }
+    const modeBar = el('div', { class: 'pillbar' }, [
+      ['timer', 'Таймер'], ['stopwatch', 'Секундомер'], ['pomodoro', 'Помодоро']
+    ].map(([id, label]) => {
+      const pill = el('button', { class: 'pill' + (id === 'timer' ? ' active' : ''), type: 'button', text: label,
+        onclick: () => setMode(id) });
+      pill.dataset.mode = id;
+      return pill;
+    }));
+
+    function totalMs(){
+      const v = form.values();
+      if (mode === 'timer') return (v.minutes * 60 + v.seconds) * 1000;
+      if (mode === 'pomodoro') return (pomodoroPhase === 'work' ? v.work : v.rest) * 60000;
+      return 0;
+    }
+
+    function reset(){
+      remaining = totalMs();
+      elapsed = 0;
+      laps = [];
+      lapsBox.innerHTML = '';
+      render();
+    }
+
+    function render(){
+      if (mode === 'stopwatch'){
+        display.textContent = fmt(elapsed);
+        bar.firstChild.style.width = (elapsed / 60000 % 1) * 100 + '%';
+        phaseLabel.textContent = laps.length ? 'кругов: ' + laps.length : '';
+      } else {
+        display.textContent = fmt(remaining);
+        const total = totalMs() || 1;
+        bar.firstChild.style.width = (1 - remaining / total) * 100 + '%';
+        phaseLabel.textContent = mode === 'pomodoro'
+          ? (pomodoroPhase === 'work' ? 'Работа' : 'Перерыв') + ' · завершено подходов: ' + pomodoroCount
+          : '';
+      }
+      // счётчик в заголовке вкладки — только пока идёт отсчёт
+      if (running) document.title = display.textContent + ' — PixTool';
+      else if (document.title.includes('— PixTool') && baseTitle) document.title = baseTitle;
+    }
+    const baseTitle = document.title;
+
+    function tick(){
+      const step = 100;
+      if (mode === 'stopwatch'){ elapsed += step; }
+      else {
+        remaining -= step;
+        if (remaining <= 0){
+          if (mode === 'pomodoro'){
+            beep(pomodoroPhase === 'work' ? 3 : 2);
+            if (pomodoroPhase === 'work'){ pomodoroCount++; pomodoroPhase = 'rest'; }
+            else pomodoroPhase = 'work';
+            remaining = totalMs();
+            status.ok(pomodoroPhase === 'work' ? 'Перерыв закончился — за работу' : 'Подход завершён, отдыхай');
+          } else {
+            remaining = 0;
+            stop();
+            beep(4);
+            status.ok('Время вышло');
+            PT.toast('Таймер: время вышло', 'ok', 6000);
+          }
+        }
+      }
+      render();
+    }
+
+    function start(){
+      if (running) return;
+      if (mode !== 'stopwatch' && remaining <= 0) reset();
+      running = true;
+      tickId = setInterval(tick, 100);
+      status.set('Идёт отсчёт');
+    }
+    function stop(){
+      running = false;
+      clearInterval(tickId);
+      if (baseTitle) document.title = baseTitle;
+    }
+    PT.onCleanup(stop);
+
+    root.appendChild(ui.card([
+      modeBar, form, ui.spacer(14),
+      display, phaseLabel, ui.spacer(10), bar, ui.spacer(16),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Старт', start),
+        ui.btn('Пауза', stop, { ghost: true }),
+        ui.btn('Сброс', () => { stop(); reset(); }, { ghost: true }),
+        ui.btn('Круг', () => {
+          if (mode !== 'stopwatch') return;
+          laps.unshift(elapsed);
+          lapsBox.innerHTML = '';
+          lapsBox.appendChild(ui.kv(laps.map((t, i) => ['Круг ' + (laps.length - i), fmt(t)])));
+          render();
+        }, { ghost: true, small: true })
+      ]),
+      status, ui.spacer(12), lapsBox
+    ]));
+    setMode('timer');
+  }
+});
+
+/* ======================================================================
+   Калькулятор
+====================================================================== */
+PT.tool({
+  id: 'util-calc', cat: 'util', icon: '=',
+  title: 'Калькулятор с историей',
+  desc: 'Считает выражения целиком: скобки, проценты, корни, степени и тригонометрию.',
+  keywords: ['калькулятор', 'вычислить', 'выражение', 'математика', 'проценты', 'корень'],
+  render(root){
+    const input = el('input', { type: 'text', placeholder: '2 + 2 * (3 - 1) или sqrt(16) + 15%',
+      style: { fontFamily: 'var(--mono)', fontSize: '19px', padding: '14px' } });
+    const result = el('div', { style: { fontFamily: 'var(--mono)', fontSize: '30px', textAlign: 'right',
+      padding: '14px', minHeight: '62px', color: 'var(--accent)' }, text: '0' });
+    const historyBox = el('div');
+    const status = ui.status();
+    const history = store.get('calc-history', []);
+
+    /** Разбор выражения без eval: рекурсивный спуск. */
+    function evaluate(expr){
+      const FUNCS = {
+        sqrt: Math.sqrt, abs: Math.abs, sin: Math.sin, cos: Math.cos, tan: Math.tan,
+        asin: Math.asin, acos: Math.acos, atan: Math.atan, ln: Math.log, log: Math.log10,
+        exp: Math.exp, floor: Math.floor, ceil: Math.ceil, round: Math.round, sign: Math.sign,
+        fact: n => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+      };
+      const CONSTS = { pi: Math.PI, e: Math.E, phi: (1 + Math.sqrt(5)) / 2 };
+      const src = expr.replace(/\s+/g, '').replace(/,/g, '.').toLowerCase();
+      let pos = 0;
+      const peek = () => src[pos];
+      const eat = ch => { if (src[pos] === ch){ pos++; return true; } return false; };
+
+      function parseExpression(){
+        let value = parseTerm();
+        for (;;){
+          if (eat('+')) value += parseTerm();
+          else if (eat('-')) value -= parseTerm();
+          else return value;
+        }
+      }
+      function parseTerm(){
+        let value = parseFactor();
+        for (;;){
+          if (eat('*')) value *= parseFactor();
+          else if (eat('/')){
+            const d = parseFactor();
+            if (d === 0) throw new Error('Деление на ноль');
+            value /= d;
+          }
+          else if (eat('%')){
+            // «100 + 15%» трактуем как процент от накопленного значения
+            value = value / 100;
+          }
+          else if (eat('^')) value = Math.pow(value, parseFactor());
+          else return value;
+        }
+      }
+      function parseFactor(){
+        if (eat('+')) return parseFactor();
+        if (eat('-')) return -parseFactor();
+        if (eat('(')){
+          const value = parseExpression();
+          if (!eat(')')) throw new Error('Не хватает закрывающей скобки');
+          return value;
+        }
+        const nameMatch = src.slice(pos).match(/^[a-zа-я]+/);
+        if (nameMatch){
+          const name = nameMatch[0];
+          pos += name.length;
+          if (CONSTS[name] !== undefined) return CONSTS[name];
+          if (FUNCS[name]){
+            if (!eat('(')) throw new Error('После ' + name + ' нужна скобка');
+            const arg = parseExpression();
+            if (!eat(')')) throw new Error('Не хватает закрывающей скобки');
+            return FUNCS[name](arg);
+          }
+          throw new Error('Неизвестное имя: ' + name);
+        }
+        const numMatch = src.slice(pos).match(/^\d*\.?\d+(e[+-]?\d+)?/);
+        if (!numMatch) throw new Error('Не понял выражение на позиции ' + (pos + 1));
+        pos += numMatch[0].length;
+        return parseFloat(numMatch[0]);
+      }
+
+      const value = parseExpression();
+      if (pos < src.length) throw new Error('Лишние символы: ' + src.slice(pos));
+      return value;
+    }
+
+    function calc(save){
+      const expr = input.value.trim();
+      if (!expr){ result.textContent = '0'; status.set(''); return; }
+      try{
+        const value = evaluate(expr);
+        result.textContent = Number.isInteger(value) ? fmtNum(value, 0) : fmtNum(value, 8);
+        status.ok('');
+        if (save){
+          history.unshift({ expr, value });
+          history.splice(20);
+          store.set('calc-history', history);
+          renderHistory();
+        }
+      } catch(err){
+        result.textContent = '—';
+        status.err(err.message);
+      }
+    }
+
+    function renderHistory(){
+      historyBox.innerHTML = '';
+      if (!history.length){ historyBox.appendChild(ui.muted('История пуста.')); return; }
+      historyBox.appendChild(el('div', {}, history.map(h =>
+        el('div', { class: 'res-kv', style: { cursor: 'pointer' }, onclick: () => { input.value = h.expr; calc(); } }, [
+          el('span', { text: h.expr }),
+          el('b', { text: Number.isInteger(h.value) ? fmtNum(h.value, 0) : fmtNum(h.value, 6) })
+        ]))));
+    }
+
+    input.addEventListener('input', () => calc(false));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') calc(true); });
+
+    const buttons = ['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '0', '.', '(', ')',
+                     'sqrt(', '^', '%', '+'];
+    const pad = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' } },
+      buttons.map(b => ui.btn(b, () => { input.value += b; input.focus(); calc(false); }, { ghost: true })));
+
+    root.appendChild(ui.card([
+      input, result, status, ui.spacer(12), pad, ui.spacer(12),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Посчитать', () => calc(true)),
+        ui.btn('Очистить', () => { input.value = ''; calc(false); }, { ghost: true, small: true }),
+        ui.btn('Копировать результат', () => copy(result.textContent), { ghost: true, small: true })
+      ]),
+      ui.spacer(10),
+      ui.muted('Доступно: + − * / ^ ( ) %, функции sqrt, sin, cos, tan, ln, log, abs, round, floor, ceil, fact ' +
+               'и константы pi, e, phi.')
+    ]));
+    root.appendChild(ui.card([
+      ui.h('История', 'Клик по строке — подставить выражение'),
+      historyBox, ui.spacer(12),
+      ui.btn('Очистить историю', () => { history.length = 0; store.set('calc-history', []); renderHistory(); }, { ghost: true, small: true })
+    ]));
+    renderHistory();
+  }
+});
+
+/* ======================================================================
+   Кредиты и вклады
+====================================================================== */
+PT.tool({
+  id: 'util-loan', cat: 'util', icon: '⌸',
+  title: 'Кредит и вклад',
+  desc: 'Считает ежемесячный платёж, переплату и график погашения, а также доход по вкладу.',
+  keywords: ['кредит', 'ипотека', 'вклад', 'проценты', 'платёж', 'переплата', 'аннуитет', 'калькулятор'],
+  render(root){
+    const out = el('div');
+    const schedule = el('div');
+    const form = ui.form([
+      { id: 'mode', type: 'select', label: 'Что считаем', col: 4, options: [
+        ['annuity', 'Кредит: равные платежи'], ['diff', 'Кредит: уменьшающиеся платежи'], ['deposit', 'Вклад с капитализацией']
+      ] },
+      { id: 'amount', type: 'number', label: 'Сумма', col: 4, value: 3000000, min: 0, step: 10000 },
+      { id: 'rate', type: 'number', label: 'Ставка, % годовых', col: 4, value: 18, min: 0, step: 0.1 },
+      { id: 'years', type: 'number', label: 'Срок, лет', col: 4, value: 15, min: 0, step: 1 },
+      { id: 'months', type: 'number', label: 'и месяцев', col: 4, value: 0, min: 0, max: 11 },
+      { id: 'extra', type: 'number', label: 'Досрочно каждый месяц', col: 4, value: 0, min: 0, step: 1000 }
+    ], calc);
+
+    function calc(){
+      const v = form.values();
+      const n = v.years * 12 + v.months;
+      const rate = v.rate / 100 / 12;
+      out.innerHTML = ''; schedule.innerHTML = '';
+      if (!n || !v.amount){ out.appendChild(ui.muted('Заполни сумму и срок.')); return; }
+
+      if (v.mode === 'deposit'){
+        let balance = v.amount;
+        let contributed = v.amount;
+        const rows = [];
+        for (let i = 1; i <= n; i++){
+          balance += balance * rate + v.extra;
+          contributed += v.extra;
+          if (i % 12 === 0 || i === n) rows.push([`Через ${i} мес.`, fmtNum(balance) + ' ₽']);
+        }
+        out.appendChild(ui.kv([
+          ['Итоговая сумма', fmtNum(balance) + ' ₽'],
+          ['Вложено всего', fmtNum(contributed) + ' ₽'],
+          ['Доход', fmtNum(balance - contributed) + ' ₽'],
+          ['Доходность за срок', fmtNum((balance / contributed - 1) * 100) + ' %']
+        ]));
+        schedule.appendChild(ui.kv(rows));
+        return;
+      }
+
+      const payment = rate > 0
+        ? v.amount * rate * Math.pow(1 + rate, n) / (Math.pow(1 + rate, n) - 1)
+        : v.amount / n;
+
+      let balance = v.amount, totalPaid = 0, totalInterest = 0, month = 0;
+      const rows = [];
+      while (balance > 0.5 && month < 1200){
+        month++;
+        const interest = balance * rate;
+        let principal = (v.mode === 'annuity' ? payment - interest : v.amount / n) + v.extra;
+        if (principal > balance) principal = balance;
+        const paid = principal + interest;
+        balance -= principal;
+        totalPaid += paid;
+        totalInterest += interest;
+        if (month <= 360) rows.push([`${month} мес.`,
+          `платёж ${fmtNum(paid, 0)} ₽ · проценты ${fmtNum(interest, 0)} ₽ · остаток ${fmtNum(Math.max(0, balance), 0)} ₽`]);
+      }
+
+      out.appendChild(ui.kv([
+        ['Ежемесячный платёж', v.mode === 'annuity' ? fmtNum(payment + v.extra) + ' ₽'
+          : fmtNum(v.amount / n + v.amount * rate + v.extra) + ' ₽ (первый)'],
+        ['Срок фактический', month + ' мес. (' + (month / 12).toFixed(1) + ' лет)'],
+        ['Всего выплат', fmtNum(totalPaid) + ' ₽'],
+        ['Переплата', fmtNum(totalInterest) + ' ₽'],
+        ['Переплата от суммы', fmtNum(totalInterest / v.amount * 100) + ' %'],
+        v.extra > 0 ? ['Экономия срока', (n - month) + ' мес.'] : ['Срок по договору', n + ' мес.']
+      ]));
+      schedule.appendChild(ui.kv(rows.slice(0, 60)));
+      if (rows.length > 60) schedule.appendChild(ui.muted('Показаны первые 60 месяцев из ' + rows.length + '.'));
+    }
+
+    root.appendChild(ui.card([form, ui.spacer(14), out]));
+    root.appendChild(ui.card([ui.h('График платежей'), schedule,
+      ui.spacer(10),
+      ui.muted('Расчёт справочный: банки могут учитывать комиссии, страховку и округления по-своему.')]));
+    calc();
+  }
+});
+
+/* ======================================================================
+   Шифры
+====================================================================== */
+PT.tool({
+  id: 'util-cipher', cat: 'util', icon: '⚙',
+  title: 'Классические шифры',
+  desc: 'Цезарь, Виженер, ROT13, Атбаш, азбука Морзе и Base32 — для игр, квестов и учёбы.',
+  keywords: ['шифр', 'цезарь', 'виженер', 'rot13', 'морзе', 'base32', 'квест', 'загадка'],
+  render(root){
+    const MORSE = { а:'.-', б:'-...', в:'.--', г:'--.', д:'-..', е:'.', ж:'...-', з:'--..', и:'..', й:'.---',
+      к:'-.-', л:'.-..', м:'--', н:'-.', о:'---', п:'.--.', р:'.-.', с:'...', т:'-', у:'..-', ф:'..-.',
+      х:'....', ц:'-.-.', ч:'---.', ш:'----', щ:'--.-', ъ:'--.--', ы:'-.--', ь:'-..-', э:'..-..', ю:'..--', я:'.-.-',
+      a:'.-', b:'-...', c:'-.-.', d:'-..', e:'.', f:'..-.', g:'--.', h:'....', i:'..', j:'.---', k:'-.-',
+      l:'.-..', m:'--', n:'-.', o:'---', p:'.--.', q:'--.-', r:'.-.', s:'...', t:'-', u:'..-', v:'...-',
+      w:'.--', x:'-..-', y:'-.--', z:'--..',
+      '0':'-----', '1':'.----', '2':'..---', '3':'...--', '4':'....-', '5':'.....', '6':'-....',
+      '7':'--...', '8':'---..', '9':'----.', '.':'.-.-.-', ',':'--..--', '?':'..--..', '!':'-.-.--' };
+    const MORSE_BACK = Object.fromEntries(Object.entries(MORSE).map(([k, v]) => [v, k]));
+
+    PT.textTool(root, {
+      inputLabel: 'Текст',
+      outputLabel: 'Результат',
+      sample: 'Секретное сообщение для PixTool',
+      form: [
+        { id: 'cipher', type: 'select', label: 'Шифр', col: 4, options: [
+          ['caesar', 'Цезарь (сдвиг)'], ['vigenere', 'Виженер (ключевое слово)'], ['rot13', 'ROT13'],
+          ['atbash', 'Атбаш (зеркало алфавита)'], ['morse', 'Азбука Морзе'], ['base32', 'Base32'], ['reverse', 'Наоборот']
+        ] },
+        { id: 'dir', type: 'select', label: 'Направление', col: 4, options: [['enc', 'Зашифровать'], ['dec', 'Расшифровать']] },
+        { id: 'shift', type: 'number', label: 'Сдвиг', col: 2, value: 3, min: 1, max: 32 },
+        { id: 'key', type: 'text', label: 'Ключевое слово', col: 2, value: 'pixel' }
+      ],
+      run(text, v){
+        const RU = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
+        const EN = 'abcdefghijklmnopqrstuvwxyz';
+
+        const shiftText = (str, amount) => Array.from(str).map(ch => {
+          const lower = ch.toLowerCase();
+          const alphabet = RU.includes(lower) ? RU : EN.includes(lower) ? EN : null;
+          if (!alphabet) return ch;
+          const idx = alphabet.indexOf(lower);
+          const next = alphabet[(idx + amount % alphabet.length + alphabet.length) % alphabet.length];
+          return ch === lower ? next : next.toUpperCase();
+        }).join('');
+
+        if (v.cipher === 'caesar') return shiftText(text, v.dir === 'enc' ? v.shift : -v.shift);
+        if (v.cipher === 'rot13') return shiftText(text, 13);
+        if (v.cipher === 'reverse') return Array.from(text).reverse().join('');
+        if (v.cipher === 'atbash') return Array.from(text).map(ch => {
+          const lower = ch.toLowerCase();
+          const alphabet = RU.includes(lower) ? RU : EN.includes(lower) ? EN : null;
+          if (!alphabet) return ch;
+          const next = alphabet[alphabet.length - 1 - alphabet.indexOf(lower)];
+          return ch === lower ? next : next.toUpperCase();
+        }).join('');
+        if (v.cipher === 'vigenere'){
+          const key = (v.key || 'key').toLowerCase().replace(/[^a-zа-яё]/g, '') || 'key';
+          let ki = 0;
+          return Array.from(text).map(ch => {
+            const lower = ch.toLowerCase();
+            const alphabet = RU.includes(lower) ? RU : EN.includes(lower) ? EN : null;
+            if (!alphabet) return ch;
+            const keyChar = key[ki % key.length];
+            const keyAlphabet = RU.includes(keyChar) ? RU : EN;
+            const amount = keyAlphabet.indexOf(keyChar) * (v.dir === 'enc' ? 1 : -1);
+            ki++;
+            const idx = alphabet.indexOf(lower);
+            const next = alphabet[(idx + amount % alphabet.length + alphabet.length) % alphabet.length];
+            return ch === lower ? next : next.toUpperCase();
+          }).join('');
+        }
+        if (v.cipher === 'morse'){
+          if (v.dir === 'enc'){
+            return Array.from(text.toLowerCase()).map(ch =>
+              ch === ' ' ? '/' : (MORSE[ch] || '')).filter(Boolean).join(' ');
+          }
+          return text.split(/\s+/).map(code => code === '/' ? ' ' : (MORSE_BACK[code] || '')).join('');
+        }
+        // base32
+        const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        if (v.dir === 'enc'){
+          const bytes = new TextEncoder().encode(text);
+          let bits = '', out = '';
+          bytes.forEach(b => { bits += b.toString(2).padStart(8, '0'); });
+          for (let i = 0; i < bits.length; i += 5){
+            const chunk = bits.slice(i, i + 5).padEnd(5, '0');
+            out += ALPHABET[parseInt(chunk, 2)];
+          }
+          while (out.length % 8) out += '=';
+          return out;
+        }
+        const clean = text.toUpperCase().replace(/=+$/, '').replace(/\s/g, '');
+        let bits = '';
+        for (const ch of clean){
+          const idx = ALPHABET.indexOf(ch);
+          if (idx < 0) continue;
+          bits += idx.toString(2).padStart(5, '0');
+        }
+        const bytes = [];
+        for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+        return new TextDecoder().decode(new Uint8Array(bytes));
+      }
+    });
+  }
+});
+
+/* ======================================================================
+   Числа прописью
+====================================================================== */
+PT.tool({
+  id: 'util-numbers', cat: 'util', icon: 'Ⅻ',
+  title: 'Числа прописью и римские',
+  desc: 'Пишет сумму словами для документов и переводит числа в римскую запись и обратно.',
+  keywords: ['прописью', 'словами', 'римские', 'сумма', 'документы', 'число', 'счёт'],
+  render(root){
+    const input = el('input', { type: 'text', value: '1234567', spellcheck: 'false' });
+    const out = el('div');
+    const status = ui.status();
+
+    const form = ui.form([
+      { id: 'currency', type: 'select', label: 'Единицы', col: 6, options: [
+        ['none', 'Без единиц'], ['rub', 'Рубли и копейки'], ['usd', 'Доллары и центы'], ['items', 'Штуки']
+      ] },
+      { id: 'gender', type: 'select', label: 'Род (для «без единиц»)', col: 6, options: [
+        ['m', 'Мужской: один, два'], ['f', 'Женский: одна, две']
+      ] }
+    ], refresh);
+
+    const ONES = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять',
+      'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать',
+      'восемнадцать', 'девятнадцать'];
+    const TENS = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+    const HUNDREDS = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+
+    function plural(n, forms){
+      const mod10 = n % 10, mod100 = n % 100;
+      if (mod10 === 1 && mod100 !== 11) return forms[0];
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
+      return forms[2];
+    }
+    function chunk(num, female){
+      const parts = [];
+      if (num >= 100){ parts.push(HUNDREDS[Math.floor(num / 100)]); num %= 100; }
+      if (num >= 20){ parts.push(TENS[Math.floor(num / 10)]); num %= 10; }
+      if (num > 0){
+        let word = ONES[num];
+        if (female && num === 1) word = 'одна';
+        if (female && num === 2) word = 'две';
+        parts.push(word);
+      }
+      return parts.filter(Boolean).join(' ');
+    }
+    function toWords(n, female){
+      if (n === 0) return 'ноль';
+      const parts = [];
+      const groups = [
+        [1e9, ['миллиард', 'миллиарда', 'миллиардов'], false],
+        [1e6, ['миллион', 'миллиона', 'миллионов'], false],
+        [1e3, ['тысяча', 'тысячи', 'тысяч'], true]
+      ];
+      let rest = n;
+      groups.forEach(([size, forms, isFemale]) => {
+        const count = Math.floor(rest / size);
+        if (count){ parts.push(chunk(count, isFemale) + ' ' + plural(count, forms)); rest %= size; }
+      });
+      if (rest) parts.push(chunk(rest, female));
+      return parts.join(' ');
+    }
+    function toRoman(num){
+      if (num < 1 || num > 3999) return '—';
+      const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
+                   [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+      let out = '';
+      map.forEach(([value, sym]) => { while (num >= value){ out += sym; num -= value; } });
+      return out;
+    }
+    function fromRoman(str){
+      const map = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+      let total = 0;
+      const up = str.toUpperCase();
+      for (let i = 0; i < up.length; i++){
+        const cur = map[up[i]], next = map[up[i + 1]];
+        if (!cur) return null;
+        total += next > cur ? -cur : cur;
+      }
+      return total;
+    }
+
+    function refresh(){
+      const raw = input.value.trim();
+      out.innerHTML = '';
+      if (/^[IVXLCDM]+$/i.test(raw)){
+        const num = fromRoman(raw);
+        out.appendChild(ui.kv([
+          ['Римское', raw.toUpperCase()],
+          ['Число', num == null ? 'не разобрать' : fmtNum(num, 0)],
+          ['Прописью', num == null ? '—' : toWords(num, false)]
+        ]));
+        status.ok('Римская запись разобрана');
+        return;
+      }
+      const value = parseFloat(raw.replace(/\s/g, '').replace(',', '.'));
+      if (isNaN(value)){ status.err('Введи число или римскую запись'); return; }
+      const v = form.values();
+      const whole = Math.floor(Math.abs(value));
+      const fraction = Math.round((Math.abs(value) - whole) * 100);
+      const female = v.currency === 'rub' || v.gender === 'f';
+      let words = (value < 0 ? 'минус ' : '') + toWords(whole, female);
+
+      if (v.currency === 'rub'){
+        words += ' ' + plural(whole, ['рубль', 'рубля', 'рублей']) + ' ' +
+                 String(fraction).padStart(2, '0') + ' ' + plural(fraction, ['копейка', 'копейки', 'копеек']);
+      } else if (v.currency === 'usd'){
+        words += ' ' + plural(whole, ['доллар', 'доллара', 'долларов']) + ' ' +
+                 String(fraction).padStart(2, '0') + ' ' + plural(fraction, ['цент', 'цента', 'центов']);
+      } else if (v.currency === 'items'){
+        words += ' ' + plural(whole, ['штука', 'штуки', 'штук']);
+      }
+      words = words.charAt(0).toUpperCase() + words.slice(1);
+
+      out.appendChild(ui.kv([
+        ['Прописью', words],
+        ['Римское', whole <= 3999 && whole >= 1 ? toRoman(whole) : 'вне диапазона (1–3999)'],
+        ['С разделителями', fmtNum(value, 2)],
+        ['Округлённо', fmtNum(Math.round(value), 0)],
+        ['В процентах', fmtNum(value * 100, 2) + ' %'],
+        ['Двоичное', whole.toString(2)],
+        ['Шестнадцатеричное', whole.toString(16).toUpperCase()]
+      ]));
+      out.appendChild(ui.spacer(12));
+      out.appendChild(ui.copyBox(words, { label: 'Для документа', rows: 2 }));
+      status.ok('Готово');
+    }
+    input.addEventListener('input', debounce(refresh, 200));
+
+    root.appendChild(ui.card([
+      el('label', { text: 'Число или римская запись' }), input, ui.spacer(12), form, status
+    ]));
+    root.appendChild(out);
+    refresh();
+  }
+});
+
+/* ======================================================================
+   Доска для рисования
+====================================================================== */
+PT.tool({
+  id: 'util-board', cat: 'util', icon: '▨',
+  title: 'Доска для набросков',
+  desc: 'Быстрые схемы и заметки от руки: кисть, фигуры, текст и экспорт в PNG.',
+  keywords: ['доска', 'рисовать', 'схема', 'whiteboard', 'набросок', 'скетч', 'объяснить'],
+  render(root){
+    const canvas = el('canvas', { width: 1600, height: 900,
+      style: { width: '100%', background: '#fff', borderRadius: '8px', border: '1px solid var(--line)',
+               cursor: 'crosshair', touchAction: 'none' } });
+    const ctx = canvas.getContext('2d');
+    const status = ui.status();
+    const undoStack = [];
+
+    function clearBoard(){
+      ctx.fillStyle = form ? form.get('bg') : '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    function snapshot(){
+      undoStack.push(canvas.toDataURL('image/png'));
+      if (undoStack.length > 12) undoStack.shift();
+    }
+    function undo(){
+      if (undoStack.length < 1) return;
+      const url = undoStack.pop();
+      const img = new Image();
+      img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
+      img.src = url;
+    }
+
+    const form = ui.form([
+      { id: 'tool', type: 'select', label: 'Инструмент', col: 3, options: [
+        ['pen', 'Кисть'], ['line', 'Линия'], ['rect', 'Прямоугольник'], ['ellipse', 'Овал'],
+        ['arrow', 'Стрелка'], ['eraser', 'Ластик']
+      ] },
+      { id: 'color', type: 'color', label: 'Цвет', col: 3, value: '#101216' },
+      { id: 'width', type: 'range', label: 'Толщина', col: 3, min: 1, max: 40, value: 4, unit: 'px' },
+      { id: 'bg', type: 'color', label: 'Фон', col: 3, value: '#ffffff' }
+    ], (id) => { if (id === 'bg'){ snapshot(); clearBoard(); } });
+
+    let drawing = false, start = null, baseline = null;
+    const pos = e => {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+    };
+
+    canvas.addEventListener('pointerdown', e => {
+      drawing = true;
+      start = pos(e);
+      canvas.setPointerCapture(e.pointerId);
+      snapshot();
+      baseline = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (form.get('tool') === 'pen' || form.get('tool') === 'eraser') stroke(start, start);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!drawing) return;
+      const p = pos(e);
+      const tool = form.get('tool');
+      if (tool === 'pen' || tool === 'eraser'){ stroke(start, p); start = p; }
+      else { ctx.putImageData(baseline, 0, 0); shape(start, p, tool); }
+    });
+    ['pointerup', 'pointerleave'].forEach(t => canvas.addEventListener(t, e => {
+      if (!drawing) return;
+      drawing = false;
+      const tool = form.get('tool');
+      if (tool !== 'pen' && tool !== 'eraser' && baseline){
+        ctx.putImageData(baseline, 0, 0);
+        shape(start, pos(e), tool);
+      }
+    }));
+
+    function setup(){
+      const v = form.values();
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.lineWidth = v.tool === 'eraser' ? v.width * 3 : v.width;
+      ctx.strokeStyle = v.tool === 'eraser' ? v.bg : v.color;
+      ctx.fillStyle = ctx.strokeStyle;
+      return v;
+    }
+    function stroke(a, b){
+      setup();
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    function shape(a, b, tool){
+      setup();
+      if (tool === 'line'){ ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      else if (tool === 'rect'){ ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)); }
+      else if (tool === 'ellipse'){
+        ctx.beginPath();
+        ctx.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2, Math.abs(b.y - a.y) / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (tool === 'arrow'){
+        const head = Math.max(14, ctx.lineWidth * 4);
+        const angle = Math.atan2(b.y - a.y, b.x - a.x);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - head * Math.cos(angle - Math.PI / 7), b.y - head * Math.sin(angle - Math.PI / 7));
+        ctx.lineTo(b.x - head * Math.cos(angle + Math.PI / 7), b.y - head * Math.sin(angle + Math.PI / 7));
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    const keyHandler = e => {
+      if (!canvas.isConnected) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' &&
+          !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)){ e.preventDefault(); undo(); }
+    };
+    document.addEventListener('keydown', keyHandler);
+    PT.onCleanup(() => document.removeEventListener('keydown', keyHandler));
+
+    root.appendChild(ui.card([
+      form, ui.spacer(14), canvas, ui.spacer(14),
+      el('div', { class: 'row gap' }, [
+        ui.btn('Скачать PNG', async () => downloadBlob(await canvasToBlob(canvas, 'image/png'), 'board.png')),
+        ui.btn('← Отменить', undo, { ghost: true, small: true }),
+        ui.btn('Очистить', () => { snapshot(); clearBoard(); }, { ghost: true, small: true }),
+        ui.btn('Копировать', async () => {
+          try{
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': await canvasToBlob(canvas, 'image/png') })]);
+            PT.toast('Скопировано', 'ok');
+          } catch(e){ PT.toast('Браузер не разрешил копирование', 'err'); }
+        }, { ghost: true, small: true })
+      ]),
+      status,
+      ui.muted('Ctrl+Z отменяет последнее действие. Рисунок нигде не сохраняется автоматически — скачай файл, если он нужен.')
+    ]));
+    clearBoard();
   }
 });
