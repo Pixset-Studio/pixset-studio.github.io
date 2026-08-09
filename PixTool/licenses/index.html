@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лицензии сторонних компонентов — PixTool</title>
+<meta name="description" content="Перечень библиотек, шрифтов и моделей, используемых в PixTool, с указанием правообладателей и лицензий.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://pixset.github.io/pixtool/licenses/">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#101216;--surface:#171a1f;--surface2:#1d2127;--line:rgba(255,255,255,.08);
+  --text:#e9e7e1;--dim:#989da6;--accent:#e8a33d;--mono:'Space Mono',ui-monospace,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;
+  padding:40px 20px 70px}
+.wrap{max-width:860px;margin:0 auto}
+a{color:var(--accent)}
+h1{font-size:27px;margin:0 0 8px}
+.lead{color:var(--dim);margin:0 0 6px}
+.back{display:inline-block;margin-bottom:26px;font-family:var(--mono);font-size:12.5px}
+.lic{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:16px 18px;margin-bottom:14px}
+.lic header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.lic h2{font-size:16.5px;margin:0}
+.lic h2 small{color:var(--dim);font-weight:400;font-size:12px}
+.tag{font-family:var(--mono);font-size:11px;color:var(--accent);background:rgba(232,163,61,.13);
+  padding:3px 9px;border-radius:100px;white-space:nowrap}
+.purpose{color:var(--dim);font-size:13.5px;margin:7px 0 10px}
+blockquote{margin:0 0 10px;padding:9px 12px;background:var(--surface2);border-left:2px solid var(--accent);
+  border-radius:0 5px 5px 0;font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.75}
+.links{margin:0;display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:12px}
+.note{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:16px 18px;margin-top:24px;
+  color:var(--dim);font-size:13.5px}
+footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--line);color:#6b7079;
+  font-family:var(--mono);font-size:11.5px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">← Вернуться в PixTool</a>
+  <h1>Лицензии сторонних компонентов</h1>
+  <p class="lead">PixTool использует перечисленные ниже библиотеки и шрифты. Их лицензии требуют сохранять
+    указание правообладателя — эти строки приведены дословно и не могут быть изменены или удалены.</p>
+  <p class="lead">Полный перечень одним файлом: <a href="../THIRD-PARTY-NOTICES.txt">THIRD-PARTY-NOTICES.txt</a></p>
+  <div style="margin-top:26px">
+    <article class="lic">
+      <header><h2>SheetJS (xlsx) <small>0.18.5</small></h2>
+        <span class="tag">Apache License 2.0</span></header>
+      <p class="purpose">Чтение и запись файлов Excel</p>
+      <blockquote>Copyright (C) 2012-present SheetJS LLC</blockquote>
+      <p class="links">
+        <a href="https://github.com/SheetJS/sheetjs/blob/master/LICENSE" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://sheetjs.com" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>pdf-lib <small>1.17.1</small></h2>
+        <span class="tag">MIT License</span></header>
+      <p class="purpose">Создание и редактирование PDF</p>
+      <blockquote>Copyright (c) 2019 Andrew Dillon<br>Включает tslib — Copyright (c) Microsoft Corporation (Apache License 2.0)</blockquote>
+      <p class="links">
+        <a href="https://github.com/Hopding/pdf-lib/blob/master/LICENSE.md" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://pdf-lib.js.org" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>pdf.js <small>3.11.174</small></h2>
+        <span class="tag">Apache License 2.0</span></header>
+      <p class="purpose">Просмотр, рендеринг и разбор PDF</p>
+      <blockquote>Copyright 2023 Mozilla Foundation</blockquote>
+      <p class="links">
+        <a href="https://github.com/mozilla/pdf.js/blob/master/LICENSE" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://mozilla.github.io/pdf.js/" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>marked <small>9.1.6</small></h2>
+        <span class="tag">MIT License</span></header>
+      <p class="purpose">Разбор и рендеринг Markdown</p>
+      <blockquote>Copyright (c) 2011-2023, Christopher Jeffrey<br>Copyright (c) 2018+, MarkedJS</blockquote>
+      <p class="links">
+        <a href="https://github.com/markedjs/marked/blob/master/LICENSE.md" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://marked.js.org" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>Turndown <small>7.1.2</small></h2>
+        <span class="tag">MIT License</span></header>
+      <p class="purpose">Преобразование HTML в Markdown</p>
+      <blockquote>Copyright (c) 2017 Dom Christie</blockquote>
+      <p class="links">
+        <a href="https://github.com/mixmark-io/turndown/blob/master/LICENSE" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://github.com/mixmark-io/turndown" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>qrcode-generator <small>1.4.4</small></h2>
+        <span class="tag">MIT License</span></header>
+      <p class="purpose">Генерация QR-кодов</p>
+      <blockquote>Copyright (c) 2009 Kazuhiko Arase</blockquote>
+      <p class="links">
+        <a href="https://github.com/kazuhikoarase/qrcode-generator/blob/master/LICENSE" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://github.com/kazuhikoarase/qrcode-generator" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>jsQR <small>1.4.0</small></h2>
+        <span class="tag">Apache License 2.0</span></header>
+      <p class="purpose">Чтение QR-кодов с изображений и камеры</p>
+      <blockquote>Copyright (c) Cosmo Wolfe (cozmo) — в файле лицензии правообладатель оставлен незаполненным</blockquote>
+      <p class="links">
+        <a href="https://github.com/cozmo/jsQR/blob/master/LICENSE" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://github.com/cozmo/jsQR" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>Transformers.js <small>3.7.5</small></h2>
+        <span class="tag">Apache License 2.0</span></header>
+      <p class="purpose">Запуск нейросетевых моделей в браузере · загружается во время работы</p>
+      <blockquote>Copyright 2023 The HuggingFace Inc. team<br>Включает ONNX Runtime Web — Copyright (c) Microsoft Corporation (MIT License)</blockquote>
+      <p class="links">
+        <a href="https://github.com/huggingface/transformers.js/blob/main/LICENSE" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://huggingface.co/docs/transformers.js" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>Inter <small>переменный</small></h2>
+        <span class="tag">SIL Open Font License 1.1</span></header>
+      <p class="purpose">Основной шрифт интерфейса</p>
+      <blockquote>Copyright (c) 2016-2020 The Inter Project Authors</blockquote>
+      <p class="links">
+        <a href="https://github.com/rsms/inter/blob/master/LICENSE.txt" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://rsms.me/inter/" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article>
+    <article class="lic">
+      <header><h2>Space Mono <small>1.0</small></h2>
+        <span class="tag">SIL Open Font License 1.1</span></header>
+      <p class="purpose">Моноширинный шрифт интерфейса</p>
+      <blockquote>Copyright (c) 2016 The Space Mono Project Authors (Colophon Foundry)</blockquote>
+      <p class="links">
+        <a href="https://openfontlicense.org" rel="noopener noreferrer" target="_blank">Текст лицензии</a>
+        <a href="https://fonts.google.com/specimen/Space+Mono" rel="noopener noreferrer" target="_blank">Сайт проекта</a>
+      </p>
+    </article></div>
+  <div class="note">
+    <strong>Модели нейросетей.</strong> Модели RMBG 1.4, MODNet, Swin2SR, Depth Anything v2, DETR, ViT, TrOCR,
+    Whisper, SpeechT5, OPUS-MT, DistilBART, BERT, MiniLM, Qwen2.5 и другие загружаются с Hugging Face
+    по запросу пользователя и принадлежат их авторам. Условия использования указаны на страницах моделей.
+    PixTool не распространяет модели в своём составе.
+  </div>
+  <footer>
+    © 2026 Pixset Studio. Все права защищены.<br>
+    PixTool и его исходный код — объекты авторского права Pixset Studio,
+    <a href="../LICENSE.txt">условия лицензии</a>.<br>
+    Перечисленные компоненты остаются собственностью своих правообладателей.<br>
+    Версия 2.0.0 от 2026-08-09.
+  </footer>
+</div>
+</body>
+</html>

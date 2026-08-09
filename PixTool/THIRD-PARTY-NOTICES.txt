@@ -1,0 +1,85 @@
+PixTool 2.0.0 — сторонние компоненты и их лицензии
+© 2026 Pixset Studio. Права на PixTool принадлежат Pixset Studio.
+Перечисленные ниже компоненты остаются собственностью своих правообладателей.
+
+==============================================================================
+
+SheetJS (xlsx) 0.18.5
+  Назначение: Чтение и запись файлов Excel
+  Лицензия:   Apache License 2.0
+  Copyright (C) 2012-present SheetJS LLC
+  Текст лицензии: https://github.com/SheetJS/sheetjs/blob/master/LICENSE
+  Сайт проекта:   https://sheetjs.com
+
+pdf-lib 1.17.1
+  Назначение: Создание и редактирование PDF
+  Лицензия:   MIT License
+  Copyright (c) 2019 Andrew Dillon
+  Включает tslib — Copyright (c) Microsoft Corporation (Apache License 2.0)
+  Текст лицензии: https://github.com/Hopding/pdf-lib/blob/master/LICENSE.md
+  Сайт проекта:   https://pdf-lib.js.org
+
+pdf.js 3.11.174
+  Назначение: Просмотр, рендеринг и разбор PDF
+  Лицензия:   Apache License 2.0
+  Copyright 2023 Mozilla Foundation
+  Текст лицензии: https://github.com/mozilla/pdf.js/blob/master/LICENSE
+  Сайт проекта:   https://mozilla.github.io/pdf.js/
+
+marked 9.1.6
+  Назначение: Разбор и рендеринг Markdown
+  Лицензия:   MIT License
+  Copyright (c) 2011-2023, Christopher Jeffrey
+  Copyright (c) 2018+, MarkedJS
+  Текст лицензии: https://github.com/markedjs/marked/blob/master/LICENSE.md
+  Сайт проекта:   https://marked.js.org
+
+Turndown 7.1.2
+  Назначение: Преобразование HTML в Markdown
+  Лицензия:   MIT License
+  Copyright (c) 2017 Dom Christie
+  Текст лицензии: https://github.com/mixmark-io/turndown/blob/master/LICENSE
+  Сайт проекта:   https://github.com/mixmark-io/turndown
+
+qrcode-generator 1.4.4
+  Назначение: Генерация QR-кодов
+  Лицензия:   MIT License
+  Copyright (c) 2009 Kazuhiko Arase
+  Текст лицензии: https://github.com/kazuhikoarase/qrcode-generator/blob/master/LICENSE
+  Сайт проекта:   https://github.com/kazuhikoarase/qrcode-generator
+
+jsQR 1.4.0
+  Назначение: Чтение QR-кодов с изображений и камеры
+  Лицензия:   Apache License 2.0
+  Copyright (c) Cosmo Wolfe (cozmo) — в файле лицензии правообладатель оставлен незаполненным
+  Текст лицензии: https://github.com/cozmo/jsQR/blob/master/LICENSE
+  Сайт проекта:   https://github.com/cozmo/jsQR
+
+Transformers.js 3.7.5
+  Назначение: Запуск нейросетевых моделей в браузере (загружается во время работы)
+  Лицензия:   Apache License 2.0
+  Copyright 2023 The HuggingFace Inc. team
+  Включает ONNX Runtime Web — Copyright (c) Microsoft Corporation (MIT License)
+  Текст лицензии: https://github.com/huggingface/transformers.js/blob/main/LICENSE
+  Сайт проекта:   https://huggingface.co/docs/transformers.js
+
+Inter переменный
+  Назначение: Основной шрифт интерфейса
+  Лицензия:   SIL Open Font License 1.1
+  Copyright (c) 2016-2020 The Inter Project Authors
+  Текст лицензии: https://github.com/rsms/inter/blob/master/LICENSE.txt
+  Сайт проекта:   https://rsms.me/inter/
+
+Space Mono 1.0
+  Назначение: Моноширинный шрифт интерфейса
+  Лицензия:   SIL Open Font License 1.1
+  Copyright (c) 2016 The Space Mono Project Authors (Colophon Foundry)
+  Текст лицензии: https://openfontlicense.org
+  Сайт проекта:   https://fonts.google.com/specimen/Space+Mono
+
+==============================================================================
+
+Модели нейросетей загружаются с Hugging Face по запросу пользователя,
+принадлежат их авторам и не входят в состав PixTool.
+
+Сборка от 2026-08-09.

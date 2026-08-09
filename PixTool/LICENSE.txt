@@ -35,21 +35,42 @@ PixTool является частью репозитория Pixset Studio и р
 --------------------------------------------------------------------------------
 СТОРОННИЕ КОМПОНЕНТЫ
 
-Условия ниже относятся только к сторонним материалам и не ограничиваются
-настоящей лицензией.
+Условия ниже относятся только к сторонним материалам и настоящей лицензией не
+ограничиваются. Лицензии MIT и Apache 2.0 требуют сохранять указание
+правообладателя, поэтому строки копирайта приведены дословно; удалять или
+изменять их нельзя.
 
-  SheetJS (xlsx)        Apache License 2.0
-  pdf-lib               MIT License
-  pdf.js                Apache License 2.0
-  marked                MIT License
-  Turndown              MIT License
-  qrcode-generator      MIT License
-  jsQR                  Apache License 2.0
-  Transformers.js       Apache License 2.0   (загружается во время работы)
-  Inter, Space Mono     SIL Open Font License 1.1
+  SheetJS (xlsx) 0.18.5              Apache License 2.0
+      Copyright (C) 2012-present SheetJS LLC
+  pdf-lib 1.17.1                     MIT License
+      Copyright (c) 2019 Andrew Dillon
+      включает tslib — Copyright (c) Microsoft Corporation (Apache License 2.0)
+  pdf.js 3.11.174                    Apache License 2.0
+      Copyright 2023 Mozilla Foundation
+  marked 9.1.6                       MIT License
+      Copyright (c) 2011-2023, Christopher Jeffrey
+      Copyright (c) 2018+, MarkedJS
+  Turndown 7.1.2                     MIT License
+      Copyright (c) 2017 Dom Christie
+  qrcode-generator 1.4.4             MIT License
+      Copyright (c) 2009 Kazuhiko Arase
+  jsQR 1.4.0                         Apache License 2.0
+      Copyright (c) Cosmo Wolfe (cozmo) — в файле лицензии правообладатель
+      оставлен незаполненным
+  Transformers.js 3.7.5              Apache License 2.0 (загружается при работе)
+      Copyright 2023 The HuggingFace Inc. team
+      включает ONNX Runtime Web — Copyright (c) Microsoft Corporation (MIT)
+  Inter                              SIL Open Font License 1.1
+      Copyright (c) 2016-2020 The Inter Project Authors
+  Space Mono                         SIL Open Font License 1.1
+      Copyright (c) 2016 The Space Mono Project Authors
 
-Модели нейросетей загружаются с Hugging Face и принадлежат их авторам; условия
-использования указаны на страницах моделей.
+Полный перечень со ссылками на тексты лицензий: THIRD-PARTY-NOTICES.txt
+(генерируется при сборке) и страница /licenses/ в веб-версии.
+
+Модели нейросетей загружаются с Hugging Face по запросу пользователя,
+принадлежат их авторам и не входят в состав PixTool; условия использования
+указаны на страницах моделей.
 
 --------------------------------------------------------------------------------
 ОТСУТСТВИЕ ГАРАНТИЙ

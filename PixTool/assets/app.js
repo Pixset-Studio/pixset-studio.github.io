@@ -1,4 +1,7 @@
-/* PixTool v2.0.0 (2026-08-09) — сборка: web */
+/* PixTool v2.0.0 (2026-08-09) — сборка: web
+   © 2026 Pixset Studio. Все права защищены.
+   Сторонние компоненты и их правообладатели: см. THIRD-PARTY-NOTICES.txt */
+const PT_THIRD_PARTY = [{"name":"SheetJS (xlsx)","version":"0.18.5","purpose":"Чтение и запись файлов Excel","license":"Apache License 2.0","licenseUrl":"https://github.com/SheetJS/sheetjs/blob/master/LICENSE","homepage":"https://sheetjs.com","copyright":["Copyright (C) 2012-present SheetJS LLC"]},{"name":"pdf-lib","version":"1.17.1","purpose":"Создание и редактирование PDF","license":"MIT License","licenseUrl":"https://github.com/Hopding/pdf-lib/blob/master/LICENSE.md","homepage":"https://pdf-lib.js.org","copyright":["Copyright (c) 2019 Andrew Dillon","Включает tslib — Copyright (c) Microsoft Corporation (Apache License 2.0)"]},{"name":"pdf.js","version":"3.11.174","purpose":"Просмотр, рендеринг и разбор PDF","license":"Apache License 2.0","licenseUrl":"https://github.com/mozilla/pdf.js/blob/master/LICENSE","homepage":"https://mozilla.github.io/pdf.js/","copyright":["Copyright 2023 Mozilla Foundation"]},{"name":"marked","version":"9.1.6","purpose":"Разбор и рендеринг Markdown","license":"MIT License","licenseUrl":"https://github.com/markedjs/marked/blob/master/LICENSE.md","homepage":"https://marked.js.org","copyright":["Copyright (c) 2011-2023, Christopher Jeffrey","Copyright (c) 2018+, MarkedJS"]},{"name":"Turndown","version":"7.1.2","purpose":"Преобразование HTML в Markdown","license":"MIT License","licenseUrl":"https://github.com/mixmark-io/turndown/blob/master/LICENSE","homepage":"https://github.com/mixmark-io/turndown","copyright":["Copyright (c) 2017 Dom Christie"]},{"name":"qrcode-generator","version":"1.4.4","purpose":"Генерация QR-кодов","license":"MIT License","licenseUrl":"https://github.com/kazuhikoarase/qrcode-generator/blob/master/LICENSE","homepage":"https://github.com/kazuhikoarase/qrcode-generator","copyright":["Copyright (c) 2009 Kazuhiko Arase"]},{"name":"jsQR","version":"1.4.0","purpose":"Чтение QR-кодов с изображений и камеры","license":"Apache License 2.0","licenseUrl":"https://github.com/cozmo/jsQR/blob/master/LICENSE","homepage":"https://github.com/cozmo/jsQR","copyright":["Copyright (c) Cosmo Wolfe (cozmo) — в файле лицензии правообладатель оставлен незаполненным"]},{"name":"Transformers.js","version":"3.7.5","purpose":"Запуск нейросетевых моделей в браузере","license":"Apache License 2.0","licenseUrl":"https://github.com/huggingface/transformers.js/blob/main/LICENSE","homepage":"https://huggingface.co/docs/transformers.js","copyright":["Copyright 2023 The HuggingFace Inc. team","Включает ONNX Runtime Web — Copyright (c) Microsoft Corporation (MIT License)"],"runtime":true},{"name":"Inter","version":"переменный","purpose":"Основной шрифт интерфейса","license":"SIL Open Font License 1.1","licenseUrl":"https://github.com/rsms/inter/blob/master/LICENSE.txt","homepage":"https://rsms.me/inter/","copyright":["Copyright (c) 2016-2020 The Inter Project Authors"]},{"name":"Space Mono","version":"1.0","purpose":"Моноширинный шрифт интерфейса","license":"SIL Open Font License 1.1","licenseUrl":"https://openfontlicense.org","homepage":"https://fonts.google.com/specimen/Space+Mono","copyright":["Copyright (c) 2016 The Space Mono Project Authors (Colophon Foundry)"]}];
 
 /* ===== core/01-utils.js ===== */
 /* ======================================================================
@@ -1015,7 +1018,10 @@ function buildShell(){
         el('span', { text: '© ' + PT.years + ' Pixset Studio. Все права защищены.' }),
         el('span', { text: 'PixTool и его исходный код — объекты авторского права Pixset Studio; ' +
                            'использование за пределами лицензии требует разрешения.' }),
-        el('span', { text: 'Встроенные библиотеки принадлежат их авторам и используются по лицензиям MIT и Apache 2.0.' }),
+        el('span', {}, [
+          'Встроенные библиотеки принадлежат их авторам и используются по лицензиям MIT, Apache 2.0 и SIL OFL 1.1. ',
+          el('a', { href: '#', onclick: e => { e.preventDefault(); showLicenses(); }, text: 'Подробнее…' })
+        ]),
         el('span', { text: 'Версия ' + PT.version + ' от ' + PT.build + '.' })
       ])
     ])
@@ -1346,17 +1352,10 @@ function showHelp(){
 PT.showHelp = showHelp;
 
 /* ---------- о программе и лицензиях ---------- */
-const LIBRARIES = [
-  ['SheetJS (xlsx)', 'Apache 2.0', 'чтение и запись Excel'],
-  ['pdf-lib', 'MIT', 'создание и редактирование PDF'],
-  ['pdf.js', 'Apache 2.0', 'просмотр и разбор PDF'],
-  ['marked', 'MIT', 'разбор Markdown'],
-  ['Turndown', 'MIT', 'HTML в Markdown'],
-  ['qrcode-generator', 'MIT', 'генерация QR-кодов'],
-  ['jsQR', 'Apache 2.0', 'чтение QR-кодов'],
-  ['Transformers.js', 'Apache 2.0', 'запуск нейросетей в браузере'],
-  ['Inter, Space Mono', 'SIL Open Font License 1.1', 'шрифты интерфейса']
-];
+/* Данные о сторонних компонентах приходят из src/data/third-party.json:
+   лицензии MIT и Apache 2.0 требуют сохранять именно строку правообладателя,
+   поэтому она хранится дословно и нигде не сокращается. */
+PT.thirdParty = typeof PT_THIRD_PARTY !== 'undefined' ? PT_THIRD_PARTY : [];
 
 function showAbout(){
   ui.modal('О программе', el('div', {}, [
@@ -1376,8 +1375,12 @@ function showAbout(){
       ['Файлы пользователя', 'Не передаются и не сохраняются авторами']
     ]),
     el('hr', { class: 'sep' }),
-    el('h4', { text: 'Сторонние библиотеки' }), ui.spacer(8),
-    ui.kv(LIBRARIES.map(([name, license, purpose]) => [name + ' — ' + purpose, license])),
+    el('h4', { text: 'Сторонние компоненты' }), ui.spacer(8),
+    ui.kv(PT.thirdParty.map(lib => [lib.name + ' — ' + lib.purpose, lib.license])),
+    ui.spacer(12),
+    el('div', { class: 'row gap' }, [
+      ui.btn('Подробнее: правообладатели и лицензии', () => showLicenses(), { ghost: true, small: true })
+    ]),
     ui.spacer(10),
     ui.muted('Модели нейросетей загружаются с Hugging Face и остаются собственностью их авторов; ' +
              'условия использования указаны на страницах моделей.'),
@@ -1386,6 +1389,68 @@ function showAbout(){
   ]));
 }
 PT.showAbout = showAbout;
+
+/** Полный перечень сторонних компонентов с копирайтами — как того требуют MIT и Apache 2.0. */
+function showLicenses(){
+  const list = el('div', { class: 'license-list' }, PT.thirdParty.map(lib => el('div', { class: 'license-item' }, [
+    el('div', { class: 'row between' }, [
+      el('b', { text: lib.name + (lib.version ? ' ' + lib.version : '') }),
+      el('span', { class: 'badge', text: lib.license })
+    ]),
+    el('p', { class: 'hint', text: lib.purpose + (lib.runtime ? ' · загружается во время работы' : '') }),
+    el('div', { class: 'license-copy' }, lib.copyright.map(line => el('div', { text: line }))),
+    el('div', { class: 'row gap' }, [
+      el('a', { href: lib.licenseUrl, target: '_blank', rel: 'noopener noreferrer', text: 'Текст лицензии' }),
+      lib.homepage ? el('a', { href: lib.homepage, target: '_blank', rel: 'noopener noreferrer', text: 'Сайт проекта' }) : null
+    ])
+  ])));
+
+  ui.modal('Лицензии сторонних компонентов', el('div', {}, [
+    ui.muted('PixTool использует перечисленные ниже библиотеки и шрифты. Их лицензии требуют сохранять ' +
+             'указание правообладателя — эти строки приведены дословно и не могут быть изменены или удалены.'),
+    ui.spacer(14),
+    list,
+    el('hr', { class: 'sep' }),
+    el('h4', { text: 'Модели нейросетей' }), ui.spacer(8),
+    ui.muted('Модели (RMBG 1.4, MODNet, Swin2SR, Depth Anything, DETR, ViT, TrOCR, Whisper, SpeechT5, ' +
+             'OPUS-MT, DistilBART, BERT, MiniLM, Qwen2.5 и другие) загружаются с Hugging Face по запросу ' +
+             'пользователя и принадлежат их авторам. Условия использования каждой модели указаны на её странице. ' +
+             'PixTool не распространяет модели в своём составе.'),
+    ui.spacer(14),
+    ui.muted('© ' + PT.years + ' Pixset Studio — права на сам PixTool. Перечисленные компоненты остаются ' +
+             'собственностью своих правообладателей.')
+  ]), {
+    actions: [
+      ui.btn('Скачать перечень (.txt)', () => downloadText(noticesText(), 'PixTool-third-party-notices.txt'), { ghost: true }),
+      ui.btn('Копировать', () => copy(noticesText()), { ghost: true })
+    ]
+  });
+}
+PT.showLicenses = showLicenses;
+
+/** Тот же перечень в виде обычного текста — удобно приложить к сборке или в репозиторий. */
+function noticesText(){
+  const lines = [
+    'PixTool ' + PT.version + ' — сторонние компоненты и их лицензии',
+    '© ' + PT.years + ' Pixset Studio. Права на PixTool принадлежат Pixset Studio.',
+    'Перечисленные ниже компоненты остаются собственностью своих правообладателей.',
+    '', '='.repeat(78), ''
+  ];
+  PT.thirdParty.forEach(lib => {
+    lines.push(lib.name + (lib.version ? ' ' + lib.version : ''));
+    lines.push('  Назначение: ' + lib.purpose + (lib.runtime ? ' (загружается во время работы)' : ''));
+    lines.push('  Лицензия:   ' + lib.license);
+    lib.copyright.forEach(c => lines.push('  ' + c));
+    lines.push('  Текст лицензии: ' + lib.licenseUrl);
+    if (lib.homepage) lines.push('  Сайт проекта:   ' + lib.homepage);
+    lines.push('');
+  });
+  lines.push('='.repeat(78), '',
+    'Модели нейросетей загружаются с Hugging Face по запросу пользователя,',
+    'принадлежат их авторам и не входят в состав PixTool.');
+  return lines.join('\n');
+}
+PT.noticesText = noticesText;
 
 /** Просим service worker сложить в кэш все внешние модули — тогда офлайн полный. */
 function prefetchVendor(){
