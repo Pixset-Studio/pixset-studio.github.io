@@ -1,28 +1,42 @@
-MIT License
+PIXTOOL — ЛИЦЕНЗИЯ
+Proprietary License — All Rights Reserved
 
-Copyright (c) 2026 Pixset Studio
+Copyright © 2026 Pixset Studio. Все права защищены. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+--------------------------------------------------------------------------------
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+PixTool является частью репозитория Pixset Studio и распространяется на условиях
+общей лицензии студии:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+    https://github.com/Pixset-Studio/pixset-studio.github.io/blob/main/LICENSE
 
----
+Коротко о главном:
 
-Сторонние библиотеки в src/vendor/ распространяются по собственным лицензиям:
+  РАЗРЕШЕНО без отдельного согласия
+    — пользоваться PixTool по назначению, в том числе офлайн-версией;
+    — изучать исходный код в образовательных целях;
+    — просматривать и форкать репозиторий средствами GitHub;
+    — цитировать небольшие фрагменты с указанием автора и ссылкой на источник.
+
+  ЗАПРЕЩЕНО без письменного разрешения Pixset Studio
+    — копировать и распространять PixTool полностью или в существенной части;
+    — использовать код и интерфейс в собственных проектах;
+    — использовать материалы в коммерческих целях;
+    — публиковать копии на других адресах и площадках;
+    — выдавать переработанные материалы за собственную разработку;
+    — удалять или изменять уведомления об авторских правах;
+    — использовать название PixTool и обозначения Pixset Studio для своих
+      продуктов;
+    — использовать материалы для обучения моделей машинного обучения.
+
+Исключительные права возникают у автора в момент создания произведения и не
+требуют регистрации (ст. 1259 ГК РФ, ст. 5(2) Бернской конвенции).
+
+--------------------------------------------------------------------------------
+СТОРОННИЕ КОМПОНЕНТЫ
+
+Условия ниже относятся только к сторонним материалам и не ограничиваются
+настоящей лицензией.
 
   SheetJS (xlsx)        Apache License 2.0
   pdf-lib               MIT License
@@ -31,9 +45,25 @@ SOFTWARE.
   Turndown              MIT License
   qrcode-generator      MIT License
   jsQR                  Apache License 2.0
+  Transformers.js       Apache License 2.0   (загружается во время работы)
+  Inter, Space Mono     SIL Open Font License 1.1
 
-Transformers.js (Apache License 2.0) загружается во время работы приложения.
-Модели нейросетей принадлежат их авторам; условия использования указаны
-на страницах моделей на Hugging Face.
+Модели нейросетей загружаются с Hugging Face и принадлежат их авторам; условия
+использования указаны на страницах моделей.
 
-Шрифты Inter и Space Mono распространяются по SIL Open Font License 1.1.
+--------------------------------------------------------------------------------
+ОТСУТСТВИЕ ГАРАНТИЙ
+
+Программа предоставляется «как есть», без каких-либо гарантий, явных или
+подразумеваемых. Автор не несёт ответственности за любой ущерб, возникший в
+связи с использованием или невозможностью использования программы.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+Запросы на использование: раздел Issues репозитория или контакты на сайте
+https://pixset-studio.github.io
+
+Редакция от 9 августа 2026 года.
