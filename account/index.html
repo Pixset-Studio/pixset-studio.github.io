@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аккаунт — Pixset Studio</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/auth.css">
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="scanlines"></div>
+
+<nav class="auth-nav">
+  <a href="../" class="back">← Pixset Studio</a>
+</nav>
+
+<!-- Пока идёт проверка сессии, не мигаем формой входа -->
+<div class="wrap narrow" id="loading">
+  <p class="sub">Проверка сессии…</p>
+</div>
+
+<!-- ── ГОСТЬ ─────────────────────────────────────────────────────────── -->
+<div class="wrap narrow" id="guest" hidden>
+  <div class="panel">
+    <h1>Аккаунт</h1>
+    <p class="sub">Одна учётная запись — все игры студии</p>
+
+    <div class="tabs">
+      <button id="tabLogin" class="active">Вход</button>
+      <button id="tabRegister">Регистрация</button>
+    </div>
+
+    <div class="msg" id="guestMsg"></div>
+
+    <!-- Вход -->
+    <form id="formLogin">
+      <label for="loginEmail">Почта</label>
+      <input type="email" id="loginEmail" autocomplete="email" required>
+
+      <label for="loginPassword">Пароль</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+
+      <button type="submit" class="btn">Войти</button>
+      <div class="link-row"><a href="#" id="forgotLink">Забыл пароль</a></div>
+    </form>
+
+    <!-- Регистрация -->
+    <form id="formRegister" hidden>
+      <label for="regNickname">Ник</label>
+      <input type="text" id="regNickname" autocomplete="username" required
+             minlength="3" maxlength="20" placeholder="3–20 символов, латиница">
+
+      <label for="regEmail">Почта</label>
+      <input type="email" id="regEmail" autocomplete="email" required>
+
+      <label for="regPassword">Пароль</label>
+      <input type="password" id="regPassword" autocomplete="new-password" required minlength="6">
+
+      <button type="submit" class="btn">Создать аккаунт</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── СБРОС ПАРОЛЯ ──────────────────────────────────────────────────── -->
+<div class="wrap narrow" id="recovery" hidden>
+  <div class="panel">
+    <h1>Новый пароль</h1>
+    <p class="sub">Придумай пароль для входа</p>
+    <div class="msg" id="recoveryMsg"></div>
+    <form id="formRecovery">
+      <label for="newPassword">Пароль</label>
+      <input type="password" id="newPassword" autocomplete="new-password" required minlength="6">
+      <button type="submit" class="btn">Сохранить</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── ПРОФИЛЬ ───────────────────────────────────────────────────────── -->
+<div class="wrap" id="profile" hidden>
+  <div class="panel">
+    <div class="profile-head">
+      <div class="who">
+        <div class="avatar" id="avatar">?</div>
+        <div>
+          <div class="nick" id="nick">…</div>
+          <div class="email" id="email"></div>
+        </div>
+      </div>
+      <button class="btn ghost" id="logoutBtn">Выйти</button>
+    </div>
+
+    <h2>Мои игры</h2>
+    <div class="games" id="games"></div>
+
+    <h2>Устройства</h2>
+    <div id="devices"></div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  supabase, register, login, logout, resetPassword,
+  getProfile, getGames, getEntitlements, getDevices, revokeDevice,
+  humanError, NICKNAME_RE,
+} from '../assets/pixset-auth.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (el) => { el.hidden = false; };
+const hide = (el) => { el.hidden = true; };
+
+function say(box, text, kind = 'error') {
+  box.textContent = text;
+  box.className = `msg show ${kind}`;
+}
+function clear(box) { box.className = 'msg'; }
+
+/** Блокирует кнопку на время запроса, чтобы не отправить форму дважды. */
+async function withBusy(btn, label, fn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = label;
+  try { await fn(); }
+  finally { btn.disabled = false; btn.textContent = original; }
+}
+
+// ── Переключение вкладок ────────────────────────────────────────────────
+$('tabLogin').onclick = () => {
+  $('tabLogin').classList.add('active');
+  $('tabRegister').classList.remove('active');
+  show($('formLogin')); hide($('formRegister')); clear($('guestMsg'));
+};
+$('tabRegister').onclick = () => {
+  $('tabRegister').classList.add('active');
+  $('tabLogin').classList.remove('active');
+  show($('formRegister')); hide($('formLogin')); clear($('guestMsg'));
+};
+
+// ── Вход ────────────────────────────────────────────────────────────────
+$('formLogin').onsubmit = async (e) => {
+  e.preventDefault();
+  clear($('guestMsg'));
+  await withBusy(e.submitter, 'Вход…', async () => {
+    try {
+      await login({ email: $('loginEmail').value.trim(), password: $('loginPassword').value });
+      // Дальше сработает onAuthStateChange и покажет профиль.
+    } catch (err) {
+      say($('guestMsg'), humanError(err));
+    }
+  });
+};
+
+// ── Регистрация ─────────────────────────────────────────────────────────
+$('formRegister').onsubmit = async (e) => {
+  e.preventDefault();
+  clear($('guestMsg'));
+  const nickname = $('regNickname').value.trim();
+  if (!NICKNAME_RE.test(nickname)) {
+    say($('guestMsg'), 'Ник: 3–20 символов, только латиница, цифры, _ и -');
+    return;
+  }
+  await withBusy(e.submitter, 'Создание…', async () => {
+    try {
+      const { needsConfirmation } = await register({
+        email: $('regEmail').value.trim(),
+        password: $('regPassword').value,
+        nickname,
+      });
+      if (needsConfirmation) {
+        say($('guestMsg'), 'Готово! Мы отправили письмо — подтверди почту и возвращайся.', 'ok');
+        $('formRegister').reset();
+      }
+    } catch (err) {
+      say($('guestMsg'), humanError(err));
+    }
+  });
+};
+
+// ── Забытый пароль ──────────────────────────────────────────────────────
+$('forgotLink').onclick = async (e) => {
+  e.preventDefault();
+  const email = $('loginEmail').value.trim();
+  if (!email) {
+    say($('guestMsg'), 'Введи почту в поле выше, и я пришлю ссылку для сброса.');
+    return;
+  }
+  try {
+    await resetPassword(email);
+    say($('guestMsg'), 'Ссылка для сброса пароля отправлена на почту.', 'ok');
+  } catch (err) {
+    say($('guestMsg'), humanError(err));
+  }
+};
+
+// ── Установка нового пароля после письма ────────────────────────────────
+$('formRecovery').onsubmit = async (e) => {
+  e.preventDefault();
+  clear($('recoveryMsg'));
+  await withBusy(e.submitter, 'Сохранение…', async () => {
+    const { error } = await supabase.auth.updateUser({ password: $('newPassword').value });
+    if (error) { say($('recoveryMsg'), humanError(error)); return; }
+    say($('recoveryMsg'), 'Пароль обновлён.', 'ok');
+    setTimeout(() => location.replace(location.pathname), 900);
+  });
+};
+
+$('logoutBtn').onclick = async () => { await logout(); location.reload(); };
+
+// ── Отрисовка профиля ───────────────────────────────────────────────────
+async function renderProfile(user) {
+  $('email').textContent = user.email;
+
+  try {
+    const profile = await getProfile(user.id);
+    $('nick').textContent = profile.nickname;
+    $('avatar').textContent = profile.nickname.charAt(0).toUpperCase();
+  } catch {
+    $('nick').textContent = 'Игрок';
+  }
+
+  // Каталог и лицензии — параллельно, они не зависят друг от друга.
+  const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
+  const ownedSlugs = new Set(owned.map((e) => e.game_slug));
+
+  $('games').innerHTML = games.length
+    ? games.map((g) => `
+        <div class="game">
+          <div class="title">${escapeHtml(g.title)}</div>
+          <div class="tagline">${escapeHtml(g.tagline || '')}</div>
+          <span class="badge ${ownedSlugs.has(g.slug) ? 'owned' : 'demo'}">
+            ${ownedSlugs.has(g.slug) ? 'Лицензия активна' : 'Демо-версия'}
+          </span>
+        </div>`).join('')
+    : '<p class="empty">Каталог пока пуст</p>';
+
+  renderDevices();
+}
+
+async function renderDevices() {
+  const devices = await getDevices();
+  const box = $('devices');
+
+  if (!devices.length) {
+    box.innerHTML = '<p class="empty">Пока ни одного входа из игры</p>';
+    return;
+  }
+
+  box.innerHTML = devices.map((d) => `
+    <div class="device">
+      <span>${escapeHtml(d.label || d.platform || 'Устройство')}</span>
+      <span class="seen">${new Date(d.last_seen).toLocaleDateString('ru-RU')}</span>
+      <button class="btn ghost" data-id="${d.id}">Отвязать</button>
+    </div>`).join('');
+
+  box.querySelectorAll('button[data-id]').forEach((btn) => {
+    btn.onclick = async () => {
+      await revokeDevice(btn.dataset.id);
+      renderDevices();
+    };
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ── Маршрутизация по состоянию сессии ───────────────────────────────────
+let recoveryMode = false;
+
+supabase.auth.onAuthStateChange((event, session) => {
+  // Переход по ссылке из письма о сбросе пароля.
+  if (event === 'PASSWORD_RECOVERY') {
+    recoveryMode = true;
+    hide($('loading')); hide($('guest')); hide($('profile'));
+    show($('recovery'));
+    return;
+  }
+  if (recoveryMode) return;
+
+  hide($('loading'));
+  if (session?.user) {
+    hide($('guest')); show($('profile'));
+    renderProfile(session.user);
+  } else {
+    hide($('profile')); show($('guest'));
+  }
+});
+
+// Первичная проверка: onAuthStateChange не срабатывает, если сессии нет.
+const { data: { session } } = await supabase.auth.getSession();
+if (!recoveryMode) {
+  hide($('loading'));
+  if (session?.user) { show($('profile')); renderProfile(session.user); }
+  else { show($('guest')); }
+}
+</script>
+
+</body>
+</html>
