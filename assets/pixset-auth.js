@@ -160,6 +160,25 @@ export async function adminRevokeLicense(email, gameSlug) {
   if (error) throw error;
 }
 
+/** Список продуктов и офферов из кабинета Lava — чтобы найти нужный offer id. */
+export async function adminLavaOffers() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('not_authenticated');
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/lava-offers`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+    },
+    body: '{}',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'lava_error');
+  return data;
+}
+
 export async function adminListPaymentEvents() {
   const { data, error } = await supabase.rpc('admin_list_payment_events');
   if (error) throw error;
