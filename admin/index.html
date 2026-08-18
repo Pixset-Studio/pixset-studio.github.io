@@ -97,6 +97,14 @@
     <h2>Игроки</h2>
     <div class="tblwrap"><table id="playersTbl"></table></div>
 
+    <h2>Настройка Lava</h2>
+    <p class="sub" style="margin-bottom:10px">
+      Счёт выставляется на id <b>оффера</b>, а не продукта. Здесь видно, какие
+      офферы заведены в кабинете — нужный id вписывается в секрет LAVA_OFFER_ID.
+    </p>
+    <button class="btn ghost" id="offersBtn">Показать офферы Lava</button>
+    <div class="tblwrap"><table id="offersTbl"></table></div>
+
     <h2>События оплат</h2>
     <p class="sub" style="margin-bottom:10px">
       Последние уведомления от платёжной системы. «Не найден» значит, что оплата
@@ -109,7 +117,7 @@
 <script type="module">
 import {
   supabase, getProfile, getGames,
-  adminListOrders, adminListPlayers, adminListPaymentEvents,
+  adminListOrders, adminListPlayers, adminListPaymentEvents, adminLavaOffers,
   adminGrantLicense, adminRevokeLicense, adminMarkPaid,
   humanError,
 } from '../assets/pixset-auth.js';
@@ -229,6 +237,33 @@ async function withGrant(fn, okText) {
     say(humanError(err));
   }
 }
+
+$('offersBtn').onclick = async () => {
+  const btn = $('offersBtn');
+  btn.disabled = true;
+  try {
+    const { offers, raw } = await adminLavaOffers();
+    $('offersTbl').innerHTML = offers && offers.length
+      ? '<tr><th>Продукт</th><th>Оффер</th><th>Цены</th><th>offer id</th></tr>' +
+        offers.map((o) => `
+          <tr>
+            <td>${escapeHtml(o.product)}</td>
+            <td>${escapeHtml(o.offer_name)}</td>
+            <td>${(o.prices || []).map((p) =>
+              escapeHtml(`${p.amount} ${p.currency}`)).join('<br>') || '—'}</td>
+            <td><code style="color:var(--neon-cyan);user-select:all">${
+              escapeHtml(o.offer_id)}</code></td>
+          </tr>`).join('')
+      : '<tr><td class="empty"><details><summary style="cursor:pointer">Офферы не распознаны — показать ответ Lava</summary>' +
+        `<pre style="white-space:pre-wrap;font-size:11px">${
+          escapeHtml(JSON.stringify(raw, null, 1))}</pre></details></td></tr>`;
+    say('Готово. Скопируй нужный offer id в секрет LAVA_OFFER_ID.', 'ok');
+  } catch (err) {
+    say(humanError(err));
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 $('grantBtn').onclick  = () => withGrant(adminGrantLicense,  'Лицензия выдана.');
 $('revokeBtn').onclick = () => withGrant(adminRevokeLicense, 'Лицензия отозвана.');
