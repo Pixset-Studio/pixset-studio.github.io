@@ -1,184 +1,216 @@
 // Pixset License SDK — проверка лицензии в играх студии.
-// Подключается в Byte Blaster, Hearthhold и любую следующую игру.
+// Подключается как обычный <script> в Byte Blaster, Hearthhold и далее.
 //
-// Главный принцип: игра запускается БЕЗ интернета. Токен подписан
-// ключом сервера, клиент проверяет подпись локально. Сеть нужна только
+// Главный принцип: игра запускается БЕЗ интернета. Токен подписан ключом
+// сервера, подпись проверяется локально через Web Crypto. Сеть нужна только
 // чтобы продлить срок действия токена.
+//
+// Никаких внешних зависимостей: supabase-js тянется с CDN и в офлайне
+// (Electron, Android в самолётном режиме) просто не загрузился бы.
+(function () {
+  'use strict';
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  const SUPABASE_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
 
-const SUPABASE_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
+  // Публичный ключ подписи (SPKI, base64). Приватная половина — только на сервере.
+  const PUBLIC_KEY_SPKI = 'MCowBQYDK2VwAyEAobGRyYmKEjjmy8rrD/2oWlMZASY8wWeSDd7ipL1cvFs=';
 
-// Публичный ключ подписи (SPKI, base64). Приватная половина — только на сервере.
-const PUBLIC_KEY_SPKI = 'MCowBQYDK2VwAyEAobGRyYmKEjjmy8rrD/2oWlMZASY8wWeSDd7ipL1cvFs=';
+  // Сколько дней играем после истечения токена, если сеть недоступна.
+  // Упавший сервер не должен ломать честно купленную игру.
+  const OFFLINE_GRACE_DAYS = 7;
 
-// Сколько дней играем после истечения токена, если сеть недоступна.
-// Не блокируем сразу: упавший сервер не должен ломать купленную игру.
-const OFFLINE_GRACE_DAYS = 7;
+  const K_TOKEN   = 'pixset.license';
+  const K_SESSION = 'pixset.session';
+  const K_CLOCK   = 'pixset.clock';
+  const K_DEVICE  = 'pixset.device';
 
-const STORAGE_KEY = 'pixset.license';
-const CLOCK_KEY = 'pixset.clock';
+  const dec = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  /* ── Хранилище ─────────────────────────────────────────────────────────
+     По умолчанию localStorage. Оболочка может подменить на защищённое
+     (Electron safeStorage, Capacitor Preferences) через License.setStorage. */
+  let store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+    remove: (k) => { try { localStorage.removeItem(k); } catch (e) {} },
+  };
 
-const b64decode = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-
-/* ── Хранилище ────────────────────────────────────────────────────────────
-   По умолчанию localStorage. В Electron передай адаптер поверх safeStorage,
-   в Capacitor — поверх Preferences, чтобы токен не лежал открытым текстом. */
-let storage = {
-  get: (k) => localStorage.getItem(k),
-  set: (k, v) => localStorage.setItem(k, v),
-  remove: (k) => localStorage.removeItem(k),
-};
-
-export function setStorage(adapter) { storage = adapter; }
-
-/* ── Защита от перевода часов ─────────────────────────────────────────────
-   Игрок может отмотать системное время назад, чтобы «оживить» истёкший
-   токен. Запоминаем максимальное виденное время и не верим меньшему. */
-function now() {
-  const system = Math.floor(Date.now() / 1000);
-  const seen = parseInt(storage.get(CLOCK_KEY) || '0', 10);
-  if (system > seen) {
-    storage.set(CLOCK_KEY, String(system));
-    return system;
-  }
-  return seen;
-}
-
-/* ── Проверка подписи ─────────────────────────────────────────────────── */
-let cachedKey = null;
-
-async function publicKey() {
-  if (!cachedKey) {
-    cachedKey = await crypto.subtle.importKey(
-      'spki', b64decode(PUBLIC_KEY_SPKI), { name: 'Ed25519' }, false, ['verify'],
-    );
-  }
-  return cachedKey;
-}
-
-async function verify(token) {
-  const payloadBytes = b64decode(token.payload);
-  const ok = await crypto.subtle.verify(
-    'Ed25519', await publicKey(), b64decode(token.signature), payloadBytes,
-  );
-  if (!ok) return null;
-  return JSON.parse(new TextDecoder().decode(payloadBytes));
-}
-
-/* ── Состояние ────────────────────────────────────────────────────────── */
-let entitlements = null;   // расшифрованный payload или null
-
-function loadCached() {
-  const raw = storage.get(STORAGE_KEY);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
-/**
- * Загружает лицензию из локального хранилища и проверяет подпись.
- * Вызывать при старте игры — до любого обращения к сети.
- */
-export async function initLicense() {
-  const token = loadCached();
-  if (!token) { entitlements = null; return null; }
-
-  const payload = await verify(token);
-  if (!payload) {
-    // Подпись не сошлась — токен подделан или повреждён.
-    storage.remove(STORAGE_KEY);
-    entitlements = null;
-    return null;
+  /* ── Часы ──────────────────────────────────────────────────────────────
+     Игрок может отмотать системное время назад, чтобы «оживить» истёкший
+     токен. Запоминаем максимальное виденное время и не верим меньшему. */
+  function now() {
+    const sys = Math.floor(Date.now() / 1000);
+    const seen = parseInt(store.get(K_CLOCK) || '0', 10);
+    if (sys > seen) { store.set(K_CLOCK, String(sys)); return sys; }
+    return seen;
   }
 
-  const graceUntil = payload.expires_at + OFFLINE_GRACE_DAYS * 86400;
-  if (now() > graceUntil) { entitlements = null; return null; }
-
-  entitlements = payload;
-  return payload;
-}
-
-/** Есть ли действующая лицензия на игру. Работает офлайн. */
-export function hasGame(slug) {
-  return Boolean(entitlements?.games?.includes(slug));
-}
-
-/** Токен ещё жив, но пора обновиться — покажи мягкое предупреждение. */
-export function needsRefresh() {
-  return Boolean(entitlements) && now() > entitlements.expires_at;
-}
-
-export function getNickname() { return entitlements?.nickname ?? null; }
-
-/* ── Сеть ─────────────────────────────────────────────────────────────── */
-export async function login(email, password) {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  return refreshLicense();
-}
-
-export async function logout() {
-  await supabase.auth.signOut();
-  storage.remove(STORAGE_KEY);
-  entitlements = null;
-}
-
-/**
- * Запрашивает свежий токен с сервера и сохраняет его.
- * Вызывать в фоне при старте, если есть сеть — тогда активный игрок
- * никогда не увидит запрос на повторный вход.
- */
-export async function refreshLicense({ deviceHash, platform, label } = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/entitlements`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      device_hash: deviceHash ?? deviceFingerprint(),
-      platform: platform ?? detectPlatform(),
-      label,
-    }),
-  });
-
-  if (!res.ok) throw new Error(`entitlements ${res.status}`);
-
-  const token = await res.json();
-  const payload = await verify(token);
-  if (!payload) throw new Error('сервер прислал токен с неверной подписью');
-
-  storage.set(STORAGE_KEY, JSON.stringify(token));
-  entitlements = payload;
-  return payload;
-}
-
-/** Обновление в фоне: нет сети — молча живём на локальном токене. */
-export async function refreshQuietly(opts) {
-  try { return await refreshLicense(opts); }
-  catch { return null; }
-}
-
-/* ── Вспомогательное ──────────────────────────────────────────────────── */
-function detectPlatform() {
-  const ua = navigator.userAgent;
-  if (/Android/i.test(ua)) return 'android';
-  if (/Electron/i.test(ua)) return 'windows';
-  return 'web';
-}
-
-/** Анонимный отпечаток устройства. Никаких аппаратных идентификаторов. */
-function deviceFingerprint() {
-  let id = storage.get('pixset.device');
-  if (!id) {
-    id = crypto.randomUUID();
-    storage.set('pixset.device', id);
+  /* ── Подпись ───────────────────────────────────────────────────────── */
+  let keyPromise = null;
+  function publicKey() {
+    if (!keyPromise) {
+      keyPromise = crypto.subtle.importKey(
+        'spki', dec(PUBLIC_KEY_SPKI), { name: 'Ed25519' }, false, ['verify'],
+      );
+    }
+    return keyPromise;
   }
-  return id;
-}
+
+  async function verify(token) {
+    if (!token || !token.payload || !token.signature) return null;
+    try {
+      const bytes = dec(token.payload);
+      const ok = await crypto.subtle.verify(
+        'Ed25519', await publicKey(), dec(token.signature), bytes,
+      );
+      if (!ok) return null;
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) {
+      return null;   // битый токен или среда без Ed25519
+    }
+  }
+
+  /* ── Состояние ─────────────────────────────────────────────────────── */
+  let ent = null;       // проверенный payload или null
+  let ready = false;    // init уже отработал
+
+  function readJSON(key) {
+    const raw = store.get(key);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+
+  /** Загружает локальный токен и проверяет подпись. Вызывать на старте игры. */
+  async function init() {
+    const token = readJSON(K_TOKEN);
+    ent = null;
+
+    if (token) {
+      const payload = await verify(token);
+      if (!payload) {
+        store.remove(K_TOKEN);           // подделан или повреждён
+      } else if (now() <= payload.expires_at + OFFLINE_GRACE_DAYS * 86400) {
+        ent = payload;
+      }
+    }
+
+    ready = true;
+    return ent;
+  }
+
+  /* ── Запросы к серверу ─────────────────────────────────────────────── */
+  function authFetch(path, body, token) {
+    const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_KEY };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    return fetch(SUPABASE_URL + path, {
+      method: 'POST', headers, body: JSON.stringify(body),
+    });
+  }
+
+  async function login(email, password) {
+    const res = await authFetch('/auth/v1/token?grant_type=password', { email, password });
+    const data = await res.json();
+    if (!res.ok) {
+      const e = new Error(data.error_description || data.msg || data.message || 'login_failed');
+      e.code = data.error_code || data.error;
+      throw e;
+    }
+    store.set(K_SESSION, JSON.stringify(data));
+    return refresh();
+  }
+
+  function logout() {
+    store.remove(K_SESSION);
+    store.remove(K_TOKEN);
+    ent = null;
+  }
+
+  function session() { return readJSON(K_SESSION); }
+  function loggedIn() { return !!session(); }
+
+  /** Обновляет access_token, если он протух. */
+  async function accessToken() {
+    const s = session();
+    if (!s) return null;
+    const alive = s.expires_at && s.expires_at - 60 > Math.floor(Date.now() / 1000);
+    if (alive) return s.access_token;
+
+    const res = await authFetch('/auth/v1/token?grant_type=refresh_token',
+      { refresh_token: s.refresh_token });
+    if (!res.ok) { store.remove(K_SESSION); return null; }
+    const data = await res.json();
+    store.set(K_SESSION, JSON.stringify(data));
+    return data.access_token;
+  }
+
+  /**
+   * Забирает свежий подписанный токен прав и сохраняет его.
+   * Вызывать в фоне при старте: у активного игрока срок никогда не истечёт.
+   */
+  async function refresh() {
+    const token = await accessToken();
+    if (!token) return null;
+
+    const res = await authFetch('/functions/v1/entitlements', {
+      device_hash: deviceId(),
+      platform: platform(),
+      label: label(),
+    }, token);
+    if (!res.ok) throw new Error('entitlements_' + res.status);
+
+    const signed = await res.json();
+    const payload = await verify(signed);
+    if (!payload) throw new Error('bad_signature');
+
+    store.set(K_TOKEN, JSON.stringify(signed));
+    ent = payload;
+    ready = true;
+    return payload;
+  }
+
+  /** Тихое обновление: нет сети — молча живём на локальном токене. */
+  async function refreshQuietly() {
+    try { return await refresh(); } catch (e) { return null; }
+  }
+
+  /* ── Ответы игре ───────────────────────────────────────────────────── */
+  function hasGame(slug) {
+    return !!(ent && ent.games && ent.games.indexOf(slug) !== -1);
+  }
+  /** Токен ещё в силе, но пора обновиться — повод для мягкого предупреждения. */
+  function stale() { return !!ent && now() > ent.expires_at; }
+  function nickname() { return ent && ent.nickname ? ent.nickname : null; }
+  function isReady() { return ready; }
+
+  /* ── Вспомогательное ───────────────────────────────────────────────── */
+  function platform() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'android';
+    if (/Electron/i.test(ua)) return 'windows';
+    return 'web';
+  }
+  function label() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/Electron/i.test(ua)) return 'PC (Windows)';
+    return 'Браузер';
+  }
+  /** Анонимный отпечаток. Никаких аппаратных идентификаторов. */
+  function deviceId() {
+    let id = store.get(K_DEVICE);
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID()
+                              : String(Date.now()) + Math.random().toString(16).slice(2));
+      store.set(K_DEVICE, id);
+    }
+    return id;
+  }
+
+  window.License = {
+    init, login, logout, refresh, refreshQuietly,
+    hasGame, stale, nickname, loggedIn, isReady,
+    setStorage(adapter) { store = adapter; },
+    get storeUrl() { return 'https://pixset-studio.github.io/store'; },
+  };
+})();

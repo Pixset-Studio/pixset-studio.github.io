@@ -26,7 +26,9 @@ export async function register({ email, password, nickname }) {
     email,
     password,
     options: {
-      data: { nickname },
+      // Страна нужна только чтобы один раз выбрать валюту аккаунта.
+      // Дальше цена привязана к профилю и от устройства не зависит.
+      data: { nickname, country: detectCountry() },
       emailRedirectTo: ACCOUNT_URL,
     },
   });
@@ -54,18 +56,126 @@ export async function resetPassword(email) {
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('nickname, avatar_url, created_at')
+    .select('nickname, avatar_url, created_at, is_admin, country, currency')
     .eq('id', userId)
     .single();
   if (error) throw error;
   return data;
 }
 
+/* ── Магазин ───────────────────────────────────────────────────────────── */
+
+/**
+ * Страна по часовому поясу — только для России: рубли положены ей одной,
+ * всем остальным (включая Беларусь) идут доллары.
+ * Значение записывается в профиль один раз при регистрации.
+ */
+export function detectCountry() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const ruZones = /^(Europe\/(Moscow|Kaliningrad|Samara|Volgograd|Kirov|Saratov|Astrakhan|Ulyanovsk)|Asia\/(Yekaterinburg|Omsk|Novosibirsk|Krasnoyarsk|Irkutsk|Yakutsk|Vladivostok|Magadan|Kamchatka|Barnaul|Tomsk|Novokuznetsk|Chita|Khandyga|Sakhalin|Srednekolymsk|Ust-Nera|Anadyr))$/;
+    if (ruZones.test(tz)) return 'RU';
+  } catch { /* экзотическая среда — считаем «не Россия» */ }
+  return 'XX';
+}
+
+export function formatPrice(game, currency) {
+  if (currency === 'RUB') {
+    return game.price_rub == null ? null : (game.price_rub / 100).toLocaleString('ru-RU') + ' ₽';
+  }
+  return game.price_usd == null ? null : '$' + (game.price_usd / 100).toFixed(2);
+}
+
+/**
+ * Создаёт заказ (или возвращает уже открытый) и отдаёт его id.
+ * Валюту и сумму сервер берёт из профиля — клиент на них не влияет.
+ */
+export async function createOrder(gameSlug) {
+  const { data, error } = await supabase.rpc('create_order', { p_game_slug: gameSlug });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Создаёт заказ и счёт в Lava, возвращает ссылку на оплату.
+ * Цену и валюту считает сервер по региону аккаунта.
+ */
+export async function startPayment(gameSlug) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('not_authenticated');
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/payment`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+    },
+    body: JSON.stringify({ game_slug: gameSlug }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.payment_url) {
+    const err = new Error(data.error || 'payment_failed');
+    err.details = data;
+    throw err;
+  }
+  return data;
+}
+
+export async function getMyOrders() {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, game_slug, amount, currency, status, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+/* ── Админка ───────────────────────────────────────────────────────────── */
+
+export async function adminListOrders() {
+  const { data, error } = await supabase.rpc('admin_list_orders');
+  if (error) throw error;
+  return data;
+}
+
+export async function adminListPlayers() {
+  const { data, error } = await supabase.rpc('admin_list_players');
+  if (error) throw error;
+  return data;
+}
+
+export async function adminGrantLicense(email, gameSlug) {
+  const { error } = await supabase.rpc('admin_grant_license', {
+    p_email: email, p_game_slug: gameSlug, p_source: 'manual',
+  });
+  if (error) throw error;
+}
+
+export async function adminRevokeLicense(email, gameSlug) {
+  const { error } = await supabase.rpc('admin_revoke_license', {
+    p_email: email, p_game_slug: gameSlug,
+  });
+  if (error) throw error;
+}
+
+export async function adminListPaymentEvents() {
+  const { data, error } = await supabase.rpc('admin_list_payment_events');
+  if (error) throw error;
+  return data;
+}
+
+export async function adminMarkPaid(orderId) {
+  const { error } = await supabase.rpc('admin_mark_paid', { p_order_id: orderId });
+  if (error) throw error;
+}
+
 /** Каталог опубликованных игр. Виден и гостям. */
 export async function getGames() {
   const { data, error } = await supabase
     .from('games')
-    .select('slug, title, tagline, price_rub, is_published')
+    .select('slug, title, tagline, price_rub, price_usd, is_published')
     .eq('is_published', true)
     .order('created_at');
   if (error) throw error;
@@ -108,5 +218,17 @@ export function humanError(err) {
     return 'Слишком много попыток. Подожди минуту и попробуй снова.';
   }
   if (m.includes('failed to fetch')) return 'Нет связи с сервером. Проверь интернет.';
+  if (m.includes('already_owned'))    return 'Эта игра уже есть на твоём аккаунте.';
+  if (m.includes('not_authenticated'))return 'Сначала войди в аккаунт.';
+  if (m.includes('user_not_found'))   return 'Игрок с такой почтой не найден.';
+  if (m.includes('game_not_found'))   return 'Игра не найдена или ещё не вышла.';
+  if (m.includes('price_not_set'))    return 'Для этой игры не задана цена.';
+  if (m.includes('order_not_found'))  return 'Заказ не найден.';
+  if (m.includes('forbidden'))        return 'Нужны права администратора.';
+  if (m.includes('lava_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
+  if (m.includes('lava_error') || m.includes('no_payment_url')) {
+    return 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.';
+  }
+  if (m.includes('payment_failed'))   return 'Не удалось создать счёт. Попробуйте ещё раз.';
   return err?.message || 'Неизвестная ошибка.';
 }

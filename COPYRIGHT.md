@@ -71,19 +71,24 @@
 
 В проектах используются материалы третьих лиц под собственными лицензиями. Лицензия Pixset Studio их не отменяет и не ограничивает.
 
-| Компонент | Лицензия | Где используется |
-|---|---|---|
-| SheetJS (xlsx) | Apache 2.0 | PixTool — таблицы Excel |
-| pdf-lib | MIT | PixTool — работа с PDF |
-| pdf.js | Apache 2.0 | PixTool — просмотр PDF |
-| marked | MIT | PixTool — Markdown |
-| Turndown | MIT | PixTool — HTML в Markdown |
-| qrcode-generator | MIT | PixTool — QR-коды |
-| jsQR | Apache 2.0 | PixTool — чтение QR |
-| Transformers.js | Apache 2.0 | PixTool — нейросети в браузере |
-| Inter, Space Mono | SIL OFL 1.1 | шрифты интерфейса |
+Лицензии MIT и Apache 2.0 требуют **сохранять указание правообладателя**, поэтому ниже приведены не только типы лицензий, но и дословные строки копирайта. Изменять или удалять их нельзя.
 
-Модели нейросетей загружаются с Hugging Face и принадлежат их авторам; условия использования указаны на страницах моделей.
+| Компонент | Правообладатель | Лицензия | Где используется |
+|---|---|---|---|
+| SheetJS (xlsx) 0.18.5 | Copyright (C) 2012-present SheetJS LLC | [Apache 2.0](https://github.com/SheetJS/sheetjs/blob/master/LICENSE) | PixTool — таблицы Excel |
+| pdf-lib 1.17.1 | Copyright (c) 2019 Andrew Dillon<br>включает tslib — Copyright (c) Microsoft Corporation | [MIT](https://github.com/Hopding/pdf-lib/blob/master/LICENSE.md) | PixTool — работа с PDF |
+| pdf.js 3.11.174 | Copyright 2023 Mozilla Foundation | [Apache 2.0](https://github.com/mozilla/pdf.js/blob/master/LICENSE) | PixTool — просмотр PDF |
+| marked 9.1.6 | Copyright (c) 2011-2023, Christopher Jeffrey<br>Copyright (c) 2018+, MarkedJS | [MIT](https://github.com/markedjs/marked/blob/master/LICENSE.md) | PixTool — Markdown |
+| Turndown 7.1.2 | Copyright (c) 2017 Dom Christie | [MIT](https://github.com/mixmark-io/turndown/blob/master/LICENSE) | PixTool — HTML в Markdown |
+| qrcode-generator 1.4.4 | Copyright (c) 2009 Kazuhiko Arase | [MIT](https://github.com/kazuhikoarase/qrcode-generator/blob/master/LICENSE) | PixTool — QR-коды |
+| jsQR 1.4.0 | Copyright (c) Cosmo Wolfe (cozmo)<br><sub>в файле лицензии правообладатель оставлен незаполненным</sub> | [Apache 2.0](https://github.com/cozmo/jsQR/blob/master/LICENSE) | PixTool — чтение QR |
+| Transformers.js 3.7.5 | Copyright 2023 The HuggingFace Inc. team<br>включает ONNX Runtime Web — Copyright (c) Microsoft Corporation | [Apache 2.0](https://github.com/huggingface/transformers.js/blob/main/LICENSE) | PixTool — нейросети в браузере |
+| Inter | Copyright (c) 2016-2020 The Inter Project Authors | [SIL OFL 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt) | шрифт интерфейса |
+| Space Mono | Copyright (c) 2016 The Space Mono Project Authors | [SIL OFL 1.1](https://openfontlicense.org) | шрифт интерфейса |
+
+Полный машинночитаемый перечень поставляется вместе со сборкой PixTool: [THIRD-PARTY-NOTICES.txt](PixTool/THIRD-PARTY-NOTICES.txt), а также доступен на странице [/PixTool/licenses/](https://pixset-studio.github.io/PixTool/licenses/).
+
+Модели нейросетей загружаются с Hugging Face по запросу пользователя, принадлежат их авторам и не входят в состав проектов; условия использования указаны на страницах моделей.
 
 Если в проектах используются чужие материалы, не указанные здесь, сообщите об этом — список будет дополнен либо материал заменён.
 

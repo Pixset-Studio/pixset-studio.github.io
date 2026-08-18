@@ -221,20 +221,22 @@ async function renderProfile(user) {
     $('nick').textContent = 'Игрок';
   }
 
-  // Каталог и лицензии — параллельно, они не зависят друг от друга.
+  // Здесь только купленное. Игра без лицензии — это не «моя игра со статусом
+  // демо», её просто нет в библиотеке; поиграть бесплатно можно и без аккаунта.
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
-  const ownedSlugs = new Set(owned.map((e) => e.game_slug));
+  const byslug = new Map(games.map((g) => [g.slug, g]));
 
-  $('games').innerHTML = games.length
-    ? games.map((g) => `
+  $('games').innerHTML = owned.length
+    ? owned.map((e) => {
+        const g = byslug.get(e.game_slug) || { title: e.game_slug, tagline: '' };
+        return `
         <div class="game">
           <div class="title">${escapeHtml(g.title)}</div>
           <div class="tagline">${escapeHtml(g.tagline || '')}</div>
-          <span class="badge ${ownedSlugs.has(g.slug) ? 'owned' : 'demo'}">
-            ${ownedSlugs.has(g.slug) ? 'Лицензия активна' : 'Демо-версия'}
-          </span>
-        </div>`).join('')
-    : '<p class="empty">Каталог пока пуст</p>';
+          <span class="badge owned">Лицензия активна</span>
+        </div>`;
+      }).join('')
+    : '<p class="empty">Пока пусто — загляни в <a href="../store/" style="color:var(--neon-cyan)">магазин</a></p>';
 
   renderDevices();
 }
@@ -283,6 +285,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 
   hide($('loading'));
   if (session?.user) {
+    if (returnTo()) { location.replace(returnTo()); return; }
     hide($('guest')); show($('profile'));
     renderProfile(session.user);
   } else {
@@ -290,11 +293,22 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
+// Куда вернуть игрока после входа (?next=/store/). Принимаем только пути
+// внутри сайта — с чужим адресом это была бы открытая переадресация.
+function returnTo() {
+  const next = new URLSearchParams(location.search).get('next');
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return null;
+  return next;
+}
+
 // Первичная проверка: onAuthStateChange не срабатывает, если сессии нет.
 const { data: { session } } = await supabase.auth.getSession();
 if (!recoveryMode) {
   hide($('loading'));
-  if (session?.user) { show($('profile')); renderProfile(session.user); }
+  if (session?.user) {
+    if (returnTo()) location.replace(returnTo());
+    else { show($('profile')); renderProfile(session.user); }
+  }
   else { show($('guest')); }
 }
 </script>

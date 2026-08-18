@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Магазин — Pixset Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/auth.css">
+<style>
+  .shop { display: grid; gap: 18px; }
+  .item {
+    border: 1px solid rgba(57,255,20,.18);
+    background: rgba(2,6,12,.6);
+    padding: 26px 24px;
+    position: relative;
+  }
+  .item::before {
+    content: '';
+    position: absolute; top: -1px; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--neon-yellow), var(--neon-cyan), transparent);
+  }
+  .item h3 {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px; font-weight: 900; letter-spacing: 3px;
+    color: #eaf6ff; margin-bottom: 6px;
+  }
+  .item .tag { font-size: 16px; color: rgba(200,230,255,.55); margin-bottom: 18px; }
+  .feats {
+    list-style: none;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; color: rgba(200,230,255,.6);
+    line-height: 2; margin-bottom: 22px;
+  }
+  .feats li::before { content: '▸ '; color: var(--neon-cyan); }
+  .buyrow { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .price {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px; font-weight: 900;
+    color: var(--neon-yellow); text-shadow: var(--glow-yellow-sm);
+  }
+  .buyrow .btn { width: auto; padding: 13px 28px; }
+  .cur {
+    font-family: 'Share Tech Mono', monospace; font-size: 11px;
+    color: rgba(200,230,255,.35); letter-spacing: 1px;
+  }
+  .cur a { color: rgba(200,230,255,.5); }
+  .order {
+    margin-top: 20px; padding: 16px 18px;
+    border-left: 2px solid var(--neon-green);
+    background: rgba(0,255,136,.06);
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    color: #9fd; line-height: 1.9; display: none;
+  }
+  .order.show { display: block; }
+  .order code {
+    color: var(--neon-cyan); font-size: 13px; letter-spacing: 1px;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="scanlines"></div>
+
+<nav class="auth-nav">
+  <a href="../" class="back">← Pixset Studio</a>
+  <a href="../account/" class="back" style="font-size:12px" id="accLink">Аккаунт</a>
+</nav>
+
+<div class="wrap">
+  <h1>Магазин</h1>
+  <p class="sub">Купил один раз — играешь везде, где войдёшь в аккаунт</p>
+
+  <div class="msg" id="msg"></div>
+  <div class="shop" id="shop"><p class="empty">Загрузка каталога…</p></div>
+</div>
+
+<script type="module">
+import {
+  supabase, getGames, getEntitlements, startPayment, getProfile,
+  detectCountry, formatPrice, humanError,
+} from '../assets/pixset-auth.js';
+
+const $ = (id) => document.getElementById(id);
+// Гостю показываем предварительную цену по его часовому поясу, но платит он
+// всегда по валюте аккаунта — она закрепляется при регистрации.
+let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
+let session = null;
+
+function say(text, kind = 'error') {
+  const box = $('msg');
+  box.textContent = text;
+  box.className = `msg show ${kind}`;
+}
+
+// Что игрок получает ЗА ДЕНЬГИ. Бесплатный первый мир сюда не пишем —
+// покупка его не даёт, он и так открыт.
+const FEATURES = {
+  'byte-blaster': [
+    '110 уровней в 10 мирах + секретный мир',
+    'Онлайн-кооператив до 5 игроков',
+    'Бесконечный режим и сложность «хардкор»',
+    'Локальная игра вдвоём',
+    'Windows, Android и браузер — по одной лицензии',
+  ],
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function render() {
+  const games = await getGames();
+  let owned = new Set();
+  if (session) {
+    try { owned = new Set((await getEntitlements()).map((e) => e.game_slug)); }
+    catch { /* права подтянутся после перезахода */ }
+  }
+
+  if (!games.length) {
+    $('shop').innerHTML = '<p class="empty">Пока ничего не продаётся</p>';
+    return;
+  }
+
+  $('shop').innerHTML = games.map((g) => {
+    const price = formatPrice(g, currency);
+    const has = owned.has(g.slug);
+    const feats = (FEATURES[g.slug] || []).map((f) => `<li>${escapeHtml(f)}</li>`).join('');
+    return `
+      <div class="item">
+        <h3>${escapeHtml(g.title)}</h3>
+        <div class="tag">${escapeHtml(g.tagline || '')}</div>
+        <ul class="feats">${feats}</ul>
+        <div class="buyrow">
+          <span class="price">${has ? '' : (price || '—')}</span>
+          ${has
+            ? '<span class="badge owned">Уже куплено</span>'
+            : `<button class="btn" data-buy="${g.slug}">Купить</button>`}
+          ${has ? '' : `<span class="cur">цена вашего региона${session ? '' : ' · уточнится после входа'}</span>`}
+        </div>
+        <div class="order" id="order-${g.slug}"></div>
+      </div>`;
+  }).join('');
+
+  document.querySelectorAll('[data-buy]').forEach((btn) => {
+    btn.onclick = () => buy(btn.dataset.buy, btn);
+  });
+}
+
+async function buy(slug, btn) {
+  if (!session) {
+    // Возвращаем игрока сюда же после входа.
+    location.href = '../account/?next=' + encodeURIComponent(location.pathname);
+    return;
+  }
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Готовим оплату…';
+  try {
+    const { payment_url, order_id } = await startPayment(slug);
+    const box = $('order-' + slug);
+    box.innerHTML =
+      'Заказ <code>' + escapeHtml(order_id) + '</code> создан, открываем оплату.<br>' +
+      'Если страница не открылась — <a href="' + encodeURI(payment_url) +
+      '" style="color:var(--neon-cyan)">перейти к оплате</a>. ' +
+      'После оплаты лицензия появится на аккаунте автоматически.';
+    box.classList.add('show');
+    // Уводим на оплату в этой же вкладке: всплывающие окна часто блокируются,
+    // а вернуться игрок сможет по ссылке из письма или из аккаунта.
+    location.href = payment_url;
+  } catch (err) {
+    say(humanError(err));
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+const { data } = await supabase.auth.getSession();
+session = data.session;
+if (session) {
+  $('accLink').textContent = 'Мой аккаунт';
+  // Валюта аккаунта важнее догадки по часовому поясу.
+  try {
+    const profile = await getProfile(session.user.id);
+    if (profile.currency) currency = profile.currency;
+  } catch { /* цена останется предварительной */ }
+}
+await render();
+</script>
+
+</body>
+</html>

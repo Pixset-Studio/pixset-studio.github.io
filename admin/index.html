@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админка — Pixset Studio</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/auth.css">
+<style>
+  .tblwrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+  }
+  th {
+    text-align: left; padding: 9px 10px;
+    color: rgba(200,230,255,.45); font-weight: normal;
+    text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 1px solid rgba(57,255,20,.2);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px; border-bottom: 1px solid rgba(57,255,20,.07);
+    color: rgba(200,230,255,.75); vertical-align: middle;
+  }
+  tr:hover td { background: rgba(57,255,20,.03); }
+  td .btn { width: auto; padding: 6px 12px; font-size: 10px; }
+  .st { padding: 3px 8px; border: 1px solid; font-size: 10px; text-transform: uppercase; }
+  .st.pending  { color: var(--neon-yellow); border-color: var(--neon-yellow); }
+  .st.paid     { color: var(--neon-green);  border-color: var(--neon-green); }
+  .st.failed,
+  .st.refunded { color: var(--neon-pink);   border-color: var(--neon-pink); }
+  .grantbox { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .grantbox > div { flex: 1; min-width: 190px; }
+  .grantbox input { margin-bottom: 0; }
+  .grantbox .btn { width: auto; padding: 11px 20px; }
+  select {
+    width: 100%; background: rgba(2,6,12,.9);
+    border: 1px solid rgba(57,255,20,.2); color: #cce8ff;
+    font-family: 'Rajdhani', sans-serif; font-size: 16px; padding: 11px 13px;
+  }
+  select:focus { outline: none; border-color: var(--neon-cyan); }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="scanlines"></div>
+
+<nav class="auth-nav">
+  <a href="../" class="back">← Pixset Studio</a>
+</nav>
+
+<div class="wrap" id="loading">
+  <p class="sub">Проверка доступа…</p>
+</div>
+
+<div class="wrap narrow" id="denied" hidden>
+  <div class="panel">
+    <h1>Доступ закрыт</h1>
+    <p class="sub" id="deniedSub">Нужен аккаунт администратора</p>
+    <a class="btn" href="../account/?next=/admin/">Войти</a>
+  </div>
+</div>
+
+<div class="wrap" id="panel" hidden>
+  <div class="panel">
+    <div class="profile-head">
+      <div>
+        <h1 style="margin:0">Админка</h1>
+        <p class="sub" style="margin:0" id="me"></p>
+      </div>
+      <button class="btn ghost" id="reloadBtn">Обновить</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <h2>Выдать лицензию вручную</h2>
+    <div class="grantbox">
+      <div>
+        <label for="grantEmail">Почта игрока</label>
+        <input type="email" id="grantEmail" placeholder="player@mail.com">
+      </div>
+      <div>
+        <label for="grantGame">Игра</label>
+        <select id="grantGame"></select>
+      </div>
+      <button class="btn" id="grantBtn">Выдать</button>
+      <button class="btn ghost" id="revokeBtn">Отозвать</button>
+    </div>
+
+    <h2>Заказы</h2>
+    <div class="tblwrap"><table id="ordersTbl"></table></div>
+
+    <h2>Игроки</h2>
+    <div class="tblwrap"><table id="playersTbl"></table></div>
+
+    <h2>События оплат</h2>
+    <p class="sub" style="margin-bottom:10px">
+      Последние уведомления от платёжной системы. «Не найден» значит, что оплата
+      пришла, но заказ по ней не определился — лицензию нужно выдать вручную.
+    </p>
+    <div class="tblwrap"><table id="eventsTbl"></table></div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  supabase, getProfile, getGames,
+  adminListOrders, adminListPlayers, adminListPaymentEvents,
+  adminGrantLicense, adminRevokeLicense, adminMarkPaid,
+  humanError,
+} from '../assets/pixset-auth.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (el) => { el.hidden = false; };
+const hide = (el) => { el.hidden = true; };
+
+function say(text, kind = 'error') {
+  const box = $('msg');
+  box.textContent = text;
+  box.className = `msg show ${kind}`;
+  if (kind === 'ok') setTimeout(() => { box.className = 'msg'; }, 4000);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+const money = (amount, currency) =>
+  currency === 'USD' ? '$' + (amount / 100).toFixed(2)
+                     : (amount / 100).toLocaleString('ru-RU') + ' ₽';
+
+const day = (iso) => new Date(iso).toLocaleDateString('ru-RU');
+
+async function loadOrders() {
+  const rows = await adminListOrders();
+  $('ordersTbl').innerHTML = rows.length
+    ? '<tr><th>Дата</th><th>Игрок</th><th>Игра</th><th>Сумма</th><th>Статус</th><th></th></tr>' +
+      rows.map((o) => `
+        <tr>
+          <td>${day(o.created_at)}</td>
+          <td>${escapeHtml(o.email)}</td>
+          <td>${escapeHtml(o.game_slug)}</td>
+          <td>${money(o.amount, o.currency)}</td>
+          <td><span class="st ${o.status}">${o.status}</span></td>
+          <td>${o.status === 'pending'
+            ? `<button class="btn" data-paid="${o.id}">Подтвердить оплату</button>`
+            : ''}</td>
+        </tr>`).join('')
+    : '<tr><td class="empty">Заказов пока нет</td></tr>';
+
+  $('ordersTbl').querySelectorAll('[data-paid]').forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await adminMarkPaid(btn.dataset.paid);
+        say('Оплата подтверждена, лицензия выдана.', 'ok');
+        await refresh();
+      } catch (err) {
+        say(humanError(err));
+        btn.disabled = false;
+      }
+    };
+  });
+}
+
+async function loadPlayers() {
+  const rows = await adminListPlayers();
+  $('playersTbl').innerHTML = rows.length
+    ? '<tr><th>Регистрация</th><th>Ник</th><th>Почта</th><th>Лицензии</th></tr>' +
+      rows.map((p) => `
+        <tr>
+          <td>${day(p.created_at)}</td>
+          <td>${escapeHtml(p.nickname)}${p.is_admin ? ' <span class="badge owned">админ</span>' : ''}</td>
+          <td>${escapeHtml(p.email)}</td>
+          <td>${p.games && p.games.length
+            ? p.games.map((g) => `<span class="badge owned">${escapeHtml(g)}</span>`).join(' ')
+            : '<span class="badge soon">нет</span>'}</td>
+        </tr>`).join('')
+    : '<tr><td class="empty">Игроков пока нет</td></tr>';
+}
+
+async function loadEvents() {
+  const rows = await adminListPaymentEvents();
+  $('eventsTbl').innerHTML = rows.length
+    ? '<tr><th>Когда</th><th>Событие</th><th>Заказ</th><th>Данные</th></tr>' +
+      rows.map((e) => `
+        <tr>
+          <td>${new Date(e.received_at).toLocaleString('ru-RU')}</td>
+          <td>${escapeHtml(e.event_type || '—')}</td>
+          <td>${e.matched
+            ? `<span class="badge owned">${escapeHtml(String(e.order_id).slice(0, 8))}</span>`
+            : '<span class="badge demo">не найден</span>'}</td>
+          <td><details><summary style="cursor:pointer">показать</summary>
+            <pre style="white-space:pre-wrap;font-size:11px;margin-top:6px">${
+              escapeHtml(JSON.stringify(e.payload, null, 1))}</pre></details></td>
+        </tr>`).join('')
+    : '<tr><td class="empty">Оплат пока не было</td></tr>';
+}
+
+async function refresh() {
+  await Promise.all([loadOrders(), loadPlayers(), loadEvents()]);
+}
+
+async function fillGames() {
+  // Каталог для выпадающего списка. Берём все игры, включая неопубликованные:
+  // лицензию на ещё не вышедшую игру выдать нужно уметь (пресса, тестеры).
+  const { data } = await supabase.from('games').select('slug, title');
+  const games = data && data.length ? data : await getGames();
+  $('grantGame').innerHTML = games
+    .map((g) => `<option value="${escapeHtml(g.slug)}">${escapeHtml(g.title)}</option>`)
+    .join('');
+}
+
+async function withGrant(fn, okText) {
+  const email = $('grantEmail').value.trim();
+  const game = $('grantGame').value;
+  if (!email) { say('Укажи почту игрока.'); return; }
+  try {
+    await fn(email, game);
+    say(okText, 'ok');
+    $('grantEmail').value = '';
+    await refresh();
+  } catch (err) {
+    say(humanError(err));
+  }
+}
+
+$('grantBtn').onclick  = () => withGrant(adminGrantLicense,  'Лицензия выдана.');
+$('revokeBtn').onclick = () => withGrant(adminRevokeLicense, 'Лицензия отозвана.');
+$('reloadBtn').onclick = () => refresh();
+
+// ── Проверка доступа ────────────────────────────────────────────────────
+const { data: { session } } = await supabase.auth.getSession();
+hide($('loading'));
+
+if (!session) {
+  show($('denied'));
+} else {
+  let profile = null;
+  try { profile = await getProfile(session.user.id); } catch { /* ниже */ }
+
+  if (!profile || !profile.is_admin) {
+    $('deniedSub').textContent = 'Этот аккаунт не администратор';
+    show($('denied'));
+  } else {
+    show($('panel'));
+    $('me').textContent = profile.nickname + ' · ' + session.user.email;
+    await fillGames();
+    await refresh();
+  }
+}
+</script>
+
+</body>
+</html>
