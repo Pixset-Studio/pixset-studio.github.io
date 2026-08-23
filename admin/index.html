@@ -5,135 +5,132 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Админка — Pixset Studio</title>
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/auth.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
 <style>
-  .tblwrap { overflow-x: auto; }
-  table {
-    width: 100%; border-collapse: collapse;
-    font-family: 'Share Tech Mono', monospace; font-size: 12px;
-  }
-  th {
-    text-align: left; padding: 9px 10px;
-    color: rgba(231,225,210,.45); font-weight: normal;
-    text-transform: uppercase; letter-spacing: 1px;
-    border-bottom: 1px solid rgba(255,212,0,.2);
-    white-space: nowrap;
-  }
-  td {
-    padding: 10px; border-bottom: 1px solid rgba(255,212,0,.07);
-    color: rgba(231,225,210,.75); vertical-align: middle;
-  }
-  tr:hover td { background: rgba(255,212,0,.03); }
-  td .btn { width: auto; padding: 6px 12px; font-size: 10px; }
-  .st { padding: 3px 8px; border: 1px solid; font-size: 10px; text-transform: uppercase; }
-  .st.pending  { color: var(--neon-yellow); border-color: var(--neon-yellow); }
-  .st.paid     { color: var(--neon-green);  border-color: var(--neon-green); }
-  .st.failed,
-  .st.refunded { color: var(--neon-pink);   border-color: var(--neon-pink); }
-  .grantbox { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .grantbox { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
   .grantbox > div { flex: 1; min-width: 190px; }
-  .grantbox input { margin-bottom: 0; }
-  .grantbox .btn { width: auto; padding: 11px 20px; }
-  select {
-    width: 100%; background: rgba(8,8,8,.9);
-    border: 1px solid rgba(255,212,0,.2); color: #e7e1d2;
-    font-family: 'Rajdhani', sans-serif; font-size: 16px; padding: 11px 13px;
-  }
-  select:focus { outline: none; border-color: var(--neon-cyan); }
+  .grantbox .field { margin-bottom: 0; }
+  .grantbox .btn { width: auto; padding: 12px 20px; }
+  .st { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+        padding: 3px 8px; border: 1px solid; border-radius: var(--radius); }
+  .st.paid { color: var(--y); border-color: var(--y); }
+  .st.pending { color: var(--y-warm); border-color: var(--y-warm); }
+  .st.failed, .st.refunded { color: var(--text-dim); border-color: var(--line-2); }
 </style>
+<script>
+(function(){try{var t=localStorage.getItem('pixsetTheme');
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial')t='industrial';
+document.documentElement.setAttribute('data-theme',t);}catch(e){
+document.documentElement.setAttribute('data-theme','industrial');}})();
+</script>
 </head>
 <body>
 
-<div class="grid-bg"></div>
-<div class="scanlines"></div>
+<div class="hazard"></div>
 
-<nav class="auth-nav">
-  <a href="../" class="back">← Pixset Studio</a>
-</nav>
-
-<div class="wrap" id="loading">
-  <p class="sub">Проверка доступа…</p>
-</div>
-
-<div class="wrap narrow" id="denied" hidden>
-  <div class="panel">
-    <h1>Доступ закрыт</h1>
-    <p class="sub" id="deniedSub">Нужен аккаунт администратора</p>
-    <a class="btn" href="../account/?next=/admin/">Войти</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <nav class="main">
+      <a href="/store">Магазин</a>
+      <a href="/account">Аккаунт</a>
+      <a href="/admin/" aria-current="page">Админка</a>
+    </nav>
   </div>
-</div>
+</header>
 
-<div class="wrap" id="panel" hidden>
-  <div class="panel">
-    <div class="profile-head">
-      <div>
-        <h1 style="margin:0">Админка</h1>
-        <p class="sub" style="margin:0" id="me"></p>
+<main>
+<section style="border-top:none">
+  <div class="wrap">
+
+    <div id="loading"><p class="empty">Проверяем доступ…</p></div>
+
+    <div id="denied" hidden>
+      <h2 style="text-align:center">Доступ закрыт</h2>
+      <div class="panel">
+        <p class="dim" id="deniedSub" style="text-align:center">Нужен аккаунт администратора</p>
+        <a class="btn solid" href="/account/?next=/admin/">Войти</a>
       </div>
-      <button class="btn ghost" id="reloadBtn">Обновить</button>
     </div>
 
-    <div class="msg" id="msg"></div>
+    <div id="panel" hidden>
+      <p class="kicker">Управление</p>
+      <h2>Админка</h2>
+      <p class="dim mono" id="me" style="margin-top:-8px"></p>
 
-    <h2>Выдать лицензию вручную</h2>
-    <div class="grantbox">
-      <div>
-        <label for="grantEmail">Почта игрока</label>
-        <input type="email" id="grantEmail" placeholder="player@mail.com">
+      <div class="msg" id="msg"></div>
+
+      <h3 style="margin-top:26px">Выдать лицензию вручную</h3>
+      <div class="grantbox">
+        <div class="field">
+          <label for="grantEmail">Почта игрока</label>
+          <input type="email" id="grantEmail" placeholder="player@mail.com">
+        </div>
+        <div class="field">
+          <label for="grantGame">Игра</label>
+          <select id="grantGame"></select>
+        </div>
+        <button class="btn solid" id="grantBtn">Выдать</button>
+        <button class="btn quiet" id="revokeBtn">Отозвать</button>
       </div>
-      <div>
-        <label for="grantGame">Игра</label>
-        <select id="grantGame"></select>
-      </div>
-      <button class="btn" id="grantBtn">Выдать</button>
-      <button class="btn ghost" id="revokeBtn">Отозвать</button>
+
+      <h3 style="margin-top:32px">Заказы</h3>
+      <div class="tblwrap"><table id="ordersTbl"></table></div>
+
+      <h3 style="margin-top:32px">Игроки</h3>
+      <div class="tblwrap"><table id="playersTbl"></table></div>
+
+      <h3 style="margin-top:32px">События оплат</h3>
+      <p class="dim" style="font-size:14px">
+        Уведомления от платёжной системы. «Не найден» значит, что оплата пришла,
+        но заказ по ней не определился — лицензию нужно выдать вручную.
+      </p>
+      <div class="tblwrap"><table id="eventsTbl"></table></div>
+
+      <p style="margin-top:26px">
+        <button class="btn quiet" id="reloadBtn" style="width:auto">Обновить данные</button>
+      </p>
     </div>
 
-    <h2>Заказы</h2>
-    <div class="tblwrap"><table id="ordersTbl"></table></div>
-
-    <h2>Игроки</h2>
-    <div class="tblwrap"><table id="playersTbl"></table></div>
-
-    <h2>События оплат</h2>
-    <p class="sub" style="margin-bottom:10px">
-      Последние уведомления от платёжной системы. «Не найден» значит, что оплата
-      пришла, но заказ по ней не определился — лицензию нужно выдать вручную.
-    </p>
-    <div class="tblwrap"><table id="eventsTbl"></table></div>
   </div>
-</div>
+</section>
+</main>
 
+<footer class="site">
+  <div class="wrap"><div class="row"><div>© 2024–2026 Pixset Studio</div></div></div>
+</footer>
+
+<script src="/assets/studio.js"></script>
 <script type="module">
 import {
   supabase, getProfile, getGames,
   adminListOrders, adminListPlayers, adminListPaymentEvents,
   adminGrantLicense, adminRevokeLicense, adminMarkPaid,
   humanError,
-} from '../assets/pixset-auth.js';
+} from '/assets/pixset-auth.js';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
 const hide = (el) => { el.hidden = true; };
 
-function say(text, kind = 'error') {
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function say(text, kind = 'err') {
   const box = $('msg');
   box.textContent = text;
   box.className = `msg show ${kind}`;
   if (kind === 'ok') setTimeout(() => { box.className = 'msg'; }, 4000);
 }
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 const money = (amount, currency) =>
   currency === 'USD' ? '$' + (amount / 100).toFixed(2)
                      : (amount / 100).toLocaleString('ru-RU') + ' ₽';
-
 const day = (iso) => new Date(iso).toLocaleDateString('ru-RU');
 
 async function loadOrders() {
@@ -143,13 +140,12 @@ async function loadOrders() {
       rows.map((o) => `
         <tr>
           <td>${day(o.created_at)}</td>
-          <td>${escapeHtml(o.email)}</td>
-          <td>${escapeHtml(o.game_slug)}</td>
+          <td>${esc(o.email)}</td>
+          <td>${esc(o.game_slug)}</td>
           <td>${money(o.amount, o.currency)}</td>
           <td><span class="st ${o.status}">${o.status}</span></td>
           <td>${o.status === 'pending'
-            ? `<button class="btn" data-paid="${o.id}">Подтвердить оплату</button>`
-            : ''}</td>
+            ? `<button class="btn solid" data-paid="${o.id}">Подтвердить оплату</button>` : ''}</td>
         </tr>`).join('')
     : '<tr><td class="empty">Заказов пока нет</td></tr>';
 
@@ -160,10 +156,7 @@ async function loadOrders() {
         await adminMarkPaid(btn.dataset.paid);
         say('Оплата подтверждена, лицензия выдана.', 'ok');
         await refresh();
-      } catch (err) {
-        say(humanError(err));
-        btn.disabled = false;
-      }
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
     };
   });
 }
@@ -175,11 +168,11 @@ async function loadPlayers() {
       rows.map((p) => `
         <tr>
           <td>${day(p.created_at)}</td>
-          <td>${escapeHtml(p.nickname)}${p.is_admin ? ' <span class="badge owned">админ</span>' : ''}</td>
-          <td>${escapeHtml(p.email)}</td>
+          <td>${esc(p.nickname)}${p.is_admin ? ' <span class="badge">админ</span>' : ''}</td>
+          <td>${esc(p.email)}</td>
           <td>${p.games && p.games.length
-            ? p.games.map((g) => `<span class="badge owned">${escapeHtml(g)}</span>`).join(' ')
-            : '<span class="badge soon">нет</span>'}</td>
+            ? p.games.map((g) => `<span class="badge">${esc(g)}</span>`).join(' ')
+            : '<span class="badge mute">нет</span>'}</td>
         </tr>`).join('')
     : '<tr><td class="empty">Игроков пока нет</td></tr>';
 }
@@ -191,13 +184,13 @@ async function loadEvents() {
       rows.map((e) => `
         <tr>
           <td>${new Date(e.received_at).toLocaleString('ru-RU')}</td>
-          <td>${escapeHtml(e.event_type || '—')}</td>
+          <td>${esc(e.event_type || '—')}</td>
           <td>${e.matched
-            ? `<span class="badge owned">${escapeHtml(String(e.order_id).slice(0, 8))}</span>`
-            : '<span class="badge demo">не найден</span>'}</td>
+            ? `<span class="badge">${esc(String(e.order_id).slice(0, 8))}</span>`
+            : '<span class="badge mute">не найден</span>'}</td>
           <td><details><summary style="cursor:pointer">показать</summary>
-            <pre style="white-space:pre-wrap;font-size:11px;margin-top:6px">${
-              escapeHtml(JSON.stringify(e.payload, null, 1))}</pre></details></td>
+            <pre style="white-space:pre-wrap;font-size:12px;margin-top:6px">${
+              esc(JSON.stringify(e.payload, null, 1))}</pre></details></td>
         </tr>`).join('')
     : '<tr><td class="empty">Оплат пока не было</td></tr>';
 }
@@ -207,34 +200,30 @@ async function refresh() {
 }
 
 async function fillGames() {
-  // Каталог для выпадающего списка. Берём все игры, включая неопубликованные:
-  // лицензию на ещё не вышедшую игру выдать нужно уметь (пресса, тестеры).
+  // Берём все игры, включая неопубликованные: лицензию на ещё не вышедшую
+  // игру выдать нужно уметь (пресса, тестеры).
   const { data } = await supabase.from('games').select('slug, title');
   const games = data && data.length ? data : await getGames();
   $('grantGame').innerHTML = games
-    .map((g) => `<option value="${escapeHtml(g.slug)}">${escapeHtml(g.title)}</option>`)
-    .join('');
+    .map((g) => `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
 }
 
 async function withGrant(fn, okText) {
   const email = $('grantEmail').value.trim();
   const game = $('grantGame').value;
-  if (!email) { say('Укажи почту игрока.'); return; }
+  if (!email) { say('Укажите почту игрока.'); return; }
   try {
     await fn(email, game);
     say(okText, 'ok');
     $('grantEmail').value = '';
     await refresh();
-  } catch (err) {
-    say(humanError(err));
-  }
+  } catch (err) { say(humanError(err)); }
 }
 
 $('grantBtn').onclick  = () => withGrant(adminGrantLicense,  'Лицензия выдана.');
 $('revokeBtn').onclick = () => withGrant(adminRevokeLicense, 'Лицензия отозвана.');
 $('reloadBtn').onclick = () => refresh();
 
-// ── Проверка доступа ────────────────────────────────────────────────────
 const { data: { session } } = await supabase.auth.getSession();
 hide($('loading'));
 

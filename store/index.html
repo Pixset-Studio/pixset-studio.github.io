@@ -4,119 +4,173 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Магазин — Pixset Studio</title>
+<meta name="description" content="Магазин Pixset Studio: купить игры студии. Одна покупка — лицензия на все устройства навсегда.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/auth.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
 <style>
-  .shop { display: grid; gap: 18px; }
-  .item {
-    border: 1px solid rgba(255,212,0,.18);
-    background: rgba(8,8,8,.6);
-    padding: 26px 24px;
-    position: relative;
+  /* Витрина: одна крупная карточка-герой и сетка остальных игр. */
+  .shelf { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .shelf { grid-template-columns: 1fr; } }
+
+  .tile {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 26px 24px;
+    display: flex; flex-direction: column; gap: 12px;
   }
-  .item::before {
-    content: '';
-    position: absolute; top: -1px; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--neon-yellow), var(--neon-cyan), transparent);
+  .tile.hero { border-color: var(--line-2); min-height: 300px; justify-content: flex-end; }
+  .tile.soon { opacity: .75; }
+  .tile h3 { margin: 0; }
+  .tile .title {
+    font-family: var(--font-head); font-weight: var(--head-weight);
+    font-size: clamp(22px, 3vw, 34px); letter-spacing: var(--head-spacing);
+    text-transform: var(--head-transform); color: #fff;
   }
-  .item h3 {
-    font-family: 'Orbitron', monospace;
-    font-size: 22px; font-weight: 900; letter-spacing: 3px;
-    color: #f5f1e6; margin-bottom: 6px;
+  .tile .feats {
+    list-style: none; font-family: var(--font-mono); font-size: 13px;
+    color: var(--text-dim); line-height: 1.9;
   }
-  .item .tag { font-size: 16px; color: rgba(231,225,210,.55); margin-bottom: 18px; }
-  .feats {
-    list-style: none;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 12px; color: rgba(231,225,210,.6);
-    line-height: 2; margin-bottom: 22px;
-  }
-  .feats li::before { content: '▸ '; color: var(--neon-cyan); }
-  .buyrow { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .tile .feats li::before { content: '▸ '; color: var(--y); }
+  .buyline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
   .price {
-    font-family: 'Orbitron', monospace;
-    font-size: 26px; font-weight: 900;
-    color: var(--neon-yellow); text-shadow: var(--glow-yellow-sm);
+    font-family: var(--font-head); font-weight: var(--head-weight);
+    font-size: clamp(24px, 3.4vw, 34px); color: var(--y);
   }
-  .buyrow .btn { width: auto; padding: 13px 28px; }
-  .cur {
-    font-family: 'Share Tech Mono', monospace; font-size: 11px;
-    color: rgba(231,225,210,.35); letter-spacing: 1px;
+  .cover {
+    aspect-ratio: 16 / 9; border-radius: var(--radius); margin-bottom: 6px;
+    background: var(--bg-2); border: 1px solid var(--line);
+    display: grid; place-items: center; overflow: hidden;
   }
-  .cur a { color: rgba(231,225,210,.5); }
-  .order {
-    margin-top: 20px; padding: 16px 18px;
-    border-left: 2px solid var(--neon-green);
-    background: rgba(255,224,102,.06);
-    font-family: 'Share Tech Mono', monospace; font-size: 12px;
-    color: #f0e6c0; line-height: 1.9; display: none;
-  }
-  .order.show { display: block; }
-  .order code {
-    color: var(--neon-cyan); font-size: 13px; letter-spacing: 1px;
-    word-break: break-all;
-  }
+  .cover img { width: 100%; height: 100%; object-fit: cover; }
 </style>
+<script>
+(function(){try{var t=localStorage.getItem('pixsetTheme');
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial')t='industrial';
+document.documentElement.setAttribute('data-theme',t);}catch(e){
+document.documentElement.setAttribute('data-theme','industrial');}})();
+</script>
 </head>
 <body>
 
-<div class="grid-bg"></div>
-<div class="scanlines"></div>
+<div class="hazard"></div>
 
-<nav class="auth-nav">
-  <a href="../" class="back">← Pixset Studio</a>
-  <a href="../account/" class="back" style="font-size:12px" id="accLink">Аккаунт</a>
-</nav>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+    <nav class="main">
+      <a href="/">Главная</a>
+      <a href="/games">Игры</a>
+      <a href="/news">Новости</a>
+      <a href="/wikipedia">Вики</a>
+      <a href="/store" class="cta" aria-current="page">Магазин</a>
+      <a href="/account"><span data-account-label>Аккаунт</span></a>
+    </nav>
+  </div>
+</header>
 
-<div class="wrap">
-  <h1>Магазин</h1>
-  <p class="sub">Купил один раз — играешь везде, где войдёшь в аккаунт</p>
-
-  <div class="msg" id="msg"></div>
-  <div class="shop" id="shop"><p class="empty">Загрузка каталога…</p></div>
+<div id="mobileNav">
+  <a href="/">Главная</a>
+  <a href="/games">Наши игры</a>
+  <a href="/news">Новости</a>
+  <a href="/wikipedia">Вики</a>
+  <a href="/store">Магазин</a>
+  <a href="/account"><span data-account-label>Аккаунт</span></a>
 </div>
 
+<main>
+
+<div class="hero wrap" style="padding-bottom:26px">
+  <p class="kicker">Магазин студии</p>
+  <h1>Наши игры</h1>
+  <div class="rule"></div>
+  <p class="lead">Покупка привязана к аккаунту: игра открывается на всех устройствах, где вы вошли. Навсегда, без подписок.</p>
+</div>
+
+<section style="border-top:none;padding-top:0">
+  <div class="wrap">
+    <div class="msg" id="msg"></div>
+    <div class="shelf" id="shelf">
+      <div class="tile hero"><p class="empty">Загружаем каталог…</p></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="row">
+      <div>© 2024–2026 Pixset Studio</div>
+      <div>
+        <a href="/">Главная</a> ·
+        <a href="/account">Аккаунт</a> ·
+        <a href="/byte-blaster/">Byte Blaster</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/studio.js"></script>
 <script type="module">
 import {
-  supabase, getGames, getEntitlements, startPayment, getProfile,
+  supabase, getGames, getEntitlements, getProfile,
   detectCountry, formatPrice, humanError,
-} from '../assets/pixset-auth.js';
+} from '/assets/pixset-auth.js';
 
 const $ = (id) => document.getElementById(id);
-// Гостю показываем предварительную цену по его часовому поясу, но платит он
-// всегда по валюте аккаунта — она закрепляется при регистрации.
-let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
-let session = null;
 
-function say(text, kind = 'error') {
-  const box = $('msg');
-  box.textContent = text;
-  box.className = `msg show ${kind}`;
-}
-
-// У игры может быть свой сайт с собственной страницей покупки — тогда «Купить»
-// ведёт туда: там и подробности про игру, и оформление в её стиле. Оплату всё
-// равно проводит один и тот же сервер, а лицензия ложится на тот же аккаунт.
-const OWN_PAGES = {
-  'byte-blaster': '/byte-blaster/buy/',
-};
-
-// Что игрок получает ЗА ДЕНЬГИ. Бесплатный первый мир сюда не пишем —
-// покупка его не даёт, он и так открыт.
+// У игры может быть свой сайт со своей страницей покупки — тогда «Купить» ведёт
+// туда: там подробности и оформление в стиле игры. Оплату всё равно проводит
+// один и тот же сервер, лицензия ложится на тот же аккаунт.
+const OWN_PAGES = { 'byte-blaster': '/byte-blaster/buy/' };
+const COVERS = { 'byte-blaster': '/byte-blaster/assets/logo-512.png' };
 const FEATURES = {
   'byte-blaster': [
-    '110 уровней в 10 мирах + секретный мир',
+    '110 уровней в 11 мирах',
     'Онлайн-кооператив до 5 игроков',
-    'Бесконечный режим и сложность «хардкор»',
-    'Локальная игра вдвоём',
-    'Windows, Android и браузер — по одной лицензии',
+    'Бесконечный режим и хардкор',
+    'Windows, Android и браузер',
   ],
 };
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
+let session = null;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function say(text, kind = 'err') {
+  $('msg').textContent = text;
+  $('msg').className = `msg show ${kind}`;
+}
+
+function tile(game, owned, isHero) {
+  const price = formatPrice(game, currency);
+  const feats = (FEATURES[game.slug] || []).map((f) => `<li>${esc(f)}</li>`).join('');
+  const cover = COVERS[game.slug];
+  const href = OWN_PAGES[game.slug] || '#';
+
+  return `
+    <div class="tile ${isHero ? 'hero' : ''}">
+      ${cover
+        ? `<div class="cover"><img src="${esc(cover)}" alt=""
+             onerror="this.closest('.cover').remove()"></div>`
+        : ''}
+      <div class="title">${esc(game.title)}</div>
+      <p class="dim" style="margin:0">${esc(game.tagline || '')}</p>
+      ${isHero && feats ? `<ul class="feats">${feats}</ul>` : ''}
+      <div class="buyline">
+        ${owned
+          ? `<span class="badge solid">Куплено</span>
+             <a class="btn quiet" href="/byte-blaster/game/full/">Играть</a>`
+          : `<span class="price">${price || '—'}</span>
+             <a class="btn solid" href="${esc(href)}">Купить</a>`}
+      </div>
+    </div>`;
 }
 
 async function render() {
@@ -128,76 +182,34 @@ async function render() {
   }
 
   if (!games.length) {
-    $('shop').innerHTML = '<p class="empty">Пока ничего не продаётся</p>';
+    $('shelf').innerHTML = '<div class="tile hero"><p class="empty">Пока ничего не продаётся</p></div>';
     return;
   }
 
-  $('shop').innerHTML = games.map((g) => {
-    const price = formatPrice(g, currency);
-    const has = owned.has(g.slug);
-    const feats = (FEATURES[g.slug] || []).map((f) => `<li>${escapeHtml(f)}</li>`).join('');
-    return `
-      <div class="item">
-        <h3>${escapeHtml(g.title)}</h3>
-        <div class="tag">${escapeHtml(g.tagline || '')}</div>
-        <ul class="feats">${feats}</ul>
-        <div class="buyrow">
-          <span class="price">${has ? '' : (price || '—')}</span>
-          ${has
-            ? '<span class="badge owned">Уже куплено</span>'
-            : (OWN_PAGES[g.slug]
-                ? `<a class="btn" href="${OWN_PAGES[g.slug]}">Купить</a>`
-                : `<button class="btn" data-buy="${g.slug}">Купить</button>`)}
-          ${has ? '' : `<span class="cur">цена вашего региона${session ? '' : ' · уточнится после входа'}</span>`}
-        </div>
-        <div class="order" id="order-${g.slug}"></div>
-      </div>`;
-  }).join('');
-
-  document.querySelectorAll('[data-buy]').forEach((btn) => {
-    btn.onclick = () => buy(btn.dataset.buy, btn);
-  });
-}
-
-async function buy(slug, btn) {
-  if (!session) {
-    // Возвращаем игрока сюда же после входа.
-    location.href = '../account/?next=' + encodeURIComponent(location.pathname);
-    return;
-  }
-  btn.disabled = true;
-  const label = btn.textContent;
-  btn.textContent = 'Готовим оплату…';
-  try {
-    const { payment_url, order_id } = await startPayment(slug);
-    const box = $('order-' + slug);
-    box.innerHTML =
-      'Заказ <code>' + escapeHtml(order_id) + '</code> создан, открываем оплату.<br>' +
-      'Если страница не открылась — <a href="' + encodeURI(payment_url) +
-      '" style="color:var(--neon-cyan)">перейти к оплате</a>. ' +
-      'После оплаты лицензия появится на аккаунте автоматически.';
-    box.classList.add('show');
-    // Уводим на оплату в этой же вкладке: всплывающие окна часто блокируются,
-    // а вернуться игрок сможет по ссылке из письма или из аккаунта.
-    location.href = payment_url;
-  } catch (err) {
-    say(humanError(err));
-    btn.disabled = false;
-    btn.textContent = label;
-  }
+  const [first, ...rest] = games;
+  $('shelf').innerHTML =
+    tile(first, owned.has(first.slug), true) +
+    `<div style="display:grid;gap:16px;align-content:start">
+      ${rest.map((g) => tile(g, owned.has(g.slug), false)).join('')}
+      <div class="tile soon">
+        <div class="title" style="font-size:20px">Скоро</div>
+        <p class="dim" style="margin:0">Hearthhold и другие проекты студии появятся здесь.</p>
+        <span class="badge mute">В разработке</span>
+      </div>
+    </div>`;
 }
 
 const { data } = await supabase.auth.getSession();
 session = data.session;
 if (session) {
-  $('accLink').textContent = 'Мой аккаунт';
-  // Валюта аккаунта важнее догадки по часовому поясу.
   try {
     const profile = await getProfile(session.user.id);
     if (profile.currency) currency = profile.currency;
   } catch { /* цена останется предварительной */ }
 }
-await render();
+
+try { await render(); }
+catch (err) { say(humanError(err)); }
 </script>
 
 </body>

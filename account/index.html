@@ -5,311 +5,348 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Аккаунт — Pixset Studio</title>
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/auth.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
+<script>
+(function(){try{var t=localStorage.getItem('pixsetTheme');
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial')t='industrial';
+document.documentElement.setAttribute('data-theme',t);}catch(e){
+document.documentElement.setAttribute('data-theme','industrial');}})();
+</script>
 </head>
 <body>
 
-<div class="grid-bg"></div>
-<div class="scanlines"></div>
+<div class="hazard"></div>
 
-<nav class="auth-nav">
-  <a href="../" class="back">← Pixset Studio</a>
-</nav>
-
-<!-- Пока идёт проверка сессии, не мигаем формой входа -->
-<div class="wrap narrow" id="loading">
-  <p class="sub">Проверка сессии…</p>
-</div>
-
-<!-- ── ГОСТЬ ─────────────────────────────────────────────────────────── -->
-<div class="wrap narrow" id="guest" hidden>
-  <div class="panel">
-    <h1>Аккаунт</h1>
-    <p class="sub">Одна учётная запись — все игры студии</p>
-
-    <div class="tabs">
-      <button id="tabLogin" class="active">Вход</button>
-      <button id="tabRegister">Регистрация</button>
-    </div>
-
-    <div class="msg" id="guestMsg"></div>
-
-    <!-- Вход -->
-    <form id="formLogin">
-      <label for="loginEmail">Почта</label>
-      <input type="email" id="loginEmail" autocomplete="email" required>
-
-      <label for="loginPassword">Пароль</label>
-      <input type="password" id="loginPassword" autocomplete="current-password" required>
-
-      <button type="submit" class="btn">Войти</button>
-      <div class="link-row"><a href="#" id="forgotLink">Забыл пароль</a></div>
-    </form>
-
-    <!-- Регистрация -->
-    <form id="formRegister" hidden>
-      <label for="regNickname">Ник</label>
-      <input type="text" id="regNickname" autocomplete="username" required
-             minlength="3" maxlength="20" placeholder="3–20 символов, латиница">
-
-      <label for="regEmail">Почта</label>
-      <input type="email" id="regEmail" autocomplete="email" required>
-
-      <label for="regPassword">Пароль</label>
-      <input type="password" id="regPassword" autocomplete="new-password" required minlength="6">
-
-      <button type="submit" class="btn">Создать аккаунт</button>
-    </form>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+    <nav class="main">
+      <a href="/">Главная</a>
+      <a href="/games">Игры</a>
+      <a href="/store">Магазин</a>
+      <a href="/account" aria-current="page"><span data-account-label>Аккаунт</span></a>
+    </nav>
   </div>
+</header>
+
+<div id="mobileNav">
+  <a href="/">Главная</a>
+  <a href="/games">Наши игры</a>
+  <a href="/store">Магазин</a>
+  <a href="/account"><span data-account-label>Аккаунт</span></a>
 </div>
 
-<!-- ── СБРОС ПАРОЛЯ ──────────────────────────────────────────────────── -->
-<div class="wrap narrow" id="recovery" hidden>
-  <div class="panel">
-    <h1>Новый пароль</h1>
-    <p class="sub">Придумай пароль для входа</p>
-    <div class="msg" id="recoveryMsg"></div>
-    <form id="formRecovery">
-      <label for="newPassword">Пароль</label>
-      <input type="password" id="newPassword" autocomplete="new-password" required minlength="6">
-      <button type="submit" class="btn">Сохранить</button>
-    </form>
-  </div>
-</div>
+<main>
+<section style="border-top:none">
+  <div class="wrap">
 
-<!-- ── ПРОФИЛЬ ───────────────────────────────────────────────────────── -->
-<div class="wrap" id="profile" hidden>
-  <div class="panel">
-    <div class="profile-head">
-      <div class="who">
-        <div class="avatar" id="avatar">?</div>
-        <div>
-          <div class="nick" id="nick">…</div>
-          <div class="email" id="email"></div>
+    <div id="loading"><p class="empty">Проверяем сессию…</p></div>
+
+    <!-- ── Гость ─────────────────────────────────────────────────────── -->
+    <div id="guest" hidden>
+      <p class="kicker" style="text-align:center">Аккаунт студии</p>
+      <h2 style="text-align:center">Вход</h2>
+      <p class="dim" style="text-align:center;max-width:520px;margin:0 auto 26px">
+        Один аккаунт на все игры Pixset Studio. Купленная игра открывается везде, где вы вошли.
+      </p>
+
+      <div class="panel">
+        <div class="tabs">
+          <button id="tabLogin" class="on">Вход</button>
+          <button id="tabReg">Регистрация</button>
         </div>
+
+        <div class="msg" id="guestMsg"></div>
+
+        <form id="formLogin">
+          <div class="field">
+            <label for="loginEmail">Почта</label>
+            <input type="email" id="loginEmail" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="loginPass">Пароль</label>
+            <input type="password" id="loginPass" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn solid">Войти</button>
+          <p style="text-align:center;margin:14px 0 0;font-size:14px">
+            <a href="#" id="forgot">Забыли пароль?</a>
+          </p>
+        </form>
+
+        <form id="formReg" hidden>
+          <div class="field">
+            <label for="regNick">Ник</label>
+            <input type="text" id="regNick" autocomplete="username" required
+                   minlength="3" maxlength="20" placeholder="3-20, латиница, цифры, _ и -">
+          </div>
+          <div class="field">
+            <label for="regEmail">Почта</label>
+            <input type="email" id="regEmail" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="regPass">Пароль</label>
+            <input type="password" id="regPass" autocomplete="new-password" required minlength="6">
+          </div>
+          <button type="submit" class="btn solid">Создать аккаунт</button>
+        </form>
       </div>
-      <button class="btn ghost" id="logoutBtn">Выйти</button>
     </div>
 
-    <h2>Мои игры</h2>
-    <div class="games" id="games"></div>
+    <!-- ── Новый пароль ──────────────────────────────────────────────── -->
+    <div id="recovery" hidden>
+      <h2 style="text-align:center">Новый пароль</h2>
+      <div class="panel">
+        <div class="msg" id="recMsg"></div>
+        <form id="formRec">
+          <div class="field">
+            <label for="newPass">Пароль</label>
+            <input type="password" id="newPass" autocomplete="new-password" required minlength="6">
+          </div>
+          <button type="submit" class="btn solid">Сохранить</button>
+        </form>
+      </div>
+    </div>
 
-    <h2>Устройства</h2>
-    <div id="devices"></div>
+    <!-- ── Профиль ───────────────────────────────────────────────────── -->
+    <div id="profile" hidden>
+      <p class="kicker">Мой аккаунт</p>
+      <h2 id="hello">Профиль</h2>
+
+      <div class="panel wide">
+        <div class="who">
+          <div class="ava" id="ava">?</div>
+          <div style="min-width:0">
+            <div class="nick" id="nick">…</div>
+            <div class="mail" id="mail"></div>
+          </div>
+          <button class="btn quiet" id="logout" style="margin-left:auto;width:auto;padding:9px 16px">Выйти</button>
+        </div>
+
+        <div class="msg" id="profMsg"></div>
+
+        <h3>Мои игры</h3>
+        <div class="rows" id="lib"></div>
+
+        <h3 style="margin-top:26px">Устройства</h3>
+        <div class="rows" id="devices"></div>
+
+        <h3 style="margin-top:26px">Внешний вид сайта</h3>
+        <p class="dim" style="font-size:14px;margin-bottom:12px">
+          Тема сохраняется в браузере и действует на всех страницах студии.
+        </p>
+        <div class="rows" id="themes"></div>
+      </div>
+    </div>
+
   </div>
-</div>
+</section>
+</main>
 
+<footer class="site">
+  <div class="wrap">
+    <div class="row">
+      <div>© 2024–2026 Pixset Studio</div>
+      <div><a href="/">Главная</a> · <a href="/store">Магазин</a></div>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/studio.js"></script>
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   humanError, NICKNAME_RE,
-} from '../assets/pixset-auth.js';
+} from '/assets/pixset-auth.js';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
 const hide = (el) => { el.hidden = true; };
 
-function say(box, text, kind = 'error') {
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function say(box, text, kind = 'err') {
   box.textContent = text;
   box.className = `msg show ${kind}`;
 }
-function clear(box) { box.className = 'msg'; }
+const clear = (box) => { box.className = 'msg'; };
 
-/** Блокирует кнопку на время запроса, чтобы не отправить форму дважды. */
-async function withBusy(btn, label, fn) {
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = label;
-  try { await fn(); }
-  finally { btn.disabled = false; btn.textContent = original; }
+async function busy(btn, fn) {
+  if (btn) btn.disabled = true;
+  try { await fn(); } finally { if (btn) btn.disabled = false; }
 }
 
-// ── Переключение вкладок ────────────────────────────────────────────────
+// ── Вкладки ─────────────────────────────────────────────────────────────
 $('tabLogin').onclick = () => {
-  $('tabLogin').classList.add('active');
-  $('tabRegister').classList.remove('active');
-  show($('formLogin')); hide($('formRegister')); clear($('guestMsg'));
+  $('tabLogin').classList.add('on'); $('tabReg').classList.remove('on');
+  show($('formLogin')); hide($('formReg')); clear($('guestMsg'));
 };
-$('tabRegister').onclick = () => {
-  $('tabRegister').classList.add('active');
-  $('tabLogin').classList.remove('active');
-  show($('formRegister')); hide($('formLogin')); clear($('guestMsg'));
+$('tabReg').onclick = () => {
+  $('tabReg').classList.add('on'); $('tabLogin').classList.remove('on');
+  show($('formReg')); hide($('formLogin')); clear($('guestMsg'));
 };
 
-// ── Вход ────────────────────────────────────────────────────────────────
-$('formLogin').onsubmit = async (e) => {
+// ── Вход и регистрация ──────────────────────────────────────────────────
+$('formLogin').onsubmit = (e) => {
   e.preventDefault();
   clear($('guestMsg'));
-  await withBusy(e.submitter, 'Вход…', async () => {
-    try {
-      await login({ email: $('loginEmail').value.trim(), password: $('loginPassword').value });
-      // Дальше сработает onAuthStateChange и покажет профиль.
-    } catch (err) {
-      say($('guestMsg'), humanError(err));
-    }
+  return busy(e.submitter, async () => {
+    try { await login({ email: $('loginEmail').value.trim(), password: $('loginPass').value }); }
+    catch (err) { say($('guestMsg'), humanError(err)); }
   });
 };
 
-// ── Регистрация ─────────────────────────────────────────────────────────
-$('formRegister').onsubmit = async (e) => {
+$('formReg').onsubmit = (e) => {
   e.preventDefault();
   clear($('guestMsg'));
-  const nickname = $('regNickname').value.trim();
+  const nickname = $('regNick').value.trim();
   if (!NICKNAME_RE.test(nickname)) {
-    say($('guestMsg'), 'Ник: 3–20 символов, только латиница, цифры, _ и -');
+    say($('guestMsg'), 'Ник: 3-20 символов, только латиница, цифры, _ и -');
     return;
   }
-  await withBusy(e.submitter, 'Создание…', async () => {
+  return busy(e.submitter, async () => {
     try {
       const { needsConfirmation } = await register({
-        email: $('regEmail').value.trim(),
-        password: $('regPassword').value,
-        nickname,
+        email: $('regEmail').value.trim(), password: $('regPass').value, nickname,
       });
       if (needsConfirmation) {
-        say($('guestMsg'), 'Готово! Мы отправили письмо — подтверди почту и возвращайся.', 'ok');
-        $('formRegister').reset();
+        say($('guestMsg'), 'Готово! Мы отправили письмо — подтвердите почту и возвращайтесь.', 'ok');
+        $('formReg').reset();
       }
-    } catch (err) {
-      say($('guestMsg'), humanError(err));
-    }
+    } catch (err) { say($('guestMsg'), humanError(err)); }
   });
 };
 
-// ── Забытый пароль ──────────────────────────────────────────────────────
-$('forgotLink').onclick = async (e) => {
+$('forgot').onclick = async (e) => {
   e.preventDefault();
   const email = $('loginEmail').value.trim();
-  if (!email) {
-    say($('guestMsg'), 'Введи почту в поле выше, и я пришлю ссылку для сброса.');
-    return;
-  }
+  if (!email) { say($('guestMsg'), 'Введите почту в поле выше — пришлём ссылку для сброса.'); return; }
   try {
     await resetPassword(email);
-    say($('guestMsg'), 'Ссылка для сброса пароля отправлена на почту.', 'ok');
-  } catch (err) {
-    say($('guestMsg'), humanError(err));
-  }
+    say($('guestMsg'), 'Ссылка для сброса отправлена на почту.', 'ok');
+  } catch (err) { say($('guestMsg'), humanError(err)); }
 };
 
-// ── Установка нового пароля после письма ────────────────────────────────
-$('formRecovery').onsubmit = async (e) => {
+$('formRec').onsubmit = (e) => {
   e.preventDefault();
-  clear($('recoveryMsg'));
-  await withBusy(e.submitter, 'Сохранение…', async () => {
-    const { error } = await supabase.auth.updateUser({ password: $('newPassword').value });
-    if (error) { say($('recoveryMsg'), humanError(error)); return; }
-    say($('recoveryMsg'), 'Пароль обновлён.', 'ok');
+  clear($('recMsg'));
+  return busy(e.submitter, async () => {
+    const { error } = await supabase.auth.updateUser({ password: $('newPass').value });
+    if (error) { say($('recMsg'), humanError(error)); return; }
+    say($('recMsg'), 'Пароль обновлён.', 'ok');
     setTimeout(() => location.replace(location.pathname), 900);
   });
 };
 
-$('logoutBtn').onclick = async () => { await logout(); location.reload(); };
+$('logout').onclick = async () => { await logout(); location.reload(); };
 
-// ── Отрисовка профиля ───────────────────────────────────────────────────
+// ── Профиль ─────────────────────────────────────────────────────────────
 async function renderProfile(user) {
-  $('email').textContent = user.email;
+  $('mail').textContent = user.email;
 
   try {
     const profile = await getProfile(user.id);
     $('nick').textContent = profile.nickname;
-    $('avatar').textContent = profile.nickname.charAt(0).toUpperCase();
-  } catch {
-    $('nick').textContent = 'Игрок';
-  }
+    $('ava').textContent = profile.nickname.charAt(0).toUpperCase();
+    $('hello').textContent = profile.nickname;
+  } catch { $('nick').textContent = 'Игрок'; }
 
-  // Здесь только купленное. Игра без лицензии — это не «моя игра со статусом
-  // демо», её просто нет в библиотеке; поиграть бесплатно можно и без аккаунта.
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
 
-  $('games').innerHTML = owned.length
+  $('lib').innerHTML = owned.length
     ? owned.map((e) => {
-        const g = byslug.get(e.game_slug) || { title: e.game_slug, tagline: '' };
-        return `
-        <div class="game">
-          <div class="title">${escapeHtml(g.title)}</div>
-          <div class="tagline">${escapeHtml(g.tagline || '')}</div>
-          <span class="badge owned">Лицензия активна</span>
-        </div>`;
+        const g = byslug.get(e.game_slug) || { title: e.game_slug };
+        return `<div class="row"><b>${esc(g.title)}</b>
+          <span class="badge">Лицензия активна</span></div>`;
       }).join('')
-    : '<p class="empty">Пока пусто — загляни в <a href="../store/" style="color:var(--neon-cyan)">магазин</a></p>';
+    : `<div class="row"><span class="dim">Пока пусто — первый мир Byte Blaster открыт бесплатно.</span>
+       <a class="btn" href="/store">В магазин</a></div>`;
 
   renderDevices();
+  renderThemes();
 }
 
 async function renderDevices() {
   const devices = await getDevices();
-  const box = $('devices');
+  $('devices').innerHTML = devices.length
+    ? devices.map((d) => `
+        <div class="row">
+          <b>${esc(d.label || d.platform || 'Устройство')}</b>
+          <span class="dim">${new Date(d.last_seen).toLocaleDateString('ru-RU')}</span>
+          <button class="btn quiet" data-dev="${esc(d.id)}">Отвязать</button>
+        </div>`).join('')
+    : '<div class="row"><span class="dim">Входов из игры пока не было.</span></div>';
 
-  if (!devices.length) {
-    box.innerHTML = '<p class="empty">Пока ни одного входа из игры</p>';
-    return;
-  }
-
-  box.innerHTML = devices.map((d) => `
-    <div class="device">
-      <span>${escapeHtml(d.label || d.platform || 'Устройство')}</span>
-      <span class="seen">${new Date(d.last_seen).toLocaleDateString('ru-RU')}</span>
-      <button class="btn ghost" data-id="${d.id}">Отвязать</button>
-    </div>`).join('');
-
-  box.querySelectorAll('button[data-id]').forEach((btn) => {
-    btn.onclick = async () => {
-      await revokeDevice(btn.dataset.id);
-      renderDevices();
-    };
+  $('devices').querySelectorAll('[data-dev]').forEach((btn) => {
+    btn.onclick = () => busy(btn, async () => {
+      try { await revokeDevice(btn.dataset.dev); await renderDevices(); }
+      catch (err) { say($('profMsg'), humanError(err)); }
+    });
   });
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Выбор темы продублирован здесь: в шапке он под кнопкой, а в настройках
+// видно все варианты сразу с описанием.
+function renderThemes() {
+  const T = window.PixsetTheme;
+  if (!T) return;
+  const now = T.current();
+  $('themes').innerHTML = T.themes.map((t) => `
+    <div class="row">
+      <div>
+        <b>${esc(t.name)}</b>
+        <div class="dim" style="font-size:14px">${esc(t.hint)}</div>
+      </div>
+      ${t.id === now
+        ? '<span class="badge">Выбрана</span>'
+        : `<button class="btn quiet" data-theme-set="${t.id}">Включить</button>`}
+    </div>`).join('');
+
+  $('themes').querySelectorAll('[data-theme-set]').forEach((btn) => {
+    btn.onclick = () => { T.apply(btn.dataset.themeSet); renderThemes(); };
+  });
 }
 
-// ── Маршрутизация по состоянию сессии ───────────────────────────────────
-let recoveryMode = false;
+// ── Маршрутизация ───────────────────────────────────────────────────────
+let recovery = false;
 
-supabase.auth.onAuthStateChange((event, session) => {
-  // Переход по ссылке из письма о сбросе пароля.
-  if (event === 'PASSWORD_RECOVERY') {
-    recoveryMode = true;
-    hide($('loading')); hide($('guest')); hide($('profile'));
-    show($('recovery'));
-    return;
-  }
-  if (recoveryMode) return;
-
-  hide($('loading'));
-  if (session?.user) {
-    if (returnTo()) { location.replace(returnTo()); return; }
-    hide($('guest')); show($('profile'));
-    renderProfile(session.user);
-  } else {
-    hide($('profile')); show($('guest'));
-  }
-});
-
-// Куда вернуть игрока после входа (?next=/store/). Принимаем только пути
-// внутри сайта — с чужим адресом это была бы открытая переадресация.
 function returnTo() {
   const next = new URLSearchParams(location.search).get('next');
   if (!next || !next.startsWith('/') || next.startsWith('//')) return null;
   return next;
 }
 
-// Первичная проверка: onAuthStateChange не срабатывает, если сессии нет.
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    recovery = true;
+    hide($('loading')); hide($('guest')); hide($('profile'));
+    show($('recovery'));
+    return;
+  }
+  if (recovery) return;
+
+  hide($('loading'));
+  if (session?.user) {
+    if (returnTo()) { location.replace(returnTo()); return; }
+    hide($('guest')); show($('profile')); renderProfile(session.user);
+  } else { hide($('profile')); show($('guest')); }
+});
+
 const { data: { session } } = await supabase.auth.getSession();
-if (!recoveryMode) {
+if (!recovery) {
   hide($('loading'));
   if (session?.user) {
     if (returnTo()) location.replace(returnTo());
     else { show($('profile')); renderProfile(session.user); }
-  }
-  else { show($('guest')); }
+  } else { show($('guest')); }
 }
 </script>
 
