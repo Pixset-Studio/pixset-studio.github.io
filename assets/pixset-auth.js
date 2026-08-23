@@ -15,8 +15,23 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   },
 });
 
-/** Страница аккаунта — куда возвращаются письма подтверждения и сброса пароля. */
-export const ACCOUNT_URL = new URL('/account/', location.origin).href;
+/**
+ * Куда возвращаются письма подтверждения и сброса пароля.
+ * Сайт игры может задать свою страницу аккаунта через window.PIXSET_ACCOUNT_URL —
+ * тогда игрок вернётся туда, откуда регистрировался, а не на сайт студии.
+ * Адрес обязан быть на этом же домене: иначе ссылка из письма уводила бы
+ * на чужой сайт.
+ */
+export const ACCOUNT_URL = (() => {
+  const custom = typeof window !== 'undefined' ? window.PIXSET_ACCOUNT_URL : null;
+  if (custom) {
+    try {
+      const url = new URL(custom, location.origin);
+      if (url.origin === location.origin) return url.href;
+    } catch { /* некорректный адрес — уходим на значение по умолчанию */ }
+  }
+  return new URL('/account/', location.origin).href;
+})();
 
 /** Ник: латиница, цифры, _ и -, 3–20 символов. */
 export const NICKNAME_RE = /^[A-Za-z0-9_-]{3,20}$/;
@@ -158,6 +173,25 @@ export async function adminRevokeLicense(email, gameSlug) {
     p_email: email, p_game_slug: gameSlug,
   });
   if (error) throw error;
+}
+
+/** Список продуктов и офферов из кабинета Lava — чтобы найти нужный offer id. */
+export async function adminLavaOffers() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('not_authenticated');
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/lava-offers`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+    },
+    body: '{}',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'lava_error');
+  return data;
 }
 
 export async function adminListPaymentEvents() {

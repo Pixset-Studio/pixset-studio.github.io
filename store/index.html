@@ -95,6 +95,13 @@ function say(text, kind = 'error') {
   box.className = `msg show ${kind}`;
 }
 
+// У игры может быть свой сайт с собственной страницей покупки — тогда «Купить»
+// ведёт туда: там и подробности про игру, и оформление в её стиле. Оплату всё
+// равно проводит один и тот же сервер, а лицензия ложится на тот же аккаунт.
+const OWN_PAGES = {
+  'byte-blaster': '/byte-blaster/buy/',
+};
+
 // Что игрок получает ЗА ДЕНЬГИ. Бесплатный первый мир сюда не пишем —
 // покупка его не даёт, он и так открыт.
 const FEATURES = {
@@ -138,7 +145,9 @@ async function render() {
           <span class="price">${has ? '' : (price || '—')}</span>
           ${has
             ? '<span class="badge owned">Уже куплено</span>'
-            : `<button class="btn" data-buy="${g.slug}">Купить</button>`}
+            : (OWN_PAGES[g.slug]
+                ? `<a class="btn" href="${OWN_PAGES[g.slug]}">Купить</a>`
+                : `<button class="btn" data-buy="${g.slug}">Купить</button>`)}
           ${has ? '' : `<span class="cur">цена вашего региона${session ? '' : ' · уточнится после входа'}</span>`}
         </div>
         <div class="order" id="order-${g.slug}"></div>

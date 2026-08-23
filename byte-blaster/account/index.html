@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru"
+      data-title-ru="Аккаунт — BYTE BLASTER"
+      data-title-en="Account — BYTE BLASTER"
+      data-desc-ru="Вход в аккаунт Pixset Studio: лицензия на Byte Blaster работает на всех устройствах, где вы вошли."
+      data-desc-en="Sign in to your Pixset Studio account: your Byte Blaster licence works on every device you sign in on.">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аккаунт — BYTE BLASTER</title>
+<meta name="description" content="Вход в аккаунт Pixset Studio: лицензия на Byte Blaster работает на всех устройствах.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#04040f">
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/byte-blaster/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<script>
+/* Pick the language BEFORE first paint so the page never flashes the wrong one. */
+(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+/* Письма подтверждения должны возвращать сюда, а не на сайт студии. */
+window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
+</script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <nav class="main">
+      <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/updates/"><span data-l="ru">ОБНОВЛЕНИЯ</span><span data-l="en">UPDATES</span></a>
+      <a href="/byte-blaster/about/"><span data-l="ru">О ПРОЕКТЕ</span><span data-l="en">ABOUT</span></a>
+      <a href="/byte-blaster/buy/"><span data-l="ru">КУПИТЬ</span><span data-l="en">BUY</span></a>
+      <a href="/byte-blaster/account/" aria-current="page"><span data-l="ru">АККАУНТ</span><span data-l="en">ACCOUNT</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<section>
+  <div class="wrap">
+
+    <div id="loading" style="text-align:center">
+      <p class="dim"><span data-l="ru">Проверяем сессию…</span><span data-l="en">Checking your session…</span></p>
+    </div>
+
+    <!-- ── Гость ─────────────────────────────────────────────────────── -->
+    <div id="guest" hidden>
+      <h1 style="text-align:center"><span data-l="ru">АККАУНТ</span><span data-l="en">ACCOUNT</span></h1>
+      <p class="lead dim" style="text-align:center;max-width:560px;margin:0 auto 30px">
+        <span data-l="ru">Один аккаунт на все игры Pixset Studio. Купленная игра открывается везде, где вы вошли — на ПК, телефоне и в браузере.</span>
+        <span data-l="en">One account for every Pixset Studio game. A purchase unlocks the game everywhere you sign in — PC, phone and browser.</span>
+      </p>
+
+      <div class="panel">
+        <div class="tabs">
+          <button id="tabLogin" class="on"><span data-l="ru">ВХОД</span><span data-l="en">SIGN IN</span></button>
+          <button id="tabReg"><span data-l="ru">РЕГИСТРАЦИЯ</span><span data-l="en">SIGN UP</span></button>
+        </div>
+
+        <div class="msg" id="guestMsg"></div>
+
+        <form id="formLogin">
+          <div class="field">
+            <label for="loginEmail"><span data-l="ru">ПОЧТА</span><span data-l="en">EMAIL</span></label>
+            <input type="email" id="loginEmail" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="loginPass"><span data-l="ru">ПАРОЛЬ</span><span data-l="en">PASSWORD</span></label>
+            <input type="password" id="loginPass" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn primary"><span data-l="ru">ВОЙТИ</span><span data-l="en">SIGN IN</span></button>
+          <p style="text-align:center;margin:16px 0 0;font-size:13px">
+            <a href="#" id="forgot"><span data-l="ru">Забыли пароль?</span><span data-l="en">Forgot your password?</span></a>
+          </p>
+        </form>
+
+        <form id="formReg" hidden>
+          <div class="field">
+            <label for="regNick"><span data-l="ru">НИК</span><span data-l="en">NICKNAME</span></label>
+            <input type="text" id="regNick" autocomplete="username" required minlength="3" maxlength="20"
+                   placeholder="3-20, a-z 0-9 _ -">
+          </div>
+          <div class="field">
+            <label for="regEmail"><span data-l="ru">ПОЧТА</span><span data-l="en">EMAIL</span></label>
+            <input type="email" id="regEmail" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="regPass"><span data-l="ru">ПАРОЛЬ</span><span data-l="en">PASSWORD</span></label>
+            <input type="password" id="regPass" autocomplete="new-password" required minlength="6">
+          </div>
+          <button type="submit" class="btn primary"><span data-l="ru">СОЗДАТЬ АККАУНТ</span><span data-l="en">CREATE ACCOUNT</span></button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Новый пароль после письма ─────────────────────────────────── -->
+    <div id="recovery" hidden>
+      <h1 style="text-align:center"><span data-l="ru">НОВЫЙ ПАРОЛЬ</span><span data-l="en">NEW PASSWORD</span></h1>
+      <div class="panel">
+        <div class="msg" id="recMsg"></div>
+        <form id="formRec">
+          <div class="field">
+            <label for="newPass"><span data-l="ru">ПАРОЛЬ</span><span data-l="en">PASSWORD</span></label>
+            <input type="password" id="newPass" autocomplete="new-password" required minlength="6">
+          </div>
+          <button type="submit" class="btn primary"><span data-l="ru">СОХРАНИТЬ</span><span data-l="en">SAVE</span></button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Профиль ───────────────────────────────────────────────────── -->
+    <div id="profile" hidden>
+      <h1 style="text-align:center"><span data-l="ru">МОЙ АККАУНТ</span><span data-l="en">MY ACCOUNT</span></h1>
+
+      <div class="panel wide">
+        <div class="who">
+          <div class="ava" id="ava">?</div>
+          <div style="min-width:0">
+            <div class="nick" id="nick">…</div>
+            <div class="mail" id="mail"></div>
+          </div>
+        </div>
+
+        <div class="msg" id="profMsg"></div>
+
+        <h3><span data-l="ru">Лицензии</span><span data-l="en">Licences</span></h3>
+        <div class="lib" id="lib"></div>
+
+        <h3 style="margin-top:26px"><span data-l="ru">Устройства</span><span data-l="en">Devices</span></h3>
+        <div class="lib" id="devices"></div>
+
+        <p style="margin:24px 0 0;text-align:center">
+          <button class="btn small" id="logout"><span data-l="ru">ВЫЙТИ</span><span data-l="en">SIGN OUT</span></button>
+        </p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
+    <div>
+      <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+      <a href="/byte-blaster/buy/"><span data-l="ru">Купить</span><span data-l="en">Buy</span></a> ·
+      <a href="/byte-blaster/wiki/"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+    </div>
+  </div>
+</footer>
+
+<script src="/byte-blaster/assets/config.js"></script>
+<script src="/byte-blaster/assets/site.js"></script>
+<script type="module">
+// Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
+// сайта студии общая, вход достаточно выполнить один раз.
+import {
+  supabase, register, login, logout, resetPassword,
+  getProfile, getGames, getEntitlements, getDevices, revokeDevice,
+  humanError, NICKNAME_RE,
+} from '/assets/pixset-auth.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (el) => { el.hidden = false; };
+const hide = (el) => { el.hidden = true; };
+
+/** Двуязычная вставка: переключатель языка в шапке работает и для неё. */
+const bi = (ru, en) =>
+  `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function say(box, ru, en, kind = 'err') {
+  box.innerHTML = bi(esc(ru), esc(en));
+  box.className = `msg show ${kind}`;
+}
+const clear = (box) => { box.className = 'msg'; };
+
+/** Ошибки Supabase приходят по-русски из общего модуля; для EN даём общий текст. */
+function fail(box, err) {
+  say(box, humanError(err), 'Something went wrong. Please try again.');
+}
+
+async function busy(btn, fn) {
+  btn.disabled = true;
+  try { await fn(); } finally { btn.disabled = false; }
+}
+
+// ── Вкладки ─────────────────────────────────────────────────────────────
+$('tabLogin').onclick = () => {
+  $('tabLogin').classList.add('on'); $('tabReg').classList.remove('on');
+  show($('formLogin')); hide($('formReg')); clear($('guestMsg'));
+};
+$('tabReg').onclick = () => {
+  $('tabReg').classList.add('on'); $('tabLogin').classList.remove('on');
+  show($('formReg')); hide($('formLogin')); clear($('guestMsg'));
+};
+
+// ── Вход ────────────────────────────────────────────────────────────────
+$('formLogin').onsubmit = (e) => {
+  e.preventDefault();
+  clear($('guestMsg'));
+  return busy(e.submitter, async () => {
+    try {
+      await login({ email: $('loginEmail').value.trim(), password: $('loginPass').value });
+      // Дальше сработает onAuthStateChange и покажет профиль.
+    } catch (err) { fail($('guestMsg'), err); }
+  });
+};
+
+// ── Регистрация ─────────────────────────────────────────────────────────
+$('formReg').onsubmit = (e) => {
+  e.preventDefault();
+  clear($('guestMsg'));
+  const nickname = $('regNick').value.trim();
+  if (!NICKNAME_RE.test(nickname)) {
+    say($('guestMsg'),
+      'Ник: 3-20 символов, только латиница, цифры, _ и -',
+      'Nickname: 3-20 characters, latin letters, digits, _ and - only');
+    return;
+  }
+  return busy(e.submitter, async () => {
+    try {
+      const { needsConfirmation } = await register({
+        email: $('regEmail').value.trim(),
+        password: $('regPass').value,
+        nickname,
+      });
+      if (needsConfirmation) {
+        say($('guestMsg'),
+          'Готово! Мы отправили письмо — подтвердите почту и возвращайтесь.',
+          'Done! Check your inbox to confirm your email, then come back.', 'ok');
+        $('formReg').reset();
+      }
+    } catch (err) { fail($('guestMsg'), err); }
+  });
+};
+
+// ── Забытый пароль ──────────────────────────────────────────────────────
+$('forgot').onclick = async (e) => {
+  e.preventDefault();
+  const email = $('loginEmail').value.trim();
+  if (!email) {
+    say($('guestMsg'),
+      'Введите почту в поле выше — пришлём ссылку для сброса.',
+      'Enter your email above and we will send a reset link.');
+    return;
+  }
+  try {
+    await resetPassword(email);
+    say($('guestMsg'), 'Ссылка для сброса отправлена на почту.',
+      'A reset link is on its way to your inbox.', 'ok');
+  } catch (err) { fail($('guestMsg'), err); }
+};
+
+// ── Новый пароль ────────────────────────────────────────────────────────
+$('formRec').onsubmit = (e) => {
+  e.preventDefault();
+  clear($('recMsg'));
+  return busy(e.submitter, async () => {
+    const { error } = await supabase.auth.updateUser({ password: $('newPass').value });
+    if (error) { fail($('recMsg'), error); return; }
+    say($('recMsg'), 'Пароль обновлён.', 'Password updated.', 'ok');
+    setTimeout(() => location.replace(location.pathname), 900);
+  });
+};
+
+$('logout').onclick = async () => { await logout(); location.reload(); };
+
+// ── Профиль ─────────────────────────────────────────────────────────────
+async function renderProfile(user) {
+  $('mail').textContent = user.email;
+
+  try {
+    const profile = await getProfile(user.id);
+    $('nick').textContent = profile.nickname;
+    $('ava').textContent = profile.nickname.charAt(0).toUpperCase();
+  } catch { $('nick').textContent = 'Player'; }
+
+  const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
+  const byslug = new Map(games.map((g) => [g.slug, g]));
+
+  $('lib').innerHTML = owned.length
+    ? owned.map((e) => {
+        const g = byslug.get(e.game_slug) || { title: e.game_slug };
+        return `<div class="item"><b>${esc(g.title)}</b>
+          <span class="badge">${bi('ЛИЦЕНЗИЯ АКТИВНА', 'LICENCE ACTIVE')}</span></div>`;
+      }).join('')
+    : `<div class="item"><span class="dim">${
+        bi('Лицензий пока нет — первый мир доступен бесплатно.',
+           'No licences yet — the first world is free to play.')}</span>
+       <a class="btn small" href="/byte-blaster/buy/">${bi('КУПИТЬ', 'BUY')}</a></div>`;
+
+  renderDevices();
+}
+
+async function renderDevices() {
+  const devices = await getDevices();
+  $('devices').innerHTML = devices.length
+    ? devices.map((d) => `
+        <div class="item">
+          <b>${esc(d.label || d.platform || 'Device')}</b>
+          <span class="dim">${new Date(d.last_seen).toLocaleDateString()}</span>
+          <button class="btn small" data-dev="${esc(d.id)}">${bi('ОТВЯЗАТЬ', 'UNLINK')}</button>
+        </div>`).join('')
+    : `<div class="item"><span class="dim">${
+        bi('Входов из игры пока не было.', 'No sign-ins from the game yet.')}</span></div>`;
+
+  $('devices').querySelectorAll('[data-dev]').forEach((btn) => {
+    btn.onclick = () => busy(btn, async () => {
+      try { await revokeDevice(btn.dataset.dev); await renderDevices(); }
+      catch (err) { fail($('profMsg'), err); }
+    });
+  });
+}
+
+// ── Маршрутизация ───────────────────────────────────────────────────────
+let recovery = false;
+
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    recovery = true;
+    hide($('loading')); hide($('guest')); hide($('profile'));
+    show($('recovery'));
+    return;
+  }
+  if (recovery) return;
+
+  hide($('loading'));
+  if (session?.user) {
+    if (returnTo()) { location.replace(returnTo()); return; }
+    hide($('guest')); show($('profile')); renderProfile(session.user);
+  }
+  else { hide($('profile')); show($('guest')); }
+});
+
+// Куда вернуть игрока после входа (?next=/byte-blaster/buy/). Принимаем только
+// пути внутри сайта — с чужим адресом это была бы открытая переадресация.
+function returnTo() {
+  const next = new URLSearchParams(location.search).get('next');
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return null;
+  return next;
+}
+
+const { data: { session } } = await supabase.auth.getSession();
+if (!recovery) {
+  hide($('loading'));
+  if (session?.user) {
+    if (returnTo()) location.replace(returnTo());
+    else { show($('profile')); renderProfile(session.user); }
+  }
+  else { show($('guest')); }
+}
+</script>
+
+</body>
+</html>

@@ -211,6 +211,6 @@
     init, login, logout, refresh, refreshQuietly,
     hasGame, stale, nickname, loggedIn, isReady,
     setStorage(adapter) { store = adapter; },
-    get storeUrl() { return 'https://pixset-studio.github.io/store'; },
+    get storeUrl() { return 'https://pixset-studio.github.io/byte-blaster/buy/'; },
   };
 })();

@@ -640,3 +640,73 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
   [data-rv] { opacity: 1 !important; transform: none !important; }
   h2::after { transform: scaleX(1) !important; }
 }
+
+/* ── Аккаунт и покупка ───────────────────────────────────────────────────── */
+/* Формы на сайте появились вместе со страницами входа и покупки: раньше
+   полей ввода тут не было вовсе, поэтому базовый вид задаётся здесь. */
+.panel {
+  background: linear-gradient(160deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 28px 26px; max-width: 460px; margin: 0 auto;
+}
+.panel.wide { max-width: 720px; }
+
+.field { margin-bottom: 16px; text-align: left; }
+.field label {
+  display: block; font-family: var(--pixel); font-size: 8px;
+  letter-spacing: 1px; color: var(--dim); margin-bottom: 7px;
+}
+.field input {
+  width: 100%; box-sizing: border-box; padding: 12px 13px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--text); font-family: var(--mono); font-size: 15px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus {
+  outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,255,255,.25);
+}
+
+/* Кнопка формы: та же .btn, но во всю ширину панели и без min-width. */
+button.btn { width: 100%; min-width: 0; cursor: pointer; }
+button.btn:disabled { opacity: .5; cursor: wait; transform: none; box-shadow: none; }
+button.btn.small { padding: 11px 18px; font-size: 9px; width: auto; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+.tabs button {
+  flex: 1; padding: 11px 8px; cursor: pointer; border-radius: 4px;
+  font-family: var(--pixel); font-size: 9px; letter-spacing: 1px;
+  background: var(--bg); border: 1px solid var(--line); color: var(--dim);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.tabs button:hover { color: var(--cyan); border-color: rgba(0,255,255,.4); }
+.tabs button.on { color: var(--cyan); border-color: var(--cyan); background: rgba(0,255,255,.07); }
+
+.msg {
+  display: none; padding: 11px 14px; margin-bottom: 18px; font-size: 14px;
+  border-left: 3px solid; border-radius: 0 4px 4px 0; text-align: left;
+}
+.msg.show { display: block; }
+.msg.err { border-color: var(--red);   background: rgba(255,85,85,.08);  color: #ffb3b3; }
+.msg.ok  { border-color: var(--green); background: rgba(0,255,136,.08);  color: #9effc9; }
+
+.who { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.who .ava {
+  width: 56px; height: 56px; flex: 0 0 56px; display: grid; place-items: center;
+  border: 2px solid var(--cyan); border-radius: 6px; background: rgba(0,255,255,.07);
+  font-family: var(--pixel); font-size: 20px; color: var(--cyan);
+}
+.who .nick { font-family: var(--pixel); font-size: 13px; color: #eaf2ff; margin-bottom: 6px; }
+.who .mail { font-size: 13px; color: var(--dim); word-break: break-all; }
+
+.lib { display: grid; gap: 12px; margin-bottom: 8px; }
+.lib .item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); flex-wrap: wrap;
+}
+.lib .item b { font-family: var(--pixel); font-size: 11px; color: #eaf2ff; }
+
+.price-big {
+  font-family: var(--pixel); font-size: clamp(18px, 4vw, 28px);
+  color: var(--green); text-shadow: 0 0 16px rgba(0,255,136,.45); margin-bottom: 6px;
+}

@@ -12,10 +12,15 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const LAVA_URL = 'https://gate.lava.top/api/v2/invoice';
 
+// apikey и x-client-info браузер запрашивает в preflight, потому что их
+// добавляет клиент Supabase. Без них в списке preflight отклоняется, и запрос
+// до функции не доходит вовсе — в интерфейсе это выглядит как «нет сети».
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, content-type, apikey, x-client-info, x-supabase-api-version',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 const json = (body: unknown, status = 200) =>
@@ -28,6 +33,86 @@ function methodFor(currency: string) {
   return currency === 'RUB'
     ? (Deno.env.get('LAVA_METHOD_RUB') ?? 'BANK131')   // карты РФ
     : (Deno.env.get('LAVA_METHOD_USD') ?? 'UNLIMINT'); // зарубежные карты
+}
+
+/* ── Поиск оффера ─────────────────────────────────────────────────────────
+   В Lava счёт выставляется на оффер внутри продукта, а не на сам продукт, и
+   его id неочевидно найти в кабинете. Поэтому берём каталог по API и ищем
+   оффер сами: сначала по настроенному LAVA_OFFER_ID, потом по совпадению цены
+   и валюты с нашим каталогом, и только если продавать нечего — ошибка.
+   Каталог кэшируем: он меняется куда реже, чем идут покупки. */
+
+type Offer = { id: string; product: string | null; name: string | null;
+               prices: { amount: number; currency: string }[] };
+
+let cachedOffers: { at: number; offers: Offer[] } | null = null;
+const CACHE_MS = 10 * 60 * 1000;
+
+async function loadOffers(apiKey: string): Promise<Offer[]> {
+  if (cachedOffers && Date.now() - cachedOffers.at < CACHE_MS) return cachedOffers.offers;
+
+  const res = await fetch('https://gate.lava.top/api/v2/products', {
+    headers: { 'X-Api-Key': apiKey },
+  });
+  if (!res.ok) throw new Error('products_' + res.status);
+
+  const raw = await res.json();
+  const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : []);
+  const offers: Offer[] = [];
+
+  for (const item of items) {
+    const data = item?.data ?? item;
+    const product = data?.title ?? data?.name ?? null;
+    for (const offer of Array.isArray(data?.offers) ? data.offers : []) {
+      if (!offer?.id) continue;
+      offers.push({
+        id: String(offer.id),
+        product,
+        name: offer?.name ?? null,
+        prices: (Array.isArray(offer?.prices) ? offer.prices : [])
+          .map((p: any) => ({ amount: Number(p?.amount), currency: String(p?.currency ?? '') })),
+      });
+    }
+  }
+
+  // Пустой разбор — это либо пустой каталог, либо структура ответа не та,
+  // которую мы ждём. Отличить можно только по сырому ответу, поэтому пишем
+  // его в лог (ключей и персональных данных там нет, только товары).
+  if (offers.length === 0) {
+    console.error('products: офферы не разобраны, сырой ответ:',
+      JSON.stringify(raw).slice(0, 2000));
+    // Пустоту не кэшируем: иначе после починки каталога пришлось бы ждать
+    // истечения кэша, чтобы покупка заработала.
+    return offers;
+  }
+
+  cachedOffers = { at: Date.now(), offers };
+  return offers;
+}
+
+/** amountMinor — цена из нашего каталога в копейках/центах. */
+async function resolveOfferId(apiKey: string, currency: string, amountMinor: number) {
+  const configured = Deno.env.get('LAVA_OFFER_ID') ?? '';
+  const offers = await loadOffers(apiKey);
+
+  if (configured && offers.some((o) => o.id === configured)) return configured;
+
+  const matches = offers.filter((o) =>
+    o.prices.some((p) => p.currency === currency && Math.round(p.amount * 100) === amountMinor));
+
+  if (matches.length === 1) {
+    console.log('offer подобран по цене:', matches[0].id, matches[0].product, matches[0].name);
+    return matches[0].id;
+  }
+
+  // Не угадываем: продать не тот товар хуже, чем показать ошибку.
+  console.error('offer не определён. настроенный:', configured || 'нет',
+    '| ищем', amountMinor, currency,
+    '| доступно:', JSON.stringify(offers.map((o) =>
+      ({ id: o.id, product: o.product, name: o.name, prices: o.prices }))));
+
+  if (offers.length === 0) throw new Error('no_offers_in_lava');
+  throw new Error(matches.length > 1 ? 'several_offers_match' : 'offer_not_found');
 }
 
 function findUrl(obj: unknown): string | null {
@@ -52,9 +137,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
+  // LAVA_OFFER_ID необязателен: если он не задан или устарел, оффер находится
+  // по цене автоматически (см. resolveOfferId).
   const apiKey = Deno.env.get('LAVA_API_KEY');
-  const offerId = Deno.env.get('LAVA_OFFER_ID');
-  if (!apiKey || !offerId) return json({ error: 'lava_not_configured' }, 503);
+  if (!apiKey) return json({ error: 'lava_not_configured' }, 503);
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return json({ error: 'no_auth' }, 401);
@@ -91,6 +177,14 @@ Deno.serve(async (req) => {
   if (!order) return json({ error: 'order_not_found' }, 500);
 
   const currency = order.currency === 'RUB' ? 'RUB' : 'USD';
+
+  let offerId: string;
+  try {
+    offerId = await resolveOfferId(apiKey, currency, order.amount);
+  } catch (e) {
+    // Причина и полный список офферов уже в логах функции.
+    return json({ error: 'offer_problem', reason: String((e as Error).message) }, 502);
+  }
 
   const lavaRes = await fetch(LAVA_URL, {
     method: 'POST',

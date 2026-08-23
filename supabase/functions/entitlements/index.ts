@@ -6,10 +6,15 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const TOKEN_TTL_DAYS = 30;
 
+// apikey и x-client-info браузер запрашивает в preflight, потому что их
+// добавляет клиент. Без них в списке preflight отклоняется, и запрос до функции
+// не доходит вовсе — в игре это выглядит как «нет связи с сервером».
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, content-type, apikey, x-client-info, x-supabase-api-version',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 const json = (body: unknown, status = 200) =>
