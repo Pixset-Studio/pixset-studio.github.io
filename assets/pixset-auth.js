@@ -112,7 +112,7 @@ export async function createOrder(gameSlug) {
 }
 
 /**
- * Создаёт заказ и счёт в Lava, возвращает ссылку на оплату.
+ * Создаёт заказ и платёж в ЮKassa, возвращает ссылку на оплату.
  * Цену и валюту считает сервер по региону аккаунта.
  */
 export async function startPayment(gameSlug) {
@@ -173,25 +173,6 @@ export async function adminRevokeLicense(email, gameSlug) {
     p_email: email, p_game_slug: gameSlug,
   });
   if (error) throw error;
-}
-
-/** Список продуктов и офферов из кабинета Lava — чтобы найти нужный offer id. */
-export async function adminLavaOffers() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('not_authenticated');
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/lava-offers`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-      apikey: SUPABASE_KEY,
-    },
-    body: '{}',
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'lava_error');
-  return data;
 }
 
 export async function adminListPaymentEvents() {
@@ -259,9 +240,12 @@ export function humanError(err) {
   if (m.includes('price_not_set'))    return 'Для этой игры не задана цена.';
   if (m.includes('order_not_found'))  return 'Заказ не найден.';
   if (m.includes('forbidden'))        return 'Нужны права администратора.';
-  if (m.includes('lava_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
-  if (m.includes('lava_error') || m.includes('no_payment_url')) {
+  if (m.includes('payments_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
+  if (m.includes('provider_error') || m.includes('no_payment_url')) {
     return 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.';
+  }
+  if (m.includes('currency_not_supported')) {
+    return 'Оплата пока доступна только для России. Первый мир игры открыт бесплатно.';
   }
   if (m.includes('payment_failed'))   return 'Не удалось создать счёт. Попробуйте ещё раз.';
   return err?.message || 'Неизвестная ошибка.';

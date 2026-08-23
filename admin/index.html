@@ -16,16 +16,16 @@
   }
   th {
     text-align: left; padding: 9px 10px;
-    color: rgba(200,230,255,.45); font-weight: normal;
+    color: rgba(231,225,210,.45); font-weight: normal;
     text-transform: uppercase; letter-spacing: 1px;
-    border-bottom: 1px solid rgba(57,255,20,.2);
+    border-bottom: 1px solid rgba(255,212,0,.2);
     white-space: nowrap;
   }
   td {
-    padding: 10px; border-bottom: 1px solid rgba(57,255,20,.07);
-    color: rgba(200,230,255,.75); vertical-align: middle;
+    padding: 10px; border-bottom: 1px solid rgba(255,212,0,.07);
+    color: rgba(231,225,210,.75); vertical-align: middle;
   }
-  tr:hover td { background: rgba(57,255,20,.03); }
+  tr:hover td { background: rgba(255,212,0,.03); }
   td .btn { width: auto; padding: 6px 12px; font-size: 10px; }
   .st { padding: 3px 8px; border: 1px solid; font-size: 10px; text-transform: uppercase; }
   .st.pending  { color: var(--neon-yellow); border-color: var(--neon-yellow); }
@@ -37,8 +37,8 @@
   .grantbox input { margin-bottom: 0; }
   .grantbox .btn { width: auto; padding: 11px 20px; }
   select {
-    width: 100%; background: rgba(2,6,12,.9);
-    border: 1px solid rgba(57,255,20,.2); color: #cce8ff;
+    width: 100%; background: rgba(8,8,8,.9);
+    border: 1px solid rgba(255,212,0,.2); color: #e7e1d2;
     font-family: 'Rajdhani', sans-serif; font-size: 16px; padding: 11px 13px;
   }
   select:focus { outline: none; border-color: var(--neon-cyan); }
@@ -97,14 +97,6 @@
     <h2>Игроки</h2>
     <div class="tblwrap"><table id="playersTbl"></table></div>
 
-    <h2>Настройка Lava</h2>
-    <p class="sub" style="margin-bottom:10px">
-      Счёт выставляется на id <b>оффера</b>, а не продукта. Здесь видно, какие
-      офферы заведены в кабинете — нужный id вписывается в секрет LAVA_OFFER_ID.
-    </p>
-    <button class="btn ghost" id="offersBtn">Показать офферы Lava</button>
-    <div class="tblwrap"><table id="offersTbl"></table></div>
-
     <h2>События оплат</h2>
     <p class="sub" style="margin-bottom:10px">
       Последние уведомления от платёжной системы. «Не найден» значит, что оплата
@@ -117,7 +109,7 @@
 <script type="module">
 import {
   supabase, getProfile, getGames,
-  adminListOrders, adminListPlayers, adminListPaymentEvents, adminLavaOffers,
+  adminListOrders, adminListPlayers, adminListPaymentEvents,
   adminGrantLicense, adminRevokeLicense, adminMarkPaid,
   humanError,
 } from '../assets/pixset-auth.js';
@@ -237,33 +229,6 @@ async function withGrant(fn, okText) {
     say(humanError(err));
   }
 }
-
-$('offersBtn').onclick = async () => {
-  const btn = $('offersBtn');
-  btn.disabled = true;
-  try {
-    const { offers, raw } = await adminLavaOffers();
-    $('offersTbl').innerHTML = offers && offers.length
-      ? '<tr><th>Продукт</th><th>Оффер</th><th>Цены</th><th>offer id</th></tr>' +
-        offers.map((o) => `
-          <tr>
-            <td>${escapeHtml(o.product)}</td>
-            <td>${escapeHtml(o.offer_name)}</td>
-            <td>${(o.prices || []).map((p) =>
-              escapeHtml(`${p.amount} ${p.currency}`)).join('<br>') || '—'}</td>
-            <td><code style="color:var(--neon-cyan);user-select:all">${
-              escapeHtml(o.offer_id)}</code></td>
-          </tr>`).join('')
-      : '<tr><td class="empty"><details><summary style="cursor:pointer">Офферы не распознаны — показать ответ Lava</summary>' +
-        `<pre style="white-space:pre-wrap;font-size:11px">${
-          escapeHtml(JSON.stringify(raw, null, 1))}</pre></details></td></tr>`;
-    say('Готово. Скопируй нужный offer id в секрет LAVA_OFFER_ID.', 'ok');
-  } catch (err) {
-    say(humanError(err));
-  } finally {
-    btn.disabled = false;
-  }
-};
 
 $('grantBtn').onclick  = () => withGrant(adminGrantLicense,  'Лицензия выдана.');
 $('revokeBtn').onclick = () => withGrant(adminRevokeLicense, 'Лицензия отозвана.');

@@ -666,10 +666,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
   outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,255,255,.25);
 }
 
-/* Кнопка формы: та же .btn, но во всю ширину панели и без min-width. */
-button.btn { width: 100%; min-width: 0; cursor: pointer; }
+/* <button> должен выглядеть ровно как ссылка-кнопка .btn рядом с ним. */
+button.btn { cursor: pointer; font-family: var(--pixel); }
 button.btn:disabled { opacity: .5; cursor: wait; transform: none; box-shadow: none; }
-button.btn.small { padding: 11px 18px; font-size: 9px; width: auto; }
+button.btn.small { padding: 11px 18px; font-size: 9px; min-width: 0; }
+
+/* Во всю ширину — только внутри формы или панели, где кнопка одна и завершает
+   ввод. В ряду .btns кнопка обязана быть такой же ширины, как соседние ссылки. */
+form button.btn,
+.panel > button.btn { width: 100%; min-width: 0; }
 
 .tabs { display: flex; gap: 8px; margin-bottom: 22px; }
 .tabs button {

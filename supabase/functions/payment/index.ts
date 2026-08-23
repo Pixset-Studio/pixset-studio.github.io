@@ -1,16 +1,16 @@
-// Создание счёта в Lava.top по заказу игрока.
+// Создание платежа в ЮKassa по заказу игрока.
 //
 // Клиент присылает только slug игры. Сумму, валюту и сам заказ считает база
-// (create_order), а ключ Lava живёт в секретах — с браузера ни цену, ни валюту
-// подменить нельзя.
+// (create_order), ключи ЮKassa живут в секретах — с браузера ни цену, ни
+// валюту подменить нельзя.
 //
-// Ответ Lava (id счёта и ссылка на оплату) может отличаться по именам полей
-// между версиями их API, поэтому ссылка ищется по нескольким вариантам, а
-// сырой ответ возвращается в поле `raw`, если ссылку найти не удалось.
+// ЮKassa принимает только российские карты и рубли, поэтому заказ в долларах
+// сюда просто не пропускается: лучше честно сказать, что оплата недоступна,
+// чем вести игрока на страницу, где он не сможет заплатить.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const LAVA_URL = 'https://gate.lava.top/api/v2/invoice';
+const YOOKASSA_URL = 'https://api.yookassa.ru/v3/payments';
 
 // apikey и x-client-info браузер запрашивает в preflight, потому что их
 // добавляет клиент Supabase. Без них в списке preflight отклоняется, и запрос
@@ -28,119 +28,22 @@ const json = (body: unknown, status = 200) =>
     status, headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-/** Способ оплаты под валюту. Переопределяется секретами, если Lava включит другие. */
-function methodFor(currency: string) {
-  return currency === 'RUB'
-    ? (Deno.env.get('LAVA_METHOD_RUB') ?? 'BANK131')   // карты РФ
-    : (Deno.env.get('LAVA_METHOD_USD') ?? 'UNLIMINT'); // зарубежные карты
-}
-
-/* ── Поиск оффера ─────────────────────────────────────────────────────────
-   В Lava счёт выставляется на оффер внутри продукта, а не на сам продукт, и
-   его id неочевидно найти в кабинете. Поэтому берём каталог по API и ищем
-   оффер сами: сначала по настроенному LAVA_OFFER_ID, потом по совпадению цены
-   и валюты с нашим каталогом, и только если продавать нечего — ошибка.
-   Каталог кэшируем: он меняется куда реже, чем идут покупки. */
-
-type Offer = { id: string; product: string | null; name: string | null;
-               prices: { amount: number; currency: string }[] };
-
-let cachedOffers: { at: number; offers: Offer[] } | null = null;
-const CACHE_MS = 10 * 60 * 1000;
-
-async function loadOffers(apiKey: string): Promise<Offer[]> {
-  if (cachedOffers && Date.now() - cachedOffers.at < CACHE_MS) return cachedOffers.offers;
-
-  const res = await fetch('https://gate.lava.top/api/v2/products', {
-    headers: { 'X-Api-Key': apiKey },
-  });
-  if (!res.ok) throw new Error('products_' + res.status);
-
-  const raw = await res.json();
-  const items = Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : []);
-  const offers: Offer[] = [];
-
-  for (const item of items) {
-    const data = item?.data ?? item;
-    const product = data?.title ?? data?.name ?? null;
-    for (const offer of Array.isArray(data?.offers) ? data.offers : []) {
-      if (!offer?.id) continue;
-      offers.push({
-        id: String(offer.id),
-        product,
-        name: offer?.name ?? null,
-        prices: (Array.isArray(offer?.prices) ? offer.prices : [])
-          .map((p: any) => ({ amount: Number(p?.amount), currency: String(p?.currency ?? '') })),
-      });
-    }
-  }
-
-  // Пустой разбор — это либо пустой каталог, либо структура ответа не та,
-  // которую мы ждём. Отличить можно только по сырому ответу, поэтому пишем
-  // его в лог (ключей и персональных данных там нет, только товары).
-  if (offers.length === 0) {
-    console.error('products: офферы не разобраны, сырой ответ:',
-      JSON.stringify(raw).slice(0, 2000));
-    // Пустоту не кэшируем: иначе после починки каталога пришлось бы ждать
-    // истечения кэша, чтобы покупка заработала.
-    return offers;
-  }
-
-  cachedOffers = { at: Date.now(), offers };
-  return offers;
-}
-
-/** amountMinor — цена из нашего каталога в копейках/центах. */
-async function resolveOfferId(apiKey: string, currency: string, amountMinor: number) {
-  const configured = Deno.env.get('LAVA_OFFER_ID') ?? '';
-  const offers = await loadOffers(apiKey);
-
-  if (configured && offers.some((o) => o.id === configured)) return configured;
-
-  const matches = offers.filter((o) =>
-    o.prices.some((p) => p.currency === currency && Math.round(p.amount * 100) === amountMinor));
-
-  if (matches.length === 1) {
-    console.log('offer подобран по цене:', matches[0].id, matches[0].product, matches[0].name);
-    return matches[0].id;
-  }
-
-  // Не угадываем: продать не тот товар хуже, чем показать ошибку.
-  console.error('offer не определён. настроенный:', configured || 'нет',
-    '| ищем', amountMinor, currency,
-    '| доступно:', JSON.stringify(offers.map((o) =>
-      ({ id: o.id, product: o.product, name: o.name, prices: o.prices }))));
-
-  if (offers.length === 0) throw new Error('no_offers_in_lava');
-  throw new Error(matches.length > 1 ? 'several_offers_match' : 'offer_not_found');
-}
-
-function findUrl(obj: unknown): string | null {
-  const seen = new Set<unknown>();
-  const walk = (v: unknown): string | null => {
-    if (!v || typeof v !== 'object' || seen.has(v)) return null;
-    seen.add(v);
-    for (const [key, val] of Object.entries(v as Record<string, unknown>)) {
-      if (typeof val === 'string' && /^https?:\/\//.test(val) &&
-          /url|link|pay/i.test(key)) {
-        return val;
-      }
-      const nested = walk(val);
-      if (nested) return nested;
-    }
-    return null;
-  };
-  return walk(obj);
+/** Куда ЮKassa вернёт игрока после оплаты. */
+function returnUrl(gameSlug: string) {
+  const custom = Deno.env.get('YOOKASSA_RETURN_URL');
+  if (custom) return custom;
+  return gameSlug === 'byte-blaster'
+    ? 'https://pixset-studio.github.io/byte-blaster/account/'
+    : 'https://pixset-studio.github.io/account/';
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
-  // LAVA_OFFER_ID необязателен: если он не задан или устарел, оффер находится
-  // по цене автоматически (см. resolveOfferId).
-  const apiKey = Deno.env.get('LAVA_API_KEY');
-  if (!apiKey) return json({ error: 'lava_not_configured' }, 503);
+  const shopId = Deno.env.get('YOOKASSA_SHOP_ID');
+  const secretKey = Deno.env.get('YOOKASSA_SECRET_KEY');
+  if (!shopId || !secretKey) return json({ error: 'payments_not_configured' }, 503);
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return json({ error: 'no_auth' }, 401);
@@ -173,56 +76,60 @@ Deno.serve(async (req) => {
   if (orderError) return json({ error: orderError.message }, 400);
 
   const { data: order } = await admin
-    .from('orders').select('id, currency, amount').eq('id', orderId).single();
+    .from('orders').select('id, currency, amount, game_slug').eq('id', orderId).single();
   if (!order) return json({ error: 'order_not_found' }, 500);
 
-  const currency = order.currency === 'RUB' ? 'RUB' : 'USD';
-
-  let offerId: string;
-  try {
-    offerId = await resolveOfferId(apiKey, currency, order.amount);
-  } catch (e) {
-    // Причина и полный список офферов уже в логах функции.
-    return json({ error: 'offer_problem', reason: String((e as Error).message) }, 502);
+  if (order.currency !== 'RUB') {
+    return json({ error: 'currency_not_supported' }, 400);
   }
 
-  const lavaRes = await fetch(LAVA_URL, {
+  // Сумма в рублях с копейками: в базе она хранится в копейках.
+  const value = (order.amount / 100).toFixed(2);
+
+  const { data: game } = await admin
+    .from('games').select('title').eq('slug', order.game_slug).single();
+
+  const res = await fetch(YOOKASSA_URL, {
     method: 'POST',
-    headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: 'Basic ' + btoa(`${shopId}:${secretKey}`),
+      'Content-Type': 'application/json',
+      // Ключ идемпотентности — id заказа: повторное нажатие «Купить» не
+      // создаст второй платёж, ЮKassa вернёт уже существующий.
+      'Idempotence-Key': order.id,
+    },
     body: JSON.stringify({
-      email: user.email,
-      offerId,
-      currency,
-      periodicity: 'ONE_TIME',
-      paymentMethod: methodFor(currency),
-      buyerLanguage: currency === 'RUB' ? 'RU' : 'EN',
-      // Номер заказа отправляем обратно к себе же: вебхук по нему найдёт покупку.
-      // Если Lava не вернёт метки, сработает запасной поиск по почте.
-      clientUtm: { utm_content: order.id, utm_source: 'pixset-store' },
+      amount: { value, currency: 'RUB' },
+      capture: true,                       // списываем сразу, без двухстадийности
+      confirmation: { type: 'redirect', return_url: returnUrl(order.game_slug) },
+      description: `${game?.title ?? order.game_slug} — лицензия Pixset Studio`,
+      // По metadata вебхук находит заказ. Это надёжнее, чем поиск по почте.
+      metadata: { order_id: order.id, user_id: user.id, game_slug: order.game_slug },
     }),
   });
 
-  const raw = await lavaRes.json().catch(() => null);
+  const raw = await res.json().catch(() => null);
 
-  if (!lavaRes.ok) {
+  if (!res.ok) {
     // Заказ оставляем в pending: игрок может повторить попытку, и create_order
     // вернёт тот же заказ, а не наплодит новых.
-    console.error('lava invoice failed', lavaRes.status, JSON.stringify(raw));
-    return json({ error: 'lava_error', status: lavaRes.status, raw }, 502);
+    console.error('yookassa payment failed', res.status, JSON.stringify(raw));
+    return json({ error: 'provider_error', status: res.status, raw }, 502);
   }
 
-  const payUrl = findUrl(raw);
+  const payUrl = raw?.confirmation?.confirmation_url ?? null;
+  const paymentId = raw?.id ? String(raw.id) : null;
 
-  // Идентификатор счёта пригодится для сверки платежей.
-  const invoiceId = raw && typeof raw === 'object' && 'id' in (raw as any)
-    ? String((raw as any).id) : null;
-  if (invoiceId) {
+  if (paymentId) {
     await admin.from('orders')
-      .update({ provider: 'lava', provider_ref: invoiceId })
+      .update({ provider: 'yookassa', provider_ref: paymentId })
       .eq('id', order.id);
   }
 
-  if (!payUrl) return json({ error: 'no_payment_url', raw }, 502);
+  if (!payUrl) {
+    console.error('yookassa: нет ссылки на оплату', JSON.stringify(raw));
+    return json({ error: 'no_payment_url', raw }, 502);
+  }
 
   return json({ ok: true, order_id: order.id, payment_url: payUrl });
 });

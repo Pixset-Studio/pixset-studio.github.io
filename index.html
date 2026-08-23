@@ -8,22 +8,29 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --neon-yellow: #ffd700;
-    --neon-yellow-warm: #ffaa00;
-    --neon-green: #00ff88;
-    --neon-cyan: #39ff14;
-    --neon-purple: #bf00ff;
-    --neon-pink: #ff006e;
-    --bg-deep: #020408;
-    --bg-dark: #050d12;
-    --bg-card: #08141c;
-    --grid-color: rgba(57, 255, 20, 0.04);
-    --glow-yellow: 0 0 10px #ffd700, 0 0 30px #ffd70050, 0 0 60px #ffd70025;
-    --glow-yellow-sm: 0 0 6px #ffd700, 0 0 18px #ffd70040;
-    --glow-green: 0 0 10px #00ff88, 0 0 30px #00ff8840, 0 0 60px #00ff8820;
-    --glow-cyan: 0 0 10px #39ff14, 0 0 30px #39ff1440, 0 0 60px #39ff1420;
-    --glow-purple: 0 0 10px #bf00ff, 0 0 30px #bf00ff40;
-    --glow-pink: 0 0 10px #ff006e, 0 0 30px #ff006e40;
+    /* Чёрно-жёлтая гамма логотипа студии. Роли цветов сохранены, поэтому
+       разметке всё равно, каким именно оттенком она подсвечена:
+       yellow — основной акцент, warm — золото для заголовков,
+       green/cyan — светлый и насыщенный жёлтый, purple — белый (максимальный
+       контраст), pink — оранжевый для предупреждений. */
+    --neon-yellow: #ffd400;
+    --neon-yellow-warm: #ffa300;
+    --neon-green: #ffe066;
+    --neon-cyan: #ffd400;
+    --neon-purple: #ffffff;
+    --neon-pink: #ff8a00;
+    --bg-deep: #050505;
+    --bg-dark: #0a0a0a;
+    --bg-card: #121110;
+    --grid-color: rgba(255, 212, 0, 0.035);
+    /* Свечение сделано сдержаннее прежнего: раньше три слоя ореола на каждом
+       элементе превращали страницу в кашу. Теперь два слоя и меньший радиус. */
+    --glow-yellow: 0 0 8px #ffd40080, 0 0 26px #ffd4003a;
+    --glow-yellow-sm: 0 0 5px #ffd40070, 0 0 14px #ffd40030;
+    --glow-green: 0 0 8px #ffe06670, 0 0 24px #ffe06630;
+    --glow-cyan: 0 0 8px #ffd40080, 0 0 26px #ffd4003a;
+    --glow-purple: 0 0 8px #ffffff55, 0 0 22px #ffffff22;
+    --glow-pink: 0 0 8px #ff8a0080, 0 0 22px #ff8a0035;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,36 +41,11 @@
 
   body {
     background: var(--bg-deep);
-    color: #cce8ff;
+    color: #e7e1d2;
     font-family: 'Rajdhani', sans-serif;
     font-size: 17px;
     line-height: 1.6;
     overflow-x: hidden;
-    cursor: none;
-  }
-
-  /* CUSTOM CURSOR */
-  .cursor {
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    background: var(--neon-cyan);
-    box-shadow: var(--glow-cyan);
-    position: fixed;
-    pointer-events: none;
-    z-index: 99999;
-    transform: translate(-50%, -50%);
-    transition: transform 0.1s, width 0.2s, height 0.2s;
-  }
-  .cursor-ring {
-    width: 36px; height: 36px;
-    border: 1px solid var(--neon-cyan);
-    border-radius: 50%;
-    position: fixed;
-    pointer-events: none;
-    z-index: 99998;
-    transform: translate(-50%, -50%);
-    transition: transform 0.15s ease-out, width 0.3s, height 0.3s, opacity 0.3s;
-    opacity: 0.5;
   }
 
   /* GRID BACKGROUND */
@@ -103,7 +85,7 @@
     z-index: 1000;
     background: rgba(2, 4, 8, 0.88);
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(57, 255, 20, 0.15);
+    border-bottom: 1px solid rgba(255, 212, 0, 0.15);
     padding: 0 32px;
     display: flex;
     align-items: center;
@@ -164,7 +146,7 @@
     align-items: center;
   }
   .nav-links a {
-    color: rgba(200, 230, 255, 0.7);
+    color: rgba(231, 225, 210, 0.7);
     text-decoration: none;
     font-family: 'Share Tech Mono', monospace;
     font-size: 12px;
@@ -177,8 +159,8 @@
   }
   .nav-links a:hover {
     color: var(--neon-cyan);
-    border-color: rgba(57, 255, 20, 0.4);
-    background: rgba(57, 255, 20, 0.05);
+    border-color: rgba(255, 212, 0, 0.4);
+    background: rgba(255, 212, 0, 0.05);
     text-shadow: 0 0 8px var(--neon-cyan);
   }
 
@@ -205,11 +187,11 @@
     transform: translateX(-50%);
     min-width: 220px;
     background: rgba(2, 6, 12, 0.97);
-    border: 1px solid rgba(57, 255, 20, 0.15);
+    border: 1px solid rgba(255, 212, 0, 0.15);
     backdrop-filter: blur(20px);
     padding: 8px 0;
     z-index: 500;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.6), 0 0 20px rgba(57,255,20,0.05);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6), 0 0 20px rgba(255,212,0,0.05);
   }
   .nav-dropdown-menu::before {
     content: '';
@@ -223,13 +205,13 @@
     padding: 8px 20px;
     border: none;
     font-size: 11px;
-    color: rgba(180,220,255,0.7);
+    color: rgba(214,206,186,0.7);
     white-space: nowrap;
     transition: all 0.15s;
   }
   .nav-dropdown-menu a:hover {
     color: var(--neon-cyan);
-    background: rgba(57,255,20,0.06);
+    background: rgba(255,212,0,0.06);
     padding-left: 26px;
     border: none;
   }
@@ -256,7 +238,7 @@
     position: fixed;
     top: 64px; left: 0; right: 0;
     background: rgba(2, 4, 8, 0.97);
-    border-bottom: 1px solid rgba(57, 255, 20, 0.2);
+    border-bottom: 1px solid rgba(255, 212, 0, 0.2);
     z-index: 999;
     padding: 20px;
     flex-direction: column;
@@ -274,7 +256,7 @@
     display: none;
     flex-direction: column;
     padding-left: 16px;
-    border-left: 1px solid rgba(57,255,20,0.2);
+    border-left: 1px solid rgba(255,212,0,0.2);
     margin: 4px 0 4px 16px;
   }
   .mobile-submenu.open { display: flex; }
@@ -286,7 +268,7 @@
   }
   .mobile-nav-item a { flex: 1; }
   .mobile-expand {
-    color: rgba(57,255,20,0.5);
+    color: rgba(255,212,0,0.5);
     font-family: 'Share Tech Mono', monospace;
     font-size: 14px;
     padding: 10px 8px;
@@ -295,7 +277,7 @@
   }
   .mobile-expand.open { transform: rotate(90deg); color: var(--neon-cyan); }
   .mobile-nav a {
-    color: rgba(200, 230, 255, 0.8);
+    color: rgba(231, 225, 210, 0.8);
     text-decoration: none;
     font-family: 'Share Tech Mono', monospace;
     font-size: 13px;
@@ -306,13 +288,13 @@
   .mobile-nav a:hover {
     color: var(--neon-cyan);
     border-left-color: var(--neon-cyan);
-    background: rgba(57,255,20,0.05);
+    background: rgba(255,212,0,0.05);
   }
 
   /* BANNER */
   .banner {
     margin-top: 64px;
-    background: linear-gradient(90deg, rgba(255,170,0,0.1), rgba(57,255,20,0.06), rgba(255,170,0,0.1));
+    background: linear-gradient(90deg, rgba(255,170,0,0.1), rgba(255,212,0,0.06), rgba(255,170,0,0.1));
     border-bottom: 1px solid rgba(255, 215, 0, 0.25);
     padding: 10px 20px;
     text-align: center;
@@ -357,9 +339,9 @@
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(ellipse at 20% 50%, rgba(0,255,136,0.06) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 20%, rgba(57,255,20,0.05) 0%, transparent 60%),
-      radial-gradient(ellipse at 60% 80%, rgba(191,0,255,0.05) 0%, transparent 60%);
+      radial-gradient(ellipse at 20% 50%, rgba(255,224,102,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(255,212,0,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse at 60% 80%, rgba(255,255,255,0.05) 0%, transparent 60%);
     animation: bgPulse 8s ease-in-out infinite alternate;
   }
   @keyframes bgPulse {
@@ -381,10 +363,10 @@
     animation: ringExpand linear infinite;
     opacity: 0;
   }
-  .ring:nth-child(1) { width: 200px; height: 200px; border-color: rgba(0,255,136,0.2); animation-duration: 4s; }
-  .ring:nth-child(2) { width: 350px; height: 350px; border-color: rgba(57,255,20,0.15); animation-duration: 4s; animation-delay: 1s; }
-  .ring:nth-child(3) { width: 500px; height: 500px; border-color: rgba(191,0,255,0.1); animation-duration: 4s; animation-delay: 2s; }
-  .ring:nth-child(4) { width: 700px; height: 700px; border-color: rgba(57,255,20,0.08); animation-duration: 4s; animation-delay: 3s; }
+  .ring:nth-child(1) { width: 200px; height: 200px; border-color: rgba(255,224,102,0.2); animation-duration: 4s; }
+  .ring:nth-child(2) { width: 350px; height: 350px; border-color: rgba(255,212,0,0.15); animation-duration: 4s; animation-delay: 1s; }
+  .ring:nth-child(3) { width: 500px; height: 500px; border-color: rgba(255,255,255,0.1); animation-duration: 4s; animation-delay: 2s; }
+  .ring:nth-child(4) { width: 700px; height: 700px; border-color: rgba(255,212,0,0.08); animation-duration: 4s; animation-delay: 3s; }
   @keyframes ringExpand {
     0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
     30% { opacity: 1; }
@@ -495,7 +477,7 @@
     box-shadow: var(--glow-yellow);
   }
   .btn-primary:hover {
-    box-shadow: 0 0 20px #ffd700, 0 0 60px #ffd70050, 0 0 100px #ffd70025;
+    box-shadow: 0 0 20px #ffd400, 0 0 60px #ffd40050, 0 0 100px #ffd40025;
     transform: translateY(-2px);
   }
 
@@ -531,7 +513,7 @@
   .scroll-text {
     font-family: 'Share Tech Mono', monospace;
     font-size: 10px;
-    color: rgba(57,255,20,0.5);
+    color: rgba(255,212,0,0.5);
     letter-spacing: 3px;
     writing-mode: vertical-rl;
   }
@@ -591,7 +573,7 @@
   }
 
   .about-text p {
-    color: rgba(180, 220, 255, 0.75);
+    color: rgba(214, 206, 186, 0.75);
     font-size: 16px;
     line-height: 1.9;
     margin-bottom: 16px;
@@ -601,7 +583,7 @@
   .about-text p a {
     color: var(--neon-cyan);
     text-decoration: none;
-    border-bottom: 1px solid rgba(57,255,20,0.3);
+    border-bottom: 1px solid rgba(255,212,0,0.3);
     transition: all 0.2s;
   }
   .about-text p a:hover {
@@ -629,15 +611,15 @@
     animation: rotate linear infinite;
   }
   .hex-ring:nth-child(1) { border-color: rgba(255,215,0,0.5); animation-duration: 10s; }
-  .hex-ring:nth-child(2) { inset: 20px; border-color: rgba(57,255,20,0.3); animation-duration: 15s; animation-direction: reverse; border-style: dashed; }
-  .hex-ring:nth-child(3) { inset: 40px; border-color: rgba(191,0,255,0.25); animation-duration: 20s; }
+  .hex-ring:nth-child(2) { inset: 20px; border-color: rgba(255,212,0,0.3); animation-duration: 15s; animation-direction: reverse; border-style: dashed; }
+  .hex-ring:nth-child(3) { inset: 40px; border-color: rgba(255,255,255,0.25); animation-duration: 20s; }
   @keyframes rotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
 
   .hex-center {
     position: absolute;
     inset: 55px;
-    background: rgba(57,255,20,0.03);
-    border: 1px solid rgba(57,255,20,0.15);
+    background: rgba(255,212,0,0.03);
+    border: 1px solid rgba(255,212,0,0.15);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -665,7 +647,7 @@
 
   .card {
     background: var(--bg-card);
-    border: 1px solid rgba(57,255,20,0.08);
+    border: 1px solid rgba(255,212,0,0.08);
     padding: 28px;
     position: relative;
     transition: all 0.3s;
@@ -684,10 +666,10 @@
   }
   .card:hover::before { transform: scaleX(1); }
   .card:hover {
-    border-color: rgba(57,255,20,0.2);
+    border-color: rgba(255,212,0,0.2);
     background: rgba(8,20,28,0.9);
     transform: translateY(-4px);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 20px rgba(57,255,20,0.04);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 20px rgba(255,212,0,0.04);
   }
 
   .card-icon {
@@ -700,7 +682,7 @@
     font-size: 14px;
     font-weight: 600;
     color: var(--neon-cyan);
-    text-shadow: 0 0 10px rgba(57,255,20,0.3);
+    text-shadow: 0 0 10px rgba(255,212,0,0.3);
     margin-bottom: 12px;
     letter-spacing: 1px;
   }
@@ -734,7 +716,7 @@
     position: relative;
     z-index: 2;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(57,255,20,0.2), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,212,0,0.2), transparent);
     margin: 0 40px;
   }
 
@@ -756,7 +738,7 @@
     flex: 1;
     min-width: 200px;
     padding: 24px;
-    border: 1px solid rgba(57,255,20,0.1);
+    border: 1px solid rgba(255,212,0,0.1);
     background: var(--bg-card);
     text-decoration: none;
     display: flex;
@@ -778,7 +760,7 @@
   .social-card:hover { transform: translateY(-4px); }
 
   .social-card.youtube { --accent: #ff0044; }
-  .social-card.roblox { --accent: #39ff14; }
+  .social-card.roblox { --accent: #ffd400; }
   .social-card.discord { --accent: #7289da; }
   .social-card.telegram { --accent: #00aaff; }
 
@@ -817,8 +799,8 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1px;
-    background: rgba(57,255,20,0.08);
-    border: 1px solid rgba(57,255,20,0.08);
+    background: rgba(255,212,0,0.08);
+    border: 1px solid rgba(255,212,0,0.08);
     margin: 60px 40px 0;
     position: relative;
     z-index: 2;
@@ -849,7 +831,7 @@
   .stat-label {
     font-family: 'Share Tech Mono', monospace;
     font-size: 11px;
-    color: rgba(57,255,20,0.6);
+    color: rgba(255,212,0,0.6);
     letter-spacing: 2px;
     text-transform: uppercase;
   }
@@ -859,7 +841,7 @@
     position: relative;
     z-index: 2;
     padding: 60px 40px 40px;
-    border-top: 1px solid rgba(57,255,20,0.08);
+    border-top: 1px solid rgba(255,212,0,0.08);
     background: rgba(2,4,8,0.9);
   }
   .footer-inner {
@@ -882,13 +864,13 @@
   .footer-copy {
     font-family: 'Share Tech Mono', monospace;
     font-size: 11px;
-    color: rgba(57,255,20,0.4);
+    color: rgba(255,212,0,0.4);
     letter-spacing: 2px;
   }
   .footer-line {
     width: 100%;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(57,255,20,0.15), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,212,0,0.15), transparent);
     margin-bottom: 32px;
   }
   .footer-brand { display: flex; flex-direction: column; gap: 10px; }
@@ -896,7 +878,7 @@
     font-family: 'Share Tech Mono', monospace;
     font-size: 11px;
     line-height: 1.9;
-    color: rgba(57,255,20,0.42);
+    color: rgba(255,212,0,0.42);
     letter-spacing: 1px;
     max-width: 640px;
     display: flex;
@@ -904,15 +886,15 @@
     gap: 2px;
   }
   .footer-legal strong { color: rgba(255,215,0,0.75); font-weight: 400; }
-  .footer-legal .dim { color: rgba(57,255,20,0.26); }
+  .footer-legal .dim { color: rgba(255,212,0,0.26); }
   .footer-links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
   .footer-links a {
     font-family: 'Share Tech Mono', monospace;
     font-size: 11px;
     letter-spacing: 1px;
-    color: rgba(57,255,20,0.55);
+    color: rgba(255,212,0,0.55);
     text-decoration: none;
-    border-bottom: 1px solid rgba(57,255,20,0.2);
+    border-bottom: 1px solid rgba(255,212,0,0.2);
     transition: color .2s, border-color .2s;
   }
   .footer-links a:hover { color: var(--neon-yellow); border-color: rgba(255,215,0,0.5); }
@@ -1025,8 +1007,6 @@
 </head>
 <body>
 
-<div class="cursor" id="cursor"></div>
-<div class="cursor-ring" id="cursorRing"></div>
 <canvas id="particles"></canvas>
 <div class="grid-bg"></div>
 <div class="scanlines"></div>
@@ -1335,30 +1315,6 @@
 </footer>
 
 <script>
-// CUSTOM CURSOR
-const cursor = document.getElementById('cursor');
-const ring = document.getElementById('cursorRing');
-let mx = 0, my = 0, rx = 0, ry = 0;
-document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
-function animateCursor() {
-  rx += (mx - rx) * 0.12;
-  ry += (my - ry) * 0.12;
-  cursor.style.left = mx + 'px'; cursor.style.top = my + 'px';
-  ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
-  requestAnimationFrame(animateCursor);
-}
-animateCursor();
-document.querySelectorAll('a,button,.btn').forEach(el => {
-  el.addEventListener('mouseenter', () => {
-    cursor.style.width = '6px'; cursor.style.height = '6px';
-    ring.style.width = '52px'; ring.style.height = '52px'; ring.style.opacity = '0.8';
-  });
-  el.addEventListener('mouseleave', () => {
-    cursor.style.width = '12px'; cursor.style.height = '12px';
-    ring.style.width = '36px'; ring.style.height = '36px'; ring.style.opacity = '0.5';
-  });
-});
-
 // PARTICLES
 const canvas = document.getElementById('particles');
 const ctx = canvas.getContext('2d');
@@ -1375,7 +1331,7 @@ class Particle {
     this.vy = (Math.random() - 0.5) * 0.3;
     this.size = Math.random() * 1.5 + 0.5;
     this.alpha = Math.random() * 0.4 + 0.1;
-    this.color = Math.random() > 0.5 ? '#39ff14' : '#00ff88';
+    this.color = Math.random() > 0.5 ? '#ffd400' : '#ffe066';
   }
   update() {
     this.x += this.vx; this.y += this.vy;
@@ -1407,7 +1363,7 @@ function animateParticles() {
       if (dist < 100) {
         ctx.save();
         ctx.globalAlpha = (1 - dist/100) * 0.06;
-        ctx.strokeStyle = '#39ff14';
+        ctx.strokeStyle = '#ffd400';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(particles[i].x, particles[i].y);

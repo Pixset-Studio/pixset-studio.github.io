@@ -2,16 +2,16 @@
    Палитра и типографика взяты из index.html. */
 
 :root {
-  --neon-yellow: #ffd700;
-  --neon-green: #00ff88;
-  --neon-cyan: #39ff14;
-  --neon-purple: #bf00ff;
-  --neon-pink: #ff006e;
-  --bg-deep: #020408;
-  --bg-card: #08141c;
-  --grid-color: rgba(57, 255, 20, 0.04);
-  --glow-yellow-sm: 0 0 6px #ffd700, 0 0 18px #ffd70040;
-  --glow-cyan: 0 0 10px #39ff14, 0 0 30px #39ff1440;
+  --neon-yellow: #ffd400;
+  --neon-green: #ffe066;
+  --neon-cyan: #ffd400;
+  --neon-purple: #ffffff;
+  --neon-pink: #ff8a00;
+  --bg-deep: #050505;
+  --bg-card: #121110;
+  --grid-color: rgba(255, 212, 0, 0.04);
+  --glow-yellow-sm: 0 0 6px #ffd400, 0 0 18px #ffd40040;
+  --glow-cyan: 0 0 10px #ffd400, 0 0 30px #ffd40040;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -19,7 +19,7 @@
 
 body {
   background: var(--bg-deep);
-  color: #cce8ff;
+  color: #e7e1d2;
   font-family: 'Rajdhani', sans-serif;
   font-size: 17px;
   line-height: 1.6;
@@ -59,9 +59,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(2, 4, 8, 0.88);
+  background: rgba(5, 5, 5, 0.88);
   backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(57, 255, 20, 0.15);
+  border-bottom: 1px solid rgba(255, 212, 0, 0.15);
 }
 .auth-nav a.back {
   font-family: 'Orbitron', monospace;
@@ -86,7 +86,7 @@ body {
 
 .panel {
   background: var(--bg-card);
-  border: 1px solid rgba(57, 255, 20, 0.18);
+  border: 1px solid rgba(255, 212, 0, 0.18);
   padding: 32px 28px;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -121,7 +121,7 @@ h2 {
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
   letter-spacing: 1px;
-  color: rgba(200, 230, 255, 0.45);
+  color: rgba(231, 225, 210, 0.45);
   text-transform: uppercase;
   margin-bottom: 26px;
 }
@@ -131,8 +131,8 @@ h2 {
 .tabs button {
   flex: 1;
   background: transparent;
-  border: 1px solid rgba(57, 255, 20, 0.2);
-  color: rgba(200, 230, 255, 0.6);
+  border: 1px solid rgba(255, 212, 0, 0.2);
+  color: rgba(231, 225, 210, 0.6);
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
   letter-spacing: 1px;
@@ -141,11 +141,11 @@ h2 {
   cursor: pointer;
   transition: all 0.25s;
 }
-.tabs button:hover { color: var(--neon-cyan); background: rgba(57, 255, 20, 0.05); }
+.tabs button:hover { color: var(--neon-cyan); background: rgba(255, 212, 0, 0.05); }
 .tabs button.active {
   color: var(--neon-cyan);
   border-color: var(--neon-cyan);
-  background: rgba(57, 255, 20, 0.08);
+  background: rgba(255, 212, 0, 0.08);
   text-shadow: 0 0 8px var(--neon-cyan);
 }
 
@@ -156,14 +156,14 @@ label {
   font-size: 11px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: rgba(200, 230, 255, 0.55);
+  color: rgba(231, 225, 210, 0.55);
   margin-bottom: 6px;
 }
 input {
   width: 100%;
-  background: rgba(2, 6, 12, 0.9);
-  border: 1px solid rgba(57, 255, 20, 0.2);
-  color: #cce8ff;
+  background: rgba(8, 8, 8, 0.9);
+  border: 1px solid rgba(255, 212, 0, 0.2);
+  color: #e7e1d2;
   font-family: 'Rajdhani', sans-serif;
   font-size: 16px;
   padding: 11px 13px;
@@ -173,7 +173,7 @@ input {
 input:focus {
   outline: none;
   border-color: var(--neon-cyan);
-  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.3), 0 0 18px rgba(57, 255, 20, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 212, 0, 0.3), 0 0 18px rgba(255, 212, 0, 0.12);
 }
 
 .btn {
@@ -194,13 +194,13 @@ input:focus {
   transition: all 0.25s;
 }
 .btn:hover:not(:disabled) {
-  background: rgba(57, 255, 20, 0.1);
+  background: rgba(255, 212, 0, 0.1);
   box-shadow: var(--glow-cyan);
 }
 .btn:disabled { opacity: 0.45; cursor: wait; }
 .btn.ghost {
-  border-color: rgba(200, 230, 255, 0.25);
-  color: rgba(200, 230, 255, 0.6);
+  border-color: rgba(231, 225, 210, 0.25);
+  color: rgba(231, 225, 210, 0.6);
   font-size: 11px;
   padding: 9px;
   width: auto;
@@ -214,7 +214,7 @@ input:focus {
   font-size: 11px;
   letter-spacing: 1px;
 }
-.link-row a { color: rgba(200, 230, 255, 0.5); text-decoration: none; }
+.link-row a { color: rgba(231, 225, 210, 0.5); text-decoration: none; }
 .link-row a:hover { color: var(--neon-cyan); }
 
 /* ── Сообщения ─────────────────────────────────────────────────────────── */
@@ -228,8 +228,8 @@ input:focus {
   display: none;
 }
 .msg.show { display: block; }
-.msg.error { color: #ff7a9c; background: rgba(255, 0, 110, 0.07); border-color: var(--neon-pink); }
-.msg.ok    { color: #7dffc0; background: rgba(0, 255, 136, 0.07); border-color: var(--neon-green); }
+.msg.error { color: #ffb066; background: rgba(255, 138, 0, 0.07); border-color: var(--neon-pink); }
+.msg.ok    { color: #ffe9a8; background: rgba(255, 224, 102, 0.07); border-color: var(--neon-green); }
 
 /* ── Профиль ───────────────────────────────────────────────────────────── */
 .profile-head {
@@ -250,7 +250,7 @@ input:focus {
   font-weight: 900;
   color: var(--neon-cyan);
   text-shadow: var(--glow-cyan);
-  background: rgba(57, 255, 20, 0.05);
+  background: rgba(255, 212, 0, 0.05);
   flex-shrink: 0;
 }
 .nick {
@@ -258,12 +258,12 @@ input:focus {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: #eaf6ff;
+  color: #f5f1e6;
 }
 .email {
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
-  color: rgba(200, 230, 255, 0.45);
+  color: rgba(231, 225, 210, 0.45);
 }
 
 /* ── Библиотека игр ────────────────────────────────────────────────────── */
@@ -273,23 +273,23 @@ input:focus {
   gap: 14px;
 }
 .game {
-  border: 1px solid rgba(57, 255, 20, 0.15);
-  background: rgba(2, 6, 12, 0.6);
+  border: 1px solid rgba(255, 212, 0, 0.15);
+  background: rgba(8, 8, 8, 0.6);
   padding: 18px;
   transition: border-color 0.25s, transform 0.25s;
 }
-.game:hover { border-color: rgba(57, 255, 20, 0.45); transform: translateY(-2px); }
+.game:hover { border-color: rgba(255, 212, 0, 0.45); transform: translateY(-2px); }
 .game .title {
   font-family: 'Orbitron', monospace;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: #eaf6ff;
+  color: #f5f1e6;
   margin-bottom: 4px;
 }
 .game .tagline {
   font-size: 14px;
-  color: rgba(200, 230, 255, 0.5);
+  color: rgba(231, 225, 210, 0.5);
   margin-bottom: 14px;
 }
 .badge {
@@ -301,9 +301,9 @@ input:focus {
   padding: 4px 9px;
   border: 1px solid;
 }
-.badge.owned  { color: var(--neon-green); border-color: var(--neon-green); background: rgba(0, 255, 136, 0.08); }
+.badge.owned  { color: var(--neon-green); border-color: var(--neon-green); background: rgba(255, 224, 102, 0.08); }
 .badge.demo   { color: var(--neon-yellow); border-color: var(--neon-yellow); background: rgba(255, 215, 0, 0.07); }
-.badge.soon   { color: rgba(200, 230, 255, 0.4); border-color: rgba(200, 230, 255, 0.2); }
+.badge.soon   { color: rgba(231, 225, 210, 0.4); border-color: rgba(231, 225, 210, 0.2); }
 
 /* ── Устройства ────────────────────────────────────────────────────────── */
 .device {
@@ -312,17 +312,17 @@ input:focus {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid rgba(57, 255, 20, 0.12);
+  border: 1px solid rgba(255, 212, 0, 0.12);
   margin-bottom: 8px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
 }
-.device .seen { color: rgba(200, 230, 255, 0.4); }
+.device .seen { color: rgba(231, 225, 210, 0.4); }
 
 .empty {
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
-  color: rgba(200, 230, 255, 0.35);
+  color: rgba(231, 225, 210, 0.35);
   letter-spacing: 1px;
   padding: 18px 0;
 }
