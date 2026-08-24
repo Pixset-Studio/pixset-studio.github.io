@@ -72,12 +72,13 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <a class="btn" href="https://www.rustore.ru/catalog/app/com.pixsetstudio.byteblaster" target="_blank" rel="noopener"><span data-l="ru">⬇ ОТКРЫТЬ В RuStore</span><span data-l="en">⬇ OPEN IN RuStore</span></a>
       </div>
 
-      <div class="card soon">
+      <div class="card" id="dlWindows">
         <div class="ico">🪟</div>
-        <h3><span data-l="ru">Windows<span class="badge off"><span data-l="ru">скоро</span><span data-l="en">soon</span></span></span><span data-l="en">Windows<span class="badge off">soon</span></span></h3>
-        <p data-l="ru">Настольная сборка (.exe): полноэкранный режим, игра по локальной сети и запуск без браузера.</p>
-        <p data-l="en">Desktop build (.exe): fullscreen mode, LAN play and no browser needed.</p>
-        <span class="btn disabled" aria-disabled="true"><span data-l="ru">ПОКА НЕДОСТУПНО</span><span data-l="en">NOT AVAILABLE YET</span></span>
+        <h3><span data-l="ru">Windows</span><span data-l="en">Windows</span></h3>
+        <p data-l="ru">Установщик (.exe): полноэкранный режим, игра по локальной сети, запуск без браузера и автоматические обновления.</p>
+        <p data-l="en">Installer (.exe): fullscreen mode, LAN play, no browser needed and automatic updates.</p>
+        <span class="btn disabled" id="winBtn" aria-disabled="true"><span data-l="ru">ПРОВЕРЯЕМ…</span><span data-l="en">CHECKING…</span></span>
+        <p class="dim" style="font-size:13px;margin-top:10px" id="winNote"></p>
       </div>
 
       <div class="card">
@@ -200,5 +201,106 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
 <script src="/byte-blaster/assets/price.js"></script>
+<script type="module">
+// Кнопка скачивания установщика. Файл лежит в закрытом хранилище: ссылка
+// выдаётся на десять минут и только владельцу лицензии, поэтому здесь мы
+// сначала выясняем, что вообще показать этому посетителю.
+import { supabase, getCurrentReleases, getDownloadLink, getEntitlements, getSettings }
+  from '/assets/pixset-auth.js';
+
+// Способы получить игру включаются и выключаются в админке студии: например,
+// .exe можно временно снять с раздачи, оставив браузерную версию.
+const channels = await getSettings();
+const off = (key) => channels[key] === false;
+
+if (off('channel_web')) {
+  document.querySelectorAll('a[href*="/game/full/"]').forEach((a) => {
+    a.replaceWith(Object.assign(document.createElement('span'), {
+      className: 'btn disabled', textContent: 'ВРЕМЕННО НЕДОСТУПНО',
+    }));
+  });
+}
+if (off('channel_rustore')) {
+  document.querySelectorAll('a[href*="rustore.ru"]').forEach((a) => {
+    a.replaceWith(Object.assign(document.createElement('span'), {
+      className: 'btn disabled', textContent: 'ВРЕМЕННО НЕДОСТУПНО',
+    }));
+  });
+}
+
+const GAME = 'byte-blaster';
+const btn = document.getElementById('winBtn');
+const note = document.getElementById('winNote');
+if (btn) {
+  const bi = (ru, en) => `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`;
+  const mbNum = (b) => b ? (b / 1048576).toFixed(0) : '';
+
+  const asLink = (href, ru, en, cls = 'btn primary') => {
+    const a = document.createElement('a');
+    a.className = cls;
+    a.href = href;
+    a.innerHTML = bi(ru, en);
+    btn.replaceWith(a);
+    return a;
+  };
+
+  try {
+    const releases = await getCurrentReleases(GAME);
+    const win = releases.find((r) => r.platform === 'windows');
+
+    if (off('channel_windows')) {
+      btn.innerHTML = bi('ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
+      note.innerHTML = bi('Скачивание для Windows приостановлено.',
+                          'Windows downloads are paused for now.');
+    } else if (!win) {
+      btn.innerHTML = bi('ПОКА НЕДОСТУПНО', 'NOT AVAILABLE YET');
+      note.innerHTML = bi('Сборка для Windows ещё не опубликована.',
+                          'The Windows build is not published yet.');
+    } else {
+      const { data: { session } } = await supabase.auth.getSession();
+      let owns = false;
+      if (session) {
+        try { owns = (await getEntitlements()).some((e) => e.game_slug === GAME); }
+        catch { owns = false; }
+      }
+
+      const size = mbNum(win.file_size);
+      note.innerHTML = bi(
+        `Версия ${win.version}${size ? ' · ' + size + ' МБ' : ''}`,
+        `Version ${win.version}${size ? ' · ' + size + ' MB' : ''}`);
+
+      if (!session) {
+        asLink('/byte-blaster/account/?next=/byte-blaster/download/',
+          '⬇ ВОЙТИ И СКАЧАТЬ', '⬇ SIGN IN TO DOWNLOAD');
+      } else if (!owns) {
+        asLink('/byte-blaster/buy/', '🛒 КУПИТЬ ПОЛНУЮ', '🛒 GET FULL GAME');
+      } else {
+        const a = asLink('#', '⬇ СКАЧАТЬ УСТАНОВЩИК', '⬇ DOWNLOAD INSTALLER');
+        a.onclick = async (e) => {
+          e.preventDefault();
+          a.innerHTML = bi('ГОТОВИМ ССЫЛКУ…', 'PREPARING LINK…');
+          try {
+            const link = await getDownloadLink(GAME, 'windows');
+            location.href = link.url;
+            a.innerHTML = bi('⬇ СКАЧАТЬ УСТАНОВЩИК', '⬇ DOWNLOAD INSTALLER');
+          } catch (err) {
+            const code = String(err.message || '');
+            a.innerHTML = bi('⬇ СКАЧАТЬ УСТАНОВЩИК', '⬇ DOWNLOAD INSTALLER');
+            note.innerHTML = code.includes('rate_limited')
+              ? bi('Слишком много скачиваний за час. Попробуйте позже.',
+                   'Too many downloads this hour. Try again later.')
+              : bi('Не удалось получить ссылку. Попробуйте ещё раз.',
+                   'Could not get the link. Please try again.');
+          }
+        };
+      }
+    }
+  } catch {
+    btn.innerHTML = bi('ПОКА НЕДОСТУПНО', 'NOT AVAILABLE YET');
+  }
+
+  if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
+}
+</script>
 </body>
 </html>

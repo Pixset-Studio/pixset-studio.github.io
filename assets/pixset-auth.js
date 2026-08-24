@@ -78,6 +78,69 @@ export async function getProfile(userId) {
   return data;
 }
 
+/* ── Профиль игрока ────────────────────────────────────────────────────── */
+
+/** Смена ника. Ник виден в мультиплеере, поэтому менять можно раз в сутки. */
+export async function updateNickname(nickname) {
+  const { data, error } = await supabase.rpc('update_nickname', { p_nickname: nickname });
+  if (error) throw error;
+  return data;
+}
+
+export async function updateLocale(locale) {
+  const { error } = await supabase.rpc('update_locale', { p_locale: locale });
+  if (error) throw error;
+}
+
+/** Смена пароля у вошедшего игрока. */
+export async function changePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+/**
+ * Смена почты. Supabase отправит письмо на новый адрес — до подтверждения
+ * вход остаётся по старому.
+ */
+export async function changeEmail(newEmail) {
+  const { error } = await supabase.auth.updateUser(
+    { email: newEmail }, { emailRedirectTo: ACCOUNT_URL },
+  );
+  if (error) throw error;
+}
+
+/** Удаление аккаунта вместе с лицензиями и заказами. Отменить нельзя. */
+export async function deleteAccount() {
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+  await supabase.auth.signOut();
+}
+
+/* ── Настройки студии ──────────────────────────────────────────────────── */
+
+/**
+ * Публичные настройки витрины: включён ли приём оплаты и куда писать, если нет.
+ * Читаются без авторизации — это не секреты, а состояние магазина.
+ */
+export async function getSettings() {
+  const fallback = { payments_enabled: false, support_email: 'pixset.studio.offical@gmail.com' };
+  try {
+    const { data, error } = await supabase.from('app_settings').select('key, value');
+    if (error) throw error;
+    const map = Object.fromEntries(data.map((r) => [r.key, r.value]));
+    return { ...fallback, ...map };
+  } catch {
+    // Настройки не прочитались — считаем оплату выключенной. Показать почту
+    // безопаснее, чем открыть кнопку, которая приведёт к ошибке.
+    return fallback;
+  }
+}
+
+export async function adminSetSetting(key, value) {
+  const { error } = await supabase.rpc('admin_set_setting', { p_key: key, p_value: value });
+  if (error) throw error;
+}
+
 /* ── Магазин ───────────────────────────────────────────────────────────── */
 
 /**
@@ -147,7 +210,111 @@ export async function getMyOrders() {
   return data;
 }
 
+/* ── Сборки и обновления ───────────────────────────────────────────────── */
+
+/** Текущие версии по платформам. Открыто всем: нужно для проверки обновлений. */
+export async function getCurrentReleases(gameSlug) {
+  const { data, error } = await supabase
+    .from('current_releases')
+    .select('platform, version, file_size, sha256, notes, external_url, created_at')
+    .eq('game_slug', gameSlug);
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Ссылка на скачивание сборки. Живёт 10 минут и выдаётся только владельцу
+ * лицензии — прямых ссылок на файлы не существует.
+ */
+export async function getDownloadLink(gameSlug, platform, version) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('not_authenticated');
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/download`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+    },
+    body: JSON.stringify({ game_slug: gameSlug, platform, version }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) {
+    const err = new Error(data.error || 'download_failed');
+    err.details = data;
+    throw err;
+  }
+  return data;
+}
+
 /* ── Админка ───────────────────────────────────────────────────────────── */
+
+export async function adminListReleases() {
+  const { data, error } = await supabase.rpc('admin_list_releases');
+  if (error) throw error;
+  return data;
+}
+
+export async function adminDeleteRelease(id) {
+  const { error } = await supabase.rpc('admin_delete_release', { p_id: id });
+  if (error) throw error;
+}
+
+/**
+ * Загружает файл сборки в приватный бакет и заводит релиз.
+ * Файл идёт напрямую в хранилище, минуя наш сервер, — иначе стомегабайтный
+ * установщик пришлось бы прогонять через функцию.
+ */
+export async function adminUploadRelease({ gameSlug, platform, version, file, notes, makeCurrent = true, onProgress }) {
+  const path = `${gameSlug}/${version}/${file.name}`;
+
+  const { error: upErr } = await supabase.storage
+    .from('releases')
+    .upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+  if (upErr) throw upErr;
+
+  if (onProgress) onProgress('checksum');
+  const sha256 = await fileSha256(file);
+
+  const { data, error } = await supabase.rpc('admin_upsert_release', {
+    p_game_slug: gameSlug,
+    p_platform: platform,
+    p_version: version,
+    p_file_path: path,
+    p_file_size: file.size,
+    p_sha256: sha256,
+    p_notes: notes || null,
+    p_external_url: null,
+    p_make_current: makeCurrent,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Релиз без файла: раздача идёт по внешней ссылке (например, RuStore). */
+export async function adminSetExternalRelease({ gameSlug, platform, version, url, notes, makeCurrent = true }) {
+  const { error } = await supabase.rpc('admin_upsert_release', {
+    p_game_slug: gameSlug,
+    p_platform: platform,
+    p_version: version,
+    p_file_path: null,
+    p_file_size: null,
+    p_sha256: null,
+    p_notes: notes || null,
+    p_external_url: url,
+    p_make_current: makeCurrent,
+  });
+  if (error) throw error;
+}
+
+/** SHA-256 файла: клиент после скачивания сверяет им целостность сборки. */
+export async function fileSha256(file) {
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export async function adminListOrders() {
   const { data, error } = await supabase.rpc('admin_list_orders');
@@ -240,6 +407,13 @@ export function humanError(err) {
   if (m.includes('price_not_set'))    return 'Для этой игры не задана цена.';
   if (m.includes('order_not_found'))  return 'Заказ не найден.';
   if (m.includes('forbidden'))        return 'Нужны права администратора.';
+  if (m.includes('bad_nickname'))     return 'Ник: 3-20 символов, латиница, цифры, _ и -';
+  if (m.includes('nickname_taken'))   return 'Этот ник уже занят.';
+  if (m.includes('nickname_too_soon'))return 'Ник можно менять раз в сутки.';
+  if (m.includes('admin_cannot_self_delete')) {
+    return 'Аккаунт администратора нельзя удалить из профиля.';
+  }
+  if (m.includes('same_password'))    return 'Новый пароль совпадает со старым.';
   if (m.includes('payments_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
   if (m.includes('provider_error') || m.includes('no_payment_url')) {
     return 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.';

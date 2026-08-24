@@ -63,9 +63,8 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
     <button class="burger" id="burger" aria-label="Меню">☰</button>
     <nav class="main">
       <a href="/">Главная</a>
-      <a href="/games">Игры</a>
-      <a href="/news">Новости</a>
       <a href="/wikipedia">Вики</a>
+      <a href="/byte-blaster/">Byte Blaster</a>
       <a href="/store" class="cta" aria-current="page">Магазин</a>
       <a href="/account"><span data-account-label>Аккаунт</span></a>
     </nav>
@@ -74,9 +73,8 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
 <div id="mobileNav">
   <a href="/">Главная</a>
-  <a href="/games">Наши игры</a>
-  <a href="/news">Новости</a>
   <a href="/wikipedia">Вики</a>
+  <a href="/byte-blaster/">Byte Blaster</a>
   <a href="/store">Магазин</a>
   <a href="/account"><span data-account-label>Аккаунт</span></a>
 </div>
@@ -117,7 +115,7 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 <script src="/assets/studio.js"></script>
 <script type="module">
 import {
-  supabase, getGames, getEntitlements, getProfile,
+  supabase, getGames, getEntitlements, getProfile, getSettings,
   detectCountry, formatPrice, humanError,
 } from '/assets/pixset-auth.js';
 
@@ -127,7 +125,7 @@ const $ = (id) => document.getElementById(id);
 // туда: там подробности и оформление в стиле игры. Оплату всё равно проводит
 // один и тот же сервер, лицензия ложится на тот же аккаунт.
 const OWN_PAGES = { 'byte-blaster': '/byte-blaster/buy/' };
-const COVERS = { 'byte-blaster': '/byte-blaster/assets/logo-512.png' };
+const COVERS = { 'byte-blaster': '/byte-blaster/assets/banner.png' };
 const FEATURES = {
   'byte-blaster': [
     '110 уровней в 11 мирах',
@@ -139,6 +137,7 @@ const FEATURES = {
 
 let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
 let session = null;
+let settings = { payments_enabled: false, support_email: 'pixset.studio.offical@gmail.com' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -170,6 +169,16 @@ function tile(game, owned, isHero) {
           : `<span class="price">${price || '—'}</span>
              <a class="btn solid" href="${esc(href)}">Купить</a>`}
       </div>
+      ${!owned && !settings.payments_enabled ? offlineNote() : ''}
+    </div>`;
+}
+
+/** Пока оплата на сайте не работает, лицензию выдаёт студия вручную. */
+function offlineNote() {
+  const mail = esc(settings.support_email);
+  return `<div class="note" style="margin-top:4px;font-size:14px">
+      Оплата на сайте временно недоступна. Напишите на
+      <a href="mailto:${mail}">${mail}</a> — мы выдадим лицензию на ваш аккаунт.
     </div>`;
 }
 
@@ -187,20 +196,28 @@ async function render() {
   }
 
   const [first, ...rest] = games;
+  // Пока игра одна, витрина занимает всю ширину: пустая колонка справа
+  // выглядела бы как незагрузившийся блок.
+  if (!rest.length) {
+    $('shelf').style.gridTemplateColumns = '1fr';
+    $('shelf').innerHTML = tile(first, owned.has(first.slug), true);
+    return;
+  }
+
   $('shelf').innerHTML =
     tile(first, owned.has(first.slug), true) +
     `<div style="display:grid;gap:16px;align-content:start">
       ${rest.map((g) => tile(g, owned.has(g.slug), false)).join('')}
-      <div class="tile soon">
-        <div class="title" style="font-size:20px">Скоро</div>
-        <p class="dim" style="margin:0">Hearthhold и другие проекты студии появятся здесь.</p>
-        <span class="badge mute">В разработке</span>
-      </div>
     </div>`;
 }
 
-const { data } = await supabase.auth.getSession();
+const [{ data }, loadedSettings] = await Promise.all([
+  supabase.auth.getSession(),
+  getSettings(),
+]);
 session = data.session;
+settings = loadedSettings;
+
 if (session) {
   try {
     const profile = await getProfile(session.user.id);

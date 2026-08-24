@@ -65,7 +65,17 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
       <div class="msg" id="msg"></div>
 
-      <h3 style="margin-top:26px">Выдать лицензию вручную</h3>
+      <h3 style="margin-top:26px">Приём оплаты</h3>
+      <div class="rows" id="payToggle"></div>
+
+      <h3 style="margin-top:32px">Способы получить игру</h3>
+      <p class="dim" style="font-size:14px">
+        Выключённый способ исчезает со страницы скачивания и перестаёт
+        предлагаться в обновлениях. Купленные игроки лицензию не теряют.
+      </p>
+      <div class="rows" id="channels"></div>
+
+      <h3 style="margin-top:32px">Выдать лицензию вручную</h3>
       <div class="grantbox">
         <div class="field">
           <label for="grantEmail">Почта игрока</label>
@@ -78,6 +88,49 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
         <button class="btn solid" id="grantBtn">Выдать</button>
         <button class="btn quiet" id="revokeBtn">Отозвать</button>
       </div>
+
+      <h3 style="margin-top:32px">Сборки и обновления</h3>
+      <p class="dim" style="font-size:14px">
+        Файл кладётся в закрытое хранилище. Прямых ссылок нет: игроку с лицензией
+        выдаётся временная ссылка на 10 минут, каждая выдача записывается.
+      </p>
+      <div class="grantbox" style="margin-bottom:14px">
+        <div class="field">
+          <label for="relGame">Игра</label>
+          <select id="relGame"></select>
+        </div>
+        <div class="field">
+          <label for="relPlatform">Платформа</label>
+          <select id="relPlatform">
+            <option value="windows">Windows (.exe)</option>
+            <option value="android">Android (.apk)</option>
+            <option value="web">Веб</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="relVersion">Версия</label>
+          <input type="text" id="relVersion" placeholder="1.0.3">
+        </div>
+      </div>
+      <div class="grantbox" style="margin-bottom:14px">
+        <div class="field">
+          <label for="relNotes">Что нового</label>
+          <input type="text" id="relNotes" placeholder="Коротко: что изменилось">
+        </div>
+        <div class="field">
+          <label for="relFile">Файл сборки</label>
+          <input type="file" id="relFile" accept=".exe,.apk,.zip">
+        </div>
+        <button class="btn solid" id="relUpload">Загрузить</button>
+      </div>
+      <div class="grantbox">
+        <div class="field">
+          <label for="relExternal">Или внешняя ссылка (RuStore и т.п.)</label>
+          <input type="url" id="relExternal" placeholder="https://www.rustore.ru/catalog/app/...">
+        </div>
+        <button class="btn quiet" id="relExtBtn">Сохранить ссылку</button>
+      </div>
+      <div class="tblwrap" style="margin-top:14px"><table id="releasesTbl"></table></div>
 
       <h3 style="margin-top:32px">Заказы</h3>
       <div class="tblwrap"><table id="ordersTbl"></table></div>
@@ -111,7 +164,8 @@ import {
   supabase, getProfile, getGames,
   adminListOrders, adminListPlayers, adminListPaymentEvents,
   adminGrantLicense, adminRevokeLicense, adminMarkPaid,
-  humanError,
+  adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
+  getSettings, adminSetSetting, humanError,
 } from '/assets/pixset-auth.js';
 
 const $ = (id) => document.getElementById(id);
@@ -195,8 +249,161 @@ async function loadEvents() {
     : '<tr><td class="empty">Оплат пока не было</td></tr>';
 }
 
+// Выключатель приёма оплаты. Пока ЮKassa не подключена, покупателям на сайте
+// показывается почта студии вместо кнопки — и лицензия выдаётся вручную.
+async function loadPayToggle() {
+  const s = await getSettings();
+  const on = s.payments_enabled === true;
+
+  $('payToggle').innerHTML = `
+    <div class="row">
+      <div>
+        <b>ЮKassa: ${on ? 'включена' : 'выключена'}</b>
+        <div class="dim" style="font-size:14px">
+          ${on
+            ? 'На сайте работает кнопка «Купить» и оплата картой.'
+            : 'Вместо кнопки покупателям показывается почта ' + esc(s.support_email) + '.'}
+        </div>
+      </div>
+      <button class="btn ${on ? 'quiet' : 'solid'}" id="payBtn">
+        ${on ? 'Выключить' : 'Включить'}
+      </button>
+    </div>`;
+
+  $('payBtn').onclick = async () => {
+    const btn = $('payBtn');
+    btn.disabled = true;
+    try {
+      await adminSetSetting('payments_enabled', !on);
+      say(on ? 'Приём оплаты выключен.' : 'Приём оплаты включён.', 'ok');
+      await loadPayToggle();
+    } catch (err) { say(humanError(err)); btn.disabled = false; }
+  };
+}
+
+// ── Сборки ──────────────────────────────────────────────────────────────
+const mb = (bytes) => bytes ? (bytes / 1048576).toFixed(1) + ' МБ' : '—';
+
+async function loadReleases() {
+  const rows = await adminListReleases();
+  $('releasesTbl').innerHTML = rows.length
+    ? '<tr><th>Игра</th><th>Платформа</th><th>Версия</th><th>Размер</th><th>Скачано</th><th>Статус</th><th></th></tr>' +
+      rows.map((r) => `
+        <tr>
+          <td>${esc(r.game_slug)}</td>
+          <td>${esc(r.platform)}</td>
+          <td>${esc(r.version)}</td>
+          <td>${r.external_url ? 'внешняя ссылка' : mb(r.file_size)}</td>
+          <td>${r.downloads}</td>
+          <td>${r.is_current ? '<span class="badge">текущая</span>' : '<span class="badge mute">старая</span>'}</td>
+          <td><button class="btn quiet" data-del-rel="${r.id}">Удалить</button></td>
+        </tr>`).join('')
+    : '<tr><td class="empty">Сборок пока нет</td></tr>';
+
+  $('releasesTbl').querySelectorAll('[data-del-rel]').forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await adminDeleteRelease(btn.dataset.delRel);
+        say('Сборка удалена из списка.', 'ok');
+        await loadReleases();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+}
+
+$('relUpload').onclick = async () => {
+  const file = $('relFile').files[0];
+  const version = $('relVersion').value.trim();
+  if (!file) { say('Выберите файл сборки.'); return; }
+  if (!version) { say('Укажите версию, например 1.0.3.'); return; }
+
+  const btn = $('relUpload');
+  btn.disabled = true;
+  btn.textContent = 'Загружаем…';
+  try {
+    await adminUploadRelease({
+      gameSlug: $('relGame').value,
+      platform: $('relPlatform').value,
+      version,
+      file,
+      notes: $('relNotes').value.trim(),
+      onProgress: (stage) => {
+        if (stage === 'checksum') btn.textContent = 'Считаем контрольную сумму…';
+      },
+    });
+    say('Сборка загружена и отмечена текущей.', 'ok');
+    $('relFile').value = '';
+    await loadReleases();
+  } catch (err) {
+    say(humanError(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Загрузить';
+  }
+};
+
+$('relExtBtn').onclick = async () => {
+  const url = $('relExternal').value.trim();
+  const version = $('relVersion').value.trim();
+  if (!url) { say('Укажите ссылку.'); return; }
+  if (!version) { say('Укажите версию.'); return; }
+  try {
+    await adminSetExternalRelease({
+      gameSlug: $('relGame').value,
+      platform: $('relPlatform').value,
+      version, url,
+      notes: $('relNotes').value.trim(),
+    });
+    say('Ссылка сохранена.', 'ok');
+    $('relExternal').value = '';
+    await loadReleases();
+  } catch (err) { say(humanError(err)); }
+};
+
+// Каналы раздачи. Каждый — отдельный выключатель: например, .exe можно снять
+// с раздачи на время, оставив веб и RuStore.
+const CHANNELS = [
+  { key: 'channel_windows', name: 'Скачивание .exe',    hint: 'установщик для Windows с сайта' },
+  { key: 'channel_android', name: 'Скачивание .apk',    hint: 'файл для Android напрямую' },
+  { key: 'channel_rustore', name: 'RuStore',            hint: 'ссылка на страницу в магазине' },
+  { key: 'channel_web',     name: 'Веб-версия',         hint: 'игра прямо в браузере' },
+];
+
+async function loadChannels() {
+  const s = await getSettings();
+  $('channels').innerHTML = CHANNELS.map((c) => {
+    const on = s[c.key] !== false;
+    return `
+      <div class="row">
+        <div>
+          <b>${esc(c.name)}</b>
+          <div class="dim" style="font-size:14px">${esc(c.hint)}</div>
+        </div>
+        <span class="badge ${on ? '' : 'mute'}">${on ? 'включено' : 'выключено'}</span>
+        <button class="btn ${on ? 'quiet' : 'solid'}" data-channel="${c.key}" data-on="${on}">
+          ${on ? 'Выключить' : 'Включить'}
+        </button>
+      </div>`;
+  }).join('');
+
+  $('channels').querySelectorAll('[data-channel]').forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await adminSetSetting(btn.dataset.channel, btn.dataset.on !== 'true');
+        say('Настройка сохранена.', 'ok');
+        await loadChannels();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+}
+
 async function refresh() {
-  await Promise.all([loadOrders(), loadPlayers(), loadEvents()]);
+  await Promise.all([
+    loadOrders(), loadPlayers(), loadEvents(),
+    loadPayToggle(), loadChannels(), loadReleases(),
+  ]);
 }
 
 async function fillGames() {
@@ -204,8 +411,10 @@ async function fillGames() {
   // игру выдать нужно уметь (пресса, тестеры).
   const { data } = await supabase.from('games').select('slug, title');
   const games = data && data.length ? data : await getGames();
-  $('grantGame').innerHTML = games
+  const options = games
     .map((g) => `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
+  $('grantGame').innerHTML = options;
+  $('relGame').innerHTML = options;
 }
 
 async function withGrant(fn, okText) {

@@ -133,7 +133,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 <script src="/byte-blaster/assets/site.js"></script>
 <script type="module">
 import {
-  supabase, getGames, getEntitlements, getProfile, startPayment,
+  supabase, getGames, getEntitlements, getProfile, startPayment, getSettings,
   detectCountry, formatPrice, humanError,
 } from '/assets/pixset-auth.js';
 
@@ -153,6 +153,7 @@ function say(ru, en, kind = 'err') {
 // именно она закреплена за игроком и по ней выставляется счёт.
 let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
 let session = null;
+let settings = { payments_enabled: false, support_email: 'pixset.studio.offical@gmail.com' };
 
 function setBuyLabel(ru, en) {
   $('buyBtn').innerHTML = bi(ru, en);
@@ -165,11 +166,28 @@ async function render() {
 
   $('price').textContent = formatPrice(game, currency) || '—';
 
+  // Пока приём оплаты выключен, кнопка заменяется на почту студии: лучше
+  // честная инструкция, чем кнопка, которая упрётся в ошибку. Проверяем это
+  // раньше входа — гостю тоже незачем видеть «Купить», которая не сработает.
+  const payOff = () => {
+    const mail = esc(settings.support_email);
+    $('buyBtn').outerHTML =
+      `<a class="btn primary" href="mailto:${mail}">${bi('НАПИСАТЬ НАМ', 'EMAIL US')}</a>`;
+    $('hint').innerHTML = bi(
+      'Оплата на сайте временно недоступна. Напишите на <b>' + mail +
+        '</b> — мы выдадим лицензию на ваш аккаунт.',
+      'Payments on the site are temporarily unavailable. Email <b>' + mail +
+        '</b> and we will add the licence to your account.');
+  };
+
   if (!session) {
-    setBuyLabel('КУПИТЬ', 'BUY NOW');
+    if (settings.payments_enabled) setBuyLabel('КУПИТЬ', 'BUY NOW');
+    else payOff();
     return;
   }
 
+  // У владельца лицензии всегда «Играть» — независимо от того, работает ли
+  // сейчас приём оплаты.
   const owned = new Set((await getEntitlements()).map((e) => e.game_slug));
   if (owned.has(GAME)) {
     $('price').textContent = '';
@@ -184,7 +202,8 @@ async function render() {
     return;
   }
 
-  setBuyLabel('КУПИТЬ', 'BUY NOW');
+  if (settings.payments_enabled) setBuyLabel('КУПИТЬ', 'BUY NOW');
+  else payOff();
 }
 
 async function buy() {
@@ -210,8 +229,13 @@ async function buy() {
 
 $('buyBtn').onclick = buy;
 
-const { data } = await supabase.auth.getSession();
+const [{ data }, loadedSettings] = await Promise.all([
+  supabase.auth.getSession(),
+  getSettings(),
+]);
 session = data.session;
+settings = loadedSettings;
+
 if (session) {
   try {
     const profile = await getProfile(session.user.id);

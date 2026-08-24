@@ -387,3 +387,9 @@ select {
   * { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto; }
 }
+
+/* Строка настройки: поле и кнопка рядом. Раньше жила только в админке —
+   теперь используется и в профиле. */
+.grantbox { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.grantbox > .field { flex: 1; min-width: 200px; margin-bottom: 0; }
+.grantbox .btn { width: auto; padding: 12px 20px; }
