@@ -20,6 +20,30 @@
     } catch (e) { return false; }
   }
 
+  /* Способы получить игру включаются в админке. Кнопку «Играть» надо гасить на
+     всех страницах, а не только на «Скачать»: иначе с главной по-прежнему
+     попадаешь в закрытую версию. */
+  fetch(API + '/rest/v1/app_settings?select=key,value', { headers: { apikey: KEY } })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var map = {};
+      rows.forEach(function (r) { map[r.key] = r.value; });
+
+      if (map.channel_web === false) disable('a[href*="/game/full/"]', 'ВЕБ-ВЕРСИЯ ЗАКРЫТА', 'BROWSER VERSION CLOSED');
+      if (map.channel_rustore === false) disable('a[href*="rustore.ru"]', 'ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
+    })
+    .catch(function () { /* не ответили — оставляем как есть */ });
+
+  function disable(selector, ru, en) {
+    document.querySelectorAll(selector).forEach(function (a) {
+      var span = document.createElement('span');
+      span.className = 'btn disabled';
+      span.setAttribute('aria-disabled', 'true');
+      span.innerHTML = '<span data-l="ru">' + ru + '</span><span data-l="en">' + en + '</span>';
+      a.replaceWith(span);
+    });
+  }
+
   var slots = document.querySelectorAll('.bbPrice');
   if (!slots.length) return;
 

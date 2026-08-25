@@ -67,9 +67,18 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <div class="card">
         <div class="ico">📱</div>
         <h3><span data-l="ru">Android<span class="badge">RuStore</span></span><span data-l="en">Android<span class="badge">RuStore</span></span></h3>
-        <p data-l="ru">Нативное приложение: работает без интернета, поддерживает сенсорное управление с настраиваемой раскладкой.</p>
-        <p data-l="en">A native app: works offline and supports touch controls with a configurable layout.</p>
+        <p data-l="ru">Нативное приложение: работает без интернета, поддерживает сенсорное управление с настраиваемой раскладкой. Обновления приходят через магазин.</p>
+        <p data-l="en">A native app: works offline and supports touch controls with a configurable layout. Updates arrive through the store.</p>
         <a class="btn" href="https://www.rustore.ru/catalog/app/com.pixsetstudio.byteblaster" target="_blank" rel="noopener"><span data-l="ru">⬇ ОТКРЫТЬ В RuStore</span><span data-l="en">⬇ OPEN IN RuStore</span></a>
+      </div>
+
+      <div class="card" id="dlAndroid">
+        <div class="ico">🤖</div>
+        <h3><span data-l="ru">Android<span class="badge">файл .apk</span></span><span data-l="en">Android<span class="badge">.apk file</span></span></h3>
+        <p data-l="ru">Тот же файл напрямую, без магазина — если RuStore недоступен. Разрешите установку из этого источника, когда телефон спросит.</p>
+        <p data-l="en">The same file directly, without a store — handy if RuStore is unavailable. Allow installs from this source when your phone asks.</p>
+        <span class="btn disabled" id="apkBtn" aria-disabled="true"><span data-l="ru">ПРОВЕРЯЕМ…</span><span data-l="en">CHECKING…</span></span>
+        <p class="dim" style="font-size:13px;margin-top:10px" id="apkNote"></p>
       </div>
 
       <div class="card" id="dlWindows">
@@ -229,78 +238,103 @@ if (off('channel_rustore')) {
 }
 
 const GAME = 'byte-blaster';
-const btn = document.getElementById('winBtn');
-const note = document.getElementById('winNote');
-if (btn) {
-  const bi = (ru, en) => `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`;
-  const mbNum = (b) => b ? (b / 1048576).toFixed(0) : '';
 
-  const asLink = (href, ru, en, cls = 'btn primary') => {
+const bi = (ru, en) => `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`;
+const mbNum = (b) => b ? (b / 1048576).toFixed(0) : '';
+
+// У Windows и Android один и тот же путь: проверить канал, найти сборку,
+// узнать, куплена ли игра, и выдать временную ссылку. Поэтому оба блока
+// обслуживает одна функция, а не две копии кода.
+const PLATFORMS = [
+  {
+    id: 'windows', channel: 'channel_windows',
+    btn: 'winBtn', note: 'winNote',
+    labelRu: '⬇ СКАЧАТЬ УСТАНОВЩИК', labelEn: '⬇ DOWNLOAD INSTALLER',
+    pausedRu: 'Скачивание для Windows приостановлено.',
+    pausedEn: 'Windows downloads are paused for now.',
+    soonRu: 'Сборка для Windows ещё не опубликована.',
+    soonEn: 'The Windows build is not published yet.',
+  },
+  {
+    id: 'android', channel: 'channel_android',
+    btn: 'apkBtn', note: 'apkNote',
+    labelRu: '⬇ СКАЧАТЬ .APK', labelEn: '⬇ DOWNLOAD .APK',
+    pausedRu: 'Скачивание .apk приостановлено. Попробуйте RuStore.',
+    pausedEn: 'Direct .apk downloads are paused. Try RuStore instead.',
+    soonRu: 'Файл .apk ещё не опубликован.',
+    soonEn: 'The .apk file is not published yet.',
+  },
+];
+
+const releases = await getCurrentReleases(GAME).catch(() => []);
+const { data: { session } } = await supabase.auth.getSession();
+
+let owns = false;
+if (session) {
+  try { owns = (await getEntitlements()).some((e) => e.game_slug === GAME); }
+  catch { owns = false; }
+}
+
+for (const p of PLATFORMS) {
+  const btn = document.getElementById(p.btn);
+  const note = document.getElementById(p.note);
+  if (!btn) continue;
+
+  const replace = (href, ru, en) => {
     const a = document.createElement('a');
-    a.className = cls;
+    a.className = 'btn primary';
     a.href = href;
     a.innerHTML = bi(ru, en);
     btn.replaceWith(a);
     return a;
   };
 
-  try {
-    const releases = await getCurrentReleases(GAME);
-    const win = releases.find((r) => r.platform === 'windows');
+  const rel = releases.find((r) => r.platform === p.id);
 
-    if (off('channel_windows')) {
-      btn.innerHTML = bi('ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
-      note.innerHTML = bi('Скачивание для Windows приостановлено.',
-                          'Windows downloads are paused for now.');
-    } else if (!win) {
-      btn.innerHTML = bi('ПОКА НЕДОСТУПНО', 'NOT AVAILABLE YET');
-      note.innerHTML = bi('Сборка для Windows ещё не опубликована.',
-                          'The Windows build is not published yet.');
-    } else {
-      const { data: { session } } = await supabase.auth.getSession();
-      let owns = false;
-      if (session) {
-        try { owns = (await getEntitlements()).some((e) => e.game_slug === GAME); }
-        catch { owns = false; }
-      }
-
-      const size = mbNum(win.file_size);
-      note.innerHTML = bi(
-        `Версия ${win.version}${size ? ' · ' + size + ' МБ' : ''}`,
-        `Version ${win.version}${size ? ' · ' + size + ' MB' : ''}`);
-
-      if (!session) {
-        asLink('/byte-blaster/account/?next=/byte-blaster/download/',
-          '⬇ ВОЙТИ И СКАЧАТЬ', '⬇ SIGN IN TO DOWNLOAD');
-      } else if (!owns) {
-        asLink('/byte-blaster/buy/', '🛒 КУПИТЬ ПОЛНУЮ', '🛒 GET FULL GAME');
-      } else {
-        const a = asLink('#', '⬇ СКАЧАТЬ УСТАНОВЩИК', '⬇ DOWNLOAD INSTALLER');
-        a.onclick = async (e) => {
-          e.preventDefault();
-          a.innerHTML = bi('ГОТОВИМ ССЫЛКУ…', 'PREPARING LINK…');
-          try {
-            const link = await getDownloadLink(GAME, 'windows');
-            location.href = link.url;
-            a.innerHTML = bi('⬇ СКАЧАТЬ УСТАНОВЩИК', '⬇ DOWNLOAD INSTALLER');
-          } catch (err) {
-            const code = String(err.message || '');
-            a.innerHTML = bi('⬇ СКАЧАТЬ УСТАНОВЩИК', '⬇ DOWNLOAD INSTALLER');
-            note.innerHTML = code.includes('rate_limited')
-              ? bi('Слишком много скачиваний за час. Попробуйте позже.',
-                   'Too many downloads this hour. Try again later.')
-              : bi('Не удалось получить ссылку. Попробуйте ещё раз.',
-                   'Could not get the link. Please try again.');
-          }
-        };
-      }
-    }
-  } catch {
+  if (off(p.channel)) {
+    btn.innerHTML = bi('ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
+    note.innerHTML = bi(p.pausedRu, p.pausedEn);
+    continue;
+  }
+  if (!rel) {
     btn.innerHTML = bi('ПОКА НЕДОСТУПНО', 'NOT AVAILABLE YET');
+    note.innerHTML = bi(p.soonRu, p.soonEn);
+    continue;
   }
 
-  if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
+  const size = mbNum(rel.file_size);
+  note.innerHTML = bi(
+    `Версия ${rel.version}${size ? ' · ' + size + ' МБ' : ''}`,
+    `Version ${rel.version}${size ? ' · ' + size + ' MB' : ''}`);
+
+  if (!session) {
+    replace('/byte-blaster/account/?next=/byte-blaster/download/',
+      '⬇ ВОЙТИ И СКАЧАТЬ', '⬇ SIGN IN TO DOWNLOAD');
+  } else if (!owns) {
+    replace('/byte-blaster/buy/', '🛒 КУПИТЬ ПОЛНУЮ', '🛒 GET FULL GAME');
+  } else {
+    const a = replace('#', p.labelRu, p.labelEn);
+    a.onclick = async (e) => {
+      e.preventDefault();
+      a.innerHTML = bi('ГОТОВИМ ССЫЛКУ…', 'PREPARING LINK…');
+      try {
+        const link = await getDownloadLink(GAME, p.id);
+        location.href = link.url;
+      } catch (err) {
+        const code = String(err.message || '');
+        note.innerHTML = code.includes('rate_limited')
+          ? bi('Слишком много скачиваний за час. Попробуйте позже.',
+               'Too many downloads this hour. Try again later.')
+          : bi('Не удалось получить ссылку. Попробуйте ещё раз.',
+               'Could not get the link. Please try again.');
+      } finally {
+        a.innerHTML = bi(p.labelRu, p.labelEn);
+      }
+    };
+  }
 }
+
+if (typeof window.applyI18nDOM === 'function') window.applyI18nDOM();
 </script>
 </body>
 </html>

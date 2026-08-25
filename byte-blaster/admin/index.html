@@ -408,7 +408,8 @@ import {
   supabase, getProfile, getSettings, adminSetSetting,
   adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
   adminListPlayers, adminListOrders, adminMarkPaid,
-  adminGrantLicense, adminRevokeLicense, adminTransferLicense, adminRefundOrder,
+  adminGrantLicense, adminRevokeLicense, adminTransferLicense,
+  adminRefundOrder, adminCancelOrder,
   adminDailyStats, adminTotals, humanError,
 } from '/assets/pixset-auth.js';
 
@@ -641,7 +642,8 @@ async function loadOrders() {
           <td>${o.currency === 'USD' ? '$' + (o.amount / 100).toFixed(2) : money(o.amount)}</td>
           <td><span class="chip ${o.status === 'paid' ? '' : 'off'}">${label[o.status] || o.status}</span></td>
           <td>${o.status === 'pending'
-            ? `<button class="btn primary" data-paid="${o.id}">ПОДТВЕРДИТЬ</button>`
+            ? `<button class="btn primary" data-paid="${o.id}">ПОДТВЕРДИТЬ</button>
+               <button class="btn ghost" data-cancel="${o.id}">ОТМЕНИТЬ</button>`
             : (o.status === 'paid'
                 ? `<button class="btn ghost" data-refund="${o.id}">ВОЗВРАТ</button>` : '')}</td>
         </tr>`).join('')
@@ -654,6 +656,20 @@ async function loadOrders() {
         await adminMarkPaid(b.dataset.paid);
         say('Оплата подтверждена, лицензия выдана.', 'ok');
         await Promise.all([loadOrders(), loadPlayers(), loadStats()]);
+      } catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+
+  $('ordersTbl').querySelectorAll('[data-cancel]').forEach((b) => {
+    b.onclick = async () => {
+      // Отмена только помечает заказ несостоявшимся — лицензии тут нет,
+      // поэтому подтверждения словом не требуем, хватает вопроса.
+      if (!confirm('Отменить этот неоплаченный заказ?')) return;
+      b.disabled = true;
+      try {
+        await adminCancelOrder(b.dataset.cancel, 'отменён в админке');
+        say('Заказ отменён.', 'ok');
+        await Promise.all([loadOrders(), loadStats()]);
       } catch (err) { say(humanError(err)); b.disabled = false; }
     };
   });

@@ -215,6 +215,10 @@ nav.main a:hover, nav.main a[aria-current="page"] { color: var(--cyan); border-c
    of stretching across the column like the primary block buttons do. */
 .btn.ghost { display: inline-block; border-color: var(--line); color: var(--text); min-width: 0; padding: 13px 20px; font-size: 10px; margin: 4px; }
 .btn.ghost:hover { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 18px rgba(255,0,255,.28); }
+/* Необратимое действие (удаление аккаунта) не должно выглядеть как соседние
+   кнопки настроек — иначе на него нажимают по инерции. */
+.btn.danger { border-color: #ff4d5e; color: #ff8b95; }
+.btn.danger:hover { border-color: #ff4d5e; color: #ff4d5e; background: #2a0d12; box-shadow: 0 0 22px rgba(255,77,94,.35); }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }

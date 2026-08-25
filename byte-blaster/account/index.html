@@ -146,6 +146,53 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         <h3 style="margin-top:26px"><span data-l="ru">Устройства</span><span data-l="en">Devices</span></h3>
         <div class="lib" id="devices"></div>
 
+        <h3 style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
+        <div class="lib" id="orders"></div>
+
+        <!-- Настройки аккаунта: то же, что на сайте студии, чтобы игроку
+             Byte Blaster не приходилось уходить на другой сайт ради ника. -->
+        <h3 style="margin-top:26px"><span data-l="ru">Настройки</span><span data-l="en">Settings</span></h3>
+
+        <div class="field">
+          <label for="newNick"><span data-l="ru">НИК</span><span data-l="en">NICKNAME</span></label>
+          <input type="text" id="newNick" minlength="3" maxlength="20" placeholder="3-20, a-z 0-9 _ -">
+        </div>
+        <button class="btn small" id="saveNick"><span data-l="ru">СОХРАНИТЬ НИК</span><span data-l="en">SAVE NICKNAME</span></button>
+        <p class="note">
+          <span data-l="ru">Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.</span>
+          <span data-l="en">Your nickname is visible to other players online. It can be changed once a day.</span>
+        </p>
+
+        <div class="field" style="margin-top:18px">
+          <label for="newEmail"><span data-l="ru">ПОЧТА ДЛЯ ВХОДА</span><span data-l="en">SIGN-IN EMAIL</span></label>
+          <input type="email" id="newEmail" placeholder="new@mail.com">
+        </div>
+        <button class="btn small" id="saveEmail"><span data-l="ru">ИЗМЕНИТЬ ПОЧТУ</span><span data-l="en">CHANGE EMAIL</span></button>
+        <p class="note">
+          <span data-l="ru">На новый адрес придёт письмо. Пока вы его не подтвердите, вход остаётся по старому.</span>
+          <span data-l="en">We'll email the new address. Until you confirm it, the old one keeps working.</span>
+        </p>
+
+        <div class="field" style="margin-top:18px">
+          <label for="newPass2"><span data-l="ru">НОВЫЙ ПАРОЛЬ</span><span data-l="en">NEW PASSWORD</span></label>
+          <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
+        </div>
+        <button class="btn small" id="savePass"><span data-l="ru">СМЕНИТЬ ПАРОЛЬ</span><span data-l="en">CHANGE PASSWORD</span></button>
+
+        <p class="note" style="margin-top:18px">
+          <span data-l="ru">Регион и валюта:</span><span data-l="en">Region and currency:</span>
+          <b id="regionInfo">—</b>
+          <span data-l="ru"> — задаётся при регистрации и не меняется.</span>
+          <span data-l="en"> — set at sign-up and cannot be changed.</span>
+        </p>
+
+        <h3 style="margin-top:26px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Delete account</span></h3>
+        <p class="note">
+          <span data-l="ru">Вместе с аккаунтом исчезнут лицензии и покупки. Отменить нельзя.</span>
+          <span data-l="en">Deleting the account removes your licences and purchases. This cannot be undone.</span>
+        </p>
+        <button class="btn small danger" id="deleteAcc"><span data-l="ru">УДАЛИТЬ АККАУНТ</span><span data-l="en">DELETE ACCOUNT</span></button>
+
         <p style="margin:24px 0 0;text-align:center">
           <button class="btn small" id="logout"><span data-l="ru">ВЫЙТИ</span><span data-l="en">SIGN OUT</span></button>
         </p>
@@ -176,6 +223,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 import {
   supabase, register, login, logout, resetPassword,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
+  updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   humanError, NICKNAME_RE,
 } from '/assets/pixset-auth.js';
 
@@ -287,6 +335,65 @@ $('formRec').onsubmit = (e) => {
 
 $('logout').onclick = async () => { await logout(); location.reload(); };
 
+// ── Настройки аккаунта ──────────────────────────────────────────────────
+$('saveNick').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('profMsg'));
+  const nickname = $('newNick').value.trim();
+  if (!NICKNAME_RE.test(nickname)) {
+    say($('profMsg'),
+      'Ник: 3-20 символов, только латиница, цифры, _ и -',
+      'Nickname: 3-20 characters, latin letters, digits, _ and - only');
+    return;
+  }
+  try {
+    await updateNickname(nickname);
+    $('nick').textContent = nickname;
+    $('ava').textContent = nickname.charAt(0).toUpperCase();
+    say($('profMsg'), 'Ник обновлён.', 'Nickname updated.', 'ok');
+  } catch (err) { fail($('profMsg'), err); }
+});
+
+$('saveEmail').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('profMsg'));
+  const email = $('newEmail').value.trim();
+  if (!email) return;
+  try {
+    await changeEmail(email);
+    say($('profMsg'),
+      'Письмо отправлено на новый адрес — подтвердите его.',
+      'We sent a confirmation link to the new address.', 'ok');
+    $('newEmail').value = '';
+  } catch (err) { fail($('profMsg'), err); }
+});
+
+$('savePass').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('profMsg'));
+  const pass = $('newPass2').value;
+  if (pass.length < 6) {
+    say($('profMsg'), 'Пароль — минимум 6 символов.', 'The password needs at least 6 characters.');
+    return;
+  }
+  try {
+    await changePassword(pass);
+    $('newPass2').value = '';
+    say($('profMsg'), 'Пароль изменён.', 'Password changed.', 'ok');
+  } catch (err) { fail($('profMsg'), err); }
+});
+
+// Удаление необратимо, поэтому спрашиваем дважды — второй раз словом.
+$('deleteAcc').onclick = (e) => {
+  const word = bi('УДАЛИТЬ', 'DELETE');
+  const typed = prompt(bi(
+    'Аккаунт, лицензии и покупки будут удалены навсегда. Введите ' + word + ' для подтверждения:',
+    'Your account, licences and purchases will be gone forever. Type ' + word + ' to confirm:'));
+  if (!typed || typed.trim().toUpperCase() !== word) return;
+
+  return busy(e.currentTarget, async () => {
+    try { await deleteAccount(); location.replace('/byte-blaster/'); }
+    catch (err) { fail($('profMsg'), err); }
+  });
+};
+
 // ── Профиль ─────────────────────────────────────────────────────────────
 async function renderProfile(user) {
   $('mail').textContent = user.email;
@@ -295,6 +402,9 @@ async function renderProfile(user) {
     const profile = await getProfile(user.id);
     $('nick').textContent = profile.nickname;
     $('ava').textContent = profile.nickname.charAt(0).toUpperCase();
+    $('newNick').value = profile.nickname || '';
+    $('regionInfo').textContent =
+      (profile.country || '—') + ' · ' + (profile.currency || (profile.country === 'RU' ? 'RUB' : 'USD'));
   } catch { $('nick').textContent = 'Player'; }
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
@@ -312,6 +422,35 @@ async function renderProfile(user) {
        <a class="btn small" href="/byte-blaster/buy/">${bi('КУПИТЬ', 'BUY')}</a></div>`;
 
   renderDevices();
+  renderOrders();
+}
+
+/** История покупок: что заказано, на сколько и чем закончилось. */
+async function renderOrders() {
+  let orders = [];
+  try { orders = await getMyOrders(); } catch { orders = []; }
+
+  const STATUS = {
+    paid: ['ОПЛАЧЕН', 'PAID'],
+    pending: ['ЖДЁТ ОПЛАТЫ', 'AWAITING PAYMENT'],
+    failed: ['ОТМЕНЁН', 'CANCELLED'],
+    refunded: ['ВОЗВРАТ', 'REFUNDED'],
+  };
+
+  $('orders').innerHTML = orders.length
+    ? orders.map((o) => {
+        const s = STATUS[o.status] || [o.status, o.status];
+        const sum = o.currency === 'RUB'
+          ? Math.round(o.amount) + ' ₽'
+          : '$' + Number(o.amount).toFixed(2);
+        return `<div class="item">
+          <b>${sum}</b>
+          <span class="dim">${new Date(o.created_at).toLocaleDateString()}</span>
+          <span class="badge">${bi(s[0], s[1])}</span>
+        </div>`;
+      }).join('')
+    : `<div class="item"><span class="dim">${
+        bi('Покупок пока не было.', 'No purchases yet.')}</span></div>`;
 }
 
 async function renderDevices() {
