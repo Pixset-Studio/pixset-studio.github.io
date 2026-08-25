@@ -75,7 +75,12 @@
     </div>
 
     <h2 style="margin-top:34px">ДИНАМИКА ЗА 30 ДНЕЙ</h2>
-    <div class="card"><canvas id="chart" height="180" style="width:100%;display:block"></canvas>
+    <div class="card" style="position:relative">
+      <canvas id="chart" height="180" style="width:100%;display:block"></canvas>
+      <div id="chartTip" style="display:none;position:absolute;pointer-events:none;z-index:5;
+           background:#0a0a16;border:1px solid var(--cyan);border-radius:3px;padding:8px 11px;
+           font-family:var(--mono);font-size:12px;line-height:1.7;white-space:nowrap;
+           box-shadow:0 8px 20px rgba(0,0,0,.6)"></div>
       <p class="dim" style="font-size:13px;margin:10px 0 0">
         <span style="color:var(--cyan)">▬</span> визиты сайта &nbsp;
         <span style="color:var(--green)">▬</span> запуски игры
@@ -368,6 +373,54 @@
     var lastLabel = series.length ? series[series.length - 1].d.slice(5) : '';
     c.fillText(lastLabel, w - c.measureText(lastLabel).width, h - 3);
     c.fillText('макс ' + max, 0, 12);
+
+    // Точки запоминаем, чтобы под курсором показать числа за конкретный день:
+    // по одной линии видно форму, но не значения.
+    chartPoints = series.map(function (s, i) { return { x: i * stepX, row: s }; });
+    bindChartTip();
+  }
+
+  var chartPoints = [];
+
+  function dayLabel(d) {
+    var t = new Date(d + 'T00:00:00');
+    return isNaN(t.getTime()) ? d
+      : t.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  }
+
+  function bindChartTip() {
+    var cv = document.getElementById('chart');
+    var tip = document.getElementById('chartTip');
+    if (!cv || !tip || cv.dataset.bound) return;
+    cv.dataset.bound = '1';
+
+    cv.addEventListener('mousemove', function (e) {
+      if (!chartPoints.length) return;
+      var box = cv.getBoundingClientRect();
+      var x = e.clientX - box.left;
+
+      var nearest = chartPoints[0];
+      chartPoints.forEach(function (p) {
+        if (Math.abs(p.x - x) < Math.abs(nearest.x - x)) nearest = p;
+      });
+      var r = nearest.row;
+
+      // Сервер отдаёт по дню ровно две величины — их и показываем.
+      tip.innerHTML =
+        '<b style="color:#fff">' + dayLabel(r.d) + '</b><br>' +
+        '<span style="color:#0ff">визиты сайта:</span> ' + n(r.visits) + '<br>' +
+        '<span style="color:#0f8">запуски игры:</span> ' + n(r.games);
+
+      tip.style.display = 'block';
+      // Держим подсказку внутри карточки, иначе у правого края её обрежет.
+      var tipW = tip.offsetWidth;
+      var left = nearest.x + 14;
+      if (left + tipW > box.width) left = nearest.x - tipW - 14;
+      tip.style.left = Math.max(4, left) + 'px';
+      tip.style.top = '14px';
+    });
+
+    cv.addEventListener('mouseleave', function () { tip.style.display = 'none'; });
   }
 
   function load() {
@@ -413,6 +466,7 @@
 import {
   supabase, getProfile, getSettings, adminSetSetting,
   adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
+  adminEditRelease,
   adminListPlayers, adminListOrders, adminMarkPaid,
   adminGrantLicense, adminRevokeLicense, adminTransferLicense,
   adminRefundOrder, adminCancelOrder,
@@ -601,14 +655,20 @@ async function toggle(btn, key, value) {
 async function loadReleases() {
   const rows = (await adminListReleases()).filter((r) => r.game_slug === GAME);
   $('relTbl').innerHTML = rows.length
-    ? '<tr><th>Платформа</th><th>Версия</th><th>Размер</th><th>Скачано</th><th>Статус</th><th></th></tr>' +
+    ? '<tr><th>Платформа</th><th>Версия</th><th>Что нового</th><th>Размер</th>'
+      + '<th>Скачано</th><th>Статус</th><th></th></tr>' +
       rows.map((r) => `<tr>
           <td>${esc(r.platform)}</td>
           <td>${esc(r.version)}</td>
+          <td class="dim" style="max-width:260px">${esc(r.notes || '—')}</td>
           <td>${r.external_url ? 'внешняя ссылка' : mb(r.file_size)}</td>
           <td>${r.downloads}</td>
           <td><span class="chip ${r.is_current ? '' : 'off'}">${r.is_current ? 'текущая' : 'старая'}</span></td>
-          <td><button class="btn ghost" data-del="${r.id}">УДАЛИТЬ</button></td>
+          <td style="white-space:nowrap">
+            <button class="btn ghost" data-edit="${r.id}" data-notes="${esc(r.notes || '')}">ОПИСАНИЕ</button>
+            ${r.is_current ? '' : `<button class="btn ghost" data-current="${r.id}">СДЕЛАТЬ ТЕКУЩЕЙ</button>`}
+            <button class="btn ghost" data-del="${r.id}">УДАЛИТЬ</button>
+          </td>
         </tr>`).join('')
     : '<tr><td class="dim">Сборок пока нет</td></tr>';
 
@@ -617,6 +677,33 @@ async function loadReleases() {
       b.disabled = true;
       try { await adminDeleteRelease(b.dataset.del); say('Сборка удалена.', 'ok'); await loadReleases(); }
       catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+
+  // Описание правится и после выпуска: опечатку в «что нового» видят все игроки.
+  $('relTbl').querySelectorAll('[data-edit]').forEach((b) => {
+    b.onclick = async () => {
+      const notes = prompt('Что нового в этой версии:', b.dataset.notes || '');
+      if (notes === null) return;
+      b.disabled = true;
+      try {
+        await adminEditRelease(b.dataset.edit, { notes });
+        say('Описание сохранено.', 'ok');
+        await loadReleases();
+      } catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+
+  // Откат: если в свежей сборке нашлась беда, игрокам возвращаем прежнюю.
+  $('relTbl').querySelectorAll('[data-current]').forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm('Сделать эту версию текущей? Игроки будут получать именно её.')) return;
+      b.disabled = true;
+      try {
+        await adminEditRelease(b.dataset.current, { makeCurrent: true });
+        say('Версия отмечена текущей.', 'ok');
+        await loadReleases();
+      } catch (err) { say(humanError(err)); b.disabled = false; }
     };
   });
 }
@@ -724,7 +811,10 @@ $('relPublish').onclick = async () => {
       btn.textContent = 'ЗАГРУЖАЕМ .EXE…';
       await adminUploadRelease({
         gameSlug: GAME, platform: 'windows', version, file: win, notes,
-        onProgress: (s) => { if (s === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ .EXE…'; },
+        onProgress: (stage, pct) => {
+          if (stage === 'upload') btn.textContent = 'ЗАГРУЖАЕМ .EXE ' + pct + '%';
+          if (stage === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ .EXE…';
+        },
       });
       done.push('Windows');
     }
@@ -732,7 +822,10 @@ $('relPublish').onclick = async () => {
       btn.textContent = 'ЗАГРУЖАЕМ .APK…';
       await adminUploadRelease({
         gameSlug: GAME, platform: 'android', version, file: apk, notes,
-        onProgress: (s) => { if (s === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ .APK…'; },
+        onProgress: (stage, pct) => {
+          if (stage === 'upload') btn.textContent = 'ЗАГРУЖАЕМ .APK ' + pct + '%';
+          if (stage === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ .APK…';
+        },
       });
       done.push('Android');
     }

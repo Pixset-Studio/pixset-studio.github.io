@@ -451,6 +451,18 @@
     }).catch(() => { when.textContent = T('cloudOffline'); });
   }
 
+  /**
+   * Текст под кнопками. Отказ сервера и пропавшая сеть — разные беды, и
+   * лечатся по-разному: одно ждёт связи, другое чинится нами.
+   */
+  function cloudError(e) {
+    const status = e && e.status;
+    if (status === 413 || /too_big/.test(String(e && e.detail))) return T('cloudTooBig');
+    if (status === 401 || status === 403) return T('accRightsFailed');
+    if (status) return T('accError');       // сервер ответил, но отказом
+    return T('cloudOffline');               // до сервера вовсе не дошли
+  }
+
   async function cloudSave() {
     const btn = ov.querySelector('#acCloudSave');
     btn.disabled = true;
@@ -460,7 +472,7 @@
       cloudMsg(T('cloudSavedOk'), 'ok');
       renderCloud(true);
     } catch (e) {
-      cloudMsg(String(e && e.message) === 'save_413' ? T('cloudTooBig') : T('cloudOffline'), 'err');
+      cloudMsg(cloudError(e), 'err');
     } finally { btn.disabled = false; }
   }
 
@@ -479,7 +491,7 @@
       // проще перезапустить интерфейс, чем обновлять каждый экран.
       setTimeout(() => location.reload(), 1200);
     } catch (e) {
-      cloudMsg(T('cloudOffline'), 'err');
+      cloudMsg(cloudError(e), 'err');
     } finally { btn.disabled = false; }
   }
 

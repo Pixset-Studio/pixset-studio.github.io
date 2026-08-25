@@ -88,6 +88,24 @@
     } catch (e) { return 'устройство'; }
   }
 
+  /**
+   * Разбирает отказ сервера. Раньше любая ошибка превращалась в «нет связи»,
+   * и настоящая причина (например, отказ базы) оставалась невидимой.
+   */
+  async function fail(res, what) {
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body.message || body.error || body.hint || '';
+    } catch (e) { /* тело не JSON — обойдёмся кодом */ }
+
+    console.error('CloudSave ' + what + ': ' + res.status + ' ' + detail);
+    const err = new Error(what + '_' + res.status);
+    err.status = res.status;
+    err.detail = detail;
+    return err;
+  }
+
   /** Кладёт прогресс в аккаунт. Возвращает время сохранения. */
   async function save() {
     const auth = await token();
@@ -106,7 +124,7 @@
       }),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error('save_' + res.status);
+    if (!res.ok) throw await fail(res, 'save');
 
     const rows = await res.json().catch(() => []);
     const when = (rows && rows[0] && rows[0].updated_at) || new Date().toISOString();
@@ -122,7 +140,7 @@
     const res = await fetch(
       SUPABASE_URL + '/rest/v1/cloud_saves?game_slug=eq.' + GAME
       + '&select=updated_at,device', { headers: headers(auth) });
-    if (!res.ok) throw new Error('peek_' + res.status);
+    if (!res.ok) throw await fail(res, 'peek');
 
     const rows = await res.json();
     return (rows && rows[0]) || null;
@@ -140,7 +158,7 @@
     const res = await fetch(
       SUPABASE_URL + '/rest/v1/cloud_saves?game_slug=eq.' + GAME
       + '&select=data,updated_at', { headers: headers(auth) });
-    if (!res.ok) throw new Error('load_' + res.status);
+    if (!res.ok) throw await fail(res, 'load');
 
     const rows = await res.json();
     if (!rows || !rows.length) return null;

@@ -299,6 +299,70 @@ export async function adminDeleteRelease(id) {
 }
 
 /**
+ * Правка уже выпущенной сборки: описание и признак «текущая».
+ * Пригождается, когда в заметках опечатка или свежую версию надо откатить,
+ * вернув игрокам предыдущую.
+ */
+export async function adminEditRelease(id, { notes = null, makeCurrent = null } = {}) {
+  const { error } = await supabase.rpc('admin_edit_release', {
+    p_id: id,
+    p_notes: notes,
+    p_make_current: makeCurrent,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Кладёт большой файл в хранилище по частям (протокол TUS).
+ *
+ * Обычная загрузка одним запросом упирается в предел размера тела: установщик
+ * на 174 МБ отваливался с невнятным 400. Здесь файл уезжает кусками по 6 МБ,
+ * можно показывать проценты, а оборванная загрузка продолжается с места обрыва.
+ */
+async function uploadResumable(bucket, path, file, onProgress) {
+  const tus = await import('https://esm.sh/tus-js-client@4');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('not_authenticated');
+
+  // Прямой адрес хранилища: он заметно быстрее на больших файлах.
+  const endpoint = SUPABASE_URL.replace('.supabase.co', '.storage.supabase.co')
+    + '/storage/v1/upload/resumable';
+
+  await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: 'Bearer ' + session.access_token,
+        apikey: SUPABASE_KEY,
+        'x-upsert': 'true',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,   // иначе повторная заливка того же файла зависает
+      metadata: {
+        bucketName: bucket,
+        objectName: path,
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+      },
+      chunkSize: 6 * 1024 * 1024,          // требование Supabase: ровно 6 МБ
+      onError: reject,
+      onProgress: (sent, total) => {
+        if (onProgress) onProgress('upload', Math.floor((sent / total) * 100));
+      },
+      onSuccess: resolve,
+    });
+
+    upload.findPreviousUploads()
+      .then((prev) => {
+        if (prev.length) upload.resumeFromPreviousUpload(prev[0]);
+        upload.start();
+      })
+      .catch(reject);
+  });
+}
+
+/**
  * Загружает файл сборки в приватный бакет и заводит релиз.
  * Файл идёт напрямую в хранилище, минуя наш сервер, — иначе стомегабайтный
  * установщик пришлось бы прогонять через функцию.
@@ -306,10 +370,15 @@ export async function adminDeleteRelease(id) {
 export async function adminUploadRelease({ gameSlug, platform, version, file, notes, makeCurrent = true, onProgress }) {
   const path = `${gameSlug}/${version}/${file.name}`;
 
-  const { error: upErr } = await supabase.storage
-    .from('releases')
-    .upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
-  if (upErr) throw upErr;
+  // Мелочь быстрее отправить одним запросом, установщики — только по частям.
+  if (file.size > 6 * 1024 * 1024) {
+    await uploadResumable('releases', path, file, onProgress);
+  } else {
+    const { error: upErr } = await supabase.storage
+      .from('releases')
+      .upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+    if (upErr) throw upErr;
+  }
 
   if (onProgress) onProgress('checksum');
   const sha256 = await fileSha256(file);
