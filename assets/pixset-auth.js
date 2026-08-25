@@ -251,6 +251,34 @@ export async function getDownloadLink(gameSlug, platform, version) {
 
 /* ── Админка ───────────────────────────────────────────────────────────── */
 
+/** Перенос покупки на другой аккаунт: игрок потерял доступ к прежней почте. */
+export async function adminTransferLicense(fromEmail, toEmail, gameSlug) {
+  const { error } = await supabase.rpc('admin_transfer_license', {
+    p_from_email: fromEmail, p_to_email: toEmail, p_game_slug: gameSlug,
+  });
+  if (error) throw error;
+}
+
+/** Возврат: заказ помечается возвращённым, лицензия снимается. */
+export async function adminRefundOrder(orderId, reason) {
+  const { error } = await supabase.rpc('admin_refund_order', {
+    p_order_id: orderId, p_reason: reason || null,
+  });
+  if (error) throw error;
+}
+
+export async function adminDailyStats(days = 30) {
+  const { data, error } = await supabase.rpc('admin_daily_stats', { p_days: days });
+  if (error) throw error;
+  return data;
+}
+
+export async function adminTotals() {
+  const { data, error } = await supabase.rpc('admin_totals');
+  if (error) throw error;
+  return data && data[0] ? data[0] : null;
+}
+
 export async function adminListReleases() {
   const { data, error } = await supabase.rpc('admin_list_releases');
   if (error) throw error;

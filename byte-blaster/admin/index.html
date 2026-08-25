@@ -95,6 +95,128 @@
       <span class="dim" style="font-size:13px">обновляется само каждые 30 секунд</span>
     </p>
   </section>
+
+  <!-- ── Управление игрой ──────────────────────────────────────────────
+       Отдельный вход: статистика сервера живёт на relay-сервере и знает свой
+       пароль, а лицензии, сборки и игроки — в базе студии, куда пускает
+       аккаунт с правами администратора. -->
+  <section id="gameAdmin" style="padding-top:34px;border-top:1px solid var(--line);margin-top:34px">
+    <h1 style="font-size:clamp(16px,3.4vw,26px)">УПРАВЛЕНИЕ ИГРОЙ</h1>
+
+    <p class="dim" id="gaLoading" style="font-size:14px">проверяем доступ…</p>
+
+    <div id="gaDenied" style="display:none">
+      <p class="lead">Нужен аккаунт Pixset Studio с правами администратора.</p>
+      <a class="btn primary" href="/byte-blaster/account/?next=/byte-blaster/admin/"
+         style="display:inline-block">ВОЙТИ В АККАУНТ</a>
+    </div>
+
+    <div id="gaPanel" style="display:none">
+      <div class="note" id="gaMsg" style="display:none"></div>
+
+      <div class="stats" style="margin-bottom:26px">
+        <div class="stat"><b id="tPlayers">—</b><span>игроков</span></div>
+        <div class="stat"><b id="tLicenses">—</b><span>лицензий</span></div>
+        <div class="stat"><b id="tOrders">—</b><span>покупок</span></div>
+        <div class="stat"><b id="tRevenue">—</b><span>выручка</span></div>
+        <div class="stat"><b id="tDownloads">—</b><span>скачиваний</span></div>
+      </div>
+
+      <h2>ДИНАМИКА ЗА 30 ДНЕЙ</h2>
+      <div class="card" style="position:relative">
+        <canvas id="salesChart" height="200" style="width:100%;display:block"></canvas>
+        <div id="salesTip" style="display:none;position:absolute;pointer-events:none;z-index:5;
+             background:#0a0a16;border:1px solid var(--cyan);border-radius:3px;padding:8px 11px;
+             font-family:var(--mono);font-size:12px;line-height:1.7;white-space:nowrap;
+             box-shadow:0 8px 20px rgba(0,0,0,.6)"></div>
+        <p class="dim" style="font-size:12px;margin:10px 0 0">
+          <span style="color:#0ff">●</span> регистрации ·
+          <span style="color:#0f8">●</span> покупки ·
+          <span style="color:#f80">●</span> скачивания
+        </p>
+      </div>
+
+      <h2 style="margin-top:34px">СПОСОБЫ ПОЛУЧИТЬ ИГРУ</h2>
+      <p class="dim" style="font-size:14px">
+        Выключённый способ сразу исчезает со страницы «Скачать». Купленные игроки
+        лицензию не теряют.
+      </p>
+      <div id="gaChannels"></div>
+
+      <h2 style="margin-top:34px">ПРИЁМ ОПЛАТЫ</h2>
+      <div id="gaPay"></div>
+
+      <h2 style="margin-top:34px">СБОРКИ И ОБНОВЛЕНИЯ</h2>
+      <p class="dim" style="font-size:14px">
+        Файл уходит в закрытое хранилище. Прямых ссылок нет: игрок с лицензией
+        получает временную ссылку на 10 минут, каждая выдача записывается.
+      </p>
+      <div class="card" style="margin-bottom:14px">
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+          <div>
+            <label class="gaLabel" for="relPlatform">Платформа</label>
+            <select id="relPlatform" class="gaInput">
+              <option value="windows">Windows (.exe)</option>
+              <option value="android">Android (.apk)</option>
+              <option value="web">Веб</option>
+            </select>
+          </div>
+          <div>
+            <label class="gaLabel" for="relVersion">Версия</label>
+            <input type="text" id="relVersion" class="gaInput" placeholder="1.0.3">
+          </div>
+          <div>
+            <label class="gaLabel" for="relNotes">Что нового</label>
+            <input type="text" id="relNotes" class="gaInput" placeholder="коротко">
+          </div>
+          <div>
+            <label class="gaLabel" for="relFile">Файл</label>
+            <input type="file" id="relFile" class="gaInput" accept=".exe,.apk,.zip">
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn primary" id="relUpload" style="min-width:0">ЗАГРУЗИТЬ</button>
+          <input type="url" id="relExternal" class="gaInput" style="flex:1;min-width:220px"
+                 placeholder="или ссылка на RuStore">
+          <button class="btn ghost" id="relExtBtn" style="min-width:0">СОХРАНИТЬ ССЫЛКУ</button>
+        </div>
+      </div>
+      <div class="tw"><table id="relTbl"></table></div>
+
+      <h2 style="margin-top:34px">ИГРОКИ И ЛИЦЕНЗИИ</h2>
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:220px">
+            <label class="gaLabel" for="grantEmail">Почта игрока</label>
+            <input type="email" id="grantEmail" class="gaInput" placeholder="player@mail.com">
+          </div>
+          <button class="btn primary" id="grantBtn" style="min-width:0">ВЫДАТЬ ЛИЦЕНЗИЮ</button>
+          <button class="btn ghost" id="revokeBtn" style="min-width:0">ОТОЗВАТЬ</button>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:14px;
+                    border-top:1px solid var(--line);padding-top:14px">
+          <div style="flex:1;min-width:220px">
+            <label class="gaLabel" for="transferTo">Перенести покупку на другую почту</label>
+            <input type="email" id="transferTo" class="gaInput" placeholder="новый адрес игрока">
+          </div>
+          <button class="btn ghost" id="transferBtn" style="min-width:0">ПЕРЕНЕСТИ</button>
+        </div>
+        <p class="dim" style="font-size:13px;margin:10px 0 0">
+          Лицензия уйдёт с адреса из поля выше на новый. Нужно, когда игрок
+          потерял доступ к почте, на которую покупал.
+        </p>
+      </div>
+      <div class="tw"><table id="playersTbl"></table></div>
+
+      <h2 style="margin-top:34px">ЗАКАЗЫ</h2>
+      <div class="tw"><table id="ordersTbl"></table></div>
+
+      <p style="margin-top:26px">
+        <button class="btn ghost" id="gaRefresh" type="button">↻ ОБНОВИТЬ ДАННЫЕ</button>
+      </p>
+    </div>
+  </section>
 </main>
 
 <footer class="site">
@@ -103,6 +225,29 @@
     <div><a href="/byte-blaster/">На сайт</a></div>
   </div>
 </footer>
+
+<style>
+  /* Поля управления игрой: на сайте формы раньше не было, поэтому вид задаём тут. */
+  .gaLabel { display:block; color:var(--cyan); font-family:var(--mono);
+             font-size:11px; letter-spacing:1px; margin-bottom:6px; }
+  .gaInput { width:100%; padding:10px 11px; background:var(--bg);
+             border:1px solid var(--line); border-radius:3px; color:var(--text);
+             font-family:var(--mono); font-size:14px; }
+  .gaInput:focus { outline:none; border-color:var(--cyan); }
+  #gameAdmin table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; }
+  #gameAdmin th { text-align:left; padding:9px 10px; color:var(--dim); font-weight:normal;
+                  border-bottom:1px solid var(--line); white-space:nowrap; }
+  #gameAdmin td { padding:10px; border-bottom:1px solid rgba(26,26,58,.6); vertical-align:middle; }
+  #gameAdmin td .btn { min-width:0; padding:7px 12px; font-size:9px; }
+  #gameAdmin .chip { display:inline-block; font-family:var(--pixel); font-size:7px;
+                     padding:4px 7px; border-radius:3px; border:1px solid var(--green);
+                     color:var(--green); background:rgba(0,255,136,.12); }
+  #gameAdmin .chip.off { border-color:var(--dim); color:var(--dim); background:transparent; }
+  #gameAdmin .chip.warn { border-color:var(--orange); color:var(--orange); background:rgba(255,136,0,.12); }
+  #gameAdmin .rowline { display:flex; align-items:center; justify-content:space-between;
+                        gap:12px; flex-wrap:wrap; padding:14px 16px; margin-bottom:10px;
+                        border:1px solid var(--line); border-radius:4px; background:var(--panel); }
+</style>
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script>
@@ -253,6 +398,385 @@
   if (token) { show(true); load(); start(); } else { show(false); }
   window.addEventListener('resize', function () { if (token) load(); });
 })();
+</script>
+
+<script type="module">
+/* Управление игрой: каналы раздачи, сборки, игроки, заказы и график продаж.
+   Живёт отдельно от статистики сервера выше — у них разные источники данных
+   и разные права: там пароль сервера, здесь аккаунт студии. */
+import {
+  supabase, getProfile, getSettings, adminSetSetting,
+  adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
+  adminListPlayers, adminListOrders, adminMarkPaid,
+  adminGrantLicense, adminRevokeLicense, adminTransferLicense, adminRefundOrder,
+  adminDailyStats, adminTotals, humanError,
+} from '/assets/pixset-auth.js';
+
+const GAME = 'byte-blaster';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function say(text, kind = 'err') {
+  const box = $('gaMsg');
+  box.textContent = text;
+  box.style.display = 'block';
+  box.style.borderLeftColor = kind === 'ok' ? 'var(--green)' : 'var(--orange)';
+  box.style.background = kind === 'ok' ? 'rgba(0,255,136,.08)' : 'rgba(255,136,0,.08)';
+  if (kind === 'ok') setTimeout(() => { box.style.display = 'none'; }, 4000);
+}
+
+const money = (kop) => (kop / 100).toLocaleString('ru-RU') + ' ₽';
+const mb = (b) => b ? (b / 1048576).toFixed(1) + ' МБ' : '—';
+const day = (iso) => new Date(iso).toLocaleDateString('ru-RU');
+
+/* ── График с подсказкой ────────────────────────────────────────────────
+   Точки запоминаем при отрисовке, а по движению мыши ищем ближайший день —
+   так подсказка показывает точные числа, а не приблизительные по пикселям. */
+let points = [];
+
+function drawChart(rows) {
+  const cv = $('salesChart');
+  const w = cv.clientWidth || 600;
+  const h = 200;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+
+  const pad = { top: 12, bottom: 24, left: 4, right: 4 };
+  const plotH = h - pad.top - pad.bottom;
+  const series = [
+    { key: 'signups',   color: '#0ff' },
+    { key: 'purchases', color: '#0f8' },
+    { key: 'downloads', color: '#f80' },
+  ];
+
+  const max = Math.max(1, ...rows.flatMap((r) => series.map((s) => Number(r[s.key]) || 0)));
+  const stepX = rows.length > 1 ? (w - pad.left - pad.right) / (rows.length - 1) : 0;
+  const xOf = (i) => pad.left + i * stepX;
+  const yOf = (v) => pad.top + plotH - (v / max) * plotH;
+
+  // Горизонтальные линии — чтобы график читался без осей.
+  c.strokeStyle = 'rgba(120,140,170,.15)';
+  c.lineWidth = 1;
+  for (let k = 0; k <= 2; k++) {
+    const y = pad.top + (plotH / 2) * k;
+    c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
+  }
+
+  for (const s of series) {
+    c.beginPath();
+    rows.forEach((r, i) => {
+      const x = xOf(i), y = yOf(Number(r[s.key]) || 0);
+      i ? c.lineTo(x, y) : c.moveTo(x, y);
+    });
+    c.strokeStyle = s.color; c.lineWidth = 2; c.stroke();
+  }
+
+  c.fillStyle = '#7788a0';
+  c.font = '11px "Share Tech Mono", monospace';
+  if (rows.length) {
+    c.fillText(rows[0].d.slice(5), 0, h - 6);
+    const last = rows[rows.length - 1].d.slice(5);
+    c.fillText(last, w - c.measureText(last).width, h - 6);
+    c.fillText(String(max), 2, pad.top - 2);
+  }
+
+  points = rows.map((r, i) => ({ x: xOf(i), row: r }));
+}
+
+function bindTooltip() {
+  const cv = $('salesChart');
+  const tip = $('salesTip');
+  if (!cv || cv.dataset.bound) return;
+  cv.dataset.bound = '1';
+
+  cv.addEventListener('mousemove', (e) => {
+    if (!points.length) return;
+    const box = cv.getBoundingClientRect();
+    const x = e.clientX - box.left;
+
+    let nearest = points[0];
+    for (const p of points) {
+      if (Math.abs(p.x - x) < Math.abs(nearest.x - x)) nearest = p;
+    }
+    const r = nearest.row;
+
+    tip.innerHTML =
+      '<b style="color:#fff">' + day(r.d) + '</b><br>' +
+      '<span style="color:#0ff">регистрации:</span> ' + r.signups + '<br>' +
+      '<span style="color:#0f8">покупки:</span> ' + r.purchases +
+        (Number(r.revenue) ? ' · ' + money(Number(r.revenue)) : '') + '<br>' +
+      '<span style="color:#f80">скачивания:</span> ' + r.downloads;
+
+    tip.style.display = 'block';
+    // Держим подсказку внутри карточки, иначе у правого края её обрежет.
+    const tipW = tip.offsetWidth;
+    let left = nearest.x + 14;
+    if (left + tipW > box.width) left = nearest.x - tipW - 14;
+    tip.style.left = Math.max(4, left) + 'px';
+    tip.style.top = '14px';
+  });
+
+  cv.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+}
+
+/* ── Загрузка разделов ──────────────────────────────────────────────── */
+async function loadStats() {
+  const [totals, rows] = await Promise.all([adminTotals(), adminDailyStats(30)]);
+  if (totals) {
+    $('tPlayers').textContent = totals.players;
+    $('tLicenses').textContent = totals.licenses;
+    $('tOrders').textContent = totals.paid_orders;
+    $('tRevenue').textContent = money(Number(totals.revenue_rub) || 0);
+    $('tDownloads').textContent = totals.downloads;
+  }
+  drawChart(rows || []);
+  bindTooltip();
+}
+
+const CHANNELS = [
+  { key: 'channel_windows', name: 'Скачивание .exe', hint: 'установщик для Windows' },
+  { key: 'channel_android', name: 'Скачивание .apk', hint: 'файл для Android напрямую' },
+  { key: 'channel_rustore', name: 'RuStore', hint: 'ссылка на магазин' },
+  { key: 'channel_web', name: 'Веб-версия', hint: 'игра в браузере' },
+];
+
+async function loadChannels() {
+  const s = await getSettings();
+
+  $('gaChannels').innerHTML = CHANNELS.map((c) => {
+    const on = s[c.key] !== false;
+    return `<div class="rowline">
+        <div>
+          <b>${esc(c.name)}</b>
+          <div class="dim" style="font-size:13px">${esc(c.hint)}</div>
+        </div>
+        <span class="chip ${on ? '' : 'off'}">${on ? 'включено' : 'выключено'}</span>
+        <button class="btn ${on ? 'ghost' : 'primary'}" data-ch="${c.key}" data-on="${on}">
+          ${on ? 'ВЫКЛЮЧИТЬ' : 'ВКЛЮЧИТЬ'}
+        </button>
+      </div>`;
+  }).join('');
+
+  const payOn = s.payments_enabled === true;
+  $('gaPay').innerHTML = `<div class="rowline">
+      <div>
+        <b>ЮKassa: ${payOn ? 'включена' : 'выключена'}</b>
+        <div class="dim" style="font-size:13px">${payOn
+          ? 'на сайте работает кнопка «Купить»'
+          : 'покупателям показывается почта ' + esc(s.support_email)}</div>
+      </div>
+      <button class="btn ${payOn ? 'ghost' : 'primary'}" data-pay="${payOn}">
+        ${payOn ? 'ВЫКЛЮЧИТЬ' : 'ВКЛЮЧИТЬ'}
+      </button>
+    </div>`;
+
+  $('gaChannels').querySelectorAll('[data-ch]').forEach((b) => {
+    b.onclick = () => toggle(b, b.dataset.ch, b.dataset.on !== 'true');
+  });
+  $('gaPay').querySelectorAll('[data-pay]').forEach((b) => {
+    b.onclick = () => toggle(b, 'payments_enabled', b.dataset.pay !== 'true');
+  });
+}
+
+async function toggle(btn, key, value) {
+  btn.disabled = true;
+  try {
+    await adminSetSetting(key, value);
+    say('Настройка сохранена.', 'ok');
+    await loadChannels();
+  } catch (err) { say(humanError(err)); btn.disabled = false; }
+}
+
+async function loadReleases() {
+  const rows = (await adminListReleases()).filter((r) => r.game_slug === GAME);
+  $('relTbl').innerHTML = rows.length
+    ? '<tr><th>Платформа</th><th>Версия</th><th>Размер</th><th>Скачано</th><th>Статус</th><th></th></tr>' +
+      rows.map((r) => `<tr>
+          <td>${esc(r.platform)}</td>
+          <td>${esc(r.version)}</td>
+          <td>${r.external_url ? 'внешняя ссылка' : mb(r.file_size)}</td>
+          <td>${r.downloads}</td>
+          <td><span class="chip ${r.is_current ? '' : 'off'}">${r.is_current ? 'текущая' : 'старая'}</span></td>
+          <td><button class="btn ghost" data-del="${r.id}">УДАЛИТЬ</button></td>
+        </tr>`).join('')
+    : '<tr><td class="dim">Сборок пока нет</td></tr>';
+
+  $('relTbl').querySelectorAll('[data-del]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await adminDeleteRelease(b.dataset.del); say('Сборка удалена.', 'ok'); await loadReleases(); }
+      catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+}
+
+async function loadPlayers() {
+  const rows = await adminListPlayers();
+  $('playersTbl').innerHTML = rows.length
+    ? '<tr><th>Регистрация</th><th>Ник</th><th>Почта</th><th>Byte Blaster</th></tr>' +
+      rows.map((p) => {
+        const owns = (p.games || []).includes(GAME);
+        return `<tr>
+          <td>${day(p.created_at)}</td>
+          <td>${esc(p.nickname)}${p.is_admin ? ' <span class="chip warn">админ</span>' : ''}</td>
+          <td>${esc(p.email)}</td>
+          <td><span class="chip ${owns ? '' : 'off'}">${owns ? 'куплено' : 'нет'}</span></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td class="dim">Игроков пока нет</td></tr>';
+}
+
+async function loadOrders() {
+  const rows = (await adminListOrders()).filter((o) => o.game_slug === GAME);
+  const label = { pending: 'ожидает', paid: 'оплачен', failed: 'не прошёл', refunded: 'возврат' };
+  $('ordersTbl').innerHTML = rows.length
+    ? '<tr><th>Дата</th><th>Игрок</th><th>Сумма</th><th>Статус</th><th></th></tr>' +
+      rows.map((o) => `<tr>
+          <td>${day(o.created_at)}</td>
+          <td>${esc(o.email)}</td>
+          <td>${o.currency === 'USD' ? '$' + (o.amount / 100).toFixed(2) : money(o.amount)}</td>
+          <td><span class="chip ${o.status === 'paid' ? '' : 'off'}">${label[o.status] || o.status}</span></td>
+          <td>${o.status === 'pending'
+            ? `<button class="btn primary" data-paid="${o.id}">ПОДТВЕРДИТЬ</button>`
+            : (o.status === 'paid'
+                ? `<button class="btn ghost" data-refund="${o.id}">ВОЗВРАТ</button>` : '')}</td>
+        </tr>`).join('')
+    : '<tr><td class="dim">Заказов пока нет</td></tr>';
+
+  $('ordersTbl').querySelectorAll('[data-paid]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await adminMarkPaid(b.dataset.paid);
+        say('Оплата подтверждена, лицензия выдана.', 'ok');
+        await Promise.all([loadOrders(), loadPlayers(), loadStats()]);
+      } catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+
+  $('ordersTbl').querySelectorAll('[data-refund]').forEach((b) => {
+    b.onclick = async () => {
+      // Возврат снимает лицензию, поэтому спрашиваем причину: она попадёт
+      // в журнал, и потом будет видно, почему у игрока пропал доступ.
+      const reason = prompt('Причина возврата (попадёт в журнал):');
+      if (reason === null) return;
+      b.disabled = true;
+      try {
+        await adminRefundOrder(b.dataset.refund, reason.trim());
+        say('Возврат оформлен, лицензия снята. Деньги вернуть нужно в кабинете платёжки.', 'ok');
+        await Promise.all([loadOrders(), loadPlayers(), loadStats()]);
+      } catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+}
+
+/* ── Действия ───────────────────────────────────────────────────────── */
+$('relUpload').onclick = async () => {
+  const file = $('relFile').files[0];
+  const version = $('relVersion').value.trim();
+  if (!file) { say('Выберите файл сборки.'); return; }
+  if (!version) { say('Укажите версию, например 1.0.3.'); return; }
+
+  const btn = $('relUpload');
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = 'ЗАГРУЖАЕМ…';
+  try {
+    await adminUploadRelease({
+      gameSlug: GAME,
+      platform: $('relPlatform').value,
+      version,
+      file,
+      notes: $('relNotes').value.trim(),
+      onProgress: (stage) => {
+        if (stage === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ…';
+      },
+    });
+    say('Сборка загружена и отмечена текущей.', 'ok');
+    $('relFile').value = '';
+    await loadReleases();
+  } catch (err) { say(humanError(err)); }
+  finally { btn.disabled = false; btn.textContent = was; }
+};
+
+$('relExtBtn').onclick = async () => {
+  const url = $('relExternal').value.trim();
+  const version = $('relVersion').value.trim();
+  if (!url) { say('Укажите ссылку.'); return; }
+  if (!version) { say('Укажите версию.'); return; }
+  try {
+    await adminSetExternalRelease({
+      gameSlug: GAME, platform: $('relPlatform').value,
+      version, url, notes: $('relNotes').value.trim(),
+    });
+    say('Ссылка сохранена.', 'ok');
+    $('relExternal').value = '';
+    await loadReleases();
+  } catch (err) { say(humanError(err)); }
+};
+
+async function grant(fn, okText) {
+  const email = $('grantEmail').value.trim();
+  if (!email) { say('Укажите почту игрока.'); return; }
+  try {
+    await fn(email, GAME);
+    say(okText, 'ok');
+    $('grantEmail').value = '';
+    await Promise.all([loadPlayers(), loadStats()]);
+  } catch (err) { say(humanError(err)); }
+}
+
+$('grantBtn').onclick = () => grant(adminGrantLicense, 'Лицензия выдана.');
+$('revokeBtn').onclick = () => grant(adminRevokeLicense, 'Лицензия отозвана.');
+
+$('transferBtn').onclick = async () => {
+  const from = $('grantEmail').value.trim();
+  const to = $('transferTo').value.trim();
+  if (!from || !to) { say('Заполните обе почты: с какой переносим и на какую.'); return; }
+  try {
+    await adminTransferLicense(from, to, GAME);
+    say('Покупка перенесена на ' + to, 'ok');
+    $('transferTo').value = '';
+    await Promise.all([loadPlayers(), loadStats()]);
+  } catch (err) { say(humanError(err)); }
+};
+$('gaRefresh').onclick = () => refreshAll();
+
+async function refreshAll() {
+  await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders()]);
+}
+
+// График подстраивается под ширину окна — перерисовываем без перезапроса.
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (points.length) drawChart(points.map((p) => p.row)); }, 200);
+});
+
+/* ── Доступ ─────────────────────────────────────────────────────────── */
+const { data: { session } } = await supabase.auth.getSession();
+$('gaLoading').style.display = 'none';
+
+if (!session) {
+  $('gaDenied').style.display = 'block';
+} else {
+  let profile = null;
+  try { profile = await getProfile(session.user.id); } catch { /* ниже */ }
+
+  if (!profile || !profile.is_admin) {
+    $('gaDenied').style.display = 'block';
+    $('gaDenied').querySelector('.lead').textContent =
+      'Этот аккаунт не администратор студии.';
+  } else {
+    $('gaPanel').style.display = 'block';
+    try { await refreshAll(); }
+    catch (err) { say(humanError(err)); }
+  }
+}
 </script>
 </body>
 </html>
