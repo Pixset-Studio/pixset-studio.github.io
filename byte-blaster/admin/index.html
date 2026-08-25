@@ -151,34 +151,40 @@
         Файл уходит в закрытое хранилище. Прямых ссылок нет: игрок с лицензией
         получает временную ссылку на 10 минут, каждая выдача записывается.
       </p>
+      <!-- Один выпуск — одна форма. Раньше платформы загружались по очереди, и
+           «что нового» приходилось писать дважды, слово в слово. -->
       <div class="card" style="margin-bottom:14px">
         <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-          <div>
-            <label class="gaLabel" for="relPlatform">Платформа</label>
-            <select id="relPlatform" class="gaInput">
-              <option value="windows">Windows (.exe)</option>
-              <option value="android">Android (.apk)</option>
-              <option value="web">Веб</option>
-            </select>
-          </div>
           <div>
             <label class="gaLabel" for="relVersion">Версия</label>
             <input type="text" id="relVersion" class="gaInput" placeholder="1.0.3">
           </div>
-          <div>
+          <div style="grid-column:span 2">
             <label class="gaLabel" for="relNotes">Что нового</label>
-            <input type="text" id="relNotes" class="gaInput" placeholder="коротко">
-          </div>
-          <div>
-            <label class="gaLabel" for="relFile">Файл</label>
-            <input type="file" id="relFile" class="gaInput" accept=".exe,.apk,.zip">
+            <input type="text" id="relNotes" class="gaInput" placeholder="общее описание для всех платформ">
           </div>
         </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
-          <button class="btn primary" id="relUpload" style="min-width:0">ЗАГРУЗИТЬ</button>
-          <input type="url" id="relExternal" class="gaInput" style="flex:1;min-width:220px"
-                 placeholder="или ссылка на RuStore">
-          <button class="btn ghost" id="relExtBtn" style="min-width:0">СОХРАНИТЬ ССЫЛКУ</button>
+
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px">
+          <div>
+            <label class="gaLabel" for="relWin">Установщик Windows (.exe)</label>
+            <input type="file" id="relWin" class="gaInput" accept=".exe">
+          </div>
+          <div>
+            <label class="gaLabel" for="relApk">Файл Android (.apk)</label>
+            <input type="file" id="relApk" class="gaInput" accept=".apk">
+          </div>
+          <div>
+            <label class="gaLabel" for="relExternal">Ссылка на RuStore</label>
+            <input type="url" id="relExternal" class="gaInput" placeholder="необязательно">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;align-items:center">
+          <button class="btn primary" id="relPublish" style="min-width:0">ВЫПУСТИТЬ ОБНОВЛЕНИЕ</button>
+          <span class="dim" style="font-size:13px">
+            Заполните то, что выпускаете: версия и заметки общие, файлы — по желанию.
+          </span>
         </div>
       </div>
       <div class="tw"><table id="relTbl"></table></div>
@@ -691,48 +697,62 @@ async function loadOrders() {
 }
 
 /* ── Действия ───────────────────────────────────────────────────────── */
-$('relUpload').onclick = async () => {
-  const file = $('relFile').files[0];
+/**
+ * Выпуск обновления: версия и заметки пишутся один раз, а уезжают во все
+ * сборки этого выпуска. Веб-версии здесь нет намеренно — она обновляется
+ * вместе с сайтом, загружать для неё файл незачем.
+ */
+$('relPublish').onclick = async () => {
   const version = $('relVersion').value.trim();
-  if (!file) { say('Выберите файл сборки.'); return; }
+  const notes = $('relNotes').value.trim();
+  const win = $('relWin').files[0];
+  const apk = $('relApk').files[0];
+  const rustore = $('relExternal').value.trim();
+
   if (!version) { say('Укажите версию, например 1.0.3.'); return; }
+  if (!win && !apk && !rustore) {
+    say('Добавьте файл .exe, файл .apk или ссылку на RuStore.');
+    return;
+  }
 
-  const btn = $('relUpload');
-  btn.disabled = true;
+  const btn = $('relPublish');
   const was = btn.textContent;
-  btn.textContent = 'ЗАГРУЖАЕМ…';
+  btn.disabled = true;
+  const done = [];
   try {
-    await adminUploadRelease({
-      gameSlug: GAME,
-      platform: $('relPlatform').value,
-      version,
-      file,
-      notes: $('relNotes').value.trim(),
-      onProgress: (stage) => {
-        if (stage === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ…';
-      },
-    });
-    say('Сборка загружена и отмечена текущей.', 'ok');
-    $('relFile').value = '';
-    await loadReleases();
-  } catch (err) { say(humanError(err)); }
-  finally { btn.disabled = false; btn.textContent = was; }
-};
+    if (win) {
+      btn.textContent = 'ЗАГРУЖАЕМ .EXE…';
+      await adminUploadRelease({
+        gameSlug: GAME, platform: 'windows', version, file: win, notes,
+        onProgress: (s) => { if (s === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ .EXE…'; },
+      });
+      done.push('Windows');
+    }
+    if (apk) {
+      btn.textContent = 'ЗАГРУЖАЕМ .APK…';
+      await adminUploadRelease({
+        gameSlug: GAME, platform: 'android', version, file: apk, notes,
+        onProgress: (s) => { if (s === 'checksum') btn.textContent = 'СЧИТАЕМ СУММУ .APK…'; },
+      });
+      done.push('Android');
+    }
+    // Ссылка на магазин — это тоже android-релиз, только без файла. Ставим её
+    // после .apk, чтобы прямой файл не затирал магазин, если выложено и то и то.
+    if (rustore && !apk) {
+      btn.textContent = 'СОХРАНЯЕМ ССЫЛКУ…';
+      await adminSetExternalRelease({
+        gameSlug: GAME, platform: 'android', version, url: rustore, notes,
+      });
+      done.push('RuStore');
+    }
 
-$('relExtBtn').onclick = async () => {
-  const url = $('relExternal').value.trim();
-  const version = $('relVersion').value.trim();
-  if (!url) { say('Укажите ссылку.'); return; }
-  if (!version) { say('Укажите версию.'); return; }
-  try {
-    await adminSetExternalRelease({
-      gameSlug: GAME, platform: $('relPlatform').value,
-      version, url, notes: $('relNotes').value.trim(),
-    });
-    say('Ссылка сохранена.', 'ok');
+    say('Выпущено: ' + done.join(', ') + ' — версия ' + version + '.', 'ok');
+    $('relWin').value = '';
+    $('relApk').value = '';
     $('relExternal').value = '';
     await loadReleases();
   } catch (err) { say(humanError(err)); }
+  finally { btn.disabled = false; btn.textContent = was; }
 };
 
 async function grant(fn, okText) {

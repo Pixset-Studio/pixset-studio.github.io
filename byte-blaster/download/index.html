@@ -61,7 +61,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <h3><span data-l="ru">Браузер<span class="badge">без установки</span></span><span data-l="en">Browser<span class="badge">no install</span></span></h3>
         <p data-l="ru">Полная версия целиком: 110 уровней, все режимы, кооператив. Прогресс сохраняется в браузере.</p>
         <p data-l="en">The complete game: 110 levels, every mode, co-op. Progress is saved in your browser.</p>
-        <a class="btn primary" href="/byte-blaster/game/full/"><span data-l="ru">▶ ИГРАТЬ СЕЙЧАС</span><span data-l="en">▶ PLAY NOW</span></a>
+        <a class="btn primary" href="/byte-blaster/game/"><span data-l="ru">▶ ИГРАТЬ СЕЙЧАС</span><span data-l="en">▶ PLAY NOW</span></a>
       </div>
 
       <div class="card">
@@ -223,7 +223,7 @@ const channels = await getSettings();
 const off = (key) => channels[key] === false;
 
 if (off('channel_web')) {
-  document.querySelectorAll('a[href*="/game/full/"]').forEach((a) => {
+  document.querySelectorAll('a[href*="/game/"]').forEach((a) => {
     a.replaceWith(Object.assign(document.createElement('span'), {
       className: 'btn disabled', textContent: 'ВРЕМЕННО НЕДОСТУПНО',
     }));
@@ -306,6 +306,13 @@ for (const p of PLATFORMS) {
   note.innerHTML = bi(
     `Версия ${rel.version}${size ? ' · ' + size + ' МБ' : ''}`,
     `Version ${rel.version}${size ? ' · ' + size + ' MB' : ''}`);
+
+  // Раздача через магазин: файла у нас нет, подписывать нечего — просто ведём
+  // по ссылке, и вход для этого не нужен.
+  if (rel.external_url) {
+    replace(rel.external_url, '⬇ ОТКРЫТЬ В МАГАЗИНЕ', '⬇ OPEN IN STORE');
+    continue;
+  }
 
   if (!session) {
     replace('/byte-blaster/account/?next=/byte-blaster/download/',

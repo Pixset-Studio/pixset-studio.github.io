@@ -29,7 +29,7 @@
       var map = {};
       rows.forEach(function (r) { map[r.key] = r.value; });
 
-      if (map.channel_web === false) disable('a[href*="/game/full/"]', 'ВЕБ-ВЕРСИЯ ЗАКРЫТА', 'BROWSER VERSION CLOSED');
+      if (map.channel_web === false) disable('a[href*="/game/"]', 'ВЕБ-ВЕРСИЯ ЗАКРЫТА', 'BROWSER VERSION CLOSED');
       if (map.channel_rustore === false) disable('a[href*="rustore.ru"]', 'ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
     })
     .catch(function () { /* не ответили — оставляем как есть */ });
@@ -37,11 +37,56 @@
   function disable(selector, ru, en) {
     document.querySelectorAll(selector).forEach(function (a) {
       var span = document.createElement('span');
-      span.className = 'btn disabled';
+      // Классы исходной кнопки сохраняем: без них терялся, например, ghost, и
+      // компактная ссылка в ряду превращалась в кнопку во всю ширину блока.
+      span.className = a.className + ' disabled';
       span.setAttribute('aria-disabled', 'true');
       span.innerHTML = '<span data-l="ru">' + ru + '</span><span data-l="en">' + en + '</span>';
       a.replaceWith(span);
     });
+  }
+
+  /* ── Игру уже купили ────────────────────────────────────────────────────
+     Владельцу лицензии предлагать покупку незачем: вместо ценников и кнопок
+     «купить» он видит переход к скачиванию, а пункт «Купить» в меню исчезает.
+     Токен лежит там же, где его держит supabase-js на страницах аккаунта. */
+  function accessToken() {
+    try {
+      var raw = localStorage.getItem('sb-zyjhvuhovimorpokiwty-auth-token');
+      if (!raw) return null;
+      var s = JSON.parse(raw);
+      return (s && s.access_token) || null;
+    } catch (e) { return null; }
+  }
+
+  var token = accessToken();
+  if (token) {
+    fetch(API + '/rest/v1/my_entitlements?select=game_slug', {
+      headers: { apikey: KEY, Authorization: 'Bearer ' + token },
+    })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var owns = rows.some(function (e) { return e.game_slug === 'byte-blaster'; });
+        if (owns) hideBuying();
+      })
+      .catch(function () { /* не ответили — оставляем страницу как есть */ });
+  }
+
+  function hideBuying() {
+    document.querySelectorAll('a[href*="/byte-blaster/buy/"]').forEach(function (a) {
+      var inNav = !!a.closest('nav, header, footer');
+      if (inNav) { a.remove(); return; }
+
+      // Кнопка на карточке: ведём туда, где игру можно забрать.
+      a.href = '/byte-blaster/download/';
+      a.innerHTML = '<span data-l="ru">⬇ СКАЧАТЬ ИГРУ</span>'
+                  + '<span data-l="en">⬇ DOWNLOAD THE GAME</span>';
+    });
+
+    // Карточка с демоверсией владельцу не нужна вовсе.
+    var demo = document.querySelector('.dl .card a[href*="/byte-blaster/download/"]');
+    var card = demo && demo.closest('.card');
+    if (card && /демо|demo/i.test(card.textContent)) card.remove();
   }
 
   var slots = document.querySelectorAll('.bbPrice');

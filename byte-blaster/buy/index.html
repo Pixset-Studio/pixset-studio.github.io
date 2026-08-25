@@ -67,7 +67,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
   <div class="btns">
     <button class="btn primary" id="buyBtn"><span data-l="ru">КУПИТЬ</span><span data-l="en">BUY NOW</span></button>
-    <a class="btn" href="/byte-blaster/game/full/">
+    <a class="btn" href="/byte-blaster/game/">
       <span data-l="ru">СНАЧАЛА ПОПРОБОВАТЬ<small>первый мир бесплатно</small></span>
       <span data-l="en">TRY IT FIRST<small>first world free</small></span>
     </a>
@@ -193,7 +193,7 @@ async function render() {
     $('price').textContent = '';
     $('priceNote').innerHTML = bi('Игра уже на вашем аккаунте', 'Already on your account');
     $('buyBtn').outerHTML =
-      `<a class="btn primary" href="/byte-blaster/game/full/">${
+      `<a class="btn primary" href="/byte-blaster/game/">${
         bi('ИГРАТЬ<small>полная версия открыта</small>',
            'PLAY<small>full version unlocked</small>')}</a>`;
     $('hint').innerHTML = bi(
