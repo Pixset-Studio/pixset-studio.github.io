@@ -7,6 +7,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 export const SUPABASE_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
 
+/**
+ * Отпечаток этой сборки модуля. Проставляется скриптом sync-sdk.js вместе с
+ * метками ?v= в импортах страниц — по нему видно, свежий ли код выполняется.
+ * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
+ * «без причины»: страница молча работала на вчерашнем модуле.
+ */
+export const SDK_VERSION = 'e0b8165e';
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,

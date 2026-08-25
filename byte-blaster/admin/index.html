@@ -466,12 +466,12 @@
 import {
   supabase, getProfile, getSettings, adminSetSetting,
   adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
-  adminEditRelease,
+  adminEditRelease, SDK_VERSION,
   adminListPlayers, adminListOrders, adminMarkPaid,
   adminGrantLicense, adminRevokeLicense, adminTransferLicense,
   adminRefundOrder, adminCancelOrder,
   adminDailyStats, adminTotals, humanError,
-} from '/byte-blaster/assets/pixset-auth.js';
+} from '/byte-blaster/assets/pixset-auth.js?v=e0b8165e';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -902,6 +902,14 @@ if (!session) {
       'Этот аккаунт не администратор студии.';
   } else {
     $('gaPanel').style.display = 'block';
+    // Версия модуля на виду: если браузер подсунул старую копию из кэша, это
+    // заметно сразу, а не после очередного «не грузится, но ошибок нет».
+    const stamp = document.createElement('p');
+    stamp.className = 'dim';
+    stamp.style.cssText = 'font-size:12px;margin:0 0 14px';
+    stamp.textContent = profile.nickname + ' · сборка ' + SDK_VERSION;
+    $('gaPanel').prepend(stamp);
+
     try { await refreshAll(); }
     catch (err) { say(humanError(err)); }
   }
