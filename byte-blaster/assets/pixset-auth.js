@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'e0b8165e';
+export const SDK_VERSION = '8b3617a7';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -325,10 +325,24 @@ export async function adminEditRelease(id, { notes = null, makeCurrent = null } 
  *
  * Обычная загрузка одним запросом упирается в предел размера тела: установщик
  * на 174 МБ отваливался с невнятным 400. Здесь файл уезжает кусками по 6 МБ,
- * можно показывать проценты, а оборванная загрузка продолжается с места обрыва.
+ * а по пути видно проценты.
+ *
+ * Протокол реализован прямо здесь, без библиотеки с чужого CDN: сначала так и
+ * было, но динамический импорт tus-js-client молча не доходил до конца, и
+ * загрузка обрывалась ещё до первого сетевого запроса. Своих строк меньше
+ * сотни, зато зависимость ровно одна — само хранилище.
  */
+const CHUNK = 6 * 1024 * 1024;   // требование Supabase: ровно 6 МБ
+
+/** Метаданные TUS едут одной строкой: «ключ base64(значение)» через запятую. */
+function tusMetadata(fields) {
+  const b64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+  return Object.entries(fields)
+    .map(([k, v]) => `${k} ${b64(String(v))}`)
+    .join(',');
+}
+
 async function uploadResumable(bucket, path, file, onProgress) {
-  const tus = await import('https://esm.sh/tus-js-client@4');
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('not_authenticated');
 
@@ -336,38 +350,90 @@ async function uploadResumable(bucket, path, file, onProgress) {
   const endpoint = SUPABASE_URL.replace('.supabase.co', '.storage.supabase.co')
     + '/storage/v1/upload/resumable';
 
-  await new Promise((resolve, reject) => {
-    const upload = new tus.Upload(file, {
-      endpoint,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      headers: {
-        authorization: 'Bearer ' + session.access_token,
-        apikey: SUPABASE_KEY,
-        'x-upsert': 'true',
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,   // иначе повторная заливка того же файла зависает
-      metadata: {
+  const auth = {
+    authorization: 'Bearer ' + session.access_token,
+    apikey: SUPABASE_KEY,
+    'Tus-Resumable': '1.0.0',
+  };
+
+  const explain = async (res, step) => {
+    const text = await res.text().catch(() => '');
+    const err = new Error(`upload_${step}_${res.status}`);
+    err.status = res.status;
+    err.detail = text.slice(0, 300);
+    console.error('Загрузка (' + step + '): ' + res.status + ' ' + err.detail);
+    return err;
+  };
+
+  // 1. Заводим загрузку и получаем её личный адрес.
+  const create = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      ...auth,
+      'Upload-Length': String(file.size),
+      'Upload-Metadata': tusMetadata({
         bucketName: bucket,
         objectName: path,
         contentType: file.type || 'application/octet-stream',
         cacheControl: '3600',
-      },
-      chunkSize: 6 * 1024 * 1024,          // требование Supabase: ровно 6 МБ
-      onError: reject,
-      onProgress: (sent, total) => {
-        if (onProgress) onProgress('upload', Math.floor((sent / total) * 100));
-      },
-      onSuccess: resolve,
-    });
-
-    upload.findPreviousUploads()
-      .then((prev) => {
-        if (prev.length) upload.resumeFromPreviousUpload(prev[0]);
-        upload.start();
-      })
-      .catch(reject);
+      }),
+      'x-upsert': 'true',
+    },
   });
+  if (!create.ok && create.status !== 201) throw await explain(create, 'create');
+
+  const location = create.headers.get('location');
+  if (!location) throw new Error('upload_no_location');
+  const uploadUrl = new URL(location, endpoint).href;
+
+  // 2. Шлём файл кусками, каждый раз сообщая, сколько уже принято.
+  let offset = 0;
+  while (offset < file.size) {
+    const chunk = file.slice(offset, Math.min(offset + CHUNK, file.size));
+    const res = await fetch(uploadUrl, {
+      method: 'PATCH',
+      headers: {
+        ...auth,
+        'Content-Type': 'application/offset+octet-stream',
+        'Upload-Offset': String(offset),
+      },
+      body: chunk,
+    });
+    if (!res.ok) throw await explain(res, 'chunk');
+
+    // Смещение берём от сервера: он — источник правды о принятом объёме.
+    const accepted = parseInt(res.headers.get('upload-offset') || '', 10);
+    offset = Number.isFinite(accepted) ? accepted : offset + chunk.size;
+
+    if (onProgress) onProgress('upload', Math.floor((offset / file.size) * 100));
+  }
+}
+
+/**
+ * Проверка связи с хранилищем на крошечном файле.
+ *
+ * Гонять ради диагностики стомегабайтный установщик мучительно: проверка
+ * проходит тот же путь (создание загрузки → кусок → удаление) за секунду и
+ * возвращает понятный результат.
+ */
+export async function adminTestUpload() {
+  const path = '_probe/' + Date.now() + '.txt';
+  const file = new File(['probe'], 'probe.txt', { type: 'text/plain' });
+  const steps = [];
+
+  try {
+    await uploadResumable('releases', path, file, (stage, pct) => {
+      steps.push(stage + (pct != null ? ' ' + pct + '%' : ''));
+    });
+  } catch (e) {
+    return { ok: false, step: 'upload', message: e.message, detail: e.detail || '', steps };
+  }
+
+  // Прибираем за собой: пробник в каталоге сборок не нужен.
+  const { error } = await supabase.storage.from('releases').remove([path]);
+  if (error) return { ok: true, step: 'cleanup', message: error.message, steps };
+
+  return { ok: true, steps };
 }
 
 /**
@@ -389,7 +455,15 @@ export async function adminUploadRelease({ gameSlug, platform, version, file, no
   }
 
   if (onProgress) onProgress('checksum');
-  const sha256 = await fileSha256(file);
+  // Сумму считаем целиком в памяти. На очень большом файле браузер может не
+  // выдержать — тогда выпуск всё равно состоится, просто игра не сверит
+  // целостность скачанного. Терять из-за этого загруженный установщик глупо.
+  let sha256 = null;
+  try {
+    sha256 = await fileSha256(file);
+  } catch (e) {
+    console.warn('Контрольная сумма не посчиталась, релиз выйдет без неё:', e);
+  }
 
   const { data, error } = await supabase.rpc('admin_upsert_release', {
     p_game_slug: gameSlug,

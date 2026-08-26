@@ -187,6 +187,7 @@
 
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;align-items:center">
           <button class="btn primary" id="relPublish" style="min-width:0">ВЫПУСТИТЬ ОБНОВЛЕНИЕ</button>
+          <button class="btn ghost" id="relTest" style="min-width:0">ПРОВЕРИТЬ ХРАНИЛИЩЕ</button>
           <span class="dim" style="font-size:13px">
             Заполните то, что выпускаете: версия и заметки общие, файлы — по желанию.
           </span>
@@ -466,12 +467,12 @@
 import {
   supabase, getProfile, getSettings, adminSetSetting,
   adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
-  adminEditRelease, SDK_VERSION,
+  adminEditRelease, adminTestUpload, SDK_VERSION,
   adminListPlayers, adminListOrders, adminMarkPaid,
   adminGrantLicense, adminRevokeLicense, adminTransferLicense,
   adminRefundOrder, adminCancelOrder,
   adminDailyStats, adminTotals, humanError,
-} from '/byte-blaster/assets/pixset-auth.js?v=e0b8165e';
+} from '/byte-blaster/assets/pixset-auth.js?v=8b3617a7';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -844,8 +845,30 @@ $('relPublish').onclick = async () => {
     $('relApk').value = '';
     $('relExternal').value = '';
     await loadReleases();
-  } catch (err) { say(humanError(err)); }
+  } catch (err) {
+    // Подробности — в консоль: сообщение на странице короткое, а разбираться
+    // с загрузкой на сотню мегабайт без деталей невозможно.
+    console.error('Выпуск обновления не удался:', err);
+    say(humanError(err));
+  }
   finally { btn.disabled = false; btn.textContent = was; }
+};
+
+// Быстрая диагностика: тот же путь загрузки, но на файле в пять байт.
+$('relTest').onclick = async () => {
+  const btn = $('relTest');
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'ПРОВЕРЯЕМ…';
+  try {
+    const r = await adminTestUpload();
+    console.log('Проверка хранилища:', r);
+    if (r.ok) say('Хранилище отвечает, загрузка работает.', 'ok');
+    else say('Хранилище отказало на шаге «' + r.step + '»: ' + (r.detail || r.message));
+  } catch (err) {
+    console.error('Проверка хранилища не удалась:', err);
+    say(humanError(err));
+  } finally { btn.disabled = false; btn.textContent = was; }
 };
 
 async function grant(fn, okText) {
