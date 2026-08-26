@@ -94,41 +94,37 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
         Файл кладётся в закрытое хранилище. Прямых ссылок нет: игроку с лицензией
         выдаётся временная ссылка на 10 минут, каждая выдача записывается.
       </p>
+      <!-- Один выпуск — одна форма: версия и «что нового» пишутся один раз на
+           все платформы. Веб-версии в списке нет: она обновляется вместе с
+           сайтом, файл для неё не выкладывают. -->
       <div class="grantbox" style="margin-bottom:14px">
         <div class="field">
           <label for="relGame">Игра</label>
           <select id="relGame"></select>
         </div>
         <div class="field">
-          <label for="relPlatform">Платформа</label>
-          <select id="relPlatform">
-            <option value="windows">Windows (.exe)</option>
-            <option value="android">Android (.apk)</option>
-            <option value="web">Веб</option>
-          </select>
-        </div>
-        <div class="field">
           <label for="relVersion">Версия</label>
           <input type="text" id="relVersion" placeholder="1.0.3">
+        </div>
+        <div class="field">
+          <label for="relNotes">Что нового</label>
+          <input type="text" id="relNotes" placeholder="Общее описание для всех платформ">
         </div>
       </div>
       <div class="grantbox" style="margin-bottom:14px">
         <div class="field">
-          <label for="relNotes">Что нового</label>
-          <input type="text" id="relNotes" placeholder="Коротко: что изменилось">
+          <label for="relWin">Установщик Windows (.exe)</label>
+          <input type="file" id="relWin" accept=".exe">
         </div>
         <div class="field">
-          <label for="relFile">Файл сборки</label>
-          <input type="file" id="relFile" accept=".exe,.apk,.zip">
+          <label for="relApk">Файл Android (.apk)</label>
+          <input type="file" id="relApk" accept=".apk">
         </div>
-        <button class="btn solid" id="relUpload">Загрузить</button>
-      </div>
-      <div class="grantbox">
         <div class="field">
-          <label for="relExternal">Или внешняя ссылка (RuStore и т.п.)</label>
-          <input type="url" id="relExternal" placeholder="https://www.rustore.ru/catalog/app/...">
+          <label for="relExternal">Ссылка на магазин (RuStore)</label>
+          <input type="url" id="relExternal" placeholder="необязательно">
         </div>
-        <button class="btn quiet" id="relExtBtn">Сохранить ссылку</button>
+        <button class="btn solid" id="relPublish">Выпустить обновление</button>
       </div>
       <div class="tblwrap" style="margin-top:14px"><table id="releasesTbl"></table></div>
 
@@ -165,8 +161,9 @@ import {
   adminListOrders, adminListPlayers, adminListPaymentEvents,
   adminGrantLicense, adminRevokeLicense, adminMarkPaid,
   adminListReleases, adminUploadRelease, adminSetExternalRelease, adminDeleteRelease,
+  adminEditRelease, SDK_VERSION,
   getSettings, adminSetSetting, humanError,
-} from '/assets/pixset-auth.js';
+} from '/assets/pixset-auth.js?v=8b3617a7';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -287,16 +284,22 @@ const mb = (bytes) => bytes ? (bytes / 1048576).toFixed(1) + ' МБ' : '—';
 async function loadReleases() {
   const rows = await adminListReleases();
   $('releasesTbl').innerHTML = rows.length
-    ? '<tr><th>Игра</th><th>Платформа</th><th>Версия</th><th>Размер</th><th>Скачано</th><th>Статус</th><th></th></tr>' +
+    ? '<tr><th>Игра</th><th>Платформа</th><th>Версия</th><th>Что нового</th><th>Размер</th>'
+      + '<th>Скачано</th><th>Статус</th><th></th></tr>' +
       rows.map((r) => `
         <tr>
           <td>${esc(r.game_slug)}</td>
           <td>${esc(r.platform)}</td>
           <td>${esc(r.version)}</td>
+          <td class="dim" style="max-width:240px">${esc(r.notes || '—')}</td>
           <td>${r.external_url ? 'внешняя ссылка' : mb(r.file_size)}</td>
           <td>${r.downloads}</td>
           <td>${r.is_current ? '<span class="badge">текущая</span>' : '<span class="badge mute">старая</span>'}</td>
-          <td><button class="btn quiet" data-del-rel="${r.id}">Удалить</button></td>
+          <td style="white-space:nowrap">
+            <button class="btn quiet" data-edit-rel="${r.id}" data-notes="${esc(r.notes || '')}">Описание</button>
+            ${r.is_current ? '' : `<button class="btn quiet" data-current-rel="${r.id}">Сделать текущей</button>`}
+            <button class="btn quiet" data-del-rel="${r.id}">Удалить</button>
+          </td>
         </tr>`).join('')
     : '<tr><td class="empty">Сборок пока нет</td></tr>';
 
@@ -310,55 +313,100 @@ async function loadReleases() {
       } catch (err) { say(humanError(err)); btn.disabled = false; }
     };
   });
+
+  // Описание можно поправить и после выпуска — его читают все игроки.
+  $('releasesTbl').querySelectorAll('[data-edit-rel]').forEach((btn) => {
+    btn.onclick = async () => {
+      const notes = prompt('Что нового в этой версии:', btn.dataset.notes || '');
+      if (notes === null) return;
+      btn.disabled = true;
+      try {
+        await adminEditRelease(btn.dataset.editRel, { notes });
+        say('Описание сохранено.', 'ok');
+        await loadReleases();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+
+  // Откат на прежнюю сборку, если в свежей нашлась беда.
+  $('releasesTbl').querySelectorAll('[data-current-rel]').forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm('Сделать эту версию текущей? Игроки будут получать именно её.')) return;
+      btn.disabled = true;
+      try {
+        await adminEditRelease(btn.dataset.currentRel, { makeCurrent: true });
+        say('Версия отмечена текущей.', 'ok');
+        await loadReleases();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
 }
 
-$('relUpload').onclick = async () => {
-  const file = $('relFile').files[0];
+/**
+ * Выпуск обновления целиком: версия и заметки общие, файлы — те, что приложили.
+ * Ссылка на магазин ставится только если .apk не выкладывали: у релиза либо
+ * наш файл, либо ссылка, и база это тоже проверяет.
+ */
+$('relPublish').onclick = async () => {
+  const gameSlug = $('relGame').value;
   const version = $('relVersion').value.trim();
-  if (!file) { say('Выберите файл сборки.'); return; }
-  if (!version) { say('Укажите версию, например 1.0.3.'); return; }
+  const notes = $('relNotes').value.trim();
+  const win = $('relWin').files[0];
+  const apk = $('relApk').files[0];
+  const store = $('relExternal').value.trim();
 
-  const btn = $('relUpload');
+  if (!version) { say('Укажите версию, например 1.0.3.'); return; }
+  if (!win && !apk && !store) {
+    say('Добавьте файл .exe, файл .apk или ссылку на магазин.');
+    return;
+  }
+
+  const btn = $('relPublish');
   btn.disabled = true;
-  btn.textContent = 'Загружаем…';
+  const done = [];
   try {
-    await adminUploadRelease({
-      gameSlug: $('relGame').value,
-      platform: $('relPlatform').value,
-      version,
-      file,
-      notes: $('relNotes').value.trim(),
-      onProgress: (stage) => {
-        if (stage === 'checksum') btn.textContent = 'Считаем контрольную сумму…';
-      },
-    });
-    say('Сборка загружена и отмечена текущей.', 'ok');
-    $('relFile').value = '';
+    if (win) {
+      btn.textContent = 'Загружаем .exe…';
+      await adminUploadRelease({
+        gameSlug, platform: 'windows', version, file: win, notes,
+        onProgress: (stage, pct) => {
+          if (stage === 'upload') btn.textContent = 'Загружаем .exe — ' + pct + '%';
+          if (stage === 'checksum') btn.textContent = 'Считаем сумму .exe…';
+        },
+      });
+      done.push('Windows');
+    }
+    if (apk) {
+      btn.textContent = 'Загружаем .apk…';
+      await adminUploadRelease({
+        gameSlug, platform: 'android', version, file: apk, notes,
+        onProgress: (stage, pct) => {
+          if (stage === 'upload') btn.textContent = 'Загружаем .apk — ' + pct + '%';
+          if (stage === 'checksum') btn.textContent = 'Считаем сумму .apk…';
+        },
+      });
+      done.push('Android');
+    }
+    if (store && !apk) {
+      btn.textContent = 'Сохраняем ссылку…';
+      await adminSetExternalRelease({
+        gameSlug, platform: 'android', version, url: store, notes,
+      });
+      done.push('магазин');
+    }
+
+    say('Выпущено: ' + done.join(', ') + ' — версия ' + version + '.', 'ok');
+    $('relWin').value = '';
+    $('relApk').value = '';
+    $('relExternal').value = '';
     await loadReleases();
   } catch (err) {
+    console.error('Выпуск обновления не удался:', err);
     say(humanError(err));
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Загрузить';
+    btn.textContent = 'Выпустить обновление';
   }
-};
-
-$('relExtBtn').onclick = async () => {
-  const url = $('relExternal').value.trim();
-  const version = $('relVersion').value.trim();
-  if (!url) { say('Укажите ссылку.'); return; }
-  if (!version) { say('Укажите версию.'); return; }
-  try {
-    await adminSetExternalRelease({
-      gameSlug: $('relGame').value,
-      platform: $('relPlatform').value,
-      version, url,
-      notes: $('relNotes').value.trim(),
-    });
-    say('Ссылка сохранена.', 'ok');
-    $('relExternal').value = '';
-    await loadReleases();
-  } catch (err) { say(humanError(err)); }
 };
 
 // Каналы раздачи. Каждый — отдельный выключатель: например, .exe можно снять
@@ -447,7 +495,10 @@ if (!session) {
     show($('denied'));
   } else {
     show($('panel'));
-    $('me').textContent = profile.nickname + ' · ' + session.user.email;
+    // Версия модуля видна сразу: если браузер подсунул старую копию из кэша,
+    // это заметно до того, как «ничего не работает без ошибок».
+    $('me').textContent = profile.nickname + ' · ' + session.user.email
+      + ' · сборка ' + SDK_VERSION;
     await fillGames();
     await refresh();
   }

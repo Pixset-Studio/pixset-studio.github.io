@@ -14,11 +14,12 @@
   const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
 
   // Публичный ключ подписи (SPKI, base64). Приватная половина — только на сервере.
-  const PUBLIC_KEY_SPKI = 'MCowBQYDK2VwAyEAobGRyYmKEjjmy8rrD/2oWlMZASY8wWeSDd7ipL1cvFs=';
+  const PUBLIC_KEY_SPKI = 'MCowBQYDK2VwAyEA6Ikvs6jnDH38jJwUe1zxdwxArzAgryXd8PRdtkabJHw=';
 
   // Сколько дней играем после истечения токена, если сеть недоступна.
-  // Упавший сервер не должен ломать честно купленную игру.
-  const OFFLINE_GRACE_DAYS = 7;
+  // Упавший сервер не должен ломать честно купленную игру, поэтому запас
+  // щедрый: вместе с трёхмесячным сроком токена это четыре месяца офлайна.
+  const OFFLINE_GRACE_DAYS = 30;
 
   const K_TOKEN   = 'pixset.license';
   const K_SESSION = 'pixset.session';
@@ -74,6 +75,9 @@
   /* ── Состояние ─────────────────────────────────────────────────────── */
   let ent = null;       // проверенный payload или null
   let ready = false;    // init уже отработал
+  // Почему в последний раз не удалось получить права. Нужен, чтобы игра
+  // говорила «сервер недоступен» вместо «нет лицензии» — это разные вещи.
+  let lastError = null;
 
   function readJSON(key) {
     const raw = store.get(key);
@@ -157,7 +161,12 @@
       platform: platform(),
       label: label(),
     }, token);
-    if (!res.ok) throw new Error('entitlements_' + res.status);
+    if (!res.ok) {
+      // 503 — ключ подписи на сервере настроен неверно. Это наша поломка:
+      // лицензия у игрока есть, просто выдать её сейчас не можем.
+      lastError = res.status === 503 ? 'server_unavailable' : 'entitlements_' + res.status;
+      throw new Error(lastError);
+    }
 
     const signed = await res.json();
     const payload = await verify(signed);
@@ -166,6 +175,7 @@
     store.set(K_TOKEN, JSON.stringify(signed));
     ent = payload;
     ready = true;
+    lastError = null;
     return payload;
   }
 
@@ -181,19 +191,66 @@
   /** Токен ещё в силе, но пора обновиться — повод для мягкого предупреждения. */
   function stale() { return !!ent && now() > ent.expires_at; }
   function nickname() { return ent && ent.nickname ? ent.nickname : null; }
+  function email() {
+    if (ent && ent.email) return ent.email;
+    const s = session();
+    return (s && s.user && s.user.email) || null;
+  }
+  function problem() { return lastError; }
   function isReady() { return ready; }
+
+  /* ── Данные для карточки профиля ───────────────────────────────────────
+     Всё это приезжает внутри подписанного токена, поэтому профиль в игре
+     полностью виден и без интернета. */
+  function memberSince() { return (ent && ent.member_since) || null; }
+  function country() { return (ent && ent.country) || null; }
+  function deviceCount() { return ent && typeof ent.devices === 'number' ? ent.devices : null; }
+  function expiresAt() { return ent && ent.expires_at ? ent.expires_at : null; }
+  /** Подробности по конкретной игре: когда выдана лицензия и откуда. */
+  function licence(slug) {
+    if (!ent || !Array.isArray(ent.licences)) return null;
+    return ent.licences.find((l) => l && l.game === slug) || null;
+  }
+
+  /**
+   * Смена ника прямо из игры — он виден другим игрокам в сети, поэтому
+   * менять его удобнее там, где играют, а не только на сайте.
+   * Ограничение «раз в сутки» проверяет сервер.
+   */
+  async function setNickname(nickname) {
+    const token = await accessToken();
+    if (!token) throw new Error('not_logged_in');
+
+    const res = await authFetch('/rest/v1/rpc/update_nickname', { p_nickname: nickname }, token);
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const e = new Error((data && (data.message || data.hint)) || 'nickname_failed');
+      e.code = data && data.message ? String(data.message) : '';
+      throw e;
+    }
+    // Ник лежит в подписанном токене — перевыпускаем, иначе игра до суток
+    // показывала бы старое имя.
+    await refreshQuietly();
+    return data;
+  }
 
   /* ── Вспомогательное ───────────────────────────────────────────────── */
   function platform() {
+    // По userAgent судить нельзя: строка с «Electron» встречается и у обычных
+    // браузеров на его основе, и тогда веб-сборка выдаёт себя за настольную.
+    // Надёжный признак нашей сборки — мост, который выставляет preload.
+    if (typeof window !== 'undefined') {
+      if (window.electronAPI && typeof window.electronAPI.quit === 'function') return 'windows';
+      if (window.Capacitor) return 'android';
+    }
     const ua = navigator.userAgent || '';
     if (/Android/i.test(ua)) return 'android';
-    if (/Electron/i.test(ua)) return 'windows';
     return 'web';
   }
   function label() {
-    const ua = navigator.userAgent || '';
-    if (/Android/i.test(ua)) return 'Android';
-    if (/Electron/i.test(ua)) return 'PC (Windows)';
+    const p = platform();
+    if (p === 'android') return 'Android';
+    if (p === 'windows') return 'PC (Windows)';
     return 'Браузер';
   }
   /** Анонимный отпечаток. Никаких аппаратных идентификаторов. */
@@ -209,7 +266,9 @@
 
   window.License = {
     init, login, logout, refresh, refreshQuietly,
-    hasGame, stale, nickname, loggedIn, isReady,
+    hasGame, stale, nickname, email, problem, loggedIn, isReady,
+    memberSince, country, deviceCount, expiresAt, licence, setNickname,
+    platformLabel: label,
     setStorage(adapter) { store = adapter; },
     get storeUrl() { return 'https://pixset-studio.github.io/byte-blaster/buy/'; },
   };

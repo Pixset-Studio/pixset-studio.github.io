@@ -4,7 +4,9 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const TOKEN_TTL_DAYS = 30;
+// Три месяца: игрок, который запускает игру хотя бы раз в сезон, вообще не
+// заметит, что права когда-то надо продлевать.
+const TOKEN_TTL_DAYS = 90;
 
 // apikey и x-client-info браузер запрашивает в preflight, потому что их
 // добавляет клиент. Без них в списке preflight отклоняется, и запрос до функции
@@ -28,12 +30,44 @@ const b64 = {
   decode: (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)),
 };
 
-/** Приватный ключ лежит в секретах проекта и никогда не покидает сервер. */
+/**
+ * Приватный ключ лежит в секретах проекта и никогда не покидает сервер.
+ *
+ * Значение чистим перед разбором: при копировании в секрет туда легко попадают
+ * перенос строки, кавычки, пробелы или подпись вида «PRIVATE(pkcs8-b64)=».
+ * Раньше такой ключ валил функцию невнятным «Failed to decode base64», а игрок
+ * видел лишь «что-то пошло не так» при входе.
+ */
+function cleanKey(raw: string) {
+  return raw
+    .replace(/^[A-Za-z()\-_. ]*=\s*/, '')   // подпись перед значением
+    .replace(/-----[A-Z ]+-----/g, '')      // обрамление PEM
+    .replace(/["'\s]/g, '');                // кавычки, переносы, пробелы
+}
+
 async function signingKey() {
   const raw = Deno.env.get('LICENSE_PRIVATE_KEY');
   if (!raw) throw new Error('LICENSE_PRIVATE_KEY не задан');
+
+  const cleaned = cleanKey(raw);
+  let bytes: Uint8Array;
+  try {
+    bytes = b64.decode(cleaned);
+  } catch {
+    throw new Error(
+      'LICENSE_PRIVATE_KEY не является base64. Ожидается ключ pkcs8 одной строкой, ' +
+      'без подписи и переносов.',
+    );
+  }
+
+  // Ed25519 pkcs8 — ровно 48 байт. Проверяем заранее, чтобы ошибка была
+  // понятной, а не «operation error» из глубины Web Crypto.
+  if (bytes.length !== 48) {
+    throw new Error('LICENSE_PRIVATE_KEY: ожидалось 48 байт pkcs8, получено ' + bytes.length);
+  }
+
   return await crypto.subtle.importKey(
-    'pkcs8', b64.decode(raw), { name: 'Ed25519' }, false, ['sign'],
+    'pkcs8', bytes, { name: 'Ed25519' }, false, ['sign'],
   );
 }
 
@@ -69,26 +103,58 @@ Deno.serve(async (req) => {
 
   const { data: licenses, error: licError } = await supabase
     .from('licenses')
-    .select('game_slug')
+    .select('game_slug, source, granted_at')
     .eq('user_id', user.id)
     .is('revoked_at', null);
 
   if (licError) return json({ error: 'db_error' }, 500);
 
+  // Профиль и устройства — чтобы игра показывала полноценную карточку игрока
+  // и в офлайне: всё это уезжает в подписанный токен.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('nickname, created_at, country')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const { count: deviceCount } = await supabase
+    .from('devices')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     user_id: user.id,
-    nickname: user.user_metadata?.nickname ?? null,
+    // Ник живёт в profiles: там его меняет сайт. user_metadata — запасной
+    // вариант для аккаунтов, заведённых до появления таблицы.
+    nickname: profile?.nickname ?? user.user_metadata?.nickname ?? null,
+    email: user.email ?? null,
+    member_since: profile?.created_at ?? user.created_at ?? null,
+    country: profile?.country ?? null,
     games: licenses.map((l) => l.game_slug),
+    licences: licenses.map((l) => ({
+      game: l.game_slug,
+      source: l.source ?? null,
+      granted_at: l.granted_at ?? null,
+    })),
+    devices: deviceCount ?? null,
     device_hash: body.device_hash ?? null,
     issued_at: now,
     expires_at: now + TOKEN_TTL_DAYS * 86400,
   };
 
   const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
-  const signature = await crypto.subtle.sign(
-    'Ed25519', await signingKey(), payloadBytes,
-  );
+
+  let signature: ArrayBuffer;
+  try {
+    signature = await crypto.subtle.sign('Ed25519', await signingKey(), payloadBytes);
+  } catch (e) {
+    // Ключ настроен неверно — это поломка на нашей стороне, а не вина игрока.
+    // Отдаём внятный код, чтобы игра показала «сервер прав недоступен», а не
+    // «нет лицензии»: лицензия-то есть.
+    console.error('signing failed:', (e as Error).message);
+    return json({ error: 'signing_unavailable' }, 503);
+  }
 
   return json({
     payload: b64.encode(payloadBytes),
