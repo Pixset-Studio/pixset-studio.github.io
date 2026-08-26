@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
   // 2. Нужная сборка: конкретная версия или текущая.
   let q = admin.from('releases')
-    .select('id, file_path, version, sha256, file_size, external_url')
+    .select('id, file_path, version, sha256, file_size, external_url, parts')
     .eq('game_slug', gameSlug).eq('platform', platform);
   q = body.version ? q.eq('version', body.version) : q.eq('is_current', true);
 
@@ -96,13 +96,26 @@ Deno.serve(async (req) => {
     return json({ error: 'rate_limited', retry_after_min: 60 }, 429);
   }
 
-  // 4. Ссылка живёт 10 минут — утёкшая быстро становится бесполезной.
+  // 4. Ссылки живут 10 минут — утёкшая быстро становится бесполезной.
+  //    Крупная сборка лежит кусками (бесплатный тариф не принимает файл больше
+  //    50 МБ), поэтому подписываем каждый и отдаём по порядку: клиент склеит.
+  const parts = Math.max(1, release.parts ?? 1);
+  const paths = parts === 1
+    ? [release.file_path]
+    : Array.from({ length: parts }, (_, i) => `${release.file_path}.part${i + 1}`);
+
   const { data: signed, error: signError } = await admin
     .storage.from('releases')
-    .createSignedUrl(release.file_path, LINK_TTL_SEC, { download: true });
+    .createSignedUrls(paths, LINK_TTL_SEC, { download: true });
 
-  if (signError || !signed) {
+  if (signError || !signed || signed.length !== paths.length) {
     console.error('signed url failed', signError?.message);
+    return json({ error: 'storage_error' }, 502);
+  }
+
+  const urls = signed.map((s) => s.signedUrl);
+  if (urls.some((u) => !u)) {
+    console.error('часть сборки не подписалась', release.file_path);
     return json({ error: 'storage_error' }, 502);
   }
 
@@ -115,7 +128,10 @@ Deno.serve(async (req) => {
 
   return json({
     ok: true,
-    url: signed.signedUrl,
+    // url — для одной части; старые клиенты продолжат работать как раньше.
+    url: urls[0],
+    urls,
+    parts,
     version: release.version,
     sha256: release.sha256,
     size: release.file_size,

@@ -709,5 +709,7 @@
   "cloudLoading": "読み込み中…",
   "cloudLoadedOk": "進行状況を読み込みました — ゲームを再起動します…",
   "cloudLoadConfirm": "アカウントのセーブを読み込みますか？ この端末の進行状況は置き換えられます。",
-  "cloudTooBig": "セーブデータが大きすぎます"
+  "cloudTooBig": "セーブデータが大きすぎます",
+  "updDownloading": "ダウンロード中… {0}%",
+  "updBroken": "ファイルが壊れて届きました。あとでもう一度お試しください"
 }

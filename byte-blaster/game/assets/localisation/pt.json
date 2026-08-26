@@ -709,5 +709,7 @@
   "cloudLoading": "a carregar…",
   "cloudLoadedOk": "progresso carregado — a reiniciar o jogo…",
   "cloudLoadConfirm": "Carregar a gravação da conta? O progresso neste dispositivo será substituído.",
-  "cloudTooBig": "a gravação é demasiado grande"
+  "cloudTooBig": "a gravação é demasiado grande",
+  "updDownloading": "a transferir… {0}%",
+  "updBroken": "o ficheiro chegou danificado — tente mais tarde"
 }

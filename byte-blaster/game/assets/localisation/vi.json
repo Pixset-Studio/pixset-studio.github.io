@@ -709,5 +709,7 @@
   "cloudLoading": "đang tải…",
   "cloudLoadedOk": "đã tải tiến độ — đang khởi động lại trò chơi…",
   "cloudLoadConfirm": "Tải bản lưu từ tài khoản? Tiến độ trên thiết bị này sẽ bị thay thế.",
-  "cloudTooBig": "bản lưu quá lớn"
+  "cloudTooBig": "bản lưu quá lớn",
+  "updDownloading": "đang tải… {0}%",
+  "updBroken": "tệp tải về bị hỏng — hãy thử lại sau"
 }

@@ -709,5 +709,7 @@
   "cloudLoading": "načítáme…",
   "cloudLoadedOk": "postup načten — restartujeme hru…",
   "cloudLoadConfirm": "Načíst uložení z účtu? Postup na tomto zařízení bude nahrazen.",
-  "cloudTooBig": "uložení je příliš velké"
+  "cloudTooBig": "uložení je příliš velké",
+  "updDownloading": "stahujeme… {0}%",
+  "updBroken": "soubor dorazil poškozený — zkuste to později"
 }

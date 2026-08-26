@@ -709,5 +709,7 @@
   "cloudLoading": "laadime…",
   "cloudLoadedOk": "edenemine laaditud — taaskäivitame mängu…",
   "cloudLoadConfirm": "Kas laadida salvestus kontolt? Selle seadme edenemine asendatakse.",
-  "cloudTooBig": "salvestus on liiga suur"
+  "cloudTooBig": "salvestus on liiga suur",
+  "updDownloading": "laadime… {0}%",
+  "updBroken": "fail tuli rikutuna — proovi hiljem uuesti"
 }

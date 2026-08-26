@@ -709,5 +709,7 @@
   "cloudLoading": "wczytujemy…",
   "cloudLoadedOk": "postęp wczytany — restartujemy grę…",
   "cloudLoadConfirm": "Wczytać zapis z konta? Postęp na tym urządzeniu zostanie zastąpiony.",
-  "cloudTooBig": "zapis jest za duży"
+  "cloudTooBig": "zapis jest za duży",
+  "updDownloading": "pobieramy… {0}%",
+  "updBroken": "plik dotarł uszkodzony — spróbuj później"
 }

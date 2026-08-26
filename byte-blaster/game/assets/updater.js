@@ -94,9 +94,34 @@
     const api = window.electronAPI;
     if (!api || typeof api.saveUpdate !== 'function') return false;
 
-    const res = await fetch(link.url);
-    if (!res.ok) throw new Error('download_' + res.status);
-    const buf = await res.arrayBuffer();
+    // Крупная сборка лежит в хранилище кусками: бесплатный тариф не принимает
+    // файл больше 50 МБ. Забираем их по порядку и склеиваем обратно —
+    // контрольная сумма считается уже от собранного установщика.
+    const urls = (link.urls && link.urls.length) ? link.urls : [link.url];
+    const chunks = [];
+    let total = 0;
+
+    for (let i = 0; i < urls.length; i++) {
+      const res = await fetch(urls[i]);
+      if (!res.ok) throw new Error('download_' + res.status);
+      const part = new Uint8Array(await res.arrayBuffer());
+      chunks.push(part);
+      total += part.length;
+
+      if (urls.length > 1) {
+        msgFail(T('updDownloading', Math.floor(((i + 1) / urls.length) * 100)));
+      }
+    }
+
+    let bytes;
+    if (chunks.length === 1) {
+      bytes = chunks[0];
+    } else {
+      bytes = new Uint8Array(total);
+      let at = 0;
+      for (const c of chunks) { bytes.set(c, at); at += c.length; }
+    }
+    const buf = bytes.buffer;
 
     if (link.sha256) {
       const actual = await sha256(buf);
@@ -108,7 +133,7 @@
     }
 
     const name = 'ByteBlaster-Setup-' + (link.version || 'latest') + '.exe';
-    await api.saveUpdate(name, new Uint8Array(buf));
+    await api.saveUpdate(name, bytes);
     return true;
   }
 

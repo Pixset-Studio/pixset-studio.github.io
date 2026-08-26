@@ -709,5 +709,7 @@
   "cloudLoading": "laster inn…",
   "cloudLoadedOk": "fremgangen er lastet inn — starter spillet på nytt…",
   "cloudLoadConfirm": "Laste inn lagringen fra kontoen? Fremgangen på denne enheten blir erstattet.",
-  "cloudTooBig": "lagringen er for stor"
+  "cloudTooBig": "lagringen er for stor",
+  "updDownloading": "laster ned… {0}%",
+  "updBroken": "filen kom skadet fram — prøv igjen senere"
 }

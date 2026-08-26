@@ -709,5 +709,7 @@
   "cloudLoading": "wird geladen…",
   "cloudLoadedOk": "Fortschritt geladen — das Spiel startet neu…",
   "cloudLoadConfirm": "Spielstand aus dem Konto laden? Der Fortschritt auf diesem Gerät wird ersetzt.",
-  "cloudTooBig": "der Spielstand ist zu groß"
+  "cloudTooBig": "der Spielstand ist zu groß",
+  "updDownloading": "wird geladen… {0}%",
+  "updBroken": "die Datei kam beschädigt an — bitte später erneut versuchen"
 }

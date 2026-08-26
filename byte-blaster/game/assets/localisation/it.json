@@ -709,5 +709,7 @@
   "cloudLoading": "caricamento…",
   "cloudLoadedOk": "progressi caricati — riavvio del gioco…",
   "cloudLoadConfirm": "Caricare il salvataggio dall’account? I progressi su questo dispositivo saranno sostituiti.",
-  "cloudTooBig": "il salvataggio è troppo grande"
+  "cloudTooBig": "il salvataggio è troppo grande",
+  "updDownloading": "download… {0}%",
+  "updBroken": "il file è arrivato danneggiato: riprova più tardi"
 }

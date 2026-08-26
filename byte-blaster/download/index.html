@@ -214,8 +214,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 // Кнопка скачивания установщика. Файл лежит в закрытом хранилище: ссылка
 // выдаётся на десять минут и только владельцу лицензии, поэтому здесь мы
 // сначала выясняем, что вообще показать этому посетителю.
-import { supabase, getCurrentReleases, getDownloadLink, getEntitlements, getSettings }
-  from '/byte-blaster/assets/pixset-auth.js?v=8b3617a7';
+import { supabase, getCurrentReleases, downloadRelease, getEntitlements, getSettings }
+  from '/byte-blaster/assets/pixset-auth.js?v=d8854988';
 
 // Способы получить игру включаются и выключаются в админке студии: например,
 // .exe можно временно снять с раздачи, оставив браузерную версию.
@@ -325,8 +325,13 @@ for (const p of PLATFORMS) {
       e.preventDefault();
       a.innerHTML = bi('ГОТОВИМ ССЫЛКУ…', 'PREPARING LINK…');
       try {
-        const link = await getDownloadLink(GAME, p.id);
-        location.href = link.url;
+        // Крупная сборка приезжает кусками и склеивается на лету, поэтому
+        // показываем проценты: иначе кнопка молчала бы всю дорогу.
+        await downloadRelease(GAME, p.id, {
+          onProgress: (pct) => {
+            a.innerHTML = bi('СКАЧИВАЕМ… ' + pct + '%', 'DOWNLOADING… ' + pct + '%');
+          },
+        });
       } catch (err) {
         const code = String(err.message || '');
         note.innerHTML = code.includes('rate_limited')

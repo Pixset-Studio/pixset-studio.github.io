@@ -709,5 +709,7 @@
   "cloudLoading": "memuat…",
   "cloudLoadedOk": "progres dimuat — memulai ulang game…",
   "cloudLoadConfirm": "Muat simpanan dari akun? Progres di perangkat ini akan diganti.",
-  "cloudTooBig": "simpanan terlalu besar"
+  "cloudTooBig": "simpanan terlalu besar",
+  "updDownloading": "mengunduh… {0}%",
+  "updBroken": "berkas tiba dalam keadaan rusak — coba lagi nanti"
 }

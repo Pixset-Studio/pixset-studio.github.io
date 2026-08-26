@@ -709,5 +709,7 @@
   "cloudLoading": "ielādējam…",
   "cloudLoadedOk": "progress ielādēts — pārstartējam spēli…",
   "cloudLoadConfirm": "Ielādēt saglabājumu no konta? Progress šajā ierīcē tiks aizstāts.",
-  "cloudTooBig": "saglabājums ir pārāk liels"
+  "cloudTooBig": "saglabājums ir pārāk liels",
+  "updDownloading": "lejupielādējam… {0}%",
+  "updBroken": "fails atnāca bojāts — mēģiniet vēlāk"
 }

@@ -709,5 +709,7 @@
   "cloudLoading": "ladataan…",
   "cloudLoadedOk": "edistyminen ladattu — peli käynnistyy uudelleen…",
   "cloudLoadConfirm": "Ladataanko tallennus tililtä? Tämän laitteen edistyminen korvataan.",
-  "cloudTooBig": "tallennus on liian suuri"
+  "cloudTooBig": "tallennus on liian suuri",
+  "updDownloading": "ladataan… {0}%",
+  "updBroken": "tiedosto saapui vioittuneena — yritä myöhemmin uudelleen"
 }

@@ -709,5 +709,7 @@
   "cloudLoading": "ýüklenýär…",
   "cloudLoadedOk": "ösüş ýüklendi — oýun täzeden başlaýar…",
   "cloudLoadConfirm": "Hasapdaky ýazgy ýüklensinmi? Bu enjamdaky ösüş çalşyrylar.",
-  "cloudTooBig": "ýazgy örän uly"
+  "cloudTooBig": "ýazgy örän uly",
+  "updDownloading": "ýüklenýär… {0}%",
+  "updBroken": "faýl zaýalanan geldi — soňrak synanyşyň"
 }

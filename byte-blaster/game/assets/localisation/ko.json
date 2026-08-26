@@ -709,5 +709,7 @@
   "cloudLoading": "불러오는 중…",
   "cloudLoadedOk": "진행 상황을 불러왔습니다 — 게임을 다시 시작합니다…",
   "cloudLoadConfirm": "계정의 저장 기록을 불러올까요? 이 기기의 진행 상황은 대체됩니다.",
-  "cloudTooBig": "저장 파일이 너무 큽니다"
+  "cloudTooBig": "저장 파일이 너무 큽니다",
+  "updDownloading": "내려받는 중… {0}%",
+  "updBroken": "파일이 손상된 채 도착했습니다 — 나중에 다시 시도하세요"
 }

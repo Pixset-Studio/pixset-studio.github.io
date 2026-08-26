@@ -709,5 +709,7 @@
   "cloudLoading": "laddar…",
   "cloudLoadedOk": "framstegen laddade — startar om spelet…",
   "cloudLoadConfirm": "Ladda sparningen från kontot? Framstegen på den här enheten ersätts.",
-  "cloudTooBig": "sparningen är för stor"
+  "cloudTooBig": "sparningen är för stor",
+  "updDownloading": "hämtar… {0}%",
+  "updBroken": "filen kom fram skadad — försök igen senare"
 }

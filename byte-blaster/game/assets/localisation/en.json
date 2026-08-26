@@ -709,5 +709,7 @@
   "cloudLoading": "loading…",
   "cloudLoadedOk": "progress loaded — restarting the game…",
   "cloudLoadConfirm": "Load the save from your account? Progress on this device will be replaced.",
-  "cloudTooBig": "the save is too large"
+  "cloudTooBig": "the save is too large",
+  "updDownloading": "downloading… {0}%",
+  "updBroken": "the file arrived damaged — please try again later"
 }

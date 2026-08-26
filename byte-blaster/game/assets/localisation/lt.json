@@ -709,5 +709,7 @@
   "cloudLoading": "įkeliame…",
   "cloudLoadedOk": "pažanga įkelta — paleidžiame žaidimą iš naujo…",
   "cloudLoadConfirm": "Įkelti įrašą iš paskyros? Pažanga šiame įrenginyje bus pakeista.",
-  "cloudTooBig": "įrašas per didelis"
+  "cloudTooBig": "įrašas per didelis",
+  "updDownloading": "atsiunčiame… {0}%",
+  "updBroken": "failas atkeliavo sugadintas — pabandykite vėliau"
 }

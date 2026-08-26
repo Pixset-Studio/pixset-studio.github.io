@@ -709,5 +709,7 @@
   "cloudLoading": "yuklanmoqda…",
   "cloudLoadedOk": "natijalar yuklandi — o'yin qayta ishga tushmoqda…",
   "cloudLoadConfirm": "Hisobdagi saqlangan o'yin yuklansinmi? Bu qurilmadagi natijalar almashtiriladi.",
-  "cloudTooBig": "saqlangan fayl juda katta"
+  "cloudTooBig": "saqlangan fayl juda katta",
+  "updDownloading": "yuklab olinmoqda… {0}%",
+  "updBroken": "fayl shikastlangan holda keldi — keyinroq urinib ko'ring"
 }

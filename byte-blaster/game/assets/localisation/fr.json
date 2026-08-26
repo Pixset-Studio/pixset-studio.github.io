@@ -709,5 +709,7 @@
   "cloudLoading": "chargement…",
   "cloudLoadedOk": "progression chargée — redémarrage du jeu…",
   "cloudLoadConfirm": "Charger la sauvegarde du compte ? La progression de cet appareil sera remplacée.",
-  "cloudTooBig": "la sauvegarde est trop volumineuse"
+  "cloudTooBig": "la sauvegarde est trop volumineuse",
+  "updDownloading": "téléchargement… {0}%",
+  "updBroken": "le fichier est arrivé endommagé — réessayez plus tard"
 }

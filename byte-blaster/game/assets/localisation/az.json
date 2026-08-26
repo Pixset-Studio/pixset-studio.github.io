@@ -709,5 +709,7 @@
   "cloudLoading": "yüklənir…",
   "cloudLoadedOk": "gedişat yükləndi — oyun yenidən başladılır…",
   "cloudLoadConfirm": "Hesabdakı saxlama yüklənsin? Bu cihazdakı gedişat əvəz olunacaq.",
-  "cloudTooBig": "saxlama həddindən artıq böyükdür"
+  "cloudTooBig": "saxlama həddindən artıq böyükdür",
+  "updDownloading": "yüklənir… {0}%",
+  "updBroken": "fayl zədəli gəldi — sonra yenidən cəhd edin"
 }

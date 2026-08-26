@@ -709,5 +709,7 @@
   "cloudLoading": "henter…",
   "cloudLoadedOk": "fremskridtet er hentet — genstarter spillet…",
   "cloudLoadConfirm": "Hent gemningen fra kontoen? Fremskridtet på denne enhed bliver erstattet.",
-  "cloudTooBig": "gemningen er for stor"
+  "cloudTooBig": "gemningen er for stor",
+  "updDownloading": "henter… {0}%",
+  "updBroken": "filen kom beskadiget frem — prøv igen senere"
 }

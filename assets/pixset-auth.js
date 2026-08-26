@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '8b3617a7';
+export const SDK_VERSION = 'd8854988';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -257,6 +257,46 @@ export async function getDownloadLink(gameSlug, platform, version) {
   return data;
 }
 
+/**
+ * Забирает сборку и отдаёт готовый файл браузеру.
+ *
+ * Крупная сборка хранится кусками, поэтому просто перейти по ссылке нельзя:
+ * куски скачиваются подряд и склеиваются в один файл уже здесь. Для цельного
+ * файла ничего не меняется — переход по ссылке, как раньше.
+ */
+export async function downloadRelease(gameSlug, platform, { version, onProgress } = {}) {
+  const link = await getDownloadLink(gameSlug, platform, version);
+
+  // Магазин или обычный одиночный файл — отдаём браузеру ссылку.
+  if (link.external || !link.parts || link.parts <= 1) {
+    location.href = link.url;
+    return link;
+  }
+
+  const blobs = [];
+  for (let i = 0; i < link.urls.length; i++) {
+    const res = await fetch(link.urls[i]);
+    if (!res.ok) throw new Error('part_' + (i + 1) + '_' + res.status);
+    blobs.push(await res.blob());
+    if (onProgress) onProgress(Math.floor(((i + 1) / link.urls.length) * 100));
+  }
+
+  const name = decodeURIComponent(new URL(link.urls[0]).pathname.split('/').pop())
+    .replace(/\.part\d+$/, '');
+  const url = URL.createObjectURL(new Blob(blobs, { type: 'application/octet-stream' }));
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Освобождаем память не сразу: браузеру нужно время начать сохранение.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  return link;
+}
+
 /* ── Админка ───────────────────────────────────────────────────────────── */
 
 /** Перенос покупки на другой аккаунт: игрок потерял доступ к прежней почте. */
@@ -333,6 +373,15 @@ export async function adminEditRelease(id, { notes = null, makeCurrent = null } 
  * сотни, зато зависимость ровно одна — само хранилище.
  */
 const CHUNK = 6 * 1024 * 1024;   // требование Supabase: ровно 6 МБ
+
+/**
+ * Размер куска, на которые режется крупная сборка.
+ *
+ * На бесплатном тарифе Supabase не принимает файл больше 50 МБ — это
+ * общий предел проекта, его не обойти ни одним способом загрузки. Берём 40 МБ
+ * с запасом: так установщик на 174 МБ ложится пятью частями.
+ */
+const PART_SIZE = 40 * 1024 * 1024;
 
 /** Метаданные TUS едут одной строкой: «ключ base64(значение)» через запятую. */
 function tusMetadata(fields) {
@@ -444,8 +493,26 @@ export async function adminTestUpload() {
 export async function adminUploadRelease({ gameSlug, platform, version, file, notes, makeCurrent = true, onProgress }) {
   const path = `${gameSlug}/${version}/${file.name}`;
 
-  // Мелочь быстрее отправить одним запросом, установщики — только по частям.
-  if (file.size > 6 * 1024 * 1024) {
+  // Бесплатный тариф Supabase не принимает файл больше 50 МБ, а установщик
+  // весит под двести. Поэтому крупная сборка уезжает кусками по 40 МБ —
+  // «…exe.part1», «…exe.part2» и так далее, — а игрок склеивает их обратно.
+  const parts = Math.ceil(file.size / PART_SIZE) || 1;
+
+  if (parts > 1) {
+    for (let i = 0; i < parts; i++) {
+      const slice = file.slice(i * PART_SIZE, Math.min((i + 1) * PART_SIZE, file.size));
+      const chunk = new File([slice], `${file.name}.part${i + 1}`,
+        { type: 'application/octet-stream' });
+
+      await uploadResumable('releases', `${path}.part${i + 1}`, chunk, (stage, pct) => {
+        // Проценты считаем по всему файлу, а не по текущему куску: игроку
+        // (и нам) важен общий ход, а не то, какая часть идёт сейчас.
+        if (!onProgress || stage !== 'upload') return;
+        const done = (i + (pct || 0) / 100) / parts;
+        onProgress('upload', Math.floor(done * 100));
+      });
+    }
+  } else if (file.size > 6 * 1024 * 1024) {
     await uploadResumable('releases', path, file, onProgress);
   } else {
     const { error: upErr } = await supabase.storage
@@ -475,6 +542,7 @@ export async function adminUploadRelease({ gameSlug, platform, version, file, no
     p_notes: notes || null,
     p_external_url: null,
     p_make_current: makeCurrent,
+    p_parts: parts,
   });
   if (error) throw error;
   return data;

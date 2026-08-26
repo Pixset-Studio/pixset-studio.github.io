@@ -709,5 +709,7 @@
   "cloudLoading": "nilo-load…",
   "cloudLoadedOk": "na-load ang progreso — nire-restart ang laro…",
   "cloudLoadConfirm": "I-load ang save mula sa account? Papalitan ang progreso sa device na ito.",
-  "cloudTooBig": "masyadong malaki ang save"
+  "cloudTooBig": "masyadong malaki ang save",
+  "updDownloading": "dina-download… {0}%",
+  "updBroken": "sira ang dumating na file — subukan muli mamaya"
 }

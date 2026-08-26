@@ -709,5 +709,7 @@
   "cloudLoading": "yükleniyor…",
   "cloudLoadedOk": "ilerleme yüklendi — oyun yeniden başlatılıyor…",
   "cloudLoadConfirm": "Hesaptaki kayıt yüklensin mi? Bu cihazdaki ilerleme değiştirilecek.",
-  "cloudTooBig": "kayıt çok büyük"
+  "cloudTooBig": "kayıt çok büyük",
+  "updDownloading": "indiriliyor… {0}%",
+  "updBroken": "dosya bozuk geldi — daha sonra tekrar deneyin"
 }

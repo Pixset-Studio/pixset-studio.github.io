@@ -709,5 +709,7 @@
   "cloudLoading": "încărcăm…",
   "cloudLoadedOk": "progresul a fost încărcat — repornim jocul…",
   "cloudLoadConfirm": "Încărcăm salvarea din cont? Progresul de pe acest dispozitiv va fi înlocuit.",
-  "cloudTooBig": "salvarea este prea mare"
+  "cloudTooBig": "salvarea este prea mare",
+  "updDownloading": "descărcăm… {0}%",
+  "updBroken": "fișierul a ajuns deteriorat — încercați mai târziu"
 }

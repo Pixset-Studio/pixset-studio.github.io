@@ -709,5 +709,7 @@
   "cloudLoading": "memuatkan…",
   "cloudLoadedOk": "kemajuan dimuatkan — memulakan semula permainan…",
   "cloudLoadConfirm": "Muatkan simpanan dari akaun? Kemajuan pada peranti ini akan diganti.",
-  "cloudTooBig": "simpanan terlalu besar"
+  "cloudTooBig": "simpanan terlalu besar",
+  "updDownloading": "memuat turun… {0}%",
+  "updBroken": "fail tiba dalam keadaan rosak — cuba lagi nanti"
 }

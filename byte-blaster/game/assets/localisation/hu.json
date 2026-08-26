@@ -709,5 +709,7 @@
   "cloudLoading": "betöltés…",
   "cloudLoadedOk": "a haladás betöltve — a játék újraindul…",
   "cloudLoadConfirm": "Betöltsük a fiókban lévő mentést? Az eszközön lévő haladás lecserélődik.",
-  "cloudTooBig": "a mentés túl nagy"
+  "cloudTooBig": "a mentés túl nagy",
+  "updDownloading": "letöltés… {0}%",
+  "updBroken": "a fájl sérülten érkezett — próbáld később"
 }

@@ -709,5 +709,7 @@
   "cloudLoading": "laden…",
   "cloudLoadedOk": "voortgang geladen — het spel start opnieuw…",
   "cloudLoadConfirm": "Het opgeslagen spel uit je account laden? De voortgang op dit apparaat wordt vervangen.",
-  "cloudTooBig": "het opgeslagen spel is te groot"
+  "cloudTooBig": "het opgeslagen spel is te groot",
+  "updDownloading": "downloaden… {0}%",
+  "updBroken": "het bestand kwam beschadigd aan — probeer het later opnieuw"
 }

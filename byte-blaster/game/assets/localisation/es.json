@@ -709,5 +709,7 @@
   "cloudLoading": "cargando…",
   "cloudLoadedOk": "progreso cargado — reiniciando el juego…",
   "cloudLoadConfirm": "¿Cargar la partida guardada de la cuenta? Se reemplazará el progreso de este dispositivo.",
-  "cloudTooBig": "la partida guardada es demasiado grande"
+  "cloudTooBig": "la partida guardada es demasiado grande",
+  "updDownloading": "descargando… {0}%",
+  "updBroken": "el archivo llegó dañado: inténtalo más tarde"
 }

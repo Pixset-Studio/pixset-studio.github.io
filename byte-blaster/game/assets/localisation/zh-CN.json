@@ -709,5 +709,7 @@
   "cloudLoading": "读取中…",
   "cloudLoadedOk": "进度已读取 — 正在重启游戏…",
   "cloudLoadConfirm": "要读取账号中的存档吗？本设备上的进度将被替换。",
-  "cloudTooBig": "存档太大了"
+  "cloudTooBig": "存档太大了",
+  "updDownloading": "下载中… {0}%",
+  "updBroken": "文件下载后已损坏，请稍后再试"
 }
