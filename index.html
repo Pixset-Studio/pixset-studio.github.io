@@ -18,7 +18,11 @@
 <script>
 /* Тема ставится до первой отрисовки, иначе страница мигнёт чужим оформлением. */
 (function(){try{var t=localStorage.getItem('pixsetTheme');
-if(t!=='arcade'&&t!=='minimal'&&t!=='industrial')t='industrial';
+/* Тема Byte Blaster открыта владельцам лицензии. Ответ сервера кэширован
+   (pixsetOwnsBB): сюда, до первой отрисовки, сетевой запрос не успеет. */
+var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
+if(t==='byteblaster'&&!own)t='industrial';
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
 document.documentElement.setAttribute('data-theme',t);}catch(e){
 document.documentElement.setAttribute('data-theme','industrial');}})();
 </script>

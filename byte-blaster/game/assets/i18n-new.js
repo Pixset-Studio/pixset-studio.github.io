@@ -38,6 +38,18 @@
   };
   window.langFlag = function (code) { return FLAGS[code] || '🌐'; };
 
+  // Языки, которые пишутся справа налево. Без переключения направления строки
+  // вроде «⬇ СКАЧАТЬ» собираются задом наперёд: знак уезжает не на ту сторону,
+  // а точка в конце фразы оказывается слева.
+  const RTL_LANGS = new Set(['ar', 'he', 'fa', 'ur']);
+
+  /** Ставит направление письма под выбранный язык. */
+  function applyDirection(code) {
+    const dir = RTL_LANGS.has(code) ? 'rtl' : 'ltr';
+    document.documentElement.dir = dir;
+    document.documentElement.lang = code;
+  }
+
   let LANG = 'en';
   let LOCALES = {};          // code -> { key: string }
   let CURRENT = {};          // active language strings
@@ -196,7 +208,7 @@
     applyDOM();
     if (typeof window.refreshDynamicUI === 'function') window.refreshDynamicUI();
     if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();
-    document.documentElement.lang = LANG;
+    applyDirection(LANG);
     console.log(`✔ Language changed to: ${LANG}`);
   };
 
@@ -210,7 +222,7 @@
     }
     const done = () => {
       applyDOM();
-      document.documentElement.lang = LANG;
+      applyDirection(LANG);
       if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();
       // Signal readiness for the boot/loading screen.
       window.i18nReady = true;

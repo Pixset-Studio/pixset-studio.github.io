@@ -8,20 +8,89 @@
   'use strict';
 
   var KEY = 'pixsetTheme';
+  var OWN_KEY = 'pixsetOwnsBB';   // кэш ответа сервера: есть ли лицензия
   var THEMES = [
     { id: 'industrial', name: 'Индустриальная', hint: 'жёлтая лента, крупный шрифт' },
     { id: 'arcade',     name: 'Аркадная',       hint: 'пиксельный терминал' },
     { id: 'minimal',    name: 'Минимализм',     hint: 'чёрный лист и золотая линия' },
+    { id: 'byteblaster', name: 'Byte Blaster', hint: 'неон игры — для владельцев',
+      needs: 'byte-blaster', buy: '/byte-blaster/buy/' },
   ];
+
+  /* ── Кто открыл тему игры ───────────────────────────────────────────────
+     Ответ сервера кэшируется, потому что тема ставится ДО первой отрисовки:
+     ждать сетевого запроса нельзя, иначе страница мигнёт чужим оформлением.
+     Кэш живёт сутки и обновляется в фоне при каждой загрузке страницы.
+
+     Это подарок, а не платный контент: тему можно «включить» правкой
+     localStorage, и это осознанно — за ней не стоит ничего, кроме внешнего
+     вида. Проверка нужна, чтобы не предлагать её тем, у кого игры нет. */
+  var API = 'https://zyjhvuhovimorpokiwty.supabase.co';
+  var PUBKEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
+  var OWN_TTL = 24 * 60 * 60 * 1000;
+
+  function ownsCached() {
+    try {
+      var v = JSON.parse(localStorage.getItem(OWN_KEY) || 'null');
+      return (v && typeof v.own === 'boolean') ? v.own : false;
+    } catch (e) { return false; }
+  }
+  function rememberOwns(own) {
+    try { localStorage.setItem(OWN_KEY, JSON.stringify({ own: !!own, at: Date.now() })); } catch (e) {}
+  }
+  function ownsFresh() {
+    try {
+      var v = JSON.parse(localStorage.getItem(OWN_KEY) || 'null');
+      return !!v && (Date.now() - (v.at || 0)) < OWN_TTL;
+    } catch (e) { return false; }
+  }
+
+  /** Токен доступа лежит там же, где его держит supabase-js на страницах аккаунта. */
+  function accessToken() {
+    try {
+      var raw = localStorage.getItem('sb-zyjhvuhovimorpokiwty-auth-token');
+      if (!raw) return null;
+      if (raw.indexOf('base64-') === 0) raw = decodeURIComponent(escape(atob(raw.slice(7))));
+      var s = JSON.parse(raw);
+      if (s && s.expires_at && s.expires_at * 1000 < Date.now()) return null;
+      return (s && s.access_token) || null;
+    } catch (e) { return null; }
+  }
+
+  /** Спрашивает сервер и обновляет кэш. Молча ничего не делает без входа. */
+  function refreshOwnership(done) {
+    var token = accessToken();
+    if (!token) { rememberOwns(false); if (done) done(false); return; }
+    fetch(API + '/rest/v1/my_entitlements?select=game_slug', {
+      headers: { apikey: PUBKEY, Authorization: 'Bearer ' + token },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        if (!rows) return;                      // сервер отказал — кэш не трогаем
+        var own = rows.some(function (e) { return e.game_slug === 'byte-blaster'; });
+        rememberOwns(own);
+        if (done) done(own);
+      })
+      .catch(function () { /* нет сети — остаёмся на прошлом ответе */ });
+  }
+
+  function unlocked(theme) { return !theme.needs || ownsCached(); }
 
   function current() {
     var t = document.documentElement.getAttribute('data-theme');
-    return THEMES.some(function (x) { return x.id === t; }) ? t : 'industrial';
+    var found = THEMES.filter(function (x) { return x.id === t; })[0];
+    return (found && unlocked(found)) ? t : 'industrial';
   }
 
-  function apply(id) {
+  /**
+   * `persist === false` — только переключить оформление, не трогая выбор
+   * игрока. Так откатывается тема игры, когда права не подтвердились: если
+   * дело было в истёкшей сессии или в отсутствии сети, выбор вернётся сам,
+   * как только лицензия снова подтвердится.
+   */
+  function apply(id, persist) {
     document.documentElement.setAttribute('data-theme', id);
-    try { localStorage.setItem(KEY, id); } catch (e) {}
+    if (persist !== false) { try { localStorage.setItem(KEY, id); } catch (e) {} }
     // Другие вкладки того же сайта подхватят выбор через событие storage.
     document.querySelectorAll('[data-theme-option]').forEach(function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.themeOption === id));
@@ -54,10 +123,24 @@
       var item = document.createElement('button');
       item.type = 'button';
       item.dataset.themeOption = t.id;
-      item.setAttribute('aria-pressed', String(t.id === current()));
-      item.innerHTML = t.name + '<small>' + t.hint + '</small>';
-      item.onclick = function () { apply(t.id); close(); };
       menu.appendChild(item);
+
+      // Закрытая тема остаётся в списке: так видно, что она есть, и понятно,
+      // как её открыть. Клик ведёт на страницу покупки, а не молча ничего.
+      function paint() {
+        var open = unlocked(t);
+        if (open) { delete item.dataset.locked; } else { item.dataset.locked = '1'; }
+        item.setAttribute('aria-pressed', String(open && t.id === current()));
+        item.innerHTML = (open ? '' : '🔒 ') + t.name +
+          '<small>' + (open ? t.hint : 'нужна лицензия Byte Blaster') + '</small>';
+      }
+      paint();
+      item.onclick = function () {
+        if (!unlocked(t)) { location.href = t.buy || '/store'; return; }
+        apply(t.id); close();
+      };
+      // Ответ сервера приходит позже отрисовки меню — перекрашиваем пункт.
+      item._repaint = paint;
     });
 
     function open() { menu.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
@@ -78,11 +161,35 @@
 
   // Выбор темы в одной вкладке должен догонять остальные открытые.
   window.addEventListener('storage', function (e) {
-    if (e.key === KEY && e.newValue) apply(e.newValue);
+    if (e.key !== KEY || !e.newValue) return;
+    var t = THEMES.filter(function (x) { return x.id === e.newValue; })[0];
+    if (!t || !unlocked(t)) return;    // закрытую тему из другой вкладки не берём
+    apply(e.newValue, false);          // выбор там уже сохранён — не дублируем
   });
+
+  /** Перерисовать пункты меню тем (после ответа сервера о лицензии). */
+  function repaintPicker() {
+    document.querySelectorAll('[data-theme-option]').forEach(function (b) {
+      if (typeof b._repaint === 'function') b._repaint();
+    });
+  }
 
   function init() {
     buildPicker(document.querySelector('nav.main'));
+
+    // Тему игры мог выставить кэш, устаревший после окончания сессии или
+    // возврата покупки — сверяемся с сервером и, если права пропали, честно
+    // возвращаем оформление по умолчанию.
+    var wasBB = document.documentElement.getAttribute('data-theme') === 'byteblaster';
+    if (wasBB && !ownsCached()) apply('industrial', false);
+    if (!ownsFresh() || wasBB) {
+      refreshOwnership(function (own) {
+        repaintPicker();
+        if (!own && document.documentElement.getAttribute('data-theme') === 'byteblaster') {
+          apply('industrial', false);
+        }
+      });
+    }
 
     var burger = document.getElementById('burger');
     var mobile = document.getElementById('mobileNav');
@@ -115,5 +222,16 @@
     document.addEventListener('DOMContentLoaded', init, { once: true });
   } else { init(); }
 
-  window.PixsetTheme = { apply: apply, current: current, themes: THEMES };
+  // refreshOwnership открыт наружу: страница аккаунта зовёт его сразу после
+  // входа и выхода, чтобы тема игры появлялась и пропадала без перезагрузки.
+  window.PixsetTheme = {
+    apply: apply, current: current, themes: THEMES,
+    ownsBB: ownsCached, refreshOwnership: function (cb) {
+      refreshOwnership(function (own) {
+        repaintPicker();
+        if (!own && document.documentElement.getAttribute('data-theme') === 'byteblaster') apply('industrial', false);
+        if (cb) cb(own);
+      });
+    },
+  };
 })();

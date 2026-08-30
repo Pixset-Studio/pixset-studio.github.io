@@ -9,6 +9,13 @@
      industrial — по умолчанию: жёлто-чёрная лента, крупная типографика
      arcade     — пиксельный терминал в духе сайта Byte Blaster
      minimal    — чёрный лист, воздух и тонкая золотая линия
+     byteblaster — неон самой игры; открывается владельцам лицензии
+
+   Жёлтый акцент (--y) вынесен в переменную не для красоты: тема Byte Blaster
+   перекрашивает его в неоново-голубой, и всё, что построено на --y — кнопки,
+   ссылки, заголовки третьего уровня, номера разделов, — переезжает вместе с
+   ней. Поэтому «сделать тему» здесь = переопределить палитру, а не переписать
+   компоненты.
    ========================================================================== */
 
 :root {
@@ -72,6 +79,72 @@
   --head-spacing: 4px;
   --head-transform: none;
 }
+
+/* ── Тема: BYTE BLASTER ──────────────────────────────────────────────────
+   Награда владельцу лицензии: сайт студии в цветах игры. Палитра, шрифты и
+   свечение взяты из самой игры (assets/styles.css в Byte Blaster), чтобы
+   переход с сайта в игру не выглядел как переход на другой сайт. */
+:root[data-theme='byteblaster'] {
+  --y:        #00ffff;
+  --y-warm:   #ff00ff;
+  --y-soft:   #aaffff;
+  --ink:      #04040f;   /* текст на голубом */
+
+  --bg:       #04040f;
+  --bg-2:     #080820;
+  --card:     #0a0a20;
+  --line:     #16203a;
+  --line-2:   #0ff3;
+
+  --text:     #dbe9ff;
+  --text-dim: #6f8bb5;
+
+  --font-head: 'Press Start 2P', monospace;
+  --font-body: 'Share Tech Mono', monospace;
+  --radius: 0px;
+  --head-weight: 400;
+  --head-spacing: 2px;
+}
+/* Пиксельный шрифт крупнее своего кегля — заголовки приходится уменьшать,
+   иначе они не помещаются в строку (та же поправка, что у arcade). */
+:root[data-theme='byteblaster'] body { font-size: 15px; line-height: 1.8; }
+:root[data-theme='byteblaster'] h1 { font-size: clamp(18px, 4vw, 34px); text-shadow: 0 0 18px #0ff8; }
+:root[data-theme='byteblaster'] h2 { font-size: clamp(13px, 2.4vw, 19px); }
+:root[data-theme='byteblaster'] h3 { font-size: clamp(11px, 1.6vw, 13px); text-shadow: 0 0 10px #0ff6; }
+:root[data-theme='byteblaster'] .brand { font-size: 12px; text-shadow: 0 0 12px #0ff8; }
+/* Жёлто-чёрная лента — подпись индустриальной темы, здесь она чужая. Вместо
+   неё тонкая неоновая полоса, как рамка HUD в игре. */
+:root[data-theme='byteblaster'] .hazard {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #0ff, #f0f, #0ff, transparent);
+  box-shadow: 0 0 12px #0ff8;
+}
+:root[data-theme='byteblaster'] .btn {
+  font-size: 10px; padding: 15px 22px;
+  box-shadow: 0 0 10px rgba(0,255,255,.25);
+}
+:root[data-theme='byteblaster'] .btn:hover { box-shadow: 0 0 22px rgba(0,255,255,.55); }
+:root[data-theme='byteblaster'] .card { border: 1px solid var(--line); }
+:root[data-theme='byteblaster'] .card:hover {
+  border-color: var(--y);
+  box-shadow: 0 0 18px rgba(0,255,255,.22);
+}
+:root[data-theme='byteblaster'] .kicker { color: #f0f; text-shadow: 0 0 8px #f0f6; }
+:root[data-theme='byteblaster'] .theme-menu button:hover { background: rgba(0,255,255,.10); }
+/* Звёздное небо главного меню игры — тем же приёмом, но статикой: анимировать
+   фон на каждой странице сайта незачем. */
+:root[data-theme='byteblaster'] body {
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, #ffffff55, transparent),
+    radial-gradient(1px 1px at 70% 60%, #ffffff44, transparent),
+    radial-gradient(1px 1px at 40% 80%, #ffffff33, transparent),
+    radial-gradient(1px 1px at 85% 15%, #ffffff44, transparent);
+  background-attachment: fixed;
+}
+
+/* Пункт меню тем, который ещё не открыт: виден, но не выбирается. */
+.theme-menu button[data-locked] { color: var(--text-dim); }
+.theme-menu button[data-locked]::after { content: ''; }
 
 /* ── База ────────────────────────────────────────────────────────────────── */
 * { margin: 0; padding: 0; box-sizing: border-box; }

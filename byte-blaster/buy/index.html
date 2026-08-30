@@ -135,7 +135,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 import {
   supabase, getGames, getEntitlements, getProfile, startPayment, getSettings,
   detectCountry, formatPrice, humanError,
-} from '/byte-blaster/assets/pixset-auth.js?v=d8854988';
+} from '/byte-blaster/assets/pixset-auth.js?v=c86bb96e';
 
 const $ = (id) => document.getElementById(id);
 const GAME = 'byte-blaster';
@@ -170,15 +170,59 @@ async function render() {
   // честная инструкция, чем кнопка, которая упрётся в ошибку. Проверяем это
   // раньше входа — гостю тоже незачем видеть «Купить», которая не сработает.
   const payOff = () => {
-    const mail = esc(settings.support_email);
+    // Кнопку уже могли заменить (render вызывается заново после входа) —
+    // без этой проверки повторный вызов падал бы на null.
+    if (!$('buyBtn')) return;
+    const mail = settings.support_email;
+    const safe = esc(mail);
+
+    // Кнопка остаётся ссылкой mailto — с почтовой программой всё работает как
+    // раньше. Но у большинства она не назначена, и клик не делал РОВНО ничего:
+    // ни письма, ни ошибки. Поэтому клик ещё и кладёт адрес в буфер обмена и
+    // говорит об этом — действие видно всегда, даже если письмо не открылось.
     $('buyBtn').outerHTML =
-      `<a class="btn primary" href="mailto:${mail}">${bi('НАПИСАТЬ НАМ', 'EMAIL US')}</a>`;
+      `<a class="btn primary" id="mailBtn" href="mailto:${safe}?subject=${
+        encodeURIComponent('Byte Blaster — покупка лицензии')
+      }">${bi('НАПИСАТЬ НАМ', 'EMAIL US')}</a>`;
     $('hint').innerHTML = bi(
-      'Оплата на сайте временно недоступна. Напишите на <b>' + mail +
+      'Оплата на сайте временно недоступна. Напишите на <b>' + safe +
         '</b> — мы выдадим лицензию на ваш аккаунт.',
-      'Payments on the site are temporarily unavailable. Email <b>' + mail +
+      'Payments on the site are temporarily unavailable. Email <b>' + safe +
         '</b> and we will add the licence to your account.');
+
+    $('mailBtn').addEventListener('click', () => {
+      copy(mail).then((ok) => {
+        if (ok) {
+          say('Адрес скопирован: ' + mail + ' — напишите нам, и мы выдадим лицензию.',
+              'Address copied: ' + mail + ' — write to us and we will add the licence.', 'ok');
+        } else {
+          say('Напишите нам на ' + mail + ' — мы выдадим лицензию на ваш аккаунт.',
+              'Write to ' + mail + ' — we will add the licence to your account.', 'ok');
+        }
+      });
+    });
   };
+
+  /** Копирование в буфер: современный способ, иначе — старый через textarea. */
+  async function copy(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* отказ в правах — пробуем запасной путь */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch { return false; }
+  }
 
   if (!session) {
     if (settings.payments_enabled) setBuyLabel('КУПИТЬ', 'BUY NOW');

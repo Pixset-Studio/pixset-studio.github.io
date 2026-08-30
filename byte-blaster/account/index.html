@@ -131,11 +131,18 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
       <div class="panel wide">
         <div class="who">
-          <div class="ava" id="ava">?</div>
+          <!-- Аватар — кнопка: клик по нему открывает выбор файла. Отдельная
+               ссылка «Изменить» нужна для клавиатуры и для ясности. -->
+          <button type="button" class="ava" id="ava" title="">?</button>
           <div style="min-width:0">
             <div class="nick" id="nick">…</div>
             <div class="mail" id="mail"></div>
+            <div class="avaActions">
+              <button type="button" id="avaPick"><span data-l="ru">Сменить фото</span><span data-l="en">Change photo</span></button>
+              <button type="button" id="avaClear" hidden><span data-l="ru">Убрать</span><span data-l="en">Remove</span></button>
+            </div>
           </div>
+          <input type="file" id="avaFile" accept="image/*" hidden>
         </div>
 
         <div class="msg" id="profMsg"></div>
@@ -224,8 +231,9 @@ import {
   supabase, register, login, logout, resetPassword,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
+  updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=d8854988';
+} from '/byte-blaster/assets/pixset-auth.js?v=c86bb96e';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -335,6 +343,60 @@ $('formRec').onsubmit = (e) => {
 
 $('logout').onclick = async () => { await logout(); location.reload(); };
 
+// ── Аватар ──────────────────────────────────────────────────────────────
+// Картинка живёт в самом профиле (data-URL), поэтому отдельного хранилища и
+// его настройки не требуется. Файл ужимается прямо в браузере — на сервер
+// уходит квадрат 160×160 весом в пару десятков килобайт.
+let avatarUrl = null;
+
+/** Рисует аватар: фото, если оно есть, иначе первая буква ника. */
+function paintAvatar(url, nickname) {
+  const box = $('ava');
+  // В колонке может лежать что угодно (её правят и другие инструменты), а в
+  // src попадёт только картинка — ни http-ссылки на чужой хост, ни javascript:.
+  avatarUrl = /^data:image\/(png|jpeg|webp);base64,/.test(url || '') ? url : null;
+  if (avatarUrl) {
+    box.innerHTML = '<img alt="" src="' + esc(avatarUrl) + '">';
+  } else {
+    box.textContent = (nickname || '?').charAt(0).toUpperCase();
+  }
+  $('avaClear').hidden = !avatarUrl;
+  const label = avatarUrl
+    ? { ru: 'Сменить фото', en: 'Change photo' }
+    : { ru: 'Загрузить фото', en: 'Upload a photo' };
+  $('avaPick').innerHTML = bi(label.ru, label.en);
+  box.title = label[document.documentElement.getAttribute('data-site-lang') === 'en' ? 'en' : 'ru'];
+}
+
+$('ava').onclick = () => $('avaFile').click();
+$('avaPick').onclick = () => $('avaFile').click();
+
+$('avaFile').onchange = async () => {
+  const file = $('avaFile').files && $('avaFile').files[0];
+  // Сбрасываем сразу: иначе повторный выбор того же файла не даёт события.
+  $('avaFile').value = '';
+  if (!file) return;
+
+  clear($('profMsg'));
+  $('avaPick').disabled = true;
+  try {
+    const dataUrl = await avatarFromFile(file);
+    await updateAvatar(dataUrl);
+    paintAvatar(dataUrl, $('nick').textContent);
+    say($('profMsg'), 'Аватар обновлён.', 'Avatar updated.', 'ok');
+  } catch (err) { fail($('profMsg'), err); }
+  finally { $('avaPick').disabled = false; }
+};
+
+$('avaClear').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('profMsg'));
+  try {
+    await removeAvatar();
+    paintAvatar(null, $('nick').textContent);
+    say($('profMsg'), 'Аватар убран.', 'Avatar removed.', 'ok');
+  } catch (err) { fail($('profMsg'), err); }
+});
+
 // ── Настройки аккаунта ──────────────────────────────────────────────────
 $('saveNick').onclick = (e) => busy(e.currentTarget, async () => {
   clear($('profMsg'));
@@ -348,7 +410,7 @@ $('saveNick').onclick = (e) => busy(e.currentTarget, async () => {
   try {
     await updateNickname(nickname);
     $('nick').textContent = nickname;
-    $('ava').textContent = nickname.charAt(0).toUpperCase();
+    paintAvatar(avatarUrl, nickname);
     say($('profMsg'), 'Ник обновлён.', 'Nickname updated.', 'ok');
   } catch (err) { fail($('profMsg'), err); }
 });
@@ -401,7 +463,7 @@ async function renderProfile(user) {
   try {
     const profile = await getProfile(user.id);
     $('nick').textContent = profile.nickname;
-    $('ava').textContent = profile.nickname.charAt(0).toUpperCase();
+    paintAvatar(profile.avatar_url, profile.nickname);
     $('newNick').value = profile.nickname || '';
     $('regionInfo').textContent =
       (profile.country || '—') + ' · ' + (profile.currency || (profile.country === 'RU' ? 'RUB' : 'USD'));
@@ -440,9 +502,11 @@ async function renderOrders() {
   $('orders').innerHTML = orders.length
     ? orders.map((o) => {
         const s = STATUS[o.status] || [o.status, o.status];
+        // orders.amount хранится в копейках/центах — так его пишет сервер и так
+        // же делит функция оплаты. Без деления $1.50 показывался как «$150.00».
         const sum = o.currency === 'RUB'
-          ? Math.round(o.amount) + ' ₽'
-          : '$' + Number(o.amount).toFixed(2);
+          ? Math.round(o.amount / 100).toLocaleString('ru-RU') + ' ₽'
+          : '$' + (Number(o.amount) / 100).toFixed(2);
         return `<div class="item">
           <b>${sum}</b>
           <span class="dim">${new Date(o.created_at).toLocaleDateString()}</span>

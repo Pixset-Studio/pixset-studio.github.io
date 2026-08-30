@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'd8854988';
+export const SDK_VERSION = 'c86bb96e';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -93,6 +93,76 @@ export async function updateNickname(nickname) {
   const { data, error } = await supabase.rpc('update_nickname', { p_nickname: nickname });
   if (error) throw error;
   return data;
+}
+
+/* ── Аватар ────────────────────────────────────────────────────────────────
+   Картинка хранится прямо в profiles.avatar_url как data-URL. Так сделано
+   намеренно: отдельное хранилище потребовало бы бакета и политик доступа, а
+   аватар после сжатия занимает пару десятков килобайт — меньше, чем иконка
+   игры. Ужимает картинку клиент (см. avatarFromFile), сюда приходит готовая
+   строка. Правку своей строки разрешает политика «own profile update». */
+export const AVATAR_MAX_BYTES = 64 * 1024;
+
+export async function updateAvatar(dataUrl) {
+  if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(dataUrl)) {
+    throw new Error('avatar_bad_format');
+  }
+  if (dataUrl.length > AVATAR_MAX_BYTES) throw new Error('avatar_too_big');
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_authenticated');
+
+  const { error } = await supabase.from('profiles')
+    .update({ avatar_url: dataUrl }).eq('id', user.id);
+  if (error) throw error;
+  return dataUrl;
+}
+
+export async function removeAvatar() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_authenticated');
+
+  const { error } = await supabase.from('profiles')
+    .update({ avatar_url: null }).eq('id', user.id);
+  if (error) throw error;
+}
+
+/**
+ * Готовит файл из «Обзора» к записи в профиль: обрезает по центру в квадрат,
+ * ужимает до 160×160 и подбирает качество JPEG так, чтобы уложиться в лимит.
+ * Телефонная фотография на 4 МБ превращается в ~15 КБ.
+ */
+export function avatarFromFile(file, size = 160) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) { reject(new Error('avatar_not_image')); return; }
+
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        if (!side) { reject(new Error('avatar_not_image')); return; }
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = size;
+        const cx = cv.getContext('2d');
+        cx.imageSmoothingQuality = 'high';
+        cx.drawImage(img,
+          (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side,
+          0, 0, size, size);
+
+        // Снижаем качество, пока не уложимся в лимит: у прозрачных PNG и
+        // пёстрых фотографий разный «вес» при одном и том же размере.
+        for (const q of [0.82, 0.7, 0.6, 0.5, 0.4]) {
+          const out = cv.toDataURL('image/jpeg', q);
+          if (out.length <= AVATAR_MAX_BYTES) { resolve(out); return; }
+        }
+        reject(new Error('avatar_too_big'));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('avatar_not_image')); };
+    img.src = url;
+  });
 }
 
 export async function updateLocale(locale) {
@@ -669,6 +739,9 @@ export function humanError(err) {
     return 'Аккаунт администратора нельзя удалить из профиля.';
   }
   if (m.includes('same_password'))    return 'Новый пароль совпадает со старым.';
+  if (m.includes('avatar_not_image')) return 'Это не картинка. Подойдут JPG, PNG или WebP.';
+  if (m.includes('avatar_too_big'))   return 'Картинку не удалось ужать. Возьмите изображение попроще.';
+  if (m.includes('avatar_bad_format'))return 'Неподдерживаемый формат картинки.';
   if (m.includes('payments_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
   if (m.includes('provider_error') || m.includes('no_payment_url')) {
     return 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.';

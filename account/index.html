@@ -13,7 +13,11 @@
 <link rel="stylesheet" href="/assets/studio.css">
 <script>
 (function(){try{var t=localStorage.getItem('pixsetTheme');
-if(t!=='arcade'&&t!=='minimal'&&t!=='industrial')t='industrial';
+/* Тема Byte Blaster открыта владельцам лицензии. Ответ сервера кэширован
+   (pixsetOwnsBB): сюда, до первой отрисовки, сетевой запрос не успеет. */
+var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
+if(t==='byteblaster'&&!own)t='industrial';
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
 document.documentElement.setAttribute('data-theme',t);}catch(e){
 document.documentElement.setAttribute('data-theme','industrial');}})();
 </script>
@@ -225,7 +229,7 @@ import {
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=d8854988';
+} from '/assets/pixset-auth.js?v=c86bb96e';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -307,7 +311,14 @@ $('formRec').onsubmit = (e) => {
   });
 };
 
-$('logout').onclick = async () => { await logout(); location.reload(); };
+$('logout').onclick = async () => {
+  await logout();
+  // Права уходят вместе с сессией: сбрасываем кэш, иначе тема Byte Blaster
+  // осталась бы включённой у следующего, кто откроет сайт на этом устройстве.
+  try { localStorage.removeItem('pixsetOwnsBB'); } catch {}
+  if (window.PixsetTheme && window.PixsetTheme.current() === 'byteblaster') window.PixsetTheme.apply('industrial');
+  location.reload();
+};
 
 // ── Профиль ─────────────────────────────────────────────────────────────
 async function renderProfile(user) {
@@ -329,6 +340,11 @@ async function renderProfile(user) {
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
+
+  // Тема оформления Byte Blaster открывается владельцу лицензии. Сообщаем об
+  // этом сразу после входа, иначе она появилась бы в меню тем только на
+  // следующей загрузке страницы (список строится по кэшу прав).
+  if (window.PixsetTheme && window.PixsetTheme.refreshOwnership) window.PixsetTheme.refreshOwnership();
 
   $('lib').innerHTML = owned.length
     ? owned.map((e) => {
