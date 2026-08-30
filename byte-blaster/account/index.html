@@ -233,7 +233,7 @@ import {
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=c86bb96e';
+} from '/byte-blaster/assets/pixset-auth.js?v=eee5d2d8';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -356,7 +356,11 @@ function paintAvatar(url, nickname) {
   // src попадёт только картинка — ни http-ссылки на чужой хост, ни javascript:.
   avatarUrl = /^data:image\/(png|jpeg|webp);base64,/.test(url || '') ? url : null;
   if (avatarUrl) {
-    box.innerHTML = '<img alt="" src="' + esc(avatarUrl) + '">';
+    // Размеры дублируются инлайном намеренно: таблица стилей кэшируется
+    // браузером агрессивно, и одна старая копия site.css выводила бы фото в
+    // натуральную величину — оно вылезало за рамку.
+    box.innerHTML = '<img alt="" src="' + esc(avatarUrl) +
+      '" style="width:100%;height:100%;object-fit:cover;display:block">';
   } else {
     box.textContent = (nickname || '?').charAt(0).toUpperCase();
   }

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Профиль игрока — Pixset Studio</title>
+<meta name="description" content="Профиль игрока Pixset Studio: прогресс в играх студии.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
+<style>
+  /* Карточка игрока. Аватар получает размеры прямо здесь и в разметке: одна
+     закэшированная браузером таблица стилей превращала его в картинку
+     натуральной величины, вылезающую за рамку. */
+  .pcard { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .pcard .ava {
+    width: 96px; height: 96px; flex: 0 0 96px;
+    border: 2px solid var(--y); border-radius: var(--radius);
+    background: rgba(255,212,0,.07); overflow: hidden;
+    display: grid; place-items: center;
+    font-family: var(--font-head); font-size: 38px; color: var(--y); line-height: 1;
+  }
+  .pcard .ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pcard h2 { margin: 0 0 4px; }
+
+  .gstats { display: grid; gap: 14px; margin-top: 10px; }
+  .gcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+  .gcard h3 { margin-bottom: 12px; }
+  .gnums { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .gnum { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .gnum b { display: block; font-family: var(--font-head); font-size: 20px; color: #fff; }
+  .gnum span { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+               text-transform: uppercase; letter-spacing: 1px; }
+  .gbar { height: 6px; background: var(--bg-2); border: 1px solid var(--line); margin-top: 12px; }
+  .gbar > i { display: block; height: 100%; background: var(--y); }
+</style>
+<script>
+(function(){try{var t=localStorage.getItem('pixsetTheme');
+/* Тема Byte Blaster открыта владельцам лицензии. Ответ сервера кэширован
+   (pixsetOwnsBB): сюда, до первой отрисовки, сетевой запрос не успеет. */
+var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
+if(t==='byteblaster'&&!own)t='industrial';
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
+document.documentElement.setAttribute('data-theme',t);}catch(e){
+document.documentElement.setAttribute('data-theme','industrial');}})();
+</script>
+</head>
+<body>
+
+<div class="hazard"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+    <nav class="main">
+      <a href="/">Главная</a>
+      <a href="/wikipedia">Вики</a>
+      <a href="/byte-blaster/">Byte Blaster</a>
+      <a href="/store">Магазин</a>
+      <a href="/account"><span data-account-label>Аккаунт</span></a>
+    </nav>
+  </div>
+</header>
+
+<div id="mobileNav">
+  <a href="/">Главная</a>
+  <a href="/wikipedia">Вики</a>
+  <a href="/byte-blaster/">Byte Blaster</a>
+  <a href="/store">Магазин</a>
+  <a href="/account">Аккаунт</a>
+</div>
+
+<main>
+<section>
+  <div class="wrap">
+    <p class="kicker">Профиль игрока</p>
+
+    <div id="loading"><p class="dim">Загружаем…</p></div>
+    <div class="msg" id="msg"></div>
+
+    <div id="card" hidden>
+      <div class="panel wide">
+        <div class="pcard">
+          <div class="ava" id="ava">?</div>
+          <div style="min-width:0;flex:1">
+            <h2 id="nick">…</h2>
+            <div class="dim mono" id="since"></div>
+          </div>
+          <button class="btn" id="addBtn" hidden style="width:auto;padding:11px 20px">В друзья</button>
+        </div>
+      </div>
+
+      <h2 style="margin-top:32px">Прогресс в играх</h2>
+      <div class="gstats" id="games"></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="row">
+      <div>© 2024–2026 Pixset Studio</div>
+      <div><a href="/">Главная</a> · <a href="/account">Аккаунт</a></div>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/studio.js"></script>
+<script type="module">
+import {
+  supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
+} from '/assets/pixset-auth.js?v=eee5d2d8';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function say(text, kind = 'err') {
+  $('msg').textContent = text;
+  $('msg').className = `msg show ${kind}`;
+}
+
+/* Каждая игра публикует свою сводку сама, поэтому набор полей у неё свой.
+   Здесь описано, ЧТО из этого показывать и как называть — незнакомые поля
+   просто не выводятся, а не ломают карточку. Добавили игре новое число —
+   допишите строку сюда, менять больше ничего не нужно. */
+const STAT_FIELDS = [
+  { key: 'levels',   label: 'Уровни',      max: 'levelsMax' },
+  { key: 'stars',    label: 'Звёзды',      max: 'starsMax' },
+  { key: 'crystals', label: 'Кристаллы',   max: 'crystalsMax' },
+  { key: 'ach',      label: 'Достижения',  max: 'achMax' },
+  { key: 'score',    label: 'Счёт' },
+  { key: 'playtime', label: 'В игре',      fmt: 'time' },
+];
+
+const fmtNum = (n) => Number(n || 0).toLocaleString('ru-RU');
+function fmtTime(sec) {
+  const s = Number(sec) || 0;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? h + ' ч ' + m + ' мин' : m + ' мин';
+}
+
+function gameCard(g) {
+  const d = (g && g.data) || {};
+  const nums = STAT_FIELDS
+    .filter((f) => d[f.key] != null)
+    .map((f) => {
+      const value = f.fmt === 'time' ? fmtTime(d[f.key])
+        : fmtNum(d[f.key]) + (d[f.max] != null ? ' / ' + fmtNum(d[f.max]) : '');
+      return `<div class="gnum"><b>${esc(value)}</b><span>${esc(f.label)}</span></div>`;
+    }).join('');
+
+  // Общая полоса завершённости — если игра её посчитала сама.
+  const pct = d.completion != null ? Math.max(0, Math.min(100, Math.round(d.completion * 100))) : null;
+
+  return `<div class="gcard">
+    <h3>${esc(g.title || g.game_slug)}</h3>
+    ${nums ? `<div class="gnums">${nums}</div>` : '<p class="dim">Игрок ещё не начинал.</p>'}
+    ${pct != null ? `<div class="gbar"><i style="width:${pct}%"></i></div>
+       <div class="dim mono" style="margin-top:6px">Пройдено на ${pct}%</div>` : ''}
+    <div class="dim mono" style="margin-top:10px">Обновлено ${
+      g.updated_at ? new Date(g.updated_at).toLocaleDateString('ru-RU') : '—'}</div>
+  </div>`;
+}
+
+const nickParam = new URLSearchParams(location.search).get('n');
+
+async function render() {
+  if (!nickParam) { $('loading').hidden = true; say('Не указан ник игрока.'); return; }
+
+  let profile = null;
+  try { profile = await getPublicProfile(nickParam); }
+  catch (err) { $('loading').hidden = true; say(humanError(err)); return; }
+
+  $('loading').hidden = true;
+  if (!profile) { say('Игрок с таким ником не найден.'); return; }
+
+  document.title = profile.nickname + ' — Pixset Studio';
+  $('nick').textContent = profile.nickname;
+  $('since').textContent = profile.created_at
+    ? 'С нами с ' + new Date(profile.created_at).toLocaleDateString('ru-RU') : '';
+
+  // В src пускаем только картинку: в колонке может оказаться что угодно.
+  const url = profile.avatar_url;
+  if (/^data:image\/(png|jpeg|webp);base64,/.test(url || '')) {
+    $('ava').innerHTML = `<img alt="" src="${esc(url)}">`;
+  } else {
+    $('ava').textContent = (profile.nickname || '?').charAt(0).toUpperCase();
+  }
+
+  const games = Array.isArray(profile.games) ? profile.games : [];
+  $('games').innerHTML = games.length
+    ? games.map(gameCard).join('')
+    : '<div class="gcard"><p class="dim">Игрок пока не публиковал прогресс. '
+      + 'Он появляется, когда игра сохраняет прогресс в аккаунт.</p></div>';
+
+  $('card').hidden = false;
+
+  // Кнопка «в друзья» — только вошедшему и только если он ещё не в связи.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session || session.user.id === profile.id) return;
+  let linked = false;
+  try { linked = (await getFriends()).some((f) => f.id === profile.id); } catch { linked = false; }
+  if (linked) return;
+
+  const btn = $('addBtn');
+  btn.hidden = false;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const res = await sendFriendRequest(profile.nickname);
+      say(res === 'accepted' ? 'Теперь вы друзья.' : 'Заявка отправлена.', 'ok');
+      btn.hidden = true;
+    } catch (err) { say(humanError(err)); btn.disabled = false; }
+  };
+}
+
+render();
+</script>
+
+</body>
+</html>

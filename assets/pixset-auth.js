@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'c86bb96e';
+export const SDK_VERSION = 'eee5d2d8';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -163,6 +163,72 @@ export function avatarFromFile(file, size = 160) {
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('avatar_not_image')); };
     img.src = url;
   });
+}
+
+/* ── Друзья ────────────────────────────────────────────────────────────────
+   Пара хранится одной строкой (см. миграцию 0002): «А позвал Б» и «Б позвал А»
+   не могут разъехаться в две независимые заявки, а встречная заявка сразу
+   становится дружбой. Клиент об этом не думает — он зовёт по нику и получает
+   плоский список из представления my_friends. */
+
+/** Поиск игроков по началу ника. Пустой запрос ничего не ищет. */
+export async function searchPlayers(query) {
+  const q = String(query || '').trim();
+  if (q.length < 2) return [];
+  const { data, error } = await supabase.rpc('search_players', { p_query: q });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Заявка по нику. Возвращает 'pending' или 'accepted' (встречная заявка). */
+export async function sendFriendRequest(nickname) {
+  const { data, error } = await supabase.rpc('friend_request', { p_nickname: nickname });
+  if (error) throw error;
+  return data;
+}
+
+export async function acceptFriend(requesterId) {
+  const { error } = await supabase.rpc('friend_accept', { p_requester: requesterId });
+  if (error) throw error;
+}
+
+/** Убирает связь в любом состоянии: отказ, отмена своей заявки, удаление друга. */
+export async function removeFriend(otherId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_authenticated');
+  const { error } = await supabase.from('friendships').delete()
+    .or(`and(requester.eq.${user.id},addressee.eq.${otherId}),`
+      + `and(requester.eq.${otherId},addressee.eq.${user.id})`);
+  if (error) throw error;
+}
+
+/** Друзья и заявки одним списком: kind = friend | incoming | outgoing. */
+export async function getFriends() {
+  const { data, error } = await supabase
+    .from('my_friends')
+    .select('id, nickname, avatar_url, kind, created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+/* ── Прогресс в играх ──────────────────────────────────────────────────────
+   Витрина, а не сохранение: сохранение лежит в cloud_saves и приватно, а это
+   короткая сводка, которую видно всем — на неё и смотрят друзья. */
+
+/** Публикует сводку. Зовёт сама игра после сохранения прогресса. */
+export async function publishGameStats(gameSlug, data) {
+  const { error } = await supabase.rpc('publish_game_stats', {
+    p_game_slug: gameSlug, p_data: data,
+  });
+  if (error) throw error;
+}
+
+/** Карточка игрока по нику: профиль + прогресс во всех играх студии. */
+export async function getPublicProfile(nickname) {
+  const { data, error } = await supabase.rpc('public_profile', { p_nickname: nickname });
+  if (error) throw error;
+  return data || null;
 }
 
 export async function updateLocale(locale) {
@@ -742,6 +808,16 @@ export function humanError(err) {
   if (m.includes('avatar_not_image')) return 'Это не картинка. Подойдут JPG, PNG или WebP.';
   if (m.includes('avatar_too_big'))   return 'Картинку не удалось ужать. Возьмите изображение попроще.';
   if (m.includes('avatar_bad_format'))return 'Неподдерживаемый формат картинки.';
+  // PostgREST так отвечает, когда функции в базе ещё нет. Для владельца это
+  // однозначный сигнал: миграция не применена, а не «что-то сломалось».
+  if (m.includes('could not find the function') || m.includes('schema cache')) {
+    return 'Эта возможность ещё не включена в базе: примените миграцию '
+         + 'supabase/migrations/0002_friends.sql в SQL Editor.';
+  }
+  if (m.includes('player_not_found')) return 'Игрок с таким ником не найден.';
+  if (m.includes('cannot_add_self'))  return 'Себя в друзья добавить нельзя.';
+  if (m.includes('request_not_found'))return 'Заявка уже отозвана или принята.';
+  if (m.includes('stats_too_big'))    return 'Сводка прогресса слишком большая.';
   if (m.includes('payments_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
   if (m.includes('provider_error') || m.includes('no_payment_url')) {
     return 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.';
