@@ -151,6 +151,33 @@
       <h2 style="margin-top:34px">ПРИЁМ ОПЛАТЫ</h2>
       <div id="gaPay"></div>
 
+      <!-- ── Рассылка ────────────────────────────────────────────────────
+           Уходит на все устройства, где игра ОТКРЫТА: .exe, браузер, .apk.
+           Игра спрашивает базу раз в полминуты, пока игрок в меню, и
+           показывает системное уведомление (если разрешено) либо всплывашку
+           внутри игры. Разбудить закрытую игру этим нельзя — для этого нужен
+           Web Push с ключами и служба доставки. -->
+      <h2 style="margin-top:34px">УВЕДОМЛЕНИЕ ИГРОКАМ</h2>
+      <p class="dim" style="font-size:14px">
+        Придёт туда, где игра открыта и уведомления разрешены: на ПК, в браузере
+        и на телефоне. Живёт неделю, потом пропадает само.
+      </p>
+      <div class="field">
+        <label for="annTitle">Заголовок</label>
+        <input type="text" id="annTitle" maxlength="80" placeholder="Например: Вышло обновление 1.0.3">
+      </div>
+      <div class="field">
+        <label for="annBody">Текст (необязательно)</label>
+        <input type="text" id="annBody" maxlength="200" placeholder="Одна-две строки">
+      </div>
+      <div class="field">
+        <label for="annUrl">Ссылка (необязательно)</label>
+        <input type="url" id="annUrl" placeholder="https://…">
+      </div>
+      <button class="btn" id="annSend">ОТПРАВИТЬ ВСЕМ</button>
+      <div class="msg" id="annMsg"></div>
+      <div id="annList" style="margin-top:14px"></div>
+
       <h2 style="margin-top:34px">СБОРКИ И ОБНОВЛЕНИЯ</h2>
       <p class="dim" style="font-size:14px">
         Файл уходит в закрытое хранилище. Прямых ссылок нет: игрок с лицензией
@@ -472,7 +499,8 @@ import {
   adminGrantLicense, adminRevokeLicense, adminTransferLicense,
   adminRefundOrder, adminCancelOrder,
   adminDailyStats, adminTotals, humanError,
-} from '/byte-blaster/assets/pixset-auth.js?v=eee5d2d8';
+  postAnnouncement, listAnnouncements, deleteAnnouncement,
+} from '/byte-blaster/assets/pixset-auth.js?v=745cfb09';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -643,6 +671,55 @@ async function loadChannels() {
     b.onclick = () => toggle(b, 'payments_enabled', b.dataset.pay !== 'true');
   });
 }
+
+/* ── Рассылка игрокам ────────────────────────────────────────────────────
+   Уходит в таблицу announcements; игра забирает её сама, пока открыта, и
+   показывает системным уведомлением либо всплывашкой внутри. Живёт неделю. */
+async function loadAnnouncements() {
+  let rows = [];
+  try { rows = await listAnnouncements(GAME); }
+  catch (err) {
+    $('annList').innerHTML = `<p class="dim" style="font-size:13px">${esc(humanError(err))}</p>`;
+    return;
+  }
+  $('annList').innerHTML = rows.length
+    ? rows.map((a) => `<div class="rowline">
+        <div style="min-width:0">
+          <b>${esc(a.title)}</b>
+          <div class="dim" style="font-size:13px">${esc(a.body || '')}</div>
+          <div class="dim" style="font-size:12px">отправлено ${
+            new Date(a.created_at).toLocaleString('ru-RU')} · истекает ${
+            new Date(a.expires_at).toLocaleDateString('ru-RU')}</div>
+        </div>
+        <button class="btn ghost" data-ann="${esc(a.id)}">УБРАТЬ</button>
+      </div>`).join('')
+    : '<p class="dim" style="font-size:13px">Активных уведомлений нет.</p>';
+
+  $('annList').querySelectorAll('[data-ann]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await deleteAnnouncement(b.dataset.ann); await loadAnnouncements(); }
+      catch (err) { say(humanError(err)); b.disabled = false; }
+    };
+  });
+}
+
+$('annSend').onclick = async () => {
+  const btn = $('annSend');
+  const title = $('annTitle').value.trim();
+  if (!title) { $('annMsg').textContent = 'Заголовок обязателен.'; $('annMsg').className = 'msg show err'; return; }
+  btn.disabled = true;
+  try {
+    await postAnnouncement({ title, body: $('annBody').value, url: $('annUrl').value, gameSlug: GAME });
+    $('annMsg').textContent = 'Отправлено. Игроки увидят его, когда игра открыта.';
+    $('annMsg').className = 'msg show ok';
+    $('annTitle').value = ''; $('annBody').value = ''; $('annUrl').value = '';
+    await loadAnnouncements();
+  } catch (err) {
+    $('annMsg').textContent = humanError(err);
+    $('annMsg').className = 'msg show err';
+  } finally { btn.disabled = false; }
+};
 
 async function toggle(btn, key, value) {
   btn.disabled = true;
@@ -899,7 +976,7 @@ $('transferBtn').onclick = async () => {
 $('gaRefresh').onclick = () => refreshAll();
 
 async function refreshAll() {
-  await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders()]);
+  await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders(), loadAnnouncements()]);
 }
 
 // График подстраивается под ширину окна — перерисовываем без перезапроса.

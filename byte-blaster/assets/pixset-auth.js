@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'eee5d2d8';
+export const SDK_VERSION = '745cfb09';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -221,6 +221,38 @@ export async function publishGameStats(gameSlug, data) {
   const { error } = await supabase.rpc('publish_game_stats', {
     p_game_slug: gameSlug, p_data: data,
   });
+  if (error) throw error;
+}
+
+/* ── Рассылка игрокам ──────────────────────────────────────────────────────
+   Объявление видят все, кто открыл игру; пишет только администратор (проверяет
+   политика по profiles.is_admin, а не клиент). Живёт неделю — рассылка про
+   обновление не должна всплывать месяцами. */
+export async function postAnnouncement({ title, body, url, gameSlug = 'byte-blaster' }) {
+  const clean = String(title || '').trim();
+  if (!clean) throw new Error('empty_title');
+  const { error } = await supabase.from('announcements').insert({
+    title: clean,
+    body: String(body || '').trim() || null,
+    url: String(url || '').trim() || null,
+    game_slug: gameSlug || null,
+  });
+  if (error) throw error;
+}
+
+export async function listAnnouncements(gameSlug = 'byte-blaster') {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('id, title, body, url, created_at, expires_at')
+    .or(`game_slug.is.null,game_slug.eq.${gameSlug}`)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function deleteAnnouncement(id) {
+  const { error } = await supabase.from('announcements').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -808,6 +840,17 @@ export function humanError(err) {
   if (m.includes('avatar_not_image')) return 'Это не картинка. Подойдут JPG, PNG или WebP.';
   if (m.includes('avatar_too_big'))   return 'Картинку не удалось ужать. Возьмите изображение попроще.';
   if (m.includes('avatar_bad_format'))return 'Неподдерживаемый формат картинки.';
+  // PostgREST так отвечает, когда функции в базе ещё нет. Для владельца это
+  // однозначный сигнал: миграция не применена, а не «что-то сломалось».
+  if (m.includes('could not find the function') || m.includes('schema cache')) {
+    return 'Эта возможность ещё не включена в базе: примените миграцию '
+         + 'supabase/migrations/0002_friends.sql в SQL Editor.';
+  }
+  // Отказ политики RLS. Для владельца это почти всегда «нет прав админа»,
+  // а не поломка — сырой текст Postgres тут только пугает.
+  if (m.includes('row-level security')) return 'Недостаточно прав: нужен аккаунт администратора.';
+  if (m.includes('not_friends'))      return 'Позвать в комнату можно только друга.';
+  if (m.includes('bad_room'))         return 'Некорректный код комнаты.';
   if (m.includes('player_not_found')) return 'Игрок с таким ником не найден.';
   if (m.includes('cannot_add_self'))  return 'Себя в друзья добавить нельзя.';
   if (m.includes('request_not_found'))return 'Заявка уже отозвана или принята.';
