@@ -164,6 +164,17 @@
     { ph: 1, bars: 2, drums: 2, lead: 2, arp: 1, bass: 1 },
   ];
 
+  // Фанфара. У победы нет времени на разгон: она должна вступать сразу в полную
+  // силу, иначе звучит как обычный куплет, который просто закончился. Прежняя
+  // тема начиналась вполсилы и ровно этим и грешила.
+  const FORM_FANFARE = [
+    { ph: 1, bars: 2, drums: 2, lead: 2, arp: 1, bass: 1 },   // удар с порога
+    { ph: 1, bars: 2, drums: 2, lead: 2, arp: 1, bass: 1 },
+    { ph: 0, bars: 2, drums: 2, lead: 1, arp: 1, bass: 1 },   // ответная фраза
+    { ph: 1, bars: 4, drums: 2, lead: 2, arp: 1, bass: 1 },   // возврат темы
+    { ph: 1, bars: 2, drums: 1, lead: 2, arp: 1, bass: 1 },   // разрешение
+  ];
+
   /**
    * Сколько раз повторить основной блок, чтобы трек лёг в 1,5–2,5 минуты вне
    * зависимости от темпа. Иначе быстрые миры кончались бы за минуту, а
@@ -225,8 +236,17 @@
       ch: { lead: 'sawtooth', bassW: 'sawtooth', drums: 'break', hats: 3, bassS: 'pulse', bright: 6200 } }),
     star:    T({ bpm: 168, base: 329.63, sc: SC.PENT, prog: [0, 3, 4, 3], seed: 3310, form: FORM_SHORT,
       ch: { drums: 'four', hats: 3, arpS: 'run', bright: 7000 } }),
-    victory: T({ bpm: 112, base: 261.63, sc: SC.PENT, prog: [0, 3, 4, 0], seed: 8890, form: FORM_SHORT,
-      ch: { lead: 'triangle', drums: 'march', hats: 1, bassS: 'octave', arpS: 'shimmer', bright: 6000 } }),
+    // Победа: мажорная пентатоника, ход I–IV–V–I, пила вместо треугольника —
+    // она читается как духовые, а не как колыбельная. Маршевый малый и бас
+    // через октаву добавляют поступь.
+    victory: T({ bpm: 108, base: 349.23, sc: SC.PENT, prog: [0, 3, 4, 0], seed: 8890, form: FORM_FANFARE,
+      ch: { lead: 'sawtooth', bassW: 'square', arpW: 'triangle', drums: 'march', hats: 2,
+            bassS: 'octave', arpS: 'run', bright: 7400 } }),
+    // Карта мира: раньше на ней играла тема меню. Здесь простор и любопытство —
+    // медленно, высоко, с эхом и почти без ударных.
+    worldmap: T({ bpm: 96, base: 293.66, sc: SC.PENT, prog: [0, 4, 5, 3], seed: 4711,
+      ch: { lead: 'sine', bassW: 'triangle', arpW: 'sine', drums: 'sparse', hats: 1,
+            bassS: 'hold', arpS: 'shimmer', echo: 6, bright: 8200 } }),
 
     // 🏙 Неоновый мегаполис: ровный ход, всё блестит и движется.
     world0:  T({ bpm: 126, base: 261.63, sc: SC.PENT, prog: [0, 4, 5, 3], seed: 1001,

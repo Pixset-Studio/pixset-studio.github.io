@@ -765,6 +765,7 @@ function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu')
 // доигрывал музыку Финальной крепости.
 function startGameMusic(){const wi=Math.min(CT.id,10);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(Math.min(wi,9));if(_tryMusicFile('world'+wi))return;startMusic('world'+wi);}
 function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic('boss');}
+function startMapMusic(){_curMusicStart=startMapMusic;if(_tryMusicFile('worldmap'))return;startMusic('worldmap');}
 function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic('star');}
 function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic('victory');}
 
@@ -1118,6 +1119,98 @@ let fireBalls=[],iceBalls=[];
 let checkpoints=[];        // mid-level checkpoint flags
 let _cpSafeZone=null;      // {x,y,w,h} — area around the checkpoint kept hazard-free
 let cpSave=null;           // {lvl,color} — checkpoint to resume from on adventure retry
+
+/* ── ЖИЗНИ ────────────────────────────────────────────────────────────────────
+   Раньше жизни ни на что не влияли: кончились — уровень просто начинался
+   заново с тремя новыми. Теперь у них есть цена, и она разная в двух режимах.
+
+   Обычный режим. Жизнь тратится на возвращение к чекпоинту. Кончились —
+   уровень с самого начала: чекпоинт снимается, и участок до него приходится
+   пройти заново. Записанные достижения уровня (лучшие звёзды и кристаллы) при
+   этом не понижаются: отнимать уже заслуженное — наказание, которого никто не
+   ждёт. Сбрасывается только текущая попытка.
+
+   Хардкор. Жизни общие на весь мир, а не на уровень: десять уровней проходятся
+   на одном запасе. Кончились — мир начинается с первого уровня, и прогресс
+   ЭТОГО мира откатывается.
+
+   Что именно откатывается в хардкоре: у хардкора отдельное хранилище
+   (advProgHard, ключ bbAdvH), поэтому обычное прохождение не затрагивается
+   вообще. Внутри хардкорного прогресса чистятся только десять уровней текущего
+   мира — отметки о прохождении, звёзды и кристаллы, — а `max` возвращается к
+   первому уровню мира. Другие миры остаются как были. */
+const HARD_WORLD_LIVES=5;   // запас на весь мир в хардкоре
+let hardWorldLives=HARD_WORLD_LIVES;
+let hardWorldIdx=-1;        // для какого мира выдан запас
+
+const worldOf=(lvl)=>Math.floor((Math.max(1,lvl)-1)/10);
+const worldFirstLevel=(w)=>w*10+1;
+
+/** Начало мира в хардкоре: выдаём общий запас жизней один раз на мир. */
+function _hardEnterWorld(lvl){
+  const w=worldOf(lvl);
+  if(w!==hardWorldIdx){hardWorldIdx=w;hardWorldLives=HARD_WORLD_LIVES;}
+}
+
+/**
+ * Жизни кончились. Куда возвращать — зависит от режима.
+ * Зовётся из кнопки «ещё раз» на экране поражения.
+ */
+function _outOfLives(){
+  lives2=3;
+  if(hardMode&&advMode){
+    const first=_hardWipeWorld(advLevel);
+    lives=hardWorldLives;
+    cpSave=null;                    // мир начинается заново, чекпоинт не нужен
+    startAdv(first,false);
+    return;
+  }
+  // Обычный режим: тот же уровень, но с самого начала.
+  lives=3;
+  cpSave=null;
+  startAdv(advLevel,false);
+}
+
+/**
+ * Хардкор: запас на мир кончился. Откатываем прогресс этого мира и
+ * возвращаемся к его первому уровню.
+ */
+function _hardWipeWorld(lvl){
+  const w=worldOf(lvl),first=worldFirstLevel(w),last=first+9;
+  const prog=advProgHard;
+  prog.done=(prog.done||[]).filter(n=>n<first||n>last);
+  if(prog.stars)for(let n=first;n<=last;n++)delete prog.stars[n];
+  if(prog.shards)for(let n=first;n<=last;n++)delete prog.shards[n];
+  // max не опускаем ниже начала мира — иначе игрок потеряет и прошлые миры.
+  prog.max=Math.max(1,Math.min(prog.max,first));
+  saveAdvH();
+  if(window.WorldMap&&window.WorldMap.refresh)window.WorldMap.refresh(true);
+  hardWorldIdx=w;hardWorldLives=HARD_WORLD_LIVES;
+  return first;
+}
+
+/**
+ * Возвращает мир к состоянию на момент взятия чекпоинта.
+ *
+ * Без этого смерть после чекпоинта отматывала уровень целиком: враги, которых
+ * игрок уже прошёл, оживали, а собранные монеты появлялись снова — и участок до
+ * чекпоинта приходилось проходить заново, хотя возрождение происходило после
+ * него. Кристаллы так восстанавливались и раньше, остальное — нет.
+ *
+ * Уровень строится детерминированно по номеру, поэтому при пересборке порядок
+ * элементов тот же и снимка по позициям достаточно. Длины сверяем на всякий
+ * случай: враги умеют делиться на лету, и в живом забеге массив длиннее, чем
+ * при чистой генерации.
+ */
+function _restoreCpWorld(){
+  if(!cpSave)return;
+  if(cpSave.coins&&typeof coins!=='undefined')
+    for(let i=0;i<coins.length&&i<cpSave.coins.length;i++) if(cpSave.coins[i])coins[i].got=true;
+  if(cpSave.enemies&&typeof enemies!=='undefined')
+    for(let i=0;i<enemies.length&&i<cpSave.enemies.length;i++) if(cpSave.enemies[i])enemies[i].alive=false;
+  if(cpSave.powerups&&typeof powerups!=='undefined')
+    for(let i=0;i<powerups.length&&i<cpSave.powerups.length;i++) if(cpSave.powerups[i])powerups[i].got=true;
+}
 let player2=null;          // P2 object (null = not in use)
 let lives2=3;              // P2 lives (separate from P1)
 let twoPlayer=false;       // 2-player mode active?
@@ -1165,7 +1258,7 @@ function _checkCoinHp(cx,cy,p){
       burst(cx+7,cy+7,'#4f8',22,5,6);
       floatTxt(cx,cy-18,T('repaired'),'#4f8');
     } else {
-      lives++;
+      lives++;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
       burst(cx+7,cy+7,'#ff2266',22,5,6);
       floatTxt(cx,cy-18,T('hpBonus'),'#ff2266');
     }
@@ -4213,6 +4306,9 @@ function showMap(){
   // Stop the in-game render loop while the map is open (see showMapH).
   if(raf){cancelAnimationFrame(raf);raf=0;}
   navScr='map';
+  // У карты своя тема: раньше здесь доигрывала музыка меню, и переход между
+  // выбором уровня и самой картой был неслышен.
+  startMapMusic();
   if (window.WorldMap) {
     window.WorldMap.show(false);
   } else {
@@ -4352,7 +4448,13 @@ function startInf(fresh=true){
   updModeLabel();startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
 }
 function startAdv(n,freshLives=false){
-  if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
+  // В хардкоре запас общий на весь мир и переносится между уровнями;
+  // в обычном режиме — свой на каждый заход.
+  if(hardMode&&advMode){
+    _hardEnterWorld(n);
+    if(freshLives)cpSave=null;
+    lives=hardWorldLives;
+  } else if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
   // Reset coin progress when starting fresh adventure from level 1
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -4374,6 +4476,7 @@ function startAdv(n,freshLives=false){
       dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
       shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
     }
+    _restoreCpWorld();
   }
   timeLeft=lvlTime(n);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
@@ -4647,7 +4750,7 @@ function updatePlayer(){
   for(const pu of powerups){
     if(!pu.got&&aabb(p,pu)){pu.got=true;SFX.powerup();
       if(pu.type==='blast'){p.blaster=true;p.bTimer=1800;burst(pu.x+12,pu.y+12,CT.mc,18,4,6);floatTxt(pu.x,pu.y,T('pBlaster'),CT.mc);camShake=9;}
-      else if(pu.type==='life'){lives++;burst(pu.x+12,pu.y+12,'#ff2266',22,5,6);floatTxt(pu.x,pu.y,T('pLife'),'#ff2266');camShake=8;[440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));}
+      else if(pu.type==='life'){lives++;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);burst(pu.x+12,pu.y+12,'#ff2266',22,5,6);floatTxt(pu.x,pu.y,T('pLife'),'#ff2266');camShake=8;[440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));}
       else if(pu.type==='boots'){p.boots=true;p.bootsTimer=900;p.jl=Math.max(p.jl,3);burst(pu.x+12,pu.y+12,'#0ff',18,4,6);floatTxt(pu.x,pu.y,T('pBoots'),'#0ff');camShake=7;}
       else if(pu.type==='star'){p.starMode=true;p.starTimer=600;p.inv=601;burst(pu.x+12,pu.y+12,'#ff0',24,5,7);floatTxt(pu.x,pu.y,T('pStar'),'#ff0');camShake=12;startStarMusic();AchTrack.star();}
       else if(pu.type==='fire'){p.fireMode=true;p.iceMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#ff4400',18,4,6);floatTxt(pu.x,pu.y,T('pFire'),'#ff4400');camShake=9;}
@@ -4911,6 +5014,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     // Show score breakdown
     floatTxt(flagX+5,touchY-30,`+${hBonus} ${tier}`,tierCol);
     floatTxt(flagX+5,touchY-52,`+${tBonus} TIME`,CT.mc);
+    if(hardMode&&advMode)hardWorldLives=lives;  // запас переходит на следующий уровень мира
     cpSave=null;             // level cleared — checkpoint no longer needed
 
     // ── Network co-op: WAIT for every player to reach the flag ────────────
@@ -5306,7 +5410,7 @@ function doHurtPlayer(fromFall=false){
   // life and respawn in place / at the checkpoint, keeping gState==='playing'.
   if(window.netActive){
     if(infiniteLives)lives=Math.max(lives,3);
-    lives--;
+    lives--;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
     AchTrack.death();
     SFX.playerHurt();camShake=12;
     p.broken=false;
@@ -5339,7 +5443,7 @@ function doHurtPlayer(fromFall=false){
     return;
   }
   if(infiniteLives)lives=Math.max(lives,3);
-  lives--;
+  lives--;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
   AchTrack.death();
   if(lives<=0){
     // In 2-player mode, only trigger game over if BOTH players are dead
@@ -5366,7 +5470,7 @@ function doHurtPlayer(fromFall=false){
     stopMusic();
     burst(p.x+p.w/2,p.y+p.h/2,'#f44',20,5,5);camShake=18;SFX.playerHurt();
     gState='gameover';
-    const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
+    const retry=advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
                        :()=>{SFX.menu();startInf(true);};
     setTimeout(()=>{showGameover(retry);},400);
     return;
@@ -5433,7 +5537,7 @@ function doHurtPlayer2(fromFall=false){
       }
       stopMusic();
       gState='gameover';
-      const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
+      const retry=advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
                          :()=>{SFX.menu();startInf(true);};
       setTimeout(()=>{showGameover(retry);},400);
     }
@@ -5913,7 +6017,14 @@ function touchCheckpoints(p){
       // Also snapshot the crystals (data-shards) collected so far, so dying after
       // the checkpoint keeps them instead of resetting the level's crystal count.
       if(advMode){
-        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot};
+        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot,
+          // Снимок мира на момент касания: убитые враги остаются убитыми, а
+          // собранные монеты — собранными. Уровень строится детерминированно по
+          // номеру, поэтому порядок элементов при пересборке тот же, и хватает
+          // флагов по позициям.
+          coins:coins.map(c=>!!c.got),
+          enemies:enemies.map(e=>e.alive===false),
+          powerups:powerups.map(u=>!!u.got)};
         // Persist the crystals reached up to this checkpoint right away (keeps the
         // best, so they're saved even if the player dies before finishing).
         if(typeof recordLevelShards==='function')recordLevelShards(advLevel,dataShardsGot,hardMode);
@@ -6773,1007 +6884,24 @@ function _sceneryBand(cfg,bd){
 
 // Draw the whole scenery stack for a world. Worlds without an entry (Cyber City
 // has its bespoke skyline, Prism Anomaly its refraction field) simply skip.
-function drawWorldScenery(id,bd){
-  const layers=WORLD_SCENERY[id];
-  if(!layers)return;
-  ctx.save();
-  ctx.shadowBlur=0;
-  for(const l of layers)_sceneryBand(l,bd);
-  ctx.restore();
-}
-
-// ════════════════════════════════════════════════
-//  BACKGROUND ATMOSPHERE
-// ════════════════════════════════════════════════
-// Each world's sky/backdrop lives in its own function in WORLD_ATMOSPHERE
-// instead of one long if/else chain inside drawBG(), so a world can be
-// redesigned without touching the other ten.
-//
-// The heavy parts (city skylines, cavern ceilings, refinery silhouettes) are
-// hundreds of small rects. Drawing them every frame was the most expensive
-// thing in the background — so they are rasterised ONCE into an offscreen tile
-// of exactly one screen width and then blitted twice with a parallax offset.
-// Two drawImage calls replace hundreds of fillRects, and the picture is
-// identical because the layout is deterministic anyway.
-
-const _bgTiles={};
-let _bgTilesTheme=-1;
-// At most one cached layer may be re-rasterised per frame. Without this, a
-// world with three animated layers rebuilds all of them on the same frame every
-// time their TTL expires — a few hundred rects in one go, which on a weak
-// device is a visible hitch twice a second. Spreading the rebuilds means a tile
-// is at worst one or two frames stale, which is invisible.
-let _bgRebuildBudget=0;
-
-// Render (or reuse) a cached, horizontally-tiling background layer.
-//   key   — unique per layer
-//   h     — tile height in logical pixels
-//   build — (c, w, h) => draws the layer with its baseline at y = h
-//   ttl   — optional: rebuild after this many ticks (for slowly-animated layers
-//           such as blinking windows; omit for fully static layers)
-function bgLayer(key,h,build,ttl){
-  // Drop every cached tile when the world changes — 11 worlds × 3 layers of
-  // screen-sized canvases would otherwise pile up tens of megabytes.
-  if(_bgTilesTheme!==CT.id){for(const k in _bgTiles)delete _bgTiles[k];_bgTilesTheme=CT.id;}
-  const rs=Math.max(1,Math.min(2,_renderScale||1));
-  let t=_bgTiles[key];
-  const needNew=!t||t.h!==h||t.rs!==rs;
-  // A first build must always happen (there is nothing to show otherwise); a
-  // refresh waits its turn if another layer already rebuilt this frame.
-  const wantRefresh=!needNew&&ttl&&tick-t.built>=ttl&&_bgRebuildBudget>0;
-  if(needNew||wantRefresh){
-    if(!needNew)_bgRebuildBudget--;
-    if(needNew){
-      const cv=document.createElement('canvas');
-      cv.width=Math.ceil(W*rs);cv.height=Math.ceil(h*rs);
-      t={cv:cv,c:cv.getContext('2d'),h:h,rs:rs,built:-1};
-      _bgTiles[key]=t;
-    }
-    const c=t.c;
-    c.setTransform(1,0,0,1,0,0);
-    c.clearRect(0,0,t.cv.width,t.cv.height);
-    c.setTransform(rs,0,0,rs,0,0);
-    build(c,W,h);
-    t.built=tick;
-  }
-  return t;
-}
-// Blit a cached tile twice so it wraps seamlessly at the given parallax factor.
-function blitLayer(t,par,y,alpha){
-  const off=((camX*par)%W+W)%W;
-  ctx.globalAlpha=alpha;
-  ctx.drawImage(t.cv,-off,y,W,t.h);
-  ctx.drawImage(t.cv,W-off,y,W,t.h);
-  ctx.globalAlpha=1;
-}
-// Stable pseudo-random for deterministic prop layouts (same helper the parallax
-// silhouettes use).
-const _bgRnd=_sceneryRnd;
-
-// A field of stars that twinkles. Shared by several night skies.
-function _atmStars(count,maxY,tintBright,gl){
-  ctx.fillStyle='#fff';
-  for(let i=0;i<count;i++){
-    const sx=(i*137.5+11)%W, sy=(i*97.3+7)%maxY;
-    const tw=Math.sin(tick*.04+i*0.9)*.45+.55;
-    const big=i%20===0;
-    ctx.globalAlpha=tw*(big?.9:.45);
-    ctx.fillStyle=big?tintBright:'#ffffff';
-    const sz=big?1.8:i%7===0?1.2:0.8;
-    ctx.fillRect(sx-sz/2,sy-sz/2,sz,sz);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 0 · CYBER CITY ─────────────────────────────────────────────────────────
-// Переделано: раньше здесь друг на друга ложились градиент неба, отдельная
-// заливка горизонта, звёзды, луна со свечением, полоса небоскрёбов, полоса
-// крыш, огни машин, световые полосы по земле и общая сетка. Десять слоёв в
-// одном месте не читаются как глубина — они читаются как каша, и каждый из них
-// красился в полном экране каждый кадр.
-//
-// Теперь сцена собрана из ТРЁХ планов с ясным разделением:
-//
-//   даль    — небо: горизонтальное зарево, луна с ореолом, звёзды;
-//   средний — один силуэт небоскрёбов с окнами, у основания растворён в дымке;
-//   ближний — крыши, по которым бежит игрок: чёрный вырез с неоновой кромкой.
-//
-// Глубину даёт не количество слоёв, а воздух между ними: у дальнего плана
-// низ башен запечён в дымку цвета неба, и он буквально утопает в ней. Резких
-// горизонтальных границ поперёк экрана больше нет — именно они и создавали
-// ощущение наклеенных друг на друга прямоугольников.
-//
-// Про стоимость честно: она осталась примерно прежней (замер на этой машине —
-// 1.16 → 1.11 мс на кадр при бюджете 16.7). Тяжёлые силуэты и раньше лежали
-// в кэшированных плитках; выигрыш от убранных полноэкранных градиентов и
-// shadowBlur у луны ушёл на два прожектора. Это переделка ради вида, а не
-// ради кадров — но и не за их счёт.
-function _cityBand(c,w,h,o){
-  const step=w/o.count;
-  for(let i=0;i<o.count;i++){
-    const bw=step*(0.6+_bgRnd(i,o.seed)*0.32);
-    const bx=i*step+(step-bw)/2;
-    const bh=h*(0.30+_bgRnd(i,o.seed+1)*0.66);
-    const by=h-bh;
-    c.fillStyle=o.body;
-    c.fillRect(bx,by,bw,bh);
-    // Crown: a setback block, a spire, or a flat roof — gives the skyline a
-    // varied profile instead of a row of identical rectangles.
-    const crown=_bgRnd(i,o.seed+2);
-    if(crown>0.7)c.fillRect(bx+bw*0.18,by-h*0.09,bw*0.64,h*0.09);
-    else if(crown>0.45)c.fillRect(bx+bw*0.44,by-h*0.15,bw*0.12,h*0.15);
-    if(!o.windows)continue;
-    // Windows: a dense grid, mostly dark, with a scattering lit in cyan and a
-    // few in warm amber. Two lit colours is what makes it read as a living city
-    // rather than confetti.
-    const cols=Math.max(2,Math.floor(bw/6)),rows=Math.max(2,Math.floor(bh/9));
-    for(let r=0;r<rows;r++){
-      for(let q=0;q<cols;q++){
-        const wx=bx+3+q*((bw-6)/cols), wy=by+5+r*((bh-8)/rows);
-        if(wy>h-3)continue;
-        const s=_bgRnd(i*97+r*13+q,o.seed+3);
-        const lit=(s+o.blink)%1;
-        if(lit>0.72)c.fillStyle=o.lit;
-        else if(lit>0.62)c.fillStyle=o.lit2;
-        else c.fillStyle=o.dark;
-        c.fillRect(wx,wy,2,3);
-      }
-    }
-    // Vertical neon sign on a few towers.
-    if(_bgRnd(i,o.seed+4)>0.82&&o.sign){
-      c.fillStyle=o.sign;
-      c.fillRect(bx+bw*0.5-1,by+bh*0.18,2,bh*0.42);
-    }
-    // Antenna with a beacon.
-    if(_bgRnd(i,o.seed+5)>0.75){
-      c.fillStyle=o.body;
-      c.fillRect(bx+bw*0.5-0.5,by-h*0.07,1,h*0.07);
-      c.fillStyle=o.beacon;
-      c.fillRect(bx+bw*0.5-1.5,by-h*0.075,3,3);
-    }
-  }
-}
-// Прожекторный луч. Один раз рисуется в маленький холст с растворением к концу,
-// дальше только поворачивается и ставится drawImage — иначе на каждый луч
-// пришлось бы создавать градиент в каждом кадре.
-let _w0Beam=null;
-function _cityBeamSprite(){
-  if(_w0Beam)return _w0Beam;
-  const L=260,Bw=54;
-  const cv=document.createElement('canvas');
-  cv.width=Bw;cv.height=L;
-  const c=cv.getContext('2d');
-  const g=c.createLinearGradient(0,0,0,L);
-  g.addColorStop(0,'rgba(120,225,255,0.30)');
-  g.addColorStop(0.45,'rgba(120,225,255,0.10)');
-  g.addColorStop(1,'rgba(120,225,255,0)');
-  c.fillStyle=g;
-  // Клин: у основания узкий, к концу расходится.
-  c.beginPath();
-  c.moveTo(Bw*0.5-3,0);c.lineTo(Bw*0.5+3,0);c.lineTo(Bw,L);c.lineTo(0,L);
-  c.closePath();c.fill();
-  _w0Beam={cv:cv,w:Bw,h:L};
-  return _w0Beam;
-}
-
-function _atmCyberCity(bd,gl){
-  // ── ДАЛЬ: небо. Зарево над городом, луна и её ореол — статичная плитка.
-  // Раньше это были два полноэкранных градиента и shadowBlur каждый кадр.
-  const sky=bgLayer('w0sky',H,(c,w,h)=>{
-    const glow=c.createLinearGradient(0,h*0.34,0,h*0.86);
-    glow.addColorStop(0,'rgba(6,20,44,0)');
-    glow.addColorStop(0.55,'rgba(10,58,96,0.55)');
-    glow.addColorStop(1,'rgba(24,96,138,0.85)');
-    c.fillStyle=glow;c.fillRect(0,h*0.34,w,h*0.52);
-
-    // Отдельное тёплое пятно у горизонта: город внизу светит вверх неровно,
-    // ровная полоса читалась бы как крашеная стена.
-    const halo=c.createRadialGradient(w*0.34,h*0.84,0,w*0.34,h*0.84,w*0.42);
-    halo.addColorStop(0,'rgba(255,150,90,0.20)');
-    halo.addColorStop(1,'rgba(255,150,90,0)');
-    c.fillStyle=halo;c.fillRect(0,h*0.5,w,h*0.5);
-
-    // Луна: ореол градиентом вместо shadowBlur — стоит нисколько и не мажет.
-    const mx=w*0.78,my=h*0.17,mr=22;
-    const mg=c.createRadialGradient(mx,my,mr*0.6,mx,my,mr*4.2);
-    mg.addColorStop(0,'rgba(170,210,255,0.30)');
-    mg.addColorStop(1,'rgba(170,210,255,0)');
-    c.fillStyle=mg;c.beginPath();c.arc(mx,my,mr*4.2,0,Math.PI*2);c.fill();
-    c.fillStyle='#cfe3f5';
-    c.beginPath();c.arc(mx,my,mr,0,Math.PI*2);c.fill();
-    c.fillStyle='rgba(120,150,175,0.28)';
-    c.beginPath();c.arc(mx+7,my+6,5.5,0,Math.PI*2);c.fill();
-    c.beginPath();c.arc(mx-9,my-4,3.5,0,Math.PI*2);c.fill();
-    c.beginPath();c.arc(mx+3,my-10,2.5,0,Math.PI*2);c.fill();
-  });
-  ctx.globalAlpha=1;
-  ctx.drawImage(sky.cv,0,0,W,H);
-
-  // Звёзды — единственное, что дышит в небе, и потому остаются живыми.
-  // Только выше линии крыш: ниже они спорили бы с окнами.
-  _atmStars(Math.round(46*bd),H*.46,'#bfe4ff',gl);
-
-  // ── СРЕДНИЙ ПЛАН: один силуэт небоскрёбов. Окна перемигиваются медленно,
-  // плитка пересобирается раз в ~2 секунды — на глаз неотличимо от живой.
-  const blink=Math.floor(tick/30)*0.11;
-  const city=bgLayer('w0city',200,(c,w,h)=>{
-    _cityBand(c,w,h,{count:15,seed:7,blink:blink,windows:1,
-      body:'#0a1526',lit:'#37e0ff',lit2:'#ffb347',dark:'#081120',sign:'#ff3fa4',beacon:'#ff3020'});
-    // Воздушная перспектива запечена прямо в плитку: низ башен растворяется в
-    // цвете неба. Это и есть ощущение расстояния — раньше его изображали
-    // ещё одной полосой домов, и получалась каша.
-    const fade=c.createLinearGradient(0,h*0.45,0,h);
-    fade.addColorStop(0,'rgba(18,74,110,0)');
-    fade.addColorStop(1,'rgba(18,74,110,0.85)');
-    c.fillStyle=fade;c.fillRect(0,h*0.45,w,h*0.55);
-  },31);
-  blitLayer(city,0.14,H*.80-200,0.95);
-
-  // Прожекторы: два медленных луча над городом. Ставятся ПОСЛЕ башен — иначе
-  // они оказывались за ними и их просто не было видно. Дают небу движение,
-  // которого не даёт ни один статичный слой, и стоят два drawImage.
-  if(bd>0.5){
-    const beam=_cityBeamSprite();
-    for(let b=0;b<2;b++){
-      const bx=b?W*0.70:W*0.22, by=H*0.74;
-      const ang=Math.sin(tick*0.0035+b*2.1)*0.42+(b?0.30:-0.30);
-      ctx.save();
-      ctx.translate(bx,by);ctx.rotate(ang);
-      ctx.globalAlpha=0.75+Math.sin(tick*0.02+b)*0.15;
-      ctx.drawImage(beam.cv,-beam.w/2,-beam.h,beam.w,beam.h);
-      ctx.restore();
-    }
-    ctx.globalAlpha=1;
-  }
-
-  // ── БЛИЖНИЙ ПЛАН: крыши, по которым бежит игрок. Плотный чёрный вырез с
-  // неоновой кромкой сверху — граница, по которой глаз отделяет город от игры.
-  // Дымку сюда класть нельзя: её верхний край шёл ровной линией через весь
-  // экран и читался как приклеенный прямоугольник — ровно та «куча слоёв»,
-  // от которой уходим. Воздух между планами запечён в плитку города, где он
-  // растворяется постепенно и края не имеет.
-  const roof=bgLayer('w0roof',150,(c,w,h)=>{
-    const INK='#03070e', RIM='rgba(60,220,255,0.55)';
-    const base=h-h*0.18;
-    const span=w/4;
-    c.fillStyle=INK;c.fillRect(0,base,w,h-base);
-    c.fillStyle=RIM;c.fillRect(0,base,w,1);            // кромка парапета
-    for(let i=0;i<4;i++){
-      const x=i*span, s=(k)=>_bgRnd(i,k+41);
-      const box=(bx,by,bw,bh,rim)=>{
-        c.fillStyle=INK;c.fillRect(bx,by,bw,bh);
-        if(rim!==false){c.fillStyle=RIM;c.fillRect(bx,by,bw,1);}
-      };
-      // Бак на опорах
-      const tw=span*0.17,th=h*(0.26+s(1)*0.16),tx=x+span*0.09;
-      box(tx,base-th,tw,th);
-      box(tx-tw*0.18,base-th-h*0.05,tw*1.36,h*0.05);
-      // Рекламный щит: рама, светящаяся панель и опора до парапета. Панель
-      // держим приглушённой — на полной яркости это просто цветной квадрат.
-      const bx=x+span*0.44,bw=span*0.26,bh=h*(0.20+s(2)*0.10);
-      const by=base-bh-h*0.10;
-      c.fillStyle=INK;
-      c.fillRect(bx+bw*0.5-2,by+bh,4,h*0.10);           // опора
-      c.fillRect(bx,by,3,bh);c.fillRect(bx+bw-3,by,3,bh);
-      c.fillRect(bx,by,bw,3);c.fillRect(bx,by+bh-3,bw,3);
-      c.fillStyle=i%2?'rgba(255,63,164,0.17)':'rgba(47,216,255,0.15)';
-      c.fillRect(bx+3,by+3,bw-6,bh-6);
-      c.fillStyle=RIM;c.fillRect(bx,by,bw,1);
-      // Мачта с маяком
-      const mx=x+span*0.86;
-      c.fillStyle=INK;
-      c.fillRect(mx,base-h*0.54,3,h*0.54);
-      c.fillRect(mx-span*0.05,base-h*0.42,span*0.12,2);
-      c.fillRect(mx-span*0.035,base-h*0.30,span*0.09,2);
-      c.fillStyle='rgba(255,60,40,0.85)';c.fillRect(mx-1,base-h*0.57,5,4);
-      // Вентиляционный короб
-      box(x+span*0.66,base-h*0.10,span*0.12,h*0.10);
-    }
-  },0);
-  blitLayer(roof,0.34,H*.92-150,1);
-
-  // Летающие машины: три огонька со следом. Единственная быстрая жизнь в кадре.
-  for(let v=0;v<3;v++){
-    const speed=v===0?0.4:v===1?0.25:0.6;
-    const span=W+120;
-    const vx=(((tick*speed+v*280)%span)+span)%span-60;
-    const vy=H*.10+v*H*.055;
-    if(vx<-20||vx>W+20)continue;
-    const blinkOn=Math.floor(tick*.12+v*2)%4>1;
-    ctx.globalAlpha=blinkOn?.85:.25;
-    ctx.fillStyle=v%2===0?'#ff5544':'#5fe8ff';
-    ctx.fillRect(vx-1.5,vy-1.5,3,3);
-    ctx.globalAlpha=.14;ctx.strokeStyle=v%2===0?'#ff5544':'#5fe8ff';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-20,vy);ctx.stroke();
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 1 · NEON JUNGLE ────────────────────────────────────────────────────────
-// A hanging canopy across the top of the screen with vines and glowing spores,
-// plus light shafts breaking through it.
-function _atmJungle(bd,gl){
-  const gz=ctx.createLinearGradient(0,0,0,H*.7);
-  gz.addColorStop(0,'#0a2a12');gz.addColorStop(1,'transparent');
-  ctx.globalAlpha=.32;ctx.fillStyle=gz;ctx.fillRect(0,0,W,H*.7);
-
-  // Light shafts through the leaves
-  ctx.globalAlpha=.05;
-  for(let s=0;s<4;s++){
-    const sx=(s*231+((camX*.12)%W))%W;
-    const g=ctx.createLinearGradient(sx,0,sx+70,H*.75);
-    g.addColorStop(0,'#cfffa0');g.addColorStop(1,'transparent');
-    ctx.fillStyle=g;
-    ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx+34,0);ctx.lineTo(sx+96,H*.75);ctx.lineTo(sx+30,H*.75);ctx.closePath();ctx.fill();
-  }
-
-  // Cached canopy: overlapping leaf lobes hanging from the top edge, with vines.
-  const canopy=bgLayer('w1canopy',120,(c,w,h)=>{
-    for(let i=0;i<16;i++){
-      const cx=i*(w/16)+_bgRnd(i,2)*20;
-      const r=26+_bgRnd(i,3)*26;
-      const cy=_bgRnd(i,4)*26;
-      c.fillStyle=i%3===0?'#0c2a12':'#071c0c';
-      c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fill();
-      // leaf rim
-      c.strokeStyle='rgba(90,255,150,0.14)';c.lineWidth=1.5;
-      c.beginPath();c.arc(cx,cy,r,0.15,Math.PI-0.15);c.stroke();
-    }
-    // Vines dangling out of the canopy
-    c.strokeStyle='rgba(60,180,100,0.30)';c.lineWidth=1.5;
-    for(let v=0;v<12;v++){
-      const vx=v*(w/12)+_bgRnd(v,5)*24;
-      const len=26+_bgRnd(v,6)*62;
-      c.beginPath();c.moveTo(vx,10);
-      for(let y=10;y<len;y+=12)c.lineTo(vx+Math.sin(y*.18+v)*5,y);
-      c.stroke();
-      c.fillStyle='rgba(120,255,160,0.20)';
-      c.beginPath();c.arc(vx+Math.sin(len*.18+v)*5,len,2.5,0,Math.PI*2);c.fill();
-    }
-  });
-  blitLayer(canopy,0.14,0,0.9);
-  const canopy2=bgLayer('w1canopy2',80,(c,w,h)=>{
-    for(let i=0;i<11;i++){
-      const cx=i*(w/11)+_bgRnd(i,8)*24;
-      const r=22+_bgRnd(i,9)*22;
-      c.fillStyle='#030f06';
-      c.beginPath();c.arc(cx,_bgRnd(i,10)*12,r,0,Math.PI*2);c.fill();
-    }
-  });
-  blitLayer(canopy2,0.30,0,0.95);
-
-  // Fireflies / spores
-  for(let i=0,fn=Math.round(20*bd);i<fn;i++){
-    const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.62);
-    const on=Math.floor(tick*.07+i*1.4)%5>2;
-    if(!on)continue;
-    ctx.globalAlpha=.5;ctx.fillStyle='#ccff88';
-    ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();
-    if(gl>0)bloom(fx,fy,7,'#aaff44',0.30);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 2 · LAVA WORLD (unchanged design, kept compact) ────────────────────────
-function _atmLava(bd,gl){
-  ctx.globalAlpha=.14;
-  const hg=ctx.createLinearGradient(0,H*.3,0,H);
-  hg.addColorStop(0,'#ff2200');hg.addColorStop(1,'#220800');
-  ctx.fillStyle=hg;ctx.fillRect(0,H*.3,W,H*.7);
-  for(let i=0,en=Math.round(22*bd);i<en;i++){
-    const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%(H*.7)+H)%H;
-    ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';
-    ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 3 · ICE CAVES ──────────────────────────────────────────────────────────
-// Read as a CAVE, not an open sky: a cached ceiling of stalactites at the top,
-// frozen crystal clusters behind, aurora light leaking in, drifting snow.
-function _atmIce(bd,gl){
-  // Aurora leaking through cracks in the ceiling
-  for(let a=0;a<3;a++){
-    const phase=tick*.008+a*.9;
-    const ax=(a+1)*W*0.27+Math.sin(phase)*30;
-    ctx.globalAlpha=.06+Math.sin(phase)*.03;
-    const ag=ctx.createLinearGradient(ax,0,ax+70,H*.55);
-    ag.addColorStop(0,'transparent');
-    ag.addColorStop(.5,a%2===0?'#88ffee':'#8899ff');
-    ag.addColorStop(1,'transparent');
-    ctx.fillStyle=ag;ctx.fillRect(ax,0,70,H*.55);
-  }
-  // Cached cave ceiling with stalactites
-  const ceil=bgLayer('w3ceil',110,(c,w,h)=>{
-    c.fillStyle='#0a1826';c.fillRect(0,0,w,h*0.30);
-    for(let i=0;i<26;i++){
-      const x=i*(w/26)+_bgRnd(i,11)*12;
-      const len=h*(0.22+_bgRnd(i,12)*0.66);
-      const half=3+_bgRnd(i,13)*5;
-      const g=c.createLinearGradient(0,h*0.3,0,h*0.3+len);
-      g.addColorStop(0,'#1b3450');g.addColorStop(1,'#0d2036');
-      c.fillStyle=g;
-      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x+half,h*0.3);c.lineTo(x,h*0.3+len);c.closePath();c.fill();
-      c.strokeStyle='rgba(170,230,255,0.22)';c.lineWidth=1;
-      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x,h*0.3+len);c.stroke();
-    }
-  });
-  blitLayer(ceil,0.16,0,0.92);
-
-  // Drifting snow
-  ctx.fillStyle='#dff';
-  for(let i=0,sn=Math.round(30*bd);i<sn;i++){
-    const sx=(i*163+tick*.35+Math.sin(tick*.02+i)*14)%W;
-    const sy=(i*71+tick*.5)%H;
-    ctx.globalAlpha=.20+(i%4)*.08;
-    ctx.fillRect(sx,sy,1.4,1.4);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 4 · DESERT RUINS (unchanged design) ────────────────────────────────────
-function _atmDesert(bd,gl){
-  ctx.globalAlpha=.9;
-  if(gl>0){ctx.shadowColor='#ffdd44';ctx.shadowBlur=20;}
-  ctx.fillStyle='#ffee88';ctx.beginPath();ctx.arc(W*.8,H*.12,22,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.globalAlpha=.05;ctx.fillStyle='#ffcc44';
-  for(let r=0;r<6;r++){const hy=H*.5+r*16+Math.sin(tick*.03+r)*4;ctx.fillRect(0,hy,W,8);}
-  ctx.globalAlpha=1;
-}
-
-// ── 5 · SPACE STATION ──────────────────────────────────────────────────────
-// The old background silhouettes were a box with a wide bar through it, which
-// read as a row of burgers. Replaced with a proper orbital structure: a truss
-// spine carrying cylindrical modules and solar-panel wings, plus a ringed
-// planet to give the scene scale.
-function _atmSpace(bd,gl){
-  _atmStars(Math.round(85*bd),H*.85,'#dde6ff',gl);
-  // Nebula
-  ctx.globalAlpha=.055;
-  ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(W*.32,H*.24,120,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#0044ff';ctx.beginPath();ctx.arc(W*.72,H*.4,84,0,Math.PI*2);ctx.fill();
-  // Ringed planet
-  const px=W*.17-((camX*.03)%(W*2)), py=H*.22, pr=46;
-  ctx.globalAlpha=.9;
-  const pg=ctx.createRadialGradient(px-pr*.35,py-pr*.35,pr*.15,px,py,pr);
-  pg.addColorStop(0,'#5a4a9a');pg.addColorStop(1,'#1a1240');
-  ctx.fillStyle=pg;ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=.5;ctx.strokeStyle='#9a86d8';ctx.lineWidth=3;
-  ctx.save();ctx.translate(px,py);ctx.rotate(-0.35);ctx.scale(1,0.26);
-  ctx.beginPath();ctx.arc(0,0,pr*1.7,0,Math.PI*2);ctx.stroke();ctx.restore();
-
-  // Cached station structure
-  // One station section: a cylindrical pressure module with capped ends, a lit
-  // window strip, a solar wing on a boom and a docking node. Drawn at varying
-  // heights so the band is a structure, not a washing line.
-  function _stationSection(c,x,y,scale,i,pal){
-    const mw=(64+_bgRnd(i,21)*40)*scale, mh=(22+_bgRnd(i,22)*10)*scale;
-    const r=mh/2;
-    // Hull (rounded cylinder)
-    const hull=c.createLinearGradient(0,y-mh,0,y);
-    hull.addColorStop(0,pal.hi);hull.addColorStop(0.45,pal.body);hull.addColorStop(1,pal.lo);
-    c.fillStyle=hull;
-    c.beginPath();
-    c.moveTo(x+r,y-mh);c.lineTo(x+mw-r,y-mh);
-    c.arc(x+mw-r,y-r,r,-Math.PI/2,Math.PI/2);
-    c.lineTo(x+r,y);c.arc(x+r,y-r,r,Math.PI/2,-Math.PI/2);
-    c.closePath();c.fill();
-    // Hull ribs
-    c.strokeStyle=pal.rib;c.lineWidth=1;
-    c.beginPath();
-    for(let s=1;s<4;s++){const sx=x+mw*s/4;c.moveTo(sx,y-mh+2);c.lineTo(sx,y-2);}
-    c.stroke();
-    // Lit window strip
-    c.fillStyle=pal.win;
-    for(let p=0;p<Math.floor(mw/(14*scale));p++)c.fillRect(x+8*scale+p*14*scale,y-mh*0.62,3*scale,3*scale);
-    // Solar wing on a boom
-    const bx=x+mw*0.5, by=y-mh;
-    c.fillStyle=pal.rib;c.fillRect(bx-1,by-18*scale,2,18*scale);
-    const pw=46*scale, ph=15*scale, px2=bx-pw/2, py2=by-18*scale-ph;
-    c.fillStyle=pal.panel;c.fillRect(px2,py2,pw,ph);
-    c.strokeStyle=pal.panelLine;c.lineWidth=1;
-    c.beginPath();
-    for(let s=0;s<=5;s++){const sx=px2+pw*s/5;c.moveTo(sx,py2);c.lineTo(sx,py2+ph);}
-    c.moveTo(px2,py2+ph/2);c.lineTo(px2+pw,py2+ph/2);
-    c.stroke();
-    // Docking node
-    c.strokeStyle=pal.rib;c.lineWidth=2*scale;
-    c.beginPath();c.arc(x+mw+6*scale,y-r,5*scale,0,Math.PI*2);c.stroke();
-    return mw;
-  }
-  const truss=bgLayer('w5truss',170,(c,w,h)=>{
-    const pal={hi:'#39406f',body:'#232848',lo:'#141830',rib:'#4b5490',win:'#7fe3ff',
-               panel:'#1b4a7c',panelLine:'#3d84c4'};
-    let x=8;
-    for(let i=0;i<5&&x<w;i++){
-      const y=h*(0.72+_bgRnd(i,25)*0.22);
-      const mw=_stationSection(c,x,y,1,i,pal);
-      // Connecting truss to the next section
-      c.fillStyle=pal.rib;c.fillRect(x+mw+11,y-12,w/5-mw-11,3);
-      x+=Math.max(mw+34,w/5);
-    }
-  });
-  blitLayer(truss,0.13,H*.62-170,0.7);
-  // A single station band: two rows of modules just overlapped into clutter.
-
-  ctx.globalAlpha=1;
-}
-
-// ── 6 · DARK FOREST ────────────────────────────────────────────────────────
-// Almost lightless: a black canopy overhead, pale mist between the trunks,
-// a shaft of moonlight, and pairs of eyes watching from the dark.
-function _atmDarkForest(bd,gl){
-  ctx.globalAlpha=.85;
-  if(gl>0){ctx.shadowColor='#aaaacc';ctx.shadowBlur=10;}
-  ctx.fillStyle='#ccccee';ctx.beginPath();ctx.arc(W*.15,H*.1,16,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.fillStyle='#060a04';ctx.globalAlpha=.25;
-  ctx.beginPath();ctx.arc(W*.15+5,H*.1-3,13,0,Math.PI*2);ctx.fill();
-
-  // Moonlight shaft
-  ctx.globalAlpha=.045;
-  const mg=ctx.createLinearGradient(W*.15,H*.1,W*.42,H*.85);
-  mg.addColorStop(0,'#cfe0ff');mg.addColorStop(1,'transparent');
-  ctx.fillStyle=mg;
-  ctx.beginPath();ctx.moveTo(W*.10,H*.1);ctx.lineTo(W*.22,H*.1);ctx.lineTo(W*.55,H*.85);ctx.lineTo(W*.24,H*.85);ctx.closePath();ctx.fill();
-
-  // Mist bands
-  for(let i=0;i<7;i++){
-    ctx.globalAlpha=.05+i*.005;ctx.fillStyle='#0a1408';
-    const fy=H*.5+i*12+Math.sin(tick*.02+i)*8;
-    ctx.fillRect(0,fy,W,20);
-  }
-
-  // Cached black canopy overhead
-  const canopy=bgLayer('w6canopy',96,(c,w,h)=>{
-    c.fillStyle='#020601';c.fillRect(0,0,w,h*0.24);
-    for(let i=0;i<20;i++){
-      const cx=i*(w/20)+_bgRnd(i,41)*16;
-      const r=20+_bgRnd(i,42)*24;
-      c.fillStyle='#020601';
-      c.beginPath();c.arc(cx,h*0.24+_bgRnd(i,43)*10,r,0,Math.PI*2);c.fill();
-    }
-    // Bare branches reaching down out of the canopy. Kept short, thick and dark
-    // — long thin strokes read as scratches on the screen, not as wood.
-    c.strokeStyle='rgba(10,22,10,0.95)';c.lineWidth=3;c.lineCap='round';
-    for(let b=0;b<9;b++){
-      const bx=b*(w/9)+_bgRnd(b,44)*22;
-      c.beginPath();c.moveTo(bx,h*0.28);
-      c.lineTo(bx+6,h*0.46);c.lineTo(bx-3,h*0.60);
-      c.stroke();
-    }
-    c.lineCap='butt';
-  });
-  blitLayer(canopy,0.12,0,1);
-
-  // Eyes blinking in the dark
-  for(let e=0;e<5;e++){
-    const cycle=(tick+e*137)%420;
-    if(cycle>70)continue;
-    const ex=((e*263+140)-(camX*0.22))%W;
-    const exx=((ex%W)+W)%W;
-    const ey=H*.46+((e*89)%Math.round(H*.28));
-    ctx.globalAlpha=Math.min(1,(70-cycle)/22)*0.75;
-    ctx.fillStyle=e%2?'#ff6a4a':'#9dff6a';
-    ctx.fillRect(exx,ey,3,2);ctx.fillRect(exx+7,ey,3,2);
-    if(gl>0)bloom(exx+5,ey+1,10,e%2?'#f64':'#9f6',0.22);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 7 · TOXIC ZONE ─────────────────────────────────────────────────────────
-// A chemical refinery: tanks and chimneys venting smoke, acid haze, bubbles.
-function _atmToxic(bd,gl){
-  // The smog used to be a flat wash over the whole upper screen, which turned
-  // every pixel the same olive green and killed all contrast. Now it hugs the
-  // horizon (where the plant is) and leaves the sky above it dark.
-  ctx.globalAlpha=.17;
-  const hg=ctx.createLinearGradient(0,H*.28,0,H*.72);
-  hg.addColorStop(0,'rgba(120,150,0,0)');
-  hg.addColorStop(0.75,'rgba(140,180,0,0.40)');
-  hg.addColorStop(1,'rgba(40,60,0,0.15)');
-  ctx.fillStyle=hg;ctx.fillRect(0,H*.28,W,H*.44);
-
-  const plant=bgLayer('w7plant',170,(c,w,h)=>{
-    const base=h;
-    for(let i=0;i<5;i++){
-      const bx=i*(w/5)+10;
-      // Storage tank
-      const tw=52+_bgRnd(i,51)*26, th=44+_bgRnd(i,52)*30;
-      c.fillStyle='#101a06';c.fillRect(bx,base-th,tw,th);
-      c.fillStyle='#18280a';c.fillRect(bx+3,base-th+3,tw-6,6);
-      c.strokeStyle='rgba(190,240,40,0.20)';c.lineWidth=1;
-      c.strokeRect(bx+0.5,base-th+0.5,tw-1,th-1);
-      c.beginPath();c.moveTo(bx,base-th*0.5);c.lineTo(bx+tw,base-th*0.5);c.stroke();
-      // Chimney
-      const cx2=bx+tw+14+_bgRnd(i,53)*14, ch=80+_bgRnd(i,54)*54;
-      c.fillStyle='#0c1405';c.fillRect(cx2,base-ch,13,ch);
-      c.fillStyle='#1a2a08';c.fillRect(cx2-2,base-ch,17,6);
-      c.fillStyle='rgba(210,255,60,0.30)';c.fillRect(cx2+4,base-ch+12,5,4);
-      // Pipe run to the next unit
-      c.fillStyle='#0e1806';c.fillRect(bx,base-th-8,w/5,5);
-    }
-  });
-  blitLayer(plant,0.12,H*.78-170,0.88);
-
-  // Chimney smoke — a few soft blobs rising, cheap and only where a stack is.
-  for(let s=0;s<6;s++){
-    const sx=((s*(W/3)+60)-(camX*0.12))%W;
-    const sxx=((sx%W)+W)%W;
-    const t=(tick*0.5+s*40)%160;
-    ctx.globalAlpha=.10*(1-t/160);
-    ctx.fillStyle='#9bbf20';
-    ctx.beginPath();ctx.arc(sxx+Math.sin(t*.05)*8,H*.42-t*0.9,7+t*0.09,0,Math.PI*2);ctx.fill();
-  }
-
-  // Acid haze ellipses, kept low in the frame so they read as ground fog
-  for(let i=0,sn=Math.round(8*bd);i<sn;i++){
-    const sx=(i*193+tick*.4)%W,sy=H*.36+(i*53)%(H*.36);
-    ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;
-    ctx.fillStyle='#a8e000';
-    ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,12,0,0,Math.PI*2);ctx.fill();
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 8 · STORM PEAKS ────────────────────────────────────────────────────────
-// A heavy cloud bank with bolts that strike a DIFFERENT place every time, rain,
-// and the full-screen flash from the nearest strike.
-let _stormBolt=null;
-function _atmStorm(bd,gl){
-  // Cloud bank
-  const clouds=bgLayer('w8clouds',120,(c,w,h)=>{
-    c.fillStyle='#0b0e1c';c.fillRect(0,0,w,h*0.35);
-    for(let i=0;i<18;i++){
-      const cx=i*(w/18)+_bgRnd(i,61)*22;
-      const r=24+_bgRnd(i,62)*30;
-      c.fillStyle=i%3===0?'#101526':'#0a0e1e';
-      c.beginPath();c.arc(cx,h*0.35+_bgRnd(i,63)*16,r,0,Math.PI*2);c.fill();
-    }
-  });
-  blitLayer(clouds,0.10,0,0.95);
-
-  // A bolt every ~2.5 s, each at a fresh position with a fresh zigzag.
-  const strikeIdx=Math.floor(tick/150);
-  const phase=tick%150;
-  if(phase<10){
-    if(!_stormBolt||_stormBolt.idx!==strikeIdx){
-      _stormBolt={idx:strikeIdx,x:_bgRnd(strikeIdx,71)*W,seed:_bgRnd(strikeIdx,72)*100,
-                  len:H*(0.55+_bgRnd(strikeIdx,73)*0.4)};
-    }
-    const b=_stormBolt;
-    const fade=1-phase/10;
-    // Sky flash from the strike
-    ctx.globalAlpha=fade*0.20;ctx.fillStyle='#8899ff';ctx.fillRect(0,0,W,H);
-    // The bolt itself
-    ctx.globalAlpha=fade;
-    ctx.strokeStyle='#e8ecff';ctx.lineWidth=2;
-    if(gl>0){ctx.shadowColor='#8899ff';ctx.shadowBlur=16;}
-    ctx.beginPath();
-    let lx=b.x,ly=H*0.12;
-    ctx.moveTo(lx,ly);
-    const pts=[];
-    while(ly<b.len){
-      ly+=16;
-      lx+=Math.sin(ly*0.21+b.seed)*17;
-      ctx.lineTo(lx,ly);
-      pts.push([lx,ly]);
-    }
-    ctx.stroke();
-    // One branch off the middle
-    if(pts.length>3){
-      const p=pts[Math.floor(pts.length*0.45)];
-      ctx.lineWidth=1;ctx.globalAlpha=fade*0.6;
-      ctx.beginPath();ctx.moveTo(p[0],p[1]);
-      ctx.lineTo(p[0]+34,p[1]+30);ctx.lineTo(p[0]+22,p[1]+62);
-      ctx.stroke();
-    }
-    ctx.shadowBlur=0;
-  }
-
-  // Rain
-  ctx.globalAlpha=.18;ctx.strokeStyle='#7f90c8';ctx.lineWidth=1;
-  ctx.beginPath();
-  for(let i=0,rn=Math.round(60*bd);i<rn;i++){
-    const rx=(i*137+tick*5)%W, ry=(i*83+tick*13)%H;
-    ctx.moveTo(rx,ry);ctx.lineTo(rx-3,ry+11);
-  }
-  ctx.stroke();
-  ctx.globalAlpha=1;
-}
-
-// ── 9 · FINAL FORTRESS ─────────────────────────────────────────────────────
-// A siege wall filling the horizon: towers, buttresses, glowing furnace slits,
-// banners, and searchlights sweeping the burning sky.
-function _atmFortress(bd,gl){
-  // A burning sky, not a black one — the world was so dark that the wall, the
-  // platforms and the enemies all disappeared into the same void.
-  ctx.globalAlpha=.5;
-  const hg=ctx.createLinearGradient(0,0,0,H*.78);
-  hg.addColorStop(0,'#3a0508');hg.addColorStop(0.55,'#6a1206');hg.addColorStop(1,'#120203');
-  ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.78);
-  // Smoke bands rolling across the glow
-  ctx.globalAlpha=.16;ctx.fillStyle='#180608';
-  for(let i=0;i<5;i++){
-    const sy=H*.10+i*H*.11+Math.sin(tick*.006+i)*7;
-    ctx.beginPath();ctx.ellipse(((i*247-camX*0.05)%W+W)%W,sy,190,17,0,0,Math.PI*2);ctx.fill();
-  }
-
-  // Searchlight beams from the towers
-  for(let s=0;s<2;s++){
-    const ang=-1.15+Math.sin(tick*0.006+s*2.1)*0.42;
-    const ox=W*(0.24+s*0.52)-((camX*0.22)%W);
-    const oxx=((ox%W)+W)%W;
-    const oy=H*0.52;
-    ctx.globalAlpha=.055;
-    const bg=ctx.createLinearGradient(oxx,oy,oxx+Math.cos(ang)*H,oy+Math.sin(ang)*H);
-    bg.addColorStop(0,'#ffb070');bg.addColorStop(1,'transparent');
-    ctx.fillStyle=bg;
-    ctx.beginPath();ctx.moveTo(oxx,oy);
-    ctx.lineTo(oxx+Math.cos(ang-0.07)*H*1.1,oy+Math.sin(ang-0.07)*H*1.1);
-    ctx.lineTo(oxx+Math.cos(ang+0.07)*H*1.1,oy+Math.sin(ang+0.07)*H*1.1);
-    ctx.closePath();ctx.fill();
-  }
-
-  // The wall has to be lighter than the sky behind it, not darker: this world's
-  // background is already almost pure black, so a near-black wall was simply
-  // invisible. Reading order is stone (lit from the furnaces below) → mortar →
-  // glowing slits.
-  const wall=bgLayer('w9wall',200,(c,w,h)=>{
-    const base=h;
-    const wallH=h*0.52;
-    const stone=c.createLinearGradient(0,base-wallH,0,base);
-    stone.addColorStop(0,'#2e1116');stone.addColorStop(1,'#48181a');
-    c.fillStyle=stone;c.fillRect(0,base-wallH,w,wallH);
-    // Block courses
-    c.strokeStyle='rgba(0,0,0,0.45)';c.lineWidth=1;
-    c.beginPath();
-    for(let y=base-wallH+10;y<base;y+=14)  {c.moveTo(0,y);c.lineTo(w,y);}
-    for(let x=0;x<w;x+=26){c.moveTo(x,base-wallH);c.lineTo(x,base);}
-    c.stroke();
-    // Buttresses
-    c.fillStyle='#240d11';
-    for(let b=0;b<10;b++)c.fillRect(b*(w/10)+6,base-wallH,16,wallH);
-    // Merlons
-    c.fillStyle='#3a1417';
-    for(let m=0;m<Math.floor(w/22);m++)c.fillRect(m*22+4,base-wallH-10,12,10);
-    // Towers
-    for(let t=0;t<3;t++){
-      const tx=t*(w/3)+34, tw=46, th=wallH+40+_bgRnd(t,81)*34;
-      const tg=c.createLinearGradient(tx,base-th,tx+tw,base);
-      tg.addColorStop(0,'#3a161a');tg.addColorStop(1,'#200b0e');
-      c.fillStyle=tg;c.fillRect(tx,base-th,tw,th);
-      c.fillStyle='#451a1e';
-      for(let m=0;m<4;m++)c.fillRect(tx+2+m*12,base-th-9,8,9);
-      // Furnace slits, with a bloom around each
-      for(let r=0;r<3;r++){
-        const sy=base-th+22+r*22;
-        const gg=c.createRadialGradient(tx+tw*0.5,sy+5,1,tx+tw*0.5,sy+5,20);
-        gg.addColorStop(0,'rgba(255,140,60,0.55)');gg.addColorStop(1,'rgba(255,90,30,0)');
-        c.fillStyle=gg;c.fillRect(tx+tw*0.5-20,sy-15,40,40);
-        c.fillStyle='#ffb15a';c.fillRect(tx+tw*0.5-2,sy,4,10);
-      }
-      // Banner
-      c.fillStyle='rgba(190,30,35,0.75)';
-      c.fillRect(tx+tw+4,base-th+26,10,40);
-      c.fillStyle='rgba(255,160,60,0.5)';
-      c.fillRect(tx+tw+6,base-th+34,6,4);
-    }
-    // Wall arrow slits
-    for(let a=0;a<Math.floor(w/40);a++){
-      const ax=a*40+18, ay=base-wallH*0.55;
-      const gg=c.createRadialGradient(ax+1.5,ay+4,1,ax+1.5,ay+4,14);
-      gg.addColorStop(0,'rgba(255,110,40,0.45)');gg.addColorStop(1,'rgba(255,110,40,0)');
-      c.fillStyle=gg;c.fillRect(ax-13,ay-10,28,28);
-      c.fillStyle='#ff8a3a';c.fillRect(ax,ay,3,9);
-    }
-  });
-  blitLayer(wall,0.14,H*.86-200,0.92);
-
-  // Falling ash
-  ctx.fillStyle='#553333';
-  for(let i=0,an=Math.round(28*bd);i<an;i++){
-    const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);
-    ctx.globalAlpha=.3;ctx.fillRect(ax,ay,2,3);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 10 · PRISM ANOMALY ─────────────────────────────────────────────────────
-// The old version washed the whole upper half in a hard-edged saturated rainbow
-// band and scattered confetti over it, which read as a broken test pattern.
-// The idea here instead: reality itself is refracting. A near-black void, one
-// huge slowly-turning prism throwing a soft spectral fan across the scene,
-// panes of broken glass drifting through it, and horizontal tears where the
-// world has come apart. Colour is used sparingly so the level stays readable.
-function _atmPrism(bd,gl){
-  // A genuinely spectral sky. The first attempt at this world was a hard-edged
-  // saturated rainbow band over half the screen; the second over-corrected into
-  // a near-black void that was really just "the purple level". This is the
-  // middle ground: the WHOLE sky runs through the spectrum, smoothly, with the
-  // hue band drifting sideways over time — but at a lightness low enough that
-  // the platforms and enemies still sit clearly on top of it.
-  //
-  // Cached: an 8-stop gradient plus a full-screen fill every frame is wasteful
-  // when the only thing changing is a slow hue drift.
-  const sky=bgLayer('w10sky',H,(c,w,h)=>{
-    const g=c.createLinearGradient(0,0,0,h);
-    const t=tick*0.25;
-    for(let s=0;s<=8;s++){
-      const hue=(t+s*45)%360;
-      // Darker toward the ground so the play area keeps its contrast.
-      const light=26-s*1.6;
-      g.addColorStop(s/8,`hsl(${hue},72%,${light}%)`);
-    }
-    c.fillStyle=g;c.fillRect(0,0,w,h);
-    // Horizontal spectral shimmer so the sky isn't a flat vertical ramp
-    const hg=c.createLinearGradient(0,0,w,0);
-    for(let s=0;s<=6;s++)hg.addColorStop(s/6,`hsla(${(t*1.7+s*60)%360},90%,55%,0.10)`);
-    c.fillStyle=hg;c.fillRect(0,0,w,h);
-  },14);
-  ctx.globalAlpha=1;
-  ctx.drawImage(sky.cv,0,0,W,H);
-
-  // Spectral aurora curtains drifting across the sky
-  for(let a=0;a<4;a++){
-    const phase=tick*0.006+a*1.4;
-    const ax=((a*W*0.31+Math.sin(phase)*70-camX*0.05)%W+W)%W;
-    const hue=(tick*0.9+a*90)%360;
-    ctx.globalAlpha=.10+Math.sin(phase*1.7)*.04;
-    const ag=ctx.createLinearGradient(ax,0,ax+90,H*0.8);
-    ag.addColorStop(0,'transparent');
-    ag.addColorStop(.5,`hsl(${hue},95%,62%)`);
-    ag.addColorStop(1,'transparent');
-    ctx.fillStyle=ag;ctx.fillRect(ax,0,90,H*0.8);
-  }
-  ctx.globalAlpha=1;
-
-  _atmStars(Math.round(40*bd),H*.8,'#ffffff',gl);
-
-  // The prism: a slowly rotating triangle high in the sky.
-  const pcx=W*0.5+Math.sin(tick*0.0035)*W*0.16, pcy=H*0.20, pr=34;
-  const rot=tick*0.004;
-
-  // Refraction fan — wide, very soft, spreading DOWN from the prism. Each ray is
-  // a triangle with a gradient so there is no visible edge.
-  // Deliberately faint and fading out well before the ground: at full strength
-  // the fan lit up the entire play area and the player lost track of the
-  // platforms behind a wall of colour.
-  //
-  // Seven full-height gradient triangles per frame was the single most
-  // expensive thing left in any background (0.59 ms). The prism drifts and the
-  // hues rotate slowly, so the whole fan is cached and refreshed a few times a
-  // second instead — indistinguishable in motion, ~10× cheaper.
-  const fan=bgLayer('w10fan',H,(c,w,h)=>{
-    for(let r=0;r<7;r++){
-      const hue=(r*46+tick*0.35)%360;
-      const spread=0.10+r*0.045;
-      const a0=Math.PI*0.5-0.36+r*0.12;
-      const g=c.createLinearGradient(pcx,pcy,pcx+Math.cos(a0)*h*1.2,pcy+Math.sin(a0)*h*1.2);
-      g.addColorStop(0,`hsla(${hue},95%,65%,0.16)`);
-      g.addColorStop(0.45,`hsla(${hue},95%,62%,0.05)`);
-      g.addColorStop(1,`hsla(${hue},95%,60%,0)`);
-      c.fillStyle=g;
-      c.beginPath();c.moveTo(pcx,pcy);
-      c.lineTo(pcx+Math.cos(a0-spread*0.5)*h*1.3,pcy+Math.sin(a0-spread*0.5)*h*1.3);
-      c.lineTo(pcx+Math.cos(a0+spread*0.5)*h*1.3,pcy+Math.sin(a0+spread*0.5)*h*1.3);
-      c.closePath();c.fill();
-    }
-  },10);
-  ctx.globalAlpha=1;
-  ctx.drawImage(fan.cv,0,0,W,H);
-
-  // Incoming white beam that feeds the prism
-  const ig=ctx.createLinearGradient(pcx-260,pcy-150,pcx,pcy);
-  ig.addColorStop(0,'rgba(255,255,255,0)');
-  ig.addColorStop(1,'rgba(255,255,255,0.22)');
-  ctx.fillStyle=ig;
-  ctx.beginPath();ctx.moveTo(pcx-280,pcy-168);ctx.lineTo(pcx-268,pcy-150);ctx.lineTo(pcx,pcy+3);ctx.lineTo(pcx,pcy-9);ctx.closePath();ctx.fill();
-
-  // The prism body
-  ctx.save();ctx.translate(pcx,pcy);ctx.rotate(rot);
-  const pg=ctx.createLinearGradient(-pr,-pr,pr,pr);
-  pg.addColorStop(0,'rgba(200,225,255,0.50)');
-  pg.addColorStop(0.5,'rgba(120,150,220,0.22)');
-  pg.addColorStop(1,'rgba(255,255,255,0.42)');
-  ctx.fillStyle=pg;
-  ctx.beginPath();ctx.moveTo(0,-pr);ctx.lineTo(pr*0.92,pr*0.62);ctx.lineTo(-pr*0.92,pr*0.62);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='rgba(230,240,255,0.75)';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.restore();
-  if(gl>0)bloom(pcx,pcy,pr*2.1,'#cfe0ff',0.30);
-
-  // Drifting glass panes — thin parallelograms catching a single hue each.
-  for(let i=0,sn=Math.round(14*bd);i<sn;i++){
-    const sx=(i*151+tick*.35)%W, sy=(i*97+tick*.16)%(H*0.9);
-    const hue=(i*37+tick*1.1)%360;
-    const a=tick*0.008+i;
-    const sz=7+((i*7)%9);
-    ctx.save();ctx.translate(sx,sy);ctx.rotate(a);
-    ctx.globalAlpha=.16+Math.sin(tick*.03+i)*.07;
-    ctx.fillStyle=`hsl(${hue},90%,70%)`;
-    ctx.beginPath();ctx.moveTo(-sz,-sz*0.35);ctx.lineTo(sz*0.6,-sz*0.7);ctx.lineTo(sz,sz*0.35);ctx.lineTo(-sz*0.6,sz*0.7);ctx.closePath();ctx.fill();
-    ctx.globalAlpha=.30;ctx.strokeStyle=`hsl(${hue},100%,85%)`;ctx.lineWidth=1;ctx.stroke();
-    ctx.restore();
-  }
-
-  // Reality tears: thin horizontal rifts that slide and flicker.
-  for(let t=0;t<4;t++){
-    const ty=H*(0.18+t*0.19)+Math.sin(tick*0.01+t*2)*8;
-    const tw=W*(0.3+_bgRnd(t,91)*0.4);
-    const tx=((t*263+tick*0.6)%(W+tw))-tw;
-    const flick=0.10+Math.abs(Math.sin(tick*0.05+t))*0.14;
-    const hue=(t*90+tick*0.8)%360;
-    const g=ctx.createLinearGradient(tx,0,tx+tw,0);
-    g.addColorStop(0,`hsla(${hue},95%,70%,0)`);
-    g.addColorStop(0.5,`hsla(${hue},95%,70%,${flick})`);
-    g.addColorStop(1,`hsla(${hue},95%,70%,0)`);
-    ctx.fillStyle=g;ctx.fillRect(tx,ty,tw,1.5);
-  }
-  ctx.globalAlpha=1;
-}
-
-const WORLD_ATMOSPHERE={
-  0:_atmCyberCity, 1:_atmJungle, 2:_atmLava, 3:_atmIce, 4:_atmDesert,
-  5:_atmSpace, 6:_atmDarkForest, 7:_atmToxic, 8:_atmStorm, 9:_atmFortress,
-  10:_atmPrism,
-};
+// Многослойные фоны миров удалены: их заменил один запечённый слой
+// (assets/backdrops.js). Здесь было ~950 строк — небо, зарево, дымка, звёзды,
+// светлячки, окна домов и полосы силуэтов с параллаксом у каждого из 11 миров.
 
 function drawBG(){
-  // Sky + horizon glow + ground haze are three full-screen fills that depend on
-  // nothing but the theme, yet they were re-run every frame. Baked into a single
-  // cached tile: one drawImage replaces three screen-sized paints, which is the
-  // kind of thing that actually costs on a weak GPU (fill rate), not on a
-  // desktop where it barely shows up in a timer.
-  const skyTile=bgLayer('sky',H,(c,w,h)=>{
-    const g=c.createLinearGradient(0,0,0,h);
-    g.addColorStop(0,CT.bg);
-    g.addColorStop(0.6,CT.bg2||CT.bg);
-    g.addColorStop(1,CT.bg2||CT.bg);
-    c.fillStyle=g;c.fillRect(0,0,w,h);
-    const hg=c.createLinearGradient(0,h*0.62,0,h);
-    hg.addColorStop(0,'transparent');
-    hg.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
-    c.globalAlpha=0.5;c.fillStyle=hg;c.fillRect(0,h*0.62,w,h*0.38);
-    c.globalAlpha=0.06;c.fillStyle=CT.grid||CT.mc||'#48f';c.fillRect(0,h*0.78,w,h*0.22);
-    c.globalAlpha=1;
-  });
-  ctx.globalAlpha=1;
-  ctx.drawImage(skyTile.cv,0,0,W,H);
-
-  const id=CT.id;
-
-  // Background-detail + glow budget for this tier. bd scales every decorative
-  // element count (stars, embers, fireflies, window lights…); gl gates shadowBlur.
-  const bd=(typeof GFX==='object'&&GFX&&typeof GFX.bgDetail==='number')?GFX.bgDetail:1;
-  const gl=(typeof GFX==='object'&&GFX&&typeof GFX.glow==='number')?GFX.glow:1;
-
-  // VERYLOW / "microwave" path: the per-theme parallax skylines, window-light
-  // grids and dense particle fields are the heaviest per-frame work in the whole
-  // game. On the lowest tier (or when the adaptive limiter has driven bgDetail
-  // right down) skip all of it and draw just a cheap sparse star field over the
-  // cached sky+horizon. Gameplay readability is unaffected.
-  // There used to be a "microwave" bail-out here that replaced every world's
-  // backdrop with a bare starfield whenever bgDetail dropped below 0.4 — so on
-  // the lowest graphics tier all ten worlds looked identical. That existed
-  // because the skylines and window grids were rebuilt from scratch every
-  // frame; now the heavy layers are cached tiles (two drawImage calls each) and
-  // every remaining element already scales its count by `bd`, so the low tier
-  // can keep its atmosphere and simply gets a thinner version of it.
-
-  // ── Per-theme atmospheric elements ────────────
-  ctx.save();
-
-  _bgRebuildBudget=1; // see bgLayer(): one cached layer may re-rasterise per frame
-  const atm=WORLD_ATMOSPHERE[id];
-  if(atm)atm(bd,gl);
-
-  // Parallax silhouette bands. Drawn last so they sit in FRONT of the sky
-  // washes/stars/embers above (they are the nearest background layer) but still
-  // behind everything the camera transform moves.
-  drawWorldScenery(id,bd);
-
-  ctx.restore();
+  // Фон — ОДИН слой, запечённый в холст (assets/backdrops.js).
+  //
+  // Раньше здесь собиралась многослойная сцена: небо, зарево, дымка, звёзды,
+  // светлячки, окна домов и полосы силуэтов с параллаксом — всё заново каждый
+  // кадр. Слои наезжали друг на друга, мир читался как каша, а на слабом
+  // устройстве это была самая дорогая работа за кадр.
+  //
+  // Теперь полотно печётся один раз на мир и размер экрана, а в кадре стоит
+  // два drawImage со сдвигом. Ничего лишнего — небо, линия горизонта и один
+  // акцент, если он этот мир характеризует.
+  if(window.BBBackdrop){ window.BBBackdrop.draw(ctx,W,H,CT,camX); return; }
+  // Запасной путь, если модуль фонов почему-то не загрузился.
+  ctx.fillStyle=CT.bg||'#04040f';ctx.fillRect(0,0,W,H);
 }
 function drawGrid(){
   ctx.save();ctx.globalAlpha=.04;ctx.strokeStyle=CT.grid;ctx.lineWidth=1;
@@ -11090,7 +10218,13 @@ function patchedStartInf(fresh=true){
 // checkpoint-resume logic lives in _doRunLevel; keep this in sync but know it
 // does not run at runtime.
 function patchedStartAdv(n,freshLives=false){
-  if(freshLives){lives=3;cpSave=null;}
+  // В хардкоре запас общий на весь мир и переносится между уровнями;
+  // в обычном режиме — свой на каждый заход.
+  if(hardMode&&advMode){
+    _hardEnterWorld(n);
+    if(freshLives)cpSave=null;
+    lives=hardWorldLives;
+  } else if(freshLives){lives=3;cpSave=null;}
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   if(infiniteLives)lives=99;
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -11105,6 +10239,7 @@ function patchedStartAdv(n,freshLives=false){
     spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
     player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
     player.cpX=spawnX;player.cpY=spawnY;
+    _restoreCpWorld();
   }
   initP2();
   timeLeft=lvlTime(n);timMax=timeLeft;

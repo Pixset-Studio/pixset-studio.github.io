@@ -212,6 +212,35 @@
   // ═══════════════════════════════════════════════
 
   let mapCanvas, mapCtx;
+
+  /**
+   * Текст, отцентрованный по САМИМ ЧЕРНИЛАМ глифа, а не по эм-квадрату шрифта.
+   *
+   * textBaseline='middle' центрирует по метрике шрифта, в которую заложены
+   * подстрочные и надстрочные запасы. Для цифр видимый центр оказывается выше
+   * геометрического, и номер уровня сидит в кружке не по центру. Раньше это
+   * лечили сдвигом на один пиксель — но подходил он ровно для одного размера
+   * шрифта, а на телефоне и кружки, и шрифт другие.
+   *
+   * Здесь берём фактические границы отрисованных пикселей и по ним и центруем.
+   * Заодно округляем до целых пикселей устройства: на дробной позиции глиф
+   * размывается, и это тоже читается как «криво».
+   */
+  function inkText(ctx, text, cx, cy) {
+    const s = String(text);
+    const m = ctx.measureText(s);
+    const l = m.actualBoundingBoxLeft, r = m.actualBoundingBoxRight;
+    const a = m.actualBoundingBoxAscent, d = m.actualBoundingBoxDescent;
+    const ok = [l, r, a, d].every(v => typeof v === 'number' && isFinite(v));
+    if (!ok) { ctx.fillText(s, cx, cy); return; }   // старый движок — как было
+    const prevAlign = ctx.textAlign, prevBase = ctx.textBaseline;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    const snap = (v) => Math.round(v * mapDpr) / mapDpr;
+    ctx.fillText(s, snap(cx - (r - l) / 2), snap(cy + (a - d) / 2));
+    ctx.textAlign = prevAlign;
+    ctx.textBaseline = prevBase;
+  }
   let mapOverlay;
   // Live canvas dimensions (follow the window/resolution) and node-size factor.
   // mapW/mapH are LOGICAL (CSS) pixels — all drawing uses them. mapDpr is the
@@ -243,6 +272,8 @@
     // proportional squeeze can otherwise slide the bottom node under the level
     // panel on a very short screen.
     let centreTop = 0, centreBot = Infinity;
+    // Фактические границы панелей — по ним доводим кольцо к центру экрана.
+    let chromeTop = 0, chromeBot = mapH;
     let mapRects = null;
     if (mapOverlay) {
       const rectOf = sel => {
@@ -254,11 +285,12 @@
       mapRects = rectOf;
       let topB = 0;
       [rectOf('#mapHudTL'), rectOf('#mapAchBtn'), rectOf('#mapWorldTitle')].forEach(r => { if (r) topB = Math.max(topB, r.bottom); });
-      if (topB > 0) PAD_T = clampN(topB + 16, 90, mapH * 0.42);
+      if (topB > 0) { PAD_T = clampN(topB + 16, 90, mapH * 0.42); chromeTop = topB; }
       let botTop = mapH;
       ['#mapZoneTag', '#mapBackTouch', '#mapKbdHint', '#mapLevelPanel'].forEach(sel => {
         const r = rectOf(sel); if (r) botTop = Math.min(botTop, r.top);
       });
+      if (botTop < mapH) chromeBot = botTop;
       const measuredB = botTop < mapH ? (mapH - botTop) : 0;
       PAD_B = clampN(Math.max(measuredB + 16, 150), 110, mapH * 0.46);
       // Keep clear of the left/right arrow buttons too. Their edges double as
@@ -290,10 +322,26 @@
     [PAD_T, PAD_B] = squeeze(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5), 0, 0);
     [PAD_L, PAD_R] = squeeze(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6), ARROW_L, ARROW_R);
 
+    // Кольцо ставим ровно в центр ЭКРАНА, а не в центр свободной полосы.
+    // Отступы сверху и снизу (заголовок против панели уровня) и слева-справа
+    // (стрелки миров) почти никогда не равны, и центр полосы оказывается
+    // смещённым — на телефоне это сразу заметно как перекос. Берём больший из
+    // двух отступов на обе стороны: так кольцо и стоит по центру, и по-прежнему
+    // не залезает ни под одну панель. Если после выравнивания места остаётся
+    // слишком мало, возвращаемся к прежнему несимметричному варианту — лучше
+    // небольшой перекос, чем узлы под панелью.
+    const centreBand = (padA, padB, total, minBand) => {
+      const p = Math.max(padA, padB);
+      return (total - 2 * p >= minBand) ? [p, p] : [padA, padB];
+    };
+    [PAD_T, PAD_B] = centreBand(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5));
+    [PAD_L, PAD_R] = centreBand(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6));
+
     const safeX = PAD_L, safeY = PAD_T;
     const safeW = Math.max(120, mapW - PAD_L - PAD_R);
     const safeH = Math.max(90, mapH - PAD_T - PAD_B);
-    const cx = safeX + safeW / 2, cy = safeY + safeH / 2;
+    // Не const: ниже кольцо ещё придвигается к центру экрана.
+    let cx = safeX + safeW / 2, cy = safeY + safeH / 2;
 
     // Game Scale widens/narrows the ring radius.
     const gs = (window.gameSettings && window.gameSettings.gameScale) || 0;
@@ -394,6 +442,25 @@
       if (rx > ry * RATIO_MAX) rx = ry * RATIO_MAX;
     }
     nodeScale = rTarget / 16; // 16 = base normal-node radius
+
+    // ── Доводка до центра экрана ────────────────────────────────────────
+    // Выше кольцо ставилось в середину СВОБОДНОЙ ПОЛОСЫ между панелями. Но
+    // сверху и снизу их высота разная (заголовок мира выше, чем нижняя
+    // панель), и центр полосы не совпадает с центром экрана: на портретном
+    // телефоне кольцо уезжало вниз почти на сотню пикселей.
+    //
+    // Само кольцо при этом обычно заметно меньше доступного места — его
+    // ограничивают стрелки миров по бокам. Значит, его можно просто придвинуть
+    // к центру экрана: настолько, насколько позволяют панели, и ни пикселем
+    // больше. Если места нет вовсе, останется как было.
+    const pull = (c, r, total, padA, padB) => {
+      const half = r + rTarget + 4;          // радиус кольца плюс сам узел
+      const lo = padA + half, hi = total - padB - half;
+      if (hi < lo) return c;                 // места нет — не трогаем
+      return clampN(total / 2, lo, hi);
+    };
+    cx = pull(cx, rx, mapW, PAD_L, PAD_R);
+    cy = pull(cy, ry, mapH, Math.max(PAD_T, chromeTop + 6), Math.max(PAD_B, mapH - chromeBot + 6));
 
     const w = MAP_STATE.activeWorld;
     const startIdx = w * LEVELS_PER_WORLD;
@@ -1065,7 +1132,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = accent;
-    ctx.fillText(world.icon, pos.cx, pos.cy);
+    inkText(ctx, world.icon, pos.cx, pos.cy);
     ctx.restore();
   }
 
@@ -1193,38 +1260,38 @@
       ctx.globalAlpha = 0.15;
       ctx.font = `bold ${R * 0.4}px "Share Tech Mono", monospace`;
       ctx.fillStyle = '#666';
-      ctx.fillText(level.num, level.x, level.y + R * 0.7);
+      inkText(ctx, level.num, level.x, level.y + R * 0.7);
     } else if (level.completed) {
       // Checkmark on top
       ctx.font = `bold ${R * 0.7}px monospace`;
       ctx.fillStyle = '#00ee44';
       ctx.shadowBlur = 14;
       ctx.shadowColor = '#00ff44';
-      ctx.fillText('✓', level.x, level.y - R * 0.25);
+      inkText(ctx, '✓', level.x, level.y - R * 0.25);
       // Level number below checkmark
       ctx.shadowBlur = 0;
       ctx.font = `bold ${R * 0.45}px "Share Tech Mono", monospace`;
       ctx.fillStyle = worldAccent(world);
       ctx.globalAlpha = 0.7;
-      ctx.fillText(level.num, level.x, level.y + R * 0.35);
+      inkText(ctx, level.num, level.x, level.y + R * 0.35);
     } else if (level.type === 'boss') {
       // Boss icon on top
       ctx.font = `bold ${R * 0.65}px monospace`;
       ctx.fillStyle = worldAccent(world);
       ctx.shadowBlur = isCurrent ? 14 : 0;
       ctx.shadowColor = worldAccent(world);
-      ctx.fillText('👑', level.x, level.y - R * 0.2);
+      inkText(ctx, '👑', level.x, level.y - R * 0.2);
       // Level number below crown
       ctx.shadowBlur = 0;
       ctx.font = `bold ${R * 0.4}px "Share Tech Mono", monospace`;
-      ctx.fillText(level.num, level.x, level.y + R * 0.4);
+      inkText(ctx, level.num, level.x, level.y + R * 0.4);
     } else {
       // Level number (centered)
       ctx.font = `bold ${R * 0.55}px "Share Tech Mono", monospace`;
       ctx.fillStyle = worldAccent(world);
       ctx.shadowBlur = isCurrent ? 12 : 0;
       ctx.shadowColor = worldAccent(world);
-      ctx.fillText(level.num, level.x, level.y + 1);
+      inkText(ctx, level.num, level.x, level.y);
     }
 
     // Star rating row (completed levels only): 3 tiny stars below the node.
