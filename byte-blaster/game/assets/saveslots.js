@@ -31,9 +31,9 @@
     // on a phone instead of being clipped — matching how the game UI is fitted.
     overlay.innerHTML = `
       <div id="slotInner" style="display:flex;flex-direction:column;align-items:center;transform-origin:center center;">
-        <h2 data-i18n="selectSave" style="color:#0ff;font-size:18px;letter-spacing:4px;text-shadow:0 0 14px #0ff;margin-bottom:22px;">SELECT SAVE</h2>
+        <h2 data-i18n="selectSave" style="color:#0ff;font-size:calc(18px * var(--bbText, 1));letter-spacing:4px;text-shadow:0 0 14px #0ff;margin-bottom:22px;">SELECT SAVE</h2>
         <div id="slotCards" style="display:flex;gap:18px;flex-wrap:nowrap;justify-content:center;"></div>
-        <button id="slotBackBtn" data-i18n="back" style="margin-top:24px;padding:10px 20px;font-family:'Press Start 2P',monospace;font-size:10px;background:#0a0a20;color:#4af;border:2px solid #4af;border-radius:4px;cursor:pointer;">← BACK [ESC]</button>
+        <button id="slotBackBtn" data-i18n="back" style="margin-top:24px;padding:10px 20px;font-family:'Press Start 2P',monospace;font-size:calc(10px * var(--bbText, 1));background:#0a0a20;color:#4af;border:2px solid #4af;border-radius:4px;cursor:pointer;">← BACK [ESC]</button>
       </div>
     `;
     document.body.appendChild(overlay);
@@ -79,25 +79,25 @@
       border-radius: 8px; padding: 18px; text-align: center;
       box-shadow: ${active ? '0 0 18px #0ff5' : 'none'};`;
 
-    const title = `<div style="color:${accent};font-size:13px;letter-spacing:2px;margin-bottom:12px;">${T('slot')} ${i + 1}</div>`;
+    const title = `<div style="color:${accent};font-size:calc(13px * var(--bbText, 1));letter-spacing:2px;margin-bottom:12px;">${T('slot')} ${i + 1}</div>`;
 
     let body, actions;
     if (s.empty) {
-      body = `<div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#556;letter-spacing:2px;margin:18px 0;" data-i18n="slotEmpty">— EMPTY —</div>`;
-      actions = `<button class="slotPlay" style="width:100%;padding:10px;margin-top:8px;font-family:'Press Start 2P',monospace;font-size:9px;background:#0a0a20;color:#0f8;border:2px solid #0f8;border-radius:4px;cursor:pointer;">${T('slotNewGame')}</button>`;
+      body = `<div style="font-family:'Share Tech Mono',monospace;font-size:calc(11px * var(--bbText, 1));color:#556;letter-spacing:2px;margin:18px 0;" data-i18n="slotEmpty">— EMPTY —</div>`;
+      actions = `<button class="slotPlay" style="width:100%;padding:10px;margin-top:8px;font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbText, 1));background:#0a0a20;color:#0f8;border:2px solid #0f8;border-radius:4px;cursor:pointer;">${T('slotNewGame')}</button>`;
     } else {
       const updated = s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : '';
       body = `
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#9cf;line-height:2;text-align:left;margin:6px 2px 14px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:calc(10px * var(--bbText, 1));color:#9cf;line-height:2;text-align:left;margin:6px 2px 14px;">
           <div>${T('slotLevels', s.done, _slotTotal(s.done))}</div>
           <div>${T('slotHardcore', s.doneH, _slotTotal(s.doneH))}</div>
           <div>${T('slotAch', s.ach)}</div>
           <div>${T('slotBest', s.best)}</div>
-          ${updated ? `<div style="color:#456;font-size:8px;margin-top:4px;">${updated}</div>` : ''}
+          ${updated ? `<div style="color:#456;font-size:calc(8px * var(--bbText, 1));margin-top:4px;">${updated}</div>` : ''}
         </div>`;
       actions = `
-        <button class="slotPlay" style="width:100%;padding:10px;font-family:'Press Start 2P',monospace;font-size:9px;background:#0a0a20;color:#0ff;border:2px solid #0ff;border-radius:4px;cursor:pointer;">${T('slotContinue')}</button>
-        <button class="slotDel" style="width:100%;padding:8px;margin-top:8px;font-family:'Press Start 2P',monospace;font-size:8px;background:#0a0a20;color:#f55;border:2px solid #f55;border-radius:4px;cursor:pointer;">${T('slotDelete')}</button>`;
+        <button class="slotPlay" style="width:100%;padding:10px;font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbText, 1));background:#0a0a20;color:#0ff;border:2px solid #0ff;border-radius:4px;cursor:pointer;">${T('slotContinue')}</button>
+        <button class="slotDel" style="width:100%;padding:8px;margin-top:8px;font-family:'Press Start 2P',monospace;font-size:calc(8px * var(--bbText, 1));background:#0a0a20;color:#f55;border:2px solid #f55;border-radius:4px;cursor:pointer;">${T('slotDelete')}</button>`;
     }
     el.innerHTML = title + body + actions;
 

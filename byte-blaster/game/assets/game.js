@@ -301,6 +301,42 @@ function prismFilter(hue,sat,bright){
   const h=(((hue-_PRISM_SEPIA_HUE)%360)+360)%360;
   return 'grayscale(1) sepia(1) saturate('+(sat||7)+') hue-rotate('+h+'deg) brightness('+(bright||1.15)+')';
 }
+
+// ── Преломление объектов: включено или нет ─────────────────────────────────
+// ctx.filter — самая дорогая операция canvas2d: каждый объект с фильтром
+// уходит в отдельный проход растеризации. Замер на этой же машине: двадцать
+// кирпичей с этим фильтром — 145 мс на кадр против 0.9 мс без него, при
+// бюджете кадра 16.7 мс. Квантование оттенка (оно уже было) стоимость
+// уменьшает, но не меняет порядок. Именно это и делает 11-й мир неиграбельным
+// на телефоне, где GPU слабее, а экран плотнее.
+//
+// Настройка «Радужный мир → Преломление» (вкладка «Графика») оставляет выбор
+// игроку: 'on' — как задумано, 'off' — кирпичи, шипы и враги в своих обычных
+// цветах, 'auto' — выключено там, где не потянет. Всё остальное (спектральное
+// небо, призма, платформы, декор) работает в любом случае: оно рисуется
+// градиентами и кэшируется, фильтров там нет.
+const _prismIsTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+function prismFxOn(){
+  const s=window.gameSettings;
+  const v=(s&&s.prismFx)||'auto';
+  if(v==='on')return true;
+  if(v==='off')return false;
+  if(_prismIsTouch||(s&&s.touchControls==='on'))return false;   // телефон/планшет
+  const g=(s&&s.gfx)||{};                                        // слабый тир графики
+  return !((g.glow!=null&&g.glow<0.6)||(g.bgDetail!=null&&g.bgDetail<0.6));
+}
+window.prismFxOn=prismFxOn;
+// Дешёвая замена преломлению для КИРПИЧЕЙ. Блок — непрозрачный прямоугольник,
+// поэтому подкрасить его можно обычным fillRect поверх: фон вокруг не задет,
+// а мир не выглядит так, будто кирпичи привезли из соседнего уровня. Для шипов
+// и врагов такой приём не годится — они не прямоугольные, и заливка испачкала
+// бы фон внутри их габаритов (ровно поэтому здесь и появился фильтр).
+function prismTintRect(x,y,w,h,hue){
+  ctx.globalAlpha=0.42;
+  ctx.fillStyle='hsl('+hue+',85%,55%)';
+  ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1;
+}
 // transition wipe in every world whose main colour is shorthand.
 // This expands shorthand first, so the result is always a valid 8-digit hex.
 function withAlpha(col,aa){
@@ -525,18 +561,24 @@ function tone(freq,type,dur,vol=.22,dst=null,detune=0){
     o.connect(g);o.start(now);o.stop(now+dur+.02);
   }catch(e){}
 }
-function sweep(f0,f1,type,dur,vol=.2,dst=null){
+// atk — время нарастания. Без него свип всегда врубается на полной громкости и
+// щёлкает; нарастающим звукам (зарядка, щит) это нужно.
+function sweep(f0,f1,type,dur,vol=.2,dst=null,atk=0){
   if(!AC||!audioOn)return;
   try{
     const now=AC.currentTime;
     const g=AC.createGain();g.connect(dst||SG);
-    g.gain.setValueAtTime(vol,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);
+    if(atk>0){g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(vol,now+atk);}
+    else g.gain.setValueAtTime(vol,now);
+    g.gain.exponentialRampToValueAtTime(.0001,now+dur);
     const o=AC.createOscillator();o.type=type;
     o.frequency.setValueAtTime(f0,now);o.frequency.exponentialRampToValueAtTime(f1,now+dur);
     o.connect(g);o.start(now);o.stop(now+dur+.02);
   }catch(e){}
 }
-function noise(dur,vol=.15,dst=null){
+// flt — {type,freq,Q}. Белый шум звучит как помеха; отфильтрованный читается
+// как материал: полосовой — металл, низкочастотный — земля, высокий — воздух.
+function noise(dur,vol=.15,dst=null,flt=null){
   if(!AC||!audioOn)return;
   try{
     const now=AC.currentTime,sz=AC.sampleRate*dur|0;
@@ -545,49 +587,46 @@ function noise(dur,vol=.15,dst=null){
     const src=AC.createBufferSource();src.buffer=buf;
     const g=AC.createGain();g.connect(dst||SG);
     g.gain.setValueAtTime(vol,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);
-    src.connect(g);src.start(now);
+    if(flt){
+      const bq=AC.createBiquadFilter();bq.type=flt.type;bq.frequency.value=flt.freq;
+      if(flt.Q)bq.Q.value=flt.Q;
+      src.connect(bq);bq.connect(g);
+    }else src.connect(g);
+    src.start(now);
   }catch(e){}
 }
 
 // ── SFX library (procedural fallback). When the baked .mp3 samples are loaded
 // (window.AudioFiles), the wrapper SFX below plays those instead — cheaper and
 // glitch-free on phones. Names here MUST match the SFX file names.
-const SFX_PROC={
-  jump(){sweep(280,540,'square',.12,.18);noise(.04,.05);},
-  dblJump(){sweep(440,800,'square',.1,.16);setTimeout(()=>sweep(600,1000,'square',.08,.12),55);},
-  land(){/* quiet landing */},
-  shoot(){sweep(900,600,'square',.07,.2);tone(1200,'square',.03,.1);},
-  coin(){tone(988,'triangle',.05,.12);tone(880,'sine',.06,.2);setTimeout(()=>tone(1320,'sine',.07,.18),55);setTimeout(()=>tone(1760,'sine',.05,.1),110);},
-  powerup(){[440,550,660,880,1100,1320].forEach((f,i)=>setTimeout(()=>tone(f,'square',.12,.25),i*60));setTimeout(()=>{tone(1760,'sine',.3,.12);tone(2640,'sine',.25,.07);},380);},
-  stomp(){noise(.05,.28);sweep(220,70,'sine',.12,.26);tone(160,'square',.06,.16);},
-  hit(){sweep(300,120,'sawtooth',.09,.22);noise(.04,.2);},
-  enemyDie(){sweep(440,110,'sawtooth',.18,.24);noise(.06,.18);tone(80,'sine',.12,.16);},
-  playerHurt(){sweep(600,80,'sawtooth',.3,.28);noise(.12,.25);tone(100,'square',.4,.22);},
-  block(){tone(220,'square',.06,.22);noise(.03,.15);},
-  clear(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,'square',.18,.28),i*100));},
-  menu(){tone(660,'square',.05,.14);setTimeout(()=>tone(880,'square',.05,.12),50);},
-  back(){tone(440,'square',.05,.14);setTimeout(()=>tone(330,'square',.05,.12),50);},
-  pause(){sweep(440,880,'sine',.12,.18);},
-  resume(){sweep(880,440,'sine',.12,.18);},
-  timerTick(){/* removed — was causing annoying persistent beep */},
-  flagReach(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,'square',.14,.3),i*80));},
-  respawn(){[300,440,600].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.08,.18),i*75));},
-  timeLow(){/* removed */},
-  secret(){[440,495,523,587,659,698,784,880].forEach((f,i)=>setTimeout(()=>tone(f,'triangle',.1,.18),i*55));},
-  // Triumphant fanfare for unlocking an achievement (chord arpeggio + sparkle).
-  achievement(){
-    [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,'square',.22,.26),i*70));
-    setTimeout(()=>{tone(1319,'triangle',.45,.22);tone(1047,'triangle',.45,.16);},300);
-    setTimeout(()=>tone(1568,'sine',.3,.14),380);
-  },
-  droneBuzz(){tone(180,'sawtooth',.08,.08);},
-  walk(){noise(.03,.06);}, // light footstep
-  // Classic RPG-style dialogue "blip": short, high-pitched, fast-decay pulse
-  // played per revealed character during the cutscene typewriter effect (see
-  // _csShowLine). Slight per-call pitch jitter keeps a whole sentence from
-  // sounding like a single repeated beep.
-  voiceBlip(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);},
-};
+// Звуки описаны в assets/sfx-data.js — там же, откуда их берёт генератор mp3.
+// Раньше определения жили двумя копиями и разъезжались, а часть была пустыми
+// заглушками: land() не издавал вообще ничего.
+const SFX_PROC={};
+(function(){
+  const D=window.BBSfx;
+  if(!D)return;
+  const play=(ev)=>{
+    const go=()=>{
+      if(ev.k==='tone')tone(ev.f,ev.type,ev.dur,ev.vol,null,ev.detune||0);
+      else if(ev.k==='sweep')sweep(ev.f0,ev.f1,ev.type,ev.dur,ev.vol,null,ev.attack||0);
+      else if(ev.k==='noise')noise(ev.dur,ev.vol,null,ev.filter||null);
+    };
+    // Ноль играем сразу: на нулевой задержке setTimeout только добавил бы
+    // дрожание там, где точность важнее всего — в момент удара.
+    if(ev.start>0.001)setTimeout(go,ev.start*1000); else go();
+  };
+  for(const name of D.names){
+    const evs=D.SFX[name];
+    SFX_PROC[name]=function(){ for(let i=0;i<evs.length;i++)play(evs[i]); };
+  }
+})();
+// Реплика диалогов: высота меняется от вызова к вызову, поэтому запечь её в
+// файл нельзя — получился бы один и тот же повторяющийся писк.
+SFX_PROC.voiceBlip=function(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);};
+// Убраны намеренно: постоянный писк таймера раздражал.
+SFX_PROC.timerTick=function(){};
+SFX_PROC.timeLow=function(){};
 // Public SFX: prefer the baked .mp3 sample, fall back to the procedural voice.
 // Built as a wrapper over SFX_PROC so every existing SFX.xxx() call site is
 // unchanged. Empty procedural entries (land/timerTick/timeLow) just no-op.
@@ -639,23 +678,8 @@ function _drumSnare(now,vol){
 }
 function hz(b,s){return b*Math.pow(2,s/12);}
 const SC={PENT:[0,2,4,7,9,12,14,16],MIN:[0,3,5,7,10,12,15,17],HARM:[0,2,3,7,8,12,14,15],CHR:[0,1,4,7,8,12,13,16],DORI:[0,2,3,7,9,12,14,15]};
-const MMUSIC={bpm:118,base:261.63,sc:SC.PENT,wave:'square',   mel:[0,4,7,9,7,4,2,0,9,7,4,2,0,2,4,7],bass:[0,0,7,0,5,0,7,0]};
-const GMUSIC=[
-  {bpm:140,base:261.63,sc:SC.PENT,wave:'square',   mel:[0,4,7,12,7,4,2,0,4,7,9,12,9,7,4,2],bass:[0,0,7,0,7,0,5,0]},
-  {bpm:128,base:220,   sc:SC.MIN, wave:'sawtooth', mel:[0,3,7,10,7,3,5,0,3,5,7,10,7,5,3,0],bass:[0,0,5,3,7,0,5,3]},
-  {bpm:162,base:293.66,sc:SC.HARM,wave:'sawtooth', mel:[0,2,7,8,7,2,3,0,2,7,8,12,8,7,2,0],bass:[0,0,7,0,8,0,7,0]},
-  {bpm:112,base:246.94,sc:SC.PENT,wave:'triangle', mel:[12,9,7,4,7,9,12,14,9,7,4,2,4,7,9,7],bass:[0,0,7,0,5,0,7,0]},
-  {bpm:133,base:220,   sc:SC.HARM,wave:'square',   mel:[0,3,7,8,7,3,2,0,7,8,12,8,7,8,3,0],bass:[0,0,8,0,7,0,3,0]},
-  {bpm:148,base:277.18,sc:SC.CHR, wave:'sawtooth', mel:[0,4,7,8,13,8,7,4,1,4,8,13,8,4,1,0],bass:[0,0,8,0,13,0,7,0]},
-  {bpm:116,base:196,   sc:SC.MIN, wave:'triangle', mel:[0,3,5,7,5,3,0,2,3,5,7,10,7,5,3,0],bass:[0,0,5,0,3,0,7,0]},
-  {bpm:155,base:233.08,sc:SC.CHR, wave:'sawtooth', mel:[0,1,4,7,8,7,4,1,4,7,8,13,8,7,1,0],bass:[0,0,7,8,4,0,7,0]},
-  {bpm:168,base:261.63,sc:SC.DORI,wave:'square',   mel:[0,2,4,9,7,12,9,7,4,7,9,12,14,12,9,7],bass:[0,0,9,0,7,0,4,0]},
-  {bpm:178,base:220,   sc:SC.HARM,wave:'sawtooth', mel:[0,2,7,8,12,8,7,2,3,7,8,12,15,12,8,7],bass:[0,0,8,7,3,7,8,12]},
-  // Theme 8 – Storm Peaks
-  {bpm:160,base:174.61,sc:SC.MIN, wave:'sawtooth', mel:[0,3,7,10,12,10,7,3,5,7,10,12,10,7,5,3],bass:[0,0,7,0,5,0,3,0]},
-  // Theme 9 – Final Fortress
-  {bpm:190,base:130.81,sc:SC.HARM,wave:'sawtooth', mel:[0,2,3,7,8,7,3,2,0,3,7,8,12,8,7,3],bass:[0,0,8,3,7,3,8,7]},
-];
+// Паттерны музыки переехали в assets/music-data.js: там же, откуда берёт ноты
+// генератор mp3, чтобы две копии больше не расходились.
 function stopMusic(){musicPlaying=false;if(mTimer){clearTimeout(mTimer);mTimer=null;}if(window.AudioFiles)window.AudioFiles.stopMusic();}
 // Remembers how to (re)start the current track, so when the .mp3 samples finish
 // decoding mid-session we can seamlessly switch from the procedural fallback to
@@ -673,49 +697,76 @@ function _tryMusicFile(name){
 // Called by AudioFiles once decoding completes: upgrade the currently-playing
 // procedural track to its .mp3 loop.
 window.onAudioFilesReady=function(){ if(musicPlaying&&_curMusicStart)_curMusicStart(); };
-function _mTick(pat,step){
-  if(!musicPlaying||!AC||!audioOn)return;
-  const{bpm,base,sc,wave,mel,bass}=pat,spb=60000/bpm/4,sec=spb/1000;
-  const now=AC.currentTime;
-  // Lead melody — doubled with a slightly detuned voice for a fuller, warmer tone.
-  const mi=mel[step%mel.length],ms=sc[mi%sc.length]+(mi>=sc.length?12:0);
-  const lf=hz(base,ms);
-  tone(lf,wave,sec*.36,.11,MTONE,7);
-  tone(lf,wave,sec*.36,.05,MTONE,-9);
-  // Bass — root plus a sub-octave for weight.
-  if(step%2===0){
-    const bi=bass[(step>>1)%bass.length],bs=sc[bi%sc.length];
-    tone(hz(base*.5,bs),wave,sec*.8,.15,MTONE);
-    tone(hz(base*.25,bs),'triangle',sec*.8,.07,MTONE);
+// Партитуру берём из assets/music-data.js — того же файла, из которого печётся
+// Audio/Music/*.mp3, поэтому запасной движок и готовые треки звучат одинаково.
+// Разбор формы стоит пары миллисекунд, но при паузе/возобновлении музыка
+// перезапускается часто, поэтому результат держим в кэше.
+const _songCache={};
+let _song=null,_songMap=null;
+function _getSong(name){
+  if(!_songCache[name]&&window.BBMusic){
+    const s=window.BBMusic.buildSong(name);
+    if(s){s.map=window.BBMusic.byStep(s);_songCache[name]=s;}
   }
-  // Counter-harmony stab on the off-beats.
-  if(step%8===4){const ci=mel[(step+4)%mel.length],cs=sc[ci%sc.length];tone(hz(base,cs+7),wave,sec*.22,.06,MTONE,step%16===4?-10:10);}
-  // ── Percussion groove: kick on every beat (4-on-the-floor), snare backbeat,
-  //    hi-hats on the off-beats with lighter ghost hats in between.
-  if(step%4===0) _drumKick(now,.42);
-  if(step%8===4) _drumSnare(now,.15);
-  if(step%2===1) _drumHat(now,.05);
-  else if(step%4!==0) _drumHat(now,.028);
-  mTimer=setTimeout(()=>_mTick(pat,step+1),spb);
+  return _songCache[name]||null;
 }
-function startMusic(pat){if(!AC||!audioOn)return;stopMusic();musicPlaying=true;_mTick(pat,0);}
-function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic(MMUSIC);}
-function startGameMusic(){const wi=Math.min(CT.id,9);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(wi);if(_tryMusicFile('world'+wi))return;startMusic(GMUSIC[wi]);}
-// Boss music — intense, fast, minor key
-const BMUSIC={bpm:195,base:110,sc:SC.MIN,wave:'sawtooth',
-  mel:[0,3,5,7,3,0,5,7, 0,3,5,10,7,5,3,0],
-  bass:[0,0,5,3,7,0,5,7]};
-function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic(BMUSIC);}
-// Star power music — fast, major, joyful
-const STAR_MUSIC={bpm:240,base:329.63,sc:SC.PENT,wave:'square',
-  mel:[0,2,4,7,9,12,9,7, 4,7,9,12,14,12,9,4],
-  bass:[0,4,7,4,0,4,7,4]};
-function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic(STAR_MUSIC);}
-// Victory music — triumphant, major, uplifting (plays during the ending cinematic)
-const VMUSIC={bpm:120,base:261.63,sc:SC.PENT,wave:'triangle',
-  mel:[0,2,4,7,9,7,4,2, 7,9,12,9,7,4,2,0, 4,7,9,12,14,12,9,7, 12,14,16,14,12,9,7,4],
-  bass:[0,0,4,4,7,7,4,0]};
-function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic(VMUSIC);}
+// Запасной движок тоже знает про стиль: иначе на телефоне до загрузки файлов
+// всегда играл бы чиптюн, даже когда выбран обычный звук.
+//
+// Фильтр общий на всю музыку, а не на ноту: отдельный узел на каждую ноту
+// съел бы весь смысл экономии, ради которой запасной движок и существует.
+let _mLP=null;
+function _modernMusic(){ return !(window.gameSettings&&window.gameSettings.musicStyle==='chip'); }
+function _mBus(){
+  if(!_modernMusic())return MTONE;
+  if(!_mLP&&AC){
+    try{ _mLP=AC.createBiquadFilter();_mLP.type='lowpass';_mLP.frequency.value=4600;_mLP.Q.value=.5;_mLP.connect(MTONE); }
+    catch(e){ _mLP=null; }
+  }
+  return _mLP||MTONE;
+}
+function _mTick(step){
+  if(!musicPlaying||!AC||!audioOn||!_song)return;
+  const sec=_song.spb,now=AC.currentTime;
+  const list=_songMap[step%_song.steps];
+  const modern=_modernMusic(),bus=_mBus();
+  if(list)for(let i=0;i<list.length;i++){
+    const e=list[i];
+    // Нота звучит почти всю свою длительность: короткие огрызки и превращали
+    // мелодию в долбёжку.
+    const d=sec*(e.len||1)*.9;
+    // Тембр берём из события: он свой у каждого слоя и у каждого мира.
+    // В обычном стиле пилу и квадрат смягчаем до треугольника: наивные волны
+    // Web Audio и дают ту самую восьмибитную жёсткость.
+    const w=modern?(e.w==='sawtooth'||e.w==='square'?'triangle':e.w||'sine'):(e.w||'square');
+    switch(e.k){
+      // Второй расстроенный голос добавляет толщины — в чиптюне он не нужен.
+      case 'lead': tone(e.f,w,d,e.vol,bus,7); if(modern)tone(e.f,w,d,e.vol*.5,bus,-11); break;
+      case 'lead2':tone(e.f,w,d,e.vol,bus,-9); break;
+      case 'bass': tone(e.f,w,d,e.vol,bus); break;
+      case 'sub':  tone(e.f,modern?'sine':w,d,e.vol,bus); break;
+      case 'arp':  tone(e.f,w,sec*(e.len||1)*.7,e.vol,bus,4); break;
+      case 'kick': _drumKick(now,e.vol); break;
+      case 'snare':_drumSnare(now,e.vol); break;
+      case 'hat':  _drumHat(now,e.vol); break;
+    }
+  }
+  mTimer=setTimeout(()=>_mTick(step+1),sec*1000);
+}
+function startMusic(name){
+  if(!AC||!audioOn)return;
+  const s=_getSong(name);
+  if(!s)return;
+  stopMusic();
+  _song=s;_songMap=s.map;musicPlaying=true;_mTick(0);
+}
+function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic('menu');}
+// У Призматической аномалии (мир 10) теперь своя тема — раньше секретный мир
+// доигрывал музыку Финальной крепости.
+function startGameMusic(){const wi=Math.min(CT.id,10);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(Math.min(wi,9));if(_tryMusicFile('world'+wi))return;startMusic('world'+wi);}
+function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic('boss');}
+function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic('star');}
+function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic('victory');}
 
 function showBossIntro(b){
   const ov=document.getElementById('bossIntroOv');
@@ -821,6 +872,9 @@ function _audioUnlock(){
 document.addEventListener('pointerdown',_audioUnlock,{once:true});
 
 function doEsc(){
+  // Экран итогов обрабатывает Escape сам (уйти на карту / в меню). Без этой
+  // проверки на одно нажатие приходилось бы два звука и две реакции.
+  if(window.Results&&window.Results.isOpen&&window.Results.isOpen())return;
   SFX.back();
   if(navScr==='playType')    {navScr='main';showMain();}
   else if(navScr==='netType'){navScr='playType';showPlayType();}
@@ -997,8 +1051,10 @@ var _csShownWorlds={};                       // Tracks which world-intro cutscen
 // doesn't carry one profile's "already seen" cutscenes over to another, and a
 // fresh slot always sees every cutscene again.
 function loadCsFired(){
-  try{const s=localStorage.getItem('bbCsFired');_csFired=s?JSON.parse(s):{};}catch(e){_csFired={};}
-  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=s2?JSON.parse(s2):{};}catch(e){_csShownWorlds={};}
+  // _plainMap: значение вида "null" или массива тоже разбирается без ошибки,
+  // а дальше по коду с ним работают как с объектом — см. _normProg.
+  try{const s=localStorage.getItem('bbCsFired');_csFired=_plainMap(s?JSON.parse(s):{});}catch(e){_csFired={};}
+  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=_plainMap(s2?JSON.parse(s2):{});}catch(e){_csShownWorlds={};}
 }
 function saveCsFired(){try{localStorage.setItem('bbCsFired',JSON.stringify(_csFired));}catch(e){}}
 function saveCsShownWorlds(){try{localStorage.setItem('bbCsWorlds',JSON.stringify(_csShownWorlds));}catch(e){}}
@@ -1082,7 +1138,7 @@ const RAINBOW_LEVEL_IN_WORLD=[4,7,2,8,5,1,9,3,6,2];
 let rainbowItem=null;            // the current level's rainbow shard entity, or null
 let rainbowCollected={};         // {worldIndex: true} — persisted, see loadRainbow()/markRainbowCollected()
 function loadRainbow(){
-  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=s?JSON.parse(s):{};}catch(e){rainbowCollected={};}
+  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=_plainMap(s?JSON.parse(s):{});}catch(e){rainbowCollected={};}
 }
 function saveRainbow(){try{localStorage.setItem('bbRainbow',JSON.stringify(rainbowCollected));}catch(e){}}
 function rainbowCount(){return Object.keys(rainbowCollected).filter(k=>rainbowCollected[k]).length;}
@@ -1186,35 +1242,64 @@ let exitBonus=0;        // height bonus text
 let exitBonusTier='';   // "PERFECT" / "GREAT" / "GOOD" / "BASE"
 let exitStars=0;        // stars (1–3) earned on the level just completed
 let exitStarsNew=false; // did this run beat the previous best star rating?
+let exitTimeBonus=0;    // points awarded for the time left on the clock
+let exitBonusCol='';    // colour of the flag tier (shared with the results screen)
 let exitLevelScore=0;   // per-level score earned on the level just completed
 let spawnX=60,spawnY=H-100;
 let boss=null; // active boss object
 let bossArenaX=0;      // x coordinate where boss arena begins
 let bossArenaTriggered=false; // has player entered the arena?
 
+// ── Загрузка сохранений: форма важна не меньше синтаксиса ───────────────────
+// JSON.parse спасает только от синтаксического мусора. Но "null", число или
+// объект без поля done — тоже валидный JSON, и такое значение проходило мимо
+// catch: игра падала уже в меню («Cannot read properties of undefined»), то
+// есть на чёрный экран. Прийти такое может из облачного сохранения, из
+// недописанного файла и из ручной правки. Теперь у прогресса проверяется ещё
+// и форма, а испорченное значение так же откладывается в <ключ>_corrupt.
+function _backupCorrupt(key){
+  try{const raw=localStorage.getItem(key);if(raw)localStorage.setItem(key+'_corrupt',raw);}catch(e){}
+}
+// Простая карта «ключ → значение» (катсцены, радужные осколки, звёзды, очки).
+function _plainMap(v){return (v&&typeof v==='object'&&!Array.isArray(v))?v:{};}
+// Приводит прогресс к рабочему виду. `key` нужен только для отметки о порче.
+function _normProg(o,key){
+  const ok=!!o&&typeof o==='object'&&!Array.isArray(o)&&Array.isArray(o.done);
+  if(!ok){
+    if(o!==null&&o!==undefined){
+      console.warn(key+' save has an unexpected shape, falling back to a fresh profile. Raw value backed up under '+key+'_corrupt for support/recovery.');
+      _backupCorrupt(key);
+    }
+    o={max:1,done:[]};
+  }
+  const max=Number(o.max);
+  o.max=(isFinite(max)&&max>=1)?Math.floor(max):1;
+  o.stars=_plainMap(o.stars);o.scores=_plainMap(o.scores);o.shards=_plainMap(o.shards);
+  return o;
+}
 function saveAdv(){try{localStorage.setItem('bbAdv3',JSON.stringify(advProg));}catch(e){}}
 function loadAdv(){
+  let parsed=null;
   try{
     const s=localStorage.getItem('bbAdv3');
-    advProg=s?JSON.parse(s):{max:1,done:[]};
+    parsed=s?JSON.parse(s):{max:1,done:[]};
   }catch(e){
     console.warn('bbAdv3 save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdv3_corrupt for support/recovery.',e);
-    try{ const raw=localStorage.getItem('bbAdv3'); if(raw) localStorage.setItem('bbAdv3_corrupt',raw); }catch(e2){}
-    advProg={max:1,done:[]};
+    _backupCorrupt('bbAdv3');
   }
-  if(!advProg.stars)advProg.stars={};if(!advProg.scores)advProg.scores={};if(!advProg.shards)advProg.shards={};
+  advProg=_normProg(parsed,'bbAdv3');
 }
 function saveAdvH(){try{localStorage.setItem('bbAdvH',JSON.stringify(advProgHard));}catch(e){}}
 function loadAdvH(){
+  let parsed=null;
   try{
     const s=localStorage.getItem('bbAdvH');
-    advProgHard=s?JSON.parse(s):{max:1,done:[]};
+    parsed=s?JSON.parse(s):{max:1,done:[]};
   }catch(e){
     console.warn('bbAdvH save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdvH_corrupt for support/recovery.',e);
-    try{ const raw=localStorage.getItem('bbAdvH'); if(raw) localStorage.setItem('bbAdvH_corrupt',raw); }catch(e2){}
-    advProgHard={max:1,done:[]};
+    _backupCorrupt('bbAdvH');
   }
-  if(!advProgHard.stars)advProgHard.stars={};if(!advProgHard.scores)advProgHard.scores={};if(!advProgHard.shards)advProgHard.shards={};
+  advProgHard=_normProg(parsed,'bbAdvH');
 }
 
 // ── STAR RATINGS (1–3 per level) ──
@@ -1282,12 +1367,15 @@ window.bbPlaytime=()=>playSeconds;
 function loadRecords(){
   try{
     const s=localStorage.getItem('bbRecords');
-    bestRecords=s?Object.assign({infinite:0,adventure:0},JSON.parse(s)):{infinite:0,adventure:0};
+    bestRecords=Object.assign({infinite:0,adventure:0},_plainMap(s?JSON.parse(s):{}));
   }catch(e){
     console.warn('bbRecords save is corrupted, falling back to fresh records. Raw value backed up under bbRecords_corrupt for support/recovery.',e);
-    try{ const raw=localStorage.getItem('bbRecords'); if(raw) localStorage.setItem('bbRecords_corrupt',raw); }catch(e2){}
+    _backupCorrupt('bbRecords');
     bestRecords={infinite:0,adventure:0};
   }
+  // Рекорд сравнивается числом; строка из чужого файла делала бы сравнение
+  // лексикографическим («9» > «100»), и настоящий рекорд не записывался бы.
+  ['infinite','adventure'].forEach(k=>{const n=Number(bestRecords[k]);bestRecords[k]=isFinite(n)&&n>0?Math.floor(n):0;});
 }
 function saveRecords(){try{localStorage.setItem('bbRecords',JSON.stringify(bestRecords));}catch(e){}}
 function recordScore(mode,sc){sc=sc|0;if(mode!=='infinite'&&mode!=='adventure')return;if(sc>(bestRecords[mode]||0)){bestRecords[mode]=sc;saveRecords();}}
@@ -4102,17 +4190,17 @@ function buildMapH(){
     const TH=THEMES[ti];
     const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color='#f44';
-    lbl.innerHTML='<span style="font-size:11px">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
+    lbl.innerHTML='<span style="font-size:calc(11px * var(--bbText, 1))">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>prog.max,done=prog.done.includes(n),avail=n===prog.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
-      if(locked){btn.disabled=true;btn.innerHTML='<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">'+n+'</span>';}
+      if(locked){btn.disabled=true;btn.innerHTML='<span style="opacity:.45;font-size:calc(9px * var(--bbText, 1))">🔒</span><span class="lvlN">'+n+'</span>';}
       else{
         btn.style.borderColor='#f446';btn.style.setProperty('--mc','#f44');
-        if(done){btn.style.background='#f4420';btn.style.color='#f44';btn.innerHTML='<span style="font-size:8px">✓</span><span class="lvlN">'+n+'</span>';}
+        if(done){btn.style.background='#f4420';btn.style.color='#f44';btn.innerHTML='<span style="font-size:calc(8px * var(--bbText, 1))">✓</span><span class="lvlN">'+n+'</span>';}
         else{btn.style.color='#f44';if(avail){btn.classList.add('avail');btn.style.borderColor='#f44';btn.style.boxShadow='0 0 9px #f449';}
-          btn.innerHTML='<span style="font-size:9px">'+(avail?'▶':'')+'</span><span class="lvlN">'+n+'</span>';}
+          btn.innerHTML='<span style="font-size:calc(9px * var(--bbText, 1))">'+(avail?'▶':'')+'</span><span class="lvlN">'+n+'</span>';}
         btn.onclick=()=>{SFX.menu();startAdv(n,true);};
       }
       row.appendChild(btn);
@@ -4229,17 +4317,17 @@ function buildMap(){
     const TH=THEMES[ti];
     const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=withAlpha(TH.mc,'55');sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color=TH.mc;
-    lbl.innerHTML=`<span style="font-size:11px">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
+    lbl.innerHTML=`<span style="font-size:calc(11px * var(--bbText, 1))">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>advProg.max,done=advProg.done.includes(n),avail=n===advProg.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
-      if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">${n}</span>`;}
+      if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:calc(9px * var(--bbText, 1))">🔒</span><span class="lvlN">${n}</span>`;}
       else{
         btn.style.borderColor=withAlpha(TH.mc,'88');btn.style.setProperty('--mc',TH.mc);
-        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
+        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:calc(8px * var(--bbText, 1))">✓</span><span class="lvlN">${n}</span>`;}
         else{btn.style.color=TH.mc;if(avail){btn.classList.add('avail');btn.style.borderColor=TH.mc;btn.style.boxShadow=`0 0 9px ${TH.mc}99`;}
-          btn.innerHTML=`<span style="font-size:9px">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
+          btn.innerHTML=`<span style="font-size:calc(9px * var(--bbText, 1))">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
         btn.onclick=()=>{SFX.menu();startAdv(n,true);};
       }
       row.appendChild(btn);
@@ -4696,6 +4784,19 @@ function updatePlayer(){
 // Persist this client's adventure progress + achievements for the level it just
 // finished. Extracted from the level-advance flow so it can run both in single
 // player AND the moment a co-op player reaches the flag (before the room advances).
+// Публичная сводка прогресса уходит на сервер не чаще раза в две минуты:
+// её смотрят друзья на сайте, и обновлять её после каждого уровня незачем —
+// а вот отправлять запрос после каждого точно не стоит.
+let _statsPubT=0;
+function _publishStatsSoon(){
+  if(!window.Friends||!window.Friends.publish)return;
+  if(window.bbStatsAutoOn&&!window.bbStatsAutoOn())return;   // игрок выключил
+  const now=Date.now();
+  if(now-_statsPubT<120000)return;
+  _statsPubT=now;
+  try{window.Friends.publish();}catch(e){}
+}
+
 function _persistAdvProgress(){
   savePlaytime();
   const prog=hardMode?advProgHard:advProg;
@@ -4717,6 +4818,7 @@ function _persistAdvProgress(){
   // Persist the best crystal (data-shard) count for this level.
   recordLevelShards(advLevel,dataShardsGot,hardMode);
   if(hardMode)saveAdvH();else saveAdv();
+  _publishStatsSoon();   // витрина для друзей — см. комментарий выше
   // Refresh WorldMap if it's loaded — mark this level done explicitly so the
   // final level (100) reliably shows its checkmark even though it ends in the
   // win/ending flow rather than loading a next level.
@@ -4798,7 +4900,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     if(timMax>0&&timeLeft>=timMax/2)AchTrack.speed();
     AchTrack.score(score);
 
-    exitBonus=hBonus;exitBonusTier=tier;
+    exitBonus=hBonus;exitBonusTier=tier;exitBonusCol=tierCol;exitTimeBonus=tBonus;
 
     // Burst at touch point
     burst(flagX+5,touchY,CT.clr,28+Math.floor(heightFrac*20),5,6);
@@ -4829,7 +4931,9 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     exitAnim=true;
     exitTimer=0;
 
-    // Schedule next level
+    // Что происходит после анимации выхода. Раньше это вызывалось таймером
+    // напрямую и уровень сменялся сам; теперь между ними встаёт экран итогов
+    // (см. _showLevelResults) — игрок идёт дальше сам.
     const _goNext=()=>{
       _goNextTimer=0;
       if(gState!=='levelclear')return; // aborted by death/pause/menu
@@ -4859,7 +4963,68 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
       }
     };
     if(_goNextTimer)clearTimeout(_goNextTimer);
-    _goNextTimer=setTimeout(_goNext, 4000);
+    // Экран итогов показывается раньше, чем закончилась бы старая пауза: он и
+    // есть остановка, тянуть её ещё секунду незачем.
+    _goNextTimer=setTimeout(()=>{
+      _goNextTimer=0;
+      if(gState!=='levelclear')return;
+      if(!_showLevelResults(_goNext))_goNext();
+    }, 2600);
+}
+
+// Экран итогов уровня. Возвращает false, если показать его нечем (нет модуля) —
+// тогда вызывающий просто идёт дальше, как раньше.
+function _showLevelResults(goNext){
+  if(!window.Results||typeof window.Results.showLevel!=='function')return false;
+  if(window.netActive)return false;   // темп сетевой комнаты задаёт хост
+  // Прогресс записываем ДО показа: с этого экрана игрок может уйти на карту, а
+  // раньше запись стояла в _goNext, то есть только на пути «дальше». Функция
+  // идемпотентна (done через includes, счёт и звёзды — по максимуму).
+  if(advMode)_persistAdvProgress();
+  if(raf){cancelAnimationFrame(raf);raf=0;}
+  const lvNum=advMode?advLevel:level;
+  const tierCols={};
+  tierCols[T('tierPerfect')]='#ff0';tierCols[T('tierGreat')]='#0ff';
+  tierCols[T('tierGood')]='#0f8';tierCols[T('tierBase')]='#888';
+  // Общий счёт кампании: банк по всем уровням плюс вклад этого забега.
+  let total=score;
+  if(advMode){
+    const banked=Math.max(levelScore(advLevel,hardMode),exitLevelScore);
+    total=totalScore(hardMode)-levelScore(advLevel,hardMode)+banked;
+  }
+  const data={
+    levelNum:lvNum,
+    accent:exitBonusCol||tierCols[exitBonusTier]||'#0ff',
+    tier:exitBonusTier,
+    flagBonus:exitBonus,
+    timeBonus:exitTimeBonus,
+    coins:coinsTotal|0,
+    levelScore:exitLevelScore,
+    score:total,
+    stars:advMode?exitStars:null,
+    starsNew:exitStarsNew,
+    subtitle:advMode&&dataShards&&dataShards.length
+      ? T('crystals')+': '+dataShardsGot+' / '+dataShards.length : '',
+  };
+  const leave=()=>{
+    stopMusic();
+    gState='menu';
+    if(advMode){
+      const open=hardMode?showMapH:showMap;
+      if(typeof open==='function')open(); else showMain();
+    }
+    else { if(window.InfSave)window.InfSave.save(); showMain(); }
+  };
+  const actions={
+    // Если состояние почему-то уже не 'levelclear', goNext() молча ничего не
+    // сделает и игрок остался бы перед пустым экраном — уводим его на карту.
+    next:()=>{ if(gState==='levelclear')goNext(); else leave(); },
+    retry:()=>{ if(advMode)startAdv(advLevel,false); else startInf(false); },
+    leaveLabel:advMode?T('map'):T('menu'),
+    leave:leave,
+  };
+  window.Results.showLevel(data,actions);
+  return true;
 }
 
 // ── PLAYER 2 UPDATE (arrow keys + ./, for shoot) ──
@@ -5362,6 +5527,32 @@ function showGameover(retry,titleTxt,subTxt){
   // continue past death, which is the one thing an endless mode cannot allow.
   if(window.InfSave&&!advMode)window.InfSave.clear();
   if(raf){cancelAnimationFrame(raf);raf=0;}
+  recordScore(advMode?'adventure':'infinite',score);   // рекорд банкуем в любом случае
+  // Экран итогов вместо главного меню с перекрашенным заголовком: видно, чем
+  // кончилась попытка, и есть куда уйти кроме «Заново» — раньше выхода на карту
+  // и в меню отсюда не было вовсе.
+  if(window.Results&&typeof window.Results.showGameOver==='function'){
+    hideAll();
+    window.Results.showGameOver({
+      title:titleTxt||T('gameOver'),
+      sub:(subTxt!=null)?subTxt:(advMode?T('levelFailed',advLevel):T('betterLuck')),
+      levelNum:advMode?advLevel:level,
+      coins:coinsTotal|0,
+      score:score,
+      best:bestRecords[advMode?'adventure':'infinite']|0,
+    },{
+      retry:retry,
+      leaveLabel:advMode?T('map'):T('menu'),
+      leave:()=>{
+        if(advMode){
+          const open=hardMode?showMapH:showMap;
+          if(typeof open==='function')open(); else showMain();
+        } else showMain();
+      },
+      menu:advMode?(()=>showMain()):null,
+    });
+    return;
+  }
   // Clear every in-game layer first. Without this the score/lives/timer HUD and
   // the level-modifier banner stayed painted on top of the Game Over screen
   // (hideAll() is what normally takes them down, and nothing called it here).
@@ -6675,9 +6866,28 @@ function _atmStars(count,maxY,tintBright,gl){
 }
 
 // ── 0 · CYBER CITY ─────────────────────────────────────────────────────────
-// Three cached skyline bands: a pale distant grid of towers, a mid band that
-// carries most of the window light, and a near band of dark blocks with
-// antennae and vertical neon signs.
+// Переделано: раньше здесь друг на друга ложились градиент неба, отдельная
+// заливка горизонта, звёзды, луна со свечением, полоса небоскрёбов, полоса
+// крыш, огни машин, световые полосы по земле и общая сетка. Десять слоёв в
+// одном месте не читаются как глубина — они читаются как каша, и каждый из них
+// красился в полном экране каждый кадр.
+//
+// Теперь сцена собрана из ТРЁХ планов с ясным разделением:
+//
+//   даль    — небо: горизонтальное зарево, луна с ореолом, звёзды;
+//   средний — один силуэт небоскрёбов с окнами, у основания растворён в дымке;
+//   ближний — крыши, по которым бежит игрок: чёрный вырез с неоновой кромкой.
+//
+// Глубину даёт не количество слоёв, а воздух между ними: у дальнего плана
+// низ башен запечён в дымку цвета неба, и он буквально утопает в ней. Резких
+// горизонтальных границ поперёк экрана больше нет — именно они и создавали
+// ощущение наклеенных друг на друга прямоугольников.
+//
+// Про стоимость честно: она осталась примерно прежней (замер на этой машине —
+// 1.16 → 1.11 мс на кадр при бюджете 16.7). Тяжёлые силуэты и раньше лежали
+// в кэшированных плитках; выигрыш от убранных полноэкранных градиентов и
+// shadowBlur у луны ушёл на два прожектора. Это переделка ради вида, а не
+// ради кадров — но и не за их счёт.
 function _cityBand(c,w,h,o){
   const step=w/o.count;
   for(let i=0;i<o.count;i++){
@@ -6723,91 +6933,160 @@ function _cityBand(c,w,h,o){
     }
   }
 }
+// Прожекторный луч. Один раз рисуется в маленький холст с растворением к концу,
+// дальше только поворачивается и ставится drawImage — иначе на каждый луч
+// пришлось бы создавать градиент в каждом кадре.
+let _w0Beam=null;
+function _cityBeamSprite(){
+  if(_w0Beam)return _w0Beam;
+  const L=260,Bw=54;
+  const cv=document.createElement('canvas');
+  cv.width=Bw;cv.height=L;
+  const c=cv.getContext('2d');
+  const g=c.createLinearGradient(0,0,0,L);
+  g.addColorStop(0,'rgba(120,225,255,0.30)');
+  g.addColorStop(0.45,'rgba(120,225,255,0.10)');
+  g.addColorStop(1,'rgba(120,225,255,0)');
+  c.fillStyle=g;
+  // Клин: у основания узкий, к концу расходится.
+  c.beginPath();
+  c.moveTo(Bw*0.5-3,0);c.lineTo(Bw*0.5+3,0);c.lineTo(Bw,L);c.lineTo(0,L);
+  c.closePath();c.fill();
+  _w0Beam={cv:cv,w:Bw,h:L};
+  return _w0Beam;
+}
+
 function _atmCyberCity(bd,gl){
-  // Distant city glow on the horizon
-  const hgz=ctx.createLinearGradient(0,H*.5,0,H*.9);
-  hgz.addColorStop(0,'#00243d');hgz.addColorStop(1,'transparent');
-  ctx.globalAlpha=.85;ctx.fillStyle=hgz;ctx.fillRect(0,H*.5,W,H*.4);
+  // ── ДАЛЬ: небо. Зарево над городом, луна и её ореол — статичная плитка.
+  // Раньше это были два полноэкранных градиента и shadowBlur каждый кадр.
+  const sky=bgLayer('w0sky',H,(c,w,h)=>{
+    const glow=c.createLinearGradient(0,h*0.34,0,h*0.86);
+    glow.addColorStop(0,'rgba(6,20,44,0)');
+    glow.addColorStop(0.55,'rgba(10,58,96,0.55)');
+    glow.addColorStop(1,'rgba(24,96,138,0.85)');
+    c.fillStyle=glow;c.fillRect(0,h*0.34,w,h*0.52);
 
-  _atmStars(Math.round(70*bd),H*.5,'#aaddff',gl);
+    // Отдельное тёплое пятно у горизонта: город внизу светит вверх неровно,
+    // ровная полоса читалась бы как крашеная стена.
+    const halo=c.createRadialGradient(w*0.34,h*0.84,0,w*0.34,h*0.84,w*0.42);
+    halo.addColorStop(0,'rgba(255,150,90,0.20)');
+    halo.addColorStop(1,'rgba(255,150,90,0)');
+    c.fillStyle=halo;c.fillRect(0,h*0.5,w,h*0.5);
 
-  // Moon
-  ctx.globalAlpha=.9;
-  if(gl>0){ctx.shadowColor='#aaccff';ctx.shadowBlur=14;}
-  ctx.fillStyle='#c8dff0';
-  ctx.beginPath();ctx.arc(W*.84,H*.11,26,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;ctx.globalAlpha=.22;ctx.fillStyle='#8aaabb';
-  ctx.beginPath();ctx.arc(W*.84+8,H*.11+6,6,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(W*.84-10,H*.11-5,4,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(W*.84+4,H*.11-11,3,0,Math.PI*2);ctx.fill();
+    // Луна: ореол градиентом вместо shadowBlur — стоит нисколько и не мажет.
+    const mx=w*0.78,my=h*0.17,mr=22;
+    const mg=c.createRadialGradient(mx,my,mr*0.6,mx,my,mr*4.2);
+    mg.addColorStop(0,'rgba(170,210,255,0.30)');
+    mg.addColorStop(1,'rgba(170,210,255,0)');
+    c.fillStyle=mg;c.beginPath();c.arc(mx,my,mr*4.2,0,Math.PI*2);c.fill();
+    c.fillStyle='#cfe3f5';
+    c.beginPath();c.arc(mx,my,mr,0,Math.PI*2);c.fill();
+    c.fillStyle='rgba(120,150,175,0.28)';
+    c.beginPath();c.arc(mx+7,my+6,5.5,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(mx-9,my-4,3.5,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(mx+3,my-10,2.5,0,Math.PI*2);c.fill();
+  });
+  ctx.globalAlpha=1;
+  ctx.drawImage(sky.cv,0,0,W,H);
 
-  // Three cached skyline bands. `blink` advances slowly, and the tiles rebuild
-  // only every 30 ticks — the window pattern changes on a ~2 s cadence, which
-  // is exactly how it looked when it was rebuilt from scratch every frame.
-  // ONE skyline plus one rooftop band. There used to be three bands of towers
-  // stacked on top of each other: at these sizes they don't read as depth, they
-  // read as one blurry pile of overlapping rectangles.
+  // Звёзды — единственное, что дышит в небе, и потому остаются живыми.
+  // Только выше линии крыш: ниже они спорили бы с окнами.
+  _atmStars(Math.round(46*bd),H*.46,'#bfe4ff',gl);
+
+  // ── СРЕДНИЙ ПЛАН: один силуэт небоскрёбов. Окна перемигиваются медленно,
+  // плитка пересобирается раз в ~2 секунды — на глаз неотличимо от живой.
   const blink=Math.floor(tick/30)*0.11;
-  const mid=bgLayer('w0mid',190,(c,w,h)=>_cityBand(c,w,h,{count:17,seed:7,blink:blink,windows:1,
-    body:'#060c18',lit:'#2fd8ff',lit2:'#ffb347',dark:'#050a12',sign:'#ff3fa4',beacon:'#ff3020'}),31);
-  blitLayer(mid,0.20,H*.74-190,0.85);
+  const city=bgLayer('w0city',200,(c,w,h)=>{
+    _cityBand(c,w,h,{count:15,seed:7,blink:blink,windows:1,
+      body:'#0a1526',lit:'#37e0ff',lit2:'#ffb347',dark:'#081120',sign:'#ff3fa4',beacon:'#ff3020'});
+    // Воздушная перспектива запечена прямо в плитку: низ башен растворяется в
+    // цвете неба. Это и есть ощущение расстояния — раньше его изображали
+    // ещё одной полосой домов, и получалась каша.
+    const fade=c.createLinearGradient(0,h*0.45,0,h);
+    fade.addColorStop(0,'rgba(18,74,110,0)');
+    fade.addColorStop(1,'rgba(18,74,110,0.85)');
+    c.fillStyle=fade;c.fillRect(0,h*0.45,w,h*0.55);
+  },31);
+  blitLayer(city,0.14,H*.80-200,0.95);
 
-  // Nearest band is deliberately NOT a third row of skyscrapers — three layers
-  // of the same towers just read as one blurry repeated object. This is the
-  // rooftop level the player is running along: parapets, water tanks, billboard
-  // frames and aerial masts, drawn as a solid dark cut-out.
-  const near=bgLayer('w0near',130,(c,w,h)=>{
+  // Прожекторы: два медленных луча над городом. Ставятся ПОСЛЕ башен — иначе
+  // они оказывались за ними и их просто не было видно. Дают небу движение,
+  // которого не даёт ни один статичный слой, и стоят два drawImage.
+  if(bd>0.5){
+    const beam=_cityBeamSprite();
+    for(let b=0;b<2;b++){
+      const bx=b?W*0.70:W*0.22, by=H*0.74;
+      const ang=Math.sin(tick*0.0035+b*2.1)*0.42+(b?0.30:-0.30);
+      ctx.save();
+      ctx.translate(bx,by);ctx.rotate(ang);
+      ctx.globalAlpha=0.75+Math.sin(tick*0.02+b)*0.15;
+      ctx.drawImage(beam.cv,-beam.w/2,-beam.h,beam.w,beam.h);
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // ── БЛИЖНИЙ ПЛАН: крыши, по которым бежит игрок. Плотный чёрный вырез с
+  // неоновой кромкой сверху — граница, по которой глаз отделяет город от игры.
+  // Дымку сюда класть нельзя: её верхний край шёл ровной линией через весь
+  // экран и читался как приклеенный прямоугольник — ровно та «куча слоёв»,
+  // от которой уходим. Воздух между планами запечён в плитку города, где он
+  // растворяется постепенно и края не имеет.
+  const roof=bgLayer('w0roof',150,(c,w,h)=>{
+    const INK='#03070e', RIM='rgba(60,220,255,0.55)';
+    const base=h-h*0.18;
     const span=w/4;
-    c.fillStyle='#02060b';
-    c.fillRect(0,h-h*0.16,w,h*0.16);                    // parapet the props stand on
+    c.fillStyle=INK;c.fillRect(0,base,w,h-base);
+    c.fillStyle=RIM;c.fillRect(0,base,w,1);            // кромка парапета
     for(let i=0;i<4;i++){
-      const x=i*span, base=h-h*0.16;
-      const s=(k)=>_bgRnd(i,k+41);
-      // Water tank on legs
-      const tw=span*0.16,th=h*(0.24+s(1)*0.16),tx=x+span*0.10;
-      c.fillStyle='#02060b';
-      c.fillRect(tx,base-th,tw,th);
-      c.fillRect(tx-tw*0.16,base-th-h*0.05,tw*1.32,h*0.05);
-      // Billboard frame with a lit panel
-      const bx=x+span*0.42,bw=span*0.36,bh=h*(0.26+s(2)*0.16);
-      c.fillStyle='#02060b';
-      c.fillRect(bx,base-bh,3,bh);c.fillRect(bx+bw-3,base-bh,3,bh);
-      c.fillRect(bx,base-bh,bw,4);c.fillRect(bx,base-bh*0.18,bw,4);
-      c.fillStyle=i%2?'rgba(255,63,164,0.22)':'rgba(47,216,255,0.20)';
-      c.fillRect(bx+3,base-bh+4,bw-6,bh*0.8);
-      // Aerial mast with a beacon
+      const x=i*span, s=(k)=>_bgRnd(i,k+41);
+      const box=(bx,by,bw,bh,rim)=>{
+        c.fillStyle=INK;c.fillRect(bx,by,bw,bh);
+        if(rim!==false){c.fillStyle=RIM;c.fillRect(bx,by,bw,1);}
+      };
+      // Бак на опорах
+      const tw=span*0.17,th=h*(0.26+s(1)*0.16),tx=x+span*0.09;
+      box(tx,base-th,tw,th);
+      box(tx-tw*0.18,base-th-h*0.05,tw*1.36,h*0.05);
+      // Рекламный щит: рама, светящаяся панель и опора до парапета. Панель
+      // держим приглушённой — на полной яркости это просто цветной квадрат.
+      const bx=x+span*0.44,bw=span*0.26,bh=h*(0.20+s(2)*0.10);
+      const by=base-bh-h*0.10;
+      c.fillStyle=INK;
+      c.fillRect(bx+bw*0.5-2,by+bh,4,h*0.10);           // опора
+      c.fillRect(bx,by,3,bh);c.fillRect(bx+bw-3,by,3,bh);
+      c.fillRect(bx,by,bw,3);c.fillRect(bx,by+bh-3,bw,3);
+      c.fillStyle=i%2?'rgba(255,63,164,0.17)':'rgba(47,216,255,0.15)';
+      c.fillRect(bx+3,by+3,bw-6,bh-6);
+      c.fillStyle=RIM;c.fillRect(bx,by,bw,1);
+      // Мачта с маяком
       const mx=x+span*0.86;
-      c.fillStyle='#02060b';
-      c.fillRect(mx,base-h*0.52,3,h*0.52);
-      c.fillRect(mx-span*0.05,base-h*0.40,span*0.12,2);
-      c.fillRect(mx-span*0.035,base-h*0.28,span*0.09,2);
-      c.fillStyle='rgba(255,40,20,0.75)';c.fillRect(mx-1,base-h*0.55,5,4);
-      // Vent boxes
-      c.fillStyle='#02060b';
-      c.fillRect(x+span*0.66,base-h*0.09,span*0.12,h*0.09);
+      c.fillStyle=INK;
+      c.fillRect(mx,base-h*0.54,3,h*0.54);
+      c.fillRect(mx-span*0.05,base-h*0.42,span*0.12,2);
+      c.fillRect(mx-span*0.035,base-h*0.30,span*0.09,2);
+      c.fillStyle='rgba(255,60,40,0.85)';c.fillRect(mx-1,base-h*0.57,5,4);
+      // Вентиляционный короб
+      box(x+span*0.66,base-h*0.10,span*0.12,h*0.10);
     }
   },0);
-  blitLayer(near,0.36,H*.88-130,0.96);
+  blitLayer(roof,0.34,H*.92-150,1);
 
-  // Flying vehicles — tiny blinking lights gliding across the sky.
+  // Летающие машины: три огонька со следом. Единственная быстрая жизнь в кадре.
   for(let v=0;v<3;v++){
     const speed=v===0?0.4:v===1?0.25:0.6;
     const span=W+120;
     const vx=(((tick*speed+v*280)%span)+span)%span-60;
-    const vy=H*.08+v*H*.06;
+    const vy=H*.10+v*H*.055;
     if(vx<-20||vx>W+20)continue;
     const blinkOn=Math.floor(tick*.12+v*2)%4>1;
-    ctx.globalAlpha=blinkOn?.8:.2;
-    ctx.fillStyle=v%2===0?'#f00':'#0ff';
+    ctx.globalAlpha=blinkOn?.85:.25;
+    ctx.fillStyle=v%2===0?'#ff5544':'#5fe8ff';
     ctx.fillRect(vx-1.5,vy-1.5,3,3);
-    ctx.globalAlpha=.12;ctx.strokeStyle=v%2===0?'#f00':'#0ff';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-18,vy);ctx.stroke();
+    ctx.globalAlpha=.14;ctx.strokeStyle=v%2===0?'#ff5544':'#5fe8ff';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-20,vy);ctx.stroke();
   }
-  // Wet-street light streaks along the ground
-  ctx.globalAlpha=.05;ctx.strokeStyle='#0ff';ctx.lineWidth=0.5;
-  ctx.beginPath();
-  for(let xi=0;xi<W;xi+=40){const gx=(xi-camX*.05)%W;ctx.moveTo(gx,H*.82);ctx.lineTo(gx+W*.3,H);}
-  ctx.stroke();
+  ctx.globalAlpha=1;
 }
 
 // ── 1 · NEON JUNGLE ────────────────────────────────────────────────────────
@@ -7739,14 +8018,16 @@ function drawGlyph(ch,px,size,col,font){
 }
 function drawBlocks(){
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismBlocks=(CT.id===10);
+  const _prismWorld=(CT.id===10);
+  const _prismBlocks=_prismWorld&&prismFxOn();
   for(const b of blocks){
     if(b.x+b.w<vLeft||b.x>vRight)continue;
     ctx.save();
     // Prism Anomaly: bricks and gold blocks are the same brown/amber in every
     // world, which left them looking imported here. Refracted per block so they
     // keep their shape, lighting and readability.
-    if(_prismBlocks)ctx.filter=prismFilter((((b.x*0.7+tick*0.8)%360)/20|0)*20,6.5,1.3);
+    const _bHue=_prismWorld?(((b.x*0.7+tick*0.8)%360)/20|0)*20:0;
+    if(_prismBlocks)ctx.filter=prismFilter(_bHue,6.5,1.3);
     if(b.type==='b'){
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.strokeStyle='#261006';ctx.lineWidth=1;
@@ -7804,6 +8085,9 @@ function drawBlocks(){
         ctx.globalAlpha=1;ctx.shadowBlur=0;
       }
     }
+    // Преломление выключено, но мир радужный — подкрашиваем блок дёшево,
+    // чтобы кирпичи не остались единственным коричневым пятном в мире света.
+    if(_prismWorld&&!_prismBlocks)prismTintRect(b.x,b.y,b.w,b.h,_bHue);
     ctx.restore();
   }
 }
@@ -7905,7 +8189,7 @@ function drawJumpPads(){
 }
 function drawHazards(){
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismHz=(CT.id===10);
+  const _prismHz=(CT.id===10)&&prismFxOn();
   for(const hz of hazards){
     if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
     ctx.save();
@@ -9168,6 +9452,8 @@ function drawBossApproach(){
 // Enemies
 function drawEnemies(){
   const vLeft=camX-60,vRight=camX+W+60;// viewport culling
+  // Один раз на кадр, а не на врага: prismFxOn() читает настройки.
+  const _prismEnemies=(CT.id===10)&&prismFxOn();
   for(const e of enemies){
     if(!e.alive)continue;
     // Не рисуем за пределами экрана
@@ -9183,7 +9469,7 @@ function drawEnemies(){
     // bounding box as well, leaving a visible coloured square around it. The
     // filter only touches the pixels the sprite itself draws, so the enemy
     // keeps its shape, shading and readable silhouette.
-    const _prismTint=(CT.id===10&&!e._frozen);
+    const _prismTint=(_prismEnemies&&!e._frozen);
     if(_prismTint){
       // Quantised to 20° steps: a canvas filter is re-parsed whenever the
       // string changes, so snapping the hue lets consecutive enemies reuse the
@@ -10522,8 +10808,17 @@ function drawParticles(){
 // entire parallax background. It only changes when the world or the language
 // changes, so it is baked into an offscreen canvas and blitted.
 let _wmCanvas=null,_wmKey='';
+// Название мира: было постоянной подложкой во весь экран на 8% прозрачности.
+// Пока фон Кибергорода был тёмным месивом, надпись в нём терялась; на новом,
+// чистом небе она читается как забытый поверх картинки слой — игрок так её и
+// описал: «почему я всё ещё вижу старый слой какой-то?!». Смысл у надписи есть
+// (сказать, куда игрок попал), но только в первые секунды уровня — дальше она
+// просто мешает смотреть. Поэтому теперь она показывается и уходит.
+const _WM_HOLD=110, _WM_FADE=70;   // кадров держим, кадров растворяем
 function drawWatermark(){
   if(!advMode)return;
+  if(tick>_WM_HOLD+_WM_FADE)return;
+  const fade=tick<=_WM_HOLD?1:1-(tick-_WM_HOLD)/_WM_FADE;
   const txt=worldName(CT);
   const key=txt+'|'+CT.mc;
   if(_wmKey!==key){
@@ -10536,7 +10831,7 @@ function drawWatermark(){
     c.fillStyle=CT.mc;c.fillText(txt,W/2,35);
     _wmCanvas=cv;_wmKey=key;
   }
-  ctx.save();ctx.globalAlpha=.08;
+  ctx.save();ctx.globalAlpha=.14*fade;
   ctx.drawImage(_wmCanvas,0,H/2-35,W,70);
   ctx.restore();
 }
@@ -10828,7 +11123,7 @@ document.getElementById('infCard').onclick=function(){
     const need=100-advProg.done.length;
     const el=document.getElementById('infCard');
     const msg=document.createElement('div');
-    msg.style.cssText='position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:"Share Tech Mono",monospace;font-size:7px;color:#f80;white-space:nowrap;pointer-events:none;';
+    msg.style.cssText='position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:"Share Tech Mono",monospace;font-size:calc(7px * var(--bbText, 1));color:#f80;white-space:nowrap;pointer-events:none;';
     msg.textContent=T('completeMore',need);
     el.style.position='relative';el.appendChild(msg);
     setTimeout(()=>msg.remove(),1800);
@@ -12969,7 +13264,7 @@ function playEndingCinematic(onDone){
     ov.appendChild(cv);
     const skip=document.createElement('div');
     skip.id='endingCinSkip';
-    skip.style.cssText='position:absolute;bottom:18px;right:24px;font-family:"Share Tech Mono",monospace;font-size:13px;color:#0ff;opacity:0;transition:opacity .6s;text-shadow:0 0 8px #0ff;pointer-events:none;';
+    skip.style.cssText='position:absolute;bottom:18px;right:24px;font-family:"Share Tech Mono",monospace;font-size:calc(13px * var(--bbText, 1));color:#0ff;opacity:0;transition:opacity .6s;text-shadow:0 0 8px #0ff;pointer-events:none;';
     ov.appendChild(skip);
     document.body.appendChild(ov);
   }

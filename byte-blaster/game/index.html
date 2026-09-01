@@ -22,6 +22,39 @@
 <link rel="stylesheet" href="assets/styles.css">
 <link rel="stylesheet" href="assets/ui-fix.css">
 <link rel="stylesheet" href="assets/touch.css">
+<script>
+  /* Размеры текста (--bbText) и интерфейса (--bbUI) выставляем ДО первой
+     отрисовки: settings.js грузится позже, и без этого экран загрузки и меню
+     на мгновение показались бы стандартным размером, а потом дёрнулись бы к
+     выбранному.
+
+     Формулы «подстроить под экран» здесь намеренно повторяют settings.js
+     (autoUiScale / autoTextScale). Позвать оттуда нечего — ни один скрипт
+     ещё не загружен, — а любое расхождение будет видно как рывок размера
+     сразу после старта. Меняете формулу там — поправьте и здесь. */
+  (function () {
+    try {
+      var s = JSON.parse(localStorage.getItem('bbSettings') || '{}');
+      var vw = document.documentElement.clientWidth || window.innerWidth || 1280;
+      var vh = document.documentElement.clientHeight || window.innerHeight || 720;
+      var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(v, hi)); };
+
+      // Во сколько раз экран больше эталона 1280×720.
+      var big = Math.min(vw / 1280, vh / 720);
+      var autoUI = big <= 1 ? 1 : clamp(1 + (big - 1) * 0.5, 0.8, 2);
+      // Сцена ужимается под маленький экран тем же множителем — от него и
+      // считается, насколько надо укрупнить текст, чтобы он остался читаемым.
+      var k = Math.min(1, big);
+      var autoText = k < 0.95 ? clamp(0.72 / k, 0.8, 2.5) : clamp(autoUI, 0.8, 2.5);
+
+      var ui = (s.uiScaleAuto === false) ? clamp(parseFloat(s.uiScale) || 1, 0.8, 2) : autoUI;
+      var tx = (s.textScaleAuto === false) ? clamp(parseFloat(s.textScale) || 1, 0.8, 2.5) : autoText;
+
+      document.documentElement.style.setProperty('--bbUI', String(ui));
+      document.documentElement.style.setProperty('--bbText', String(tx));
+    } catch (e) { /* нет сохранённых настроек — остаются единицы */ }
+  })();
+</script>
 <script src="assets/version.js"></script>
 <script>
   // ── Global error catcher ────────────────────────────────────────────────
@@ -43,16 +76,16 @@
           + 'font-family:monospace;display:flex;flex-direction:column;align-items:center;'
           + 'justify-content:center;padding:24px;text-align:center;gap:14px;';
         el.innerHTML =
-          '<div style="font-size:20px;color:#f55;letter-spacing:2px;">⚠ BYTE BLASTER FAILED TO START</div>' +
-          '<div style="font-size:13px;color:#faa;max-width:640px;">' + title + '</div>' +
-          '<pre style="font-size:11px;color:#999;max-width:800px;max-height:240px;overflow:auto;' +
+          '<div style="font-size:calc(20px * var(--bbText, 1));color:#f55;letter-spacing:2px;">⚠ BYTE BLASTER FAILED TO START</div>' +
+          '<div style="font-size:calc(13px * var(--bbText, 1));color:#faa;max-width:640px;">' + title + '</div>' +
+          '<pre style="font-size:calc(11px * var(--bbText, 1));color:#999;max-width:800px;max-height:240px;overflow:auto;' +
             'background:#000;border:1px solid #500;padding:10px;text-align:left;white-space:pre-wrap;">' +
             detail + '</pre>' +
-          '<div style="font-size:11px;color:#8cf;max-width:640px;">' +
+          '<div style="font-size:calc(11px * var(--bbText, 1));color:#8cf;max-width:640px;">' +
             'Please screenshot this AND send byte-blaster-log.txt (next to the game .exe) — together they tell us exactly what broke.' +
           '</div>' +
           '<button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#204;' +
-            'color:#fff;border:2px solid #f4a;cursor:pointer;font-family:monospace;font-size:12px;">RELOAD</button>';
+            'color:#fff;border:2px solid #f4a;cursor:pointer;font-family:monospace;font-size:calc(12px * var(--bbText, 1));">RELOAD</button>';
         document.body.appendChild(el);
       } catch (e2) { /* even the fallback failed — nothing more we can do client-side */ }
     }
@@ -112,11 +145,11 @@
      ready, so the player never sees a half-built menu. Removed by the script at
      the bottom of <body>. Inline-styled so it shows before any CSS/JS parses. -->
 <div id="bootScreen" style="position:fixed;inset:0;z-index:99999;background:#04040f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Press Start 2P',monospace;transition:opacity .45s ease">
-  <div style="font-size:22px;color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff;letter-spacing:5px;text-align:center">⚡ BYTE BLASTER</div>
+  <div style="font-size:calc(22px * var(--bbText, 1));color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff;letter-spacing:5px;text-align:center">⚡ BYTE BLASTER</div>
   <div style="width:200px;height:8px;background:#0a0a22;border:1px solid #0ff5;border-radius:4px;overflow:hidden">
     <div id="bootBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0af,#0ff);box-shadow:0 0 12px #0ff;transition:width .3s ease"></div>
   </div>
-  <div id="bootMsg" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4af;letter-spacing:2px">LOADING…</div>
+  <div id="bootMsg" style="font-family:'Share Tech Mono',monospace;font-size:calc(9px * var(--bbText, 1));color:#4af;letter-spacing:2px">LOADING…</div>
 </div>
 <div id="stars"></div>
 <div id="stage">
@@ -126,7 +159,7 @@
   <div class="uib"><div class="uil" data-i18n="lives">LIVES</div><div class="hearts" id="heartsEl"></div></div>
   <div class="uib"><div class="uil" data-i18n="level">LEVEL</div><div class="uiv" id="levelEl">1</div></div>
   <div id="timerUi" class="uib"><div class="uil" data-i18n="time">TIME</div><div id="timerVal">2:00</div></div>
-  <div class="uib" id="modeUI" style="display:none"><div class="uil" data-i18n="mode">MODE</div><div class="uiv" id="modeEl" style="font-size:6px">--</div></div>
+  <div class="uib" id="modeUI" style="display:none"><div class="uil" data-i18n="mode">MODE</div><div class="uiv" id="modeEl" style="font-size:calc(6px * var(--bbText, 1))">--</div></div>
   <div class="uib" id="coinsUi"><div class="uil" data-i18n="coins">COINS</div><div class="uiv" id="coinsEl">0</div></div>
   <div class="uib" id="keysUi" style="display:none"><div class="uil" data-i18n="keys">KEYS</div><div class="uiv" id="keysEl">0/3</div></div>
   <div class="uib" id="shardsUi" style="display:none"><div class="uil" data-i18n="crystals">CRYSTALS</div><div class="uiv" id="shardsEl">0/3</div></div>
@@ -162,12 +195,12 @@
       <span data-i18n="legend2">Z / X / CTRL — SHOOT (needs blaster power-up) &nbsp;|&nbsp; ESC — PAUSE</span><br>
       <span data-i18n="legend3">🟡 HIT GOLD BLOCKS FROM BELOW &nbsp;|&nbsp; STOMP ENEMIES FROM ABOVE</span>
     </div>
-    <div id="verTag" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:#4af7;letter-spacing:2px;margin-top:6px"></div>
+    <div id="verTag" style="font-family:'Share Tech Mono',monospace;font-size:calc(8px * var(--bbText, 1));color:#4af7;letter-spacing:2px;margin-top:6px"></div>
   </div>
 
   <!-- Play type select: Solo vs Online -->
   <div id="playTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
-    <h2 data-i18n="selectMode" style="font-size:13px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px;margin:0">SELECT MODE</h2>
+    <h2 data-i18n="selectMode" style="font-size:calc(13px * var(--bbText, 1));color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px;margin:0">SELECT MODE</h2>
     <div style="display:flex;gap:18px">
       <div class="mCard" id="soloCard" style="cursor:pointer">
         <div class="mIcon">👤</div>
@@ -185,7 +218,7 @@
 
   <!-- Online type: Local (LAN) vs Server -->
   <div id="netTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
-    <h2 data-i18n="netMultiplayer" style="font-size:12px;color:#f0f;text-shadow:0 0 14px #f0f;letter-spacing:3px;margin:0">🌐 ONLINE MULTIPLAYER</h2>
+    <h2 data-i18n="netMultiplayer" style="font-size:calc(12px * var(--bbText, 1));color:#f0f;text-shadow:0 0 14px #f0f;letter-spacing:3px;margin:0">🌐 ONLINE MULTIPLAYER</h2>
     <div style="display:flex;gap:18px">
       <div class="mCard" id="createRoomCard" style="cursor:pointer;border-color:#0f84">
         <div class="mIcon">➕</div>
@@ -207,7 +240,7 @@
     <button class="pBtn" id="resumeBtn" data-i18n="resume">▶ RESUME</button>
     <button class="pBtn" id="pauseMapBtn" data-i18n="map" style="display:none">🗺 MAP</button>
     <button class="pBtn" id="pauseMenuBtn" data-i18n="menu">⬅ MENU</button>
-    <div data-i18n="escResume" style="font-family:'Share Tech Mono',monospace;font-size:7px;color:#4af6;margin-top:4px">ESC — RESUME</div>
+    <div data-i18n="escResume" style="font-family:'Share Tech Mono',monospace;font-size:calc(7px * var(--bbText, 1));color:#4af6;margin-top:4px">ESC — RESUME</div>
   </div>
 
   <!-- Mode select -->
@@ -218,7 +251,7 @@
       <button class="ptBtn active" id="btn1p" onclick="setPlayers(1)" data-i18n="onePlayer">👤 1 PLAYER</button>
       <button class="ptBtn" id="btn2p" onclick="setPlayers(2)" data-i18n="twoPlayer">👥 2 PLAYERS</button>
     </div>
-    <div id="p2hint" data-i18n="p2hint" style="font-family:'Share Tech Mono',monospace;font-size:7px;color:#4af8;display:none;margin-top:-6px">
+    <div id="p2hint" data-i18n="p2hint" style="font-family:'Share Tech Mono',monospace;font-size:calc(7px * var(--bbText, 1));color:#4af8;display:none;margin-top:-6px">
       P1: WASD + Z/X shoot &nbsp;|&nbsp; P2: ← → ↑ + . / , shoot
     </div>
     <div id="modeCards">
@@ -236,7 +269,7 @@
 
   <!-- Difficulty select overlay (Normal vs Hardcore) -->
   <div id="diffOv" class="fov" style="background:#04040fee;gap:16px">
-    <h2 data-i18n="selectDiff" style="font-size:13px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px">SELECT DIFFICULTY</h2>
+    <h2 data-i18n="selectDiff" style="font-size:calc(13px * var(--bbText, 1));color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px">SELECT DIFFICULTY</h2>
     <div style="display:flex;gap:18px" id="diffCards">
       <div class="mCard" id="normalCard">
         <div class="mIcon">⚔️</div><div class="mTitle" data-i18n="normal" style="color:#0ff">NORMAL</div>
@@ -256,7 +289,7 @@
       <h2 data-i18n="advMap">🗺 ADVENTURE MAP</h2>
       <div id="mapProg">0 / 100</div>
     <button id="mapBackBtn" data-i18n="back">← BACK [ESC]</button>
-      <div style="font-family:monospace;font-size:8px;color:#ffffff33;margin-top:4px;letter-spacing:1px"> </div>
+      <div style="font-family:monospace;font-size:calc(8px * var(--bbText, 1));color:#ffffff33;margin-top:4px;letter-spacing:1px"> </div>
     </div>
     <div id="mapGrid"></div>
     <div id="mapFoot" data-i18n="mapFoot">CLICK UNLOCKED LEVEL • COMPLETE IN TIME • RESPAWN IN PLACE ON HIT</div>
@@ -267,9 +300,9 @@
 
 <!-- Boss intro overlay -->
 <div id="bossIntroOv" style="display:none;position:fixed;inset:0;background:#000c;z-index:30;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none">
-  <div id="bossIntroName" style="font-family:'Press Start 2P',monospace;font-size:22px;color:#f44;text-shadow:0 0 30px #f44,0 0 60px #f44;letter-spacing:4px;animation:bossShake .1s infinite"></div>
-  <div id="bossIntroHint" style="font-family:'Press Start 2P',monospace;font-size:7px;color:#ff8;text-align:center;max-width:500px;line-height:1.8"></div>
-  <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:#888;margin-top:6px" data-i18n="getReady">GET READY...</div>
+  <div id="bossIntroName" style="font-family:'Press Start 2P',monospace;font-size:calc(22px * var(--bbText, 1));color:#f44;text-shadow:0 0 30px #f44,0 0 60px #f44;letter-spacing:4px;animation:bossShake .1s infinite"></div>
+  <div id="bossIntroHint" style="font-family:'Press Start 2P',monospace;font-size:calc(7px * var(--bbText, 1));color:#ff8;text-align:center;max-width:500px;line-height:1.8"></div>
+  <div style="font-family:'Press Start 2P',monospace;font-size:calc(6px * var(--bbText, 1));color:#888;margin-top:6px" data-i18n="getReady">GET READY...</div>
 </div>
 
 <!-- Cutscene overlay -->
@@ -292,6 +325,11 @@
   <div id="csBarsBot"></div>
 </div>
 
+<!-- Партитуры и звуки — раньше всех, кто ими пользуется: audiofiles.js берёт
+     отсюда список файлов для загрузки, game.js — ноты для живого синтеза. -->
+<script src="assets/music-data.js"></script>
+<script src="assets/sfx-data.js"></script>
+<script>window.__chk('after music-data.js');</script>
 <script src="assets/audiofiles.js"></script>
 <script>window.__chk('after audiofiles.js');</script>
 <script src="assets/game.js"></script>
@@ -315,6 +353,21 @@
 <script src="assets/profile.js"></script>
 <script>window.__chk('after profile.js');</script>
 
+<!-- Друзья и публичная сводка прогресса. После profile.js: сводку берёт
+     window.Profile.snapshot(), второй такой же счётчик тут же с ним разошёлся бы. -->
+<script src="assets/friends.js"></script>
+<script>window.__chk('after friends.js');</script>
+
+<!-- Уведомления: приглашения друзей в комнату и объявления студии. После
+     friends.js — берёт данные оттуда. -->
+<script src="assets/notify.js"></script>
+<script>window.__chk('after notify.js');</script>
+
+<!-- Экран итогов уровня и поражения. Грузится после game.js: тот зовёт
+     window.Results уже во время игры, а не при разборе файла. -->
+<script src="assets/results.js"></script>
+<script>window.__chk('after results.js');</script>
+
 <!-- ══════════════════════════════════════════════════════════════
      BYTE BLASTER — NETWORK MULTIPLAYER MODULE
      Relay server: wss://byte-blaster-server-production.up.railway.app
@@ -326,23 +379,30 @@
   <h2 id="netLobbyTitle">⚡ ONLINE MULTIPLAYER</h2>
 
   <!-- Step: connect screen -->
+  <!-- Панель разложена на колонки: «кто я» слева, «что делаем» справа, общий
+       низ со статусом и кнопкой. На узком экране колонки просто встают в
+       столбик — см. .net-panel в network.css. Вертикальная простыня не влезала
+       по высоте, и лобби приходилось ужимать до нечитаемого. -->
   <div class="net-panel" id="netConnect">
+    <div class="net-col" id="netIdCol">
     <div class="net-label" data-i18n="netNickname">NICKNAME</div>
     <input class="net-input" id="netNick" maxlength="16" data-i18n-ph="netNickPlaceholder" placeholder="YOUR NAME" value="PLAYER"/>
     <div class="net-label" data-i18n="netRobotColour">ROBOT COLOUR</div>
     <div class="net-color-ring" id="netColorPicker"></div>
+    </div>
+    <div class="net-col" id="netModeCol">
     <!-- ════ CREATE ROOM view ════ -->
     <div id="netCreateView" style="display:none;flex-direction:column;gap:10px">
       <div class="net-label" data-i18n="netRoomSource">ROOM SOURCE</div>
       <div class="net-toggle-row">
-        <button class="net-btn secondary" id="netCreateSrcServerBtn" data-i18n="netServer" style="flex:1;font-size:6px">☁️ SERVER</button>
-        <button class="net-btn secondary" id="netCreateSrcLocalBtn" data-i18n="netLocal" style="flex:1;font-size:6px">📡 LOCAL</button>
+        <button class="net-btn secondary" id="netCreateSrcServerBtn" data-i18n="netServer" style="flex:1;font-size:calc(6px * var(--bbText, 1))">☁️ SERVER</button>
+        <button class="net-btn secondary" id="netCreateSrcLocalBtn" data-i18n="netLocal" style="flex:1;font-size:calc(6px * var(--bbText, 1))">📡 LOCAL</button>
       </div>
       <div class="net-status net-local-web-hint" style="display:none;color:#4af9"></div>
       <div class="net-label" data-i18n="netRoomVisibility">ROOM TYPE</div>
       <div class="net-toggle-row">
-        <button class="net-btn" id="netVisOpenBtn" data-i18n="netOpen" style="flex:1;font-size:6px">🌍 OPEN</button>
-        <button class="net-btn secondary" id="netVisClosedBtn" data-i18n="netClosed" style="flex:1;font-size:6px">🔒 CLOSED</button>
+        <button class="net-btn" id="netVisOpenBtn" data-i18n="netOpen" style="flex:1;font-size:calc(6px * var(--bbText, 1))">🌍 OPEN</button>
+        <button class="net-btn secondary" id="netVisClosedBtn" data-i18n="netClosed" style="flex:1;font-size:calc(6px * var(--bbText, 1))">🔒 CLOSED</button>
       </div>
       <div class="net-status" id="netVisHint" style="color:#4af9">🌍 anyone can find this room</div>
       <div class="net-label" data-i18n="netPlayerLimit">PLAYER LIMIT</div>
@@ -359,8 +419,8 @@
     <div id="netFindView" style="display:none;flex-direction:column;gap:10px">
       <div class="net-label" data-i18n="netRoomSource">ROOM SOURCE</div>
       <div class="net-toggle-row">
-        <button class="net-btn secondary" id="netSrcServerBtn" data-i18n="netServer" style="flex:1;font-size:6px">☁️ SERVER</button>
-        <button class="net-btn secondary" id="netSrcLocalBtn" data-i18n="netLocal" style="flex:1;font-size:6px">📡 LOCAL</button>
+        <button class="net-btn secondary" id="netSrcServerBtn" data-i18n="netServer" style="flex:1;font-size:calc(6px * var(--bbText, 1))">☁️ SERVER</button>
+        <button class="net-btn secondary" id="netSrcLocalBtn" data-i18n="netLocal" style="flex:1;font-size:calc(6px * var(--bbText, 1))">📡 LOCAL</button>
       </div>
       <div class="net-status net-local-web-hint" style="display:none;color:#4af9"></div>
       <div id="netLanHostRow" style="display:none;flex-direction:column;gap:4px">
@@ -377,16 +437,22 @@
       </div>
       <div class="net-label" style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
         <span id="netRoomsListTitle" data-i18n="netRoomsListTitle">AVAILABLE ROOMS</span>
-        <button class="net-btn secondary" id="netReloadRoomsBtn" data-i18n="netReload" style="font-size:5px;padding:3px 7px">↻ RELOAD</button>
+        <button class="net-btn secondary" id="netReloadRoomsBtn" data-i18n="netReload" style="font-size:calc(5px * var(--bbText, 1));padding:3px 7px">↻ RELOAD</button>
       </div>
       <div id="netRoomsList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto"></div>
     </div>
+    </div>
+    <div class="net-foot">
     <div class="net-status" id="netConnStatus">connecting to server…</div>
     <button class="net-btn secondary" id="netBackBtn" data-i18n="netBack" style="margin-top:4px">← BACK</button>
+    </div>
   </div>
 
   <!-- Step: room lobby -->
   <div class="net-panel" id="netRoom" style="display:none">
+    <!-- Слева комната и кто в ней, справа переписка и выбор уровня, внизу
+         кнопки. Раньше всё это шло одним столбцом высотой в полтора экрана. -->
+    <div class="net-col" id="netRoomLeft">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
         <div class="net-label" data-i18n="netRoomCodeLabel">ROOM CODE</div>
@@ -396,6 +462,15 @@
     </div>
     <div class="net-label" id="netPlayersLabel">PLAYERS (max 5)</div>
     <div id="netPlayerList"></div>
+    <!-- Друзья: позвать в эту комнату одним нажатием. Список берётся из того
+         же аккаунта, что и на сайте (assets/friends.js). -->
+    <div id="netFriendsBox" style="display:none;flex-direction:column;gap:6px;margin-top:4px">
+      <div class="net-label" data-i18n="netInviteFriends">INVITE FRIENDS</div>
+      <div id="netFriendList"></div>
+      <div class="net-status" id="netInviteStatus"></div>
+    </div>
+    </div>
+    <div class="net-col" id="netRoomRight">
     <div class="net-label" data-i18n="netChatLabel" style="margin-top:4px">CHAT</div>
     <div id="netChat"></div>
     <input class="net-input" id="netChatInput" maxlength="80" data-i18n-ph="netChatPlaceholder" placeholder="TYPE + ENTER"/>
@@ -403,8 +478,8 @@
     <div id="netLevelPicker" style="display:none;flex-direction:column;gap:8px;border-top:1px solid #0ff2;padding-top:10px">
       <div class="net-label" data-i18n="netGameMode">GAME MODE</div>
       <div style="display:flex;gap:8px">
-        <button class="net-btn" id="netModeAdv" data-i18n="netModeAdventure" style="flex:1;font-size:6px">🗺 ADVENTURE</button>
-        <button class="net-btn secondary" id="netModeInf" data-i18n="netModeInfinite" style="flex:1;font-size:6px">∞ INFINITE</button>
+        <button class="net-btn" id="netModeAdv" data-i18n="netModeAdventure" style="flex:1;font-size:calc(6px * var(--bbText, 1))">🗺 ADVENTURE</button>
+        <button class="net-btn secondary" id="netModeInf" data-i18n="netModeInfinite" style="flex:1;font-size:calc(6px * var(--bbText, 1))">∞ INFINITE</button>
       </div>
       <div id="netLvlRow" style="display:none;flex-direction:column;gap:6px">
         <div class="net-label" data-i18n="netLevelRange">LEVEL (1–100)</div>
@@ -413,12 +488,15 @@
       <div class="net-status" id="netLevelStatus" style="color:#ff0">⚡ choose a mode</div>
     </div>
 
+    </div>
+    <div class="net-foot">
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="net-btn" id="netReadyBtn" data-i18n="netReady">✔ READY</button>
       <button class="net-btn" id="netStartBtn" data-i18n="netStart" style="display:none">▶ START</button>
       <button class="net-btn danger" id="netLeaveBtn" data-i18n="netLeave">✕ LEAVE</button>
     </div>
     <div class="net-status" id="netRoomStatus"></div>
+    </div>
   </div>
 </div><!-- /#netLobby -->
 
@@ -428,27 +506,27 @@
      correctly while the game canvas is up. -->
   <!-- Loading / countdown overlay -->
   <div id="netLoading" style="display:none;position:fixed;inset:0;z-index:950;background:#04040ff5;flex-direction:column;align-items:center;justify-content:center;gap:20px;font-family:'Press Start 2P',monospace">
-    <div style="font-size:11px;color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:4px" id="netLoadTitle">LOADING LEVEL</div>
-    <div style="font-size:28px;color:#ff0;text-shadow:0 0 24px #ff0" id="netLoadCount">3</div>
-    <div style="font-size:7px;color:#4af8;letter-spacing:2px" id="netLoadSub">get ready…</div>
+    <div style="font-size:calc(11px * var(--bbText, 1));color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:4px" id="netLoadTitle">LOADING LEVEL</div>
+    <div style="font-size:calc(28px * var(--bbText, 1));color:#ff0;text-shadow:0 0 24px #ff0" id="netLoadCount">3</div>
+    <div style="font-size:calc(7px * var(--bbText, 1));color:#4af8;letter-spacing:2px" id="netLoadSub">get ready…</div>
   </div>
 
   <!-- Connection-lost overlay (shown if the socket drops mid-game) -->
   <div id="netConnLost" style="display:none;position:fixed;inset:0;z-index:960;background:#0a0208f8;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Press Start 2P',monospace">
-    <div style="font-size:11px;color:#f55;text-shadow:0 0 18px #f00;letter-spacing:3px" id="netConnLostTitle">⚠ CONNECTION LOST</div>
-    <div style="font-size:7px;color:#fa8;letter-spacing:2px" id="netConnLostSub">trying to reconnect…</div>
+    <div style="font-size:calc(11px * var(--bbText, 1));color:#f55;text-shadow:0 0 18px #f00;letter-spacing:3px" id="netConnLostTitle">⚠ CONNECTION LOST</div>
+    <div style="font-size:calc(7px * var(--bbText, 1));color:#fa8;letter-spacing:2px" id="netConnLostSub">trying to reconnect…</div>
     <button class="net-btn danger" id="netConnLostBtn" style="margin-top:6px">← RETURN TO LOBBY</button>
   </div>
 
   <!-- Co-op "waiting for the other players to finish" overlay (dims the game). -->
   <div id="netWaiting" style="display:none;position:fixed;inset:0;z-index:940;background:#04040fcc;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Press Start 2P',monospace">
-    <div style="font-size:10px;color:#0ff;text-shadow:0 0 16px #0ff;letter-spacing:3px" id="netWaitingTitle" data-i18n="netWaitingTitle">✓ LEVEL CLEARED</div>
-    <div style="font-size:9px;color:#ff0;text-shadow:0 0 18px #ff0;letter-spacing:2px" id="netWaitingTxt">WAITING FOR PLAYERS 1/2</div>
-    <div style="font-size:6px;color:#4af8;letter-spacing:2px" id="netWaitingSub" data-i18n="netWaitingSub">the level continues once everyone reaches the flag</div>
+    <div style="font-size:calc(10px * var(--bbText, 1));color:#0ff;text-shadow:0 0 16px #0ff;letter-spacing:3px" id="netWaitingTitle" data-i18n="netWaitingTitle">✓ LEVEL CLEARED</div>
+    <div style="font-size:calc(9px * var(--bbText, 1));color:#ff0;text-shadow:0 0 18px #ff0;letter-spacing:2px" id="netWaitingTxt">WAITING FOR PLAYERS 1/2</div>
+    <div style="font-size:calc(6px * var(--bbText, 1));color:#4af8;letter-spacing:2px" id="netWaitingSub" data-i18n="netWaitingSub">the level continues once everyone reaches the flag</div>
   </div>
 
   <!-- In-game ping readout (top-right). Shown only during a network game. -->
-  <div id="netGamePing" style="display:none;position:fixed;top:8px;right:10px;z-index:920;font-family:'Press Start 2P',monospace;font-size:8px;color:#0f8;text-shadow:0 0 6px #000,0 0 3px #000;pointer-events:none;letter-spacing:1px">📶 -- ms</div>
+  <div id="netGamePing" style="display:none;position:fixed;top:8px;right:10px;z-index:920;font-family:'Press Start 2P',monospace;font-size:calc(8px * var(--bbText, 1));color:#0f8;text-shadow:0 0 6px #000,0 0 3px #000;pointer-events:none;letter-spacing:1px">📶 -- ms</div>
 
 </div><!-- /#stage -->
 

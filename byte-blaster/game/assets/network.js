@@ -127,7 +127,12 @@ const $gamePing    = document.getElementById('netGamePing');
     const vpH = (vv && vv.height) ? vv.height : window.innerHeight;
     const w = inner.offsetWidth, h = inner.offsetHeight;
     if(!w || !h) return;
-    let k = Math.min((vpW * 0.96) / w, (vpH * 0.96) / h, 1);
+    // offsetWidth/Height не учитывают zoom, а вьюпорт — реальный. Без деления
+    // на множитель интерфейса подгонка «не видела» увеличения и ужимала лобби
+    // ровно во столько же раз, во сколько игрок его увеличил.
+    const uz = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue('--bbUI')) || 1;
+    let k = Math.min((vpW * 0.96) / (w * uz), (vpH * 0.96) / (h * uz), 1);
     // READABILITY FLOOR. Scaling the whole lobby to fit meant every attempt to
     // make its buttons thumb-sized simply shrank k by the same factor — the
     // controls measured 23px tall on a phone no matter what the CSS said. Below
@@ -147,7 +152,8 @@ const $gamePing    = document.getElementById('netGamePing');
     inner.style.transformOrigin = floored ? 'top center' : 'center center';
     // A scaled box still reserves its UNSCALED height in the scroll container,
     // leaving a large empty gap. Reserve the visual height instead.
-    inner.style.marginBottom = floored ? (-(h * (1 - k)) + 'px') : '';
+    // Высоту резервируем видимую, а она с учётом увеличения — h * uz * k.
+    inner.style.marginBottom = floored ? (-(h * uz * (1 - k)) + 'px') : '';
   }
   window._netFitLobby = fitLobby;
   // Re-fit on any content/size change (switching connect<->room, player list,
@@ -285,7 +291,7 @@ function connect(){
     if(roomCode && $room.style.display !== 'none'){
       roomCode = null; isHost = false; isReady = false; players = [];
       $room.style.display = 'none';
-      $connect.style.display = 'flex';
+      $connect.style.display = '';
     }
     $connStatus.textContent = T('netDisconnected');
     $connStatus.classList.add('net-error');
@@ -524,8 +530,11 @@ function handleServerMsg(msg){
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
 function enterRoomScreen(){
+  // Показываем пустой строкой, а не 'flex': инлайновый display перебивал бы
+  // grid из медиазапроса, панель осталась бы одной колонкой, а вторая —
+  // пустым местом справа. Проверки «!== 'none'» с пустой строкой работают.
   $connect.style.display = 'none';
-  $room.style.display    = 'flex';
+  $room.style.display    = '';
   $roomCode.textContent  = roomCode;
   isReady = false;
   $readyBtn.textContent  = T('netReady');
@@ -542,6 +551,54 @@ function enterRoomScreen(){
   else { setRoomStatus(T('netWaitHost')); }
   // Clear chat from any previous room
   $chat.innerHTML = '';
+  refreshFriendInvites();
+}
+
+/* ── Позвать друзей в эту комнату ────────────────────────────────────────
+   Список тот же, что в профиле и на сайте: аккаунт один. Показываем блок
+   только когда есть кого звать — пустой заголовок «пригласить друзей» в
+   комнате выглядит как сломанная кнопка.
+
+   Звать можно только друга, и это проверяет сервер (invite_to_room): иначе
+   код комнаты стал бы способом рассылать приглашения кому угодно. */
+function refreshFriendInvites(){
+  const box  = document.getElementById('netFriendsBox');
+  const list = document.getElementById('netFriendList');
+  const stat = document.getElementById('netInviteStatus');
+  if(!box || !list) return;
+  box.style.display = 'none';
+  list.innerHTML = '';
+  if(stat) stat.textContent = '';
+  if(!window.Friends || !window.License || !window.License.loggedIn()) return;
+
+  window.Friends.list().then((all) => {
+    const friends = (all || []).filter(f => f.kind === 'friend');
+    if(!friends.length || !roomCode) return;
+    box.style.display = 'flex';
+    friends.forEach((f) => {
+      const row = document.createElement('div');
+      row.className = 'net-friend';
+      const name = document.createElement('b');
+      name.textContent = f.nickname;
+      const btn = document.createElement('button');
+      btn.className = 'net-btn secondary';
+      btn.textContent = T('netInvite');
+      btn.onclick = () => {
+        btn.disabled = true;
+        // Источник комнаты передаём вместе с кодом: гость обязан подключиться
+        // туда же, иначе шесть символов кода ничего не значат.
+        const src = (_lobbyMode === 'lan') ? 'local' : 'server';
+        window.Friends.invite(f.nickname, roomCode, src)
+          .then(() => { btn.textContent = T('netInvited');
+                        if(stat) stat.textContent = T('netInviteSent', f.nickname); })
+          .catch((e) => { btn.disabled = false;
+                          if(stat) stat.textContent = T('netInviteFailed'); });
+      };
+      row.appendChild(name); row.appendChild(btn);
+      list.appendChild(row);
+    });
+    if(window._netFitLobby) window._netFitLobby();
+  }).catch(() => { /* нет сети или миграция не применена — блок просто не покажем */ });
 }
 
 function refreshPlayerList(){
@@ -1663,7 +1720,7 @@ function leaveRoom(){
   roomCode = null; isHost = false; isReady = false; players = [];
   if(ws){ try{ ws.close(); }catch(e){} ws=null; }
   $room.style.display    = 'none';
-  $connect.style.display = 'flex';
+  $connect.style.display = '';
   $lobby.style.display   = 'none';
   if(typeof showNetType==='function') showNetType();
   else if(typeof showMain==='function') showMain();
@@ -1735,7 +1792,7 @@ window.NetPlay = {
 
     netApplyLang();
     if(typeof window.applyI18nDOM==='function') window.applyI18nDOM();
-    $connect.style.display = 'flex';
+    $connect.style.display = '';
     $room.style.display    = 'none';
     $lobby.style.display   = 'flex';
     if(window._netFitLobby){ window._netFitLobby(); [60,200,500].forEach(t=>setTimeout(window._netFitLobby,t)); }
@@ -1752,6 +1809,40 @@ window.NetPlay = {
   },
   close: leaveRoom,
   isActive(){ return window.netActive; },
+
+  /**
+   * Войти в комнату по коду. Нужен уведомлению о приглашении: нажатие должно
+   * заводить игрока прямо в комнату друга, а не открывать лобби «где-то рядом».
+   *
+   * `source` обязателен вместе с кодом: комната живёт либо на облачном relay,
+   * либо в локальной сети, и один и тот же код в другом источнике не значит
+   * ничего. Подключение может быть ещё не поднято (игрок в главном меню),
+   * поэтому отправку ставим в очередь до открытия сокета.
+   */
+  joinByCode(code, source){
+    const clean = String(code || '').toUpperCase().trim();
+    if(clean.length !== 6) return false;
+    this.open('find');
+    // В приглашении источник называется 'local' (так его понимает база),
+    // а внутри лобби тот же режим зовётся 'lan'.
+    if(source === 'local') setSource('lan');
+    else if(source === 'server') setSource('server');
+    const input = document.getElementById('netCodeInput');
+    if(input) input.value = clean;
+
+    const send = () => wsSend({type:'join_room', code:clean, nickname:myNick, color:myColor});
+    if(ws && ws.readyState === 1) send();
+    else {
+      // Сокет ещё открывается — ждём, но не вечно: если за десять секунд не
+      // поднялся, игрок остаётся в лобби с уже вписанным кодом и жмёт «войти».
+      let tries = 0;
+      const t = setInterval(() => {
+        if(ws && ws.readyState === 1){ clearInterval(t); send(); }
+        else if(++tries > 40) clearInterval(t);
+      }, 250);
+    }
+    return true;
+  },
 };
 
 // ── Util ─────────────────────────────────────────────────────────────────────

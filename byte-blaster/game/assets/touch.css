@@ -201,7 +201,7 @@
   max-width: 92vw;
 }
 #tpEditHint {
-  font-size: 8px;
+  font-size: calc(8px * var(--bbText, 1));
   color: #0ff;
   letter-spacing: 1px;
   line-height: 1.6;
@@ -212,14 +212,14 @@
 #tpEditSize { display: flex; align-items: center; gap: 14px; }
 #tpSizeLbl {
   font-family: 'Press Start 2P', monospace;
-  font-size: 10px;
+  font-size: calc(10px * var(--bbText, 1));
   color: #fff;
   min-width: 52px;
   text-align: center;
 }
 .tpSizeBtn {
   font-family: 'Press Start 2P', monospace;
-  font-size: 14px;
+  font-size: calc(14px * var(--bbText, 1));
   width: 38px;
   height: 38px;
   border-radius: 6px;
@@ -231,7 +231,7 @@
 }
 #tpEditBar #tpEditBtns button {
   font-family: 'Press Start 2P', monospace;
-  font-size: 9px;
+  font-size: calc(9px * var(--bbText, 1));
   padding: 9px 14px;
   border-radius: 4px;
   cursor: pointer;
@@ -242,7 +242,7 @@
 /* ◀▶ SPLIT / LINK arrows toggle in the edit bar. */
 #tpEditLink {
   font-family: 'Press Start 2P', monospace;
-  font-size: 9px;
+  font-size: calc(9px * var(--bbText, 1));
   padding: 9px 14px;
   border-radius: 4px;
   cursor: pointer;

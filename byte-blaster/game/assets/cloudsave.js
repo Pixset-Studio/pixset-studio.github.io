@@ -19,7 +19,7 @@
   const SEEN_KEY = 'bbCloudSeen';     // отметка последней синхронизации
   const AUTO_DELAY_MS = 20000;        // копим изменения, а не шлём каждое
 
-  // Что уезжает в облако: прогресс, слоты, достижения, настройки, профиль.
+  // Что уезжает в облако: прогресс, слоты, достижения, профиль.
   // Всё, что игра держит под своим префиксом, кроме служебных отметок —
   // они привязаны к устройству и на другом только помешают.
   const SKIP = new Set([
@@ -29,6 +29,31 @@
     'bbNetLanHost', 'bb_net_lanhost',   // адрес в локальной сети
   ]);
 
+  const SETTINGS_KEY = 'bbSettings';
+
+  /* ── Настройки: что принадлежит устройству, а что игроку ────────────────
+     Раньше bbSettings уезжал в облако целиком, и загрузка сохранения на
+     телефоне привозила туда разрешение окна, режим окна, тир графики и
+     раскладку клавиатуры с ПК — экранные кнопки пропадали, качество прыгало,
+     масштаб ломался. Теперь ключи настроек делятся на две части:
+
+       • DEVICE_SETTINGS — привязаны к железу и экрану. Никогда не уезжают в
+         облако и никогда не перезаписываются загрузкой.
+       • всё остальное (язык, катсцены, громкость, тряска, подсказки…) —
+         предпочтения игрока, они как раз и должны переезжать. */
+  const DEVICE_SETTINGS = new Set([
+    // экран и окно
+    'resolution', 'customResolution', 'gameScale', 'mobileZoom', 'windowMode',
+    'textScale',
+    // производительность
+    'graphicsQuality', 'gfx', 'particles', 'fpsLimit', 'showFPS', 'vsync',
+    'adaptiveQuality',
+    // управление
+    'controls',
+    'touchControls', 'touchStyle', 'touchArrowsSplit', 'touchJoyFloat',
+    'touchLayout', 'touchScale', 'touchScales',
+  ]);
+
   function isOurs(key) {
     if (!/^bb/.test(key)) return false;
     if (SKIP.has(key)) return false;
@@ -36,12 +61,53 @@
     return true;
   }
 
+  function parseSettings(raw) {
+    try {
+      const o = JSON.parse(raw);
+      return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
+    } catch (e) { return null; }
+  }
+
+  /** Настройки без всего, что относится к конкретному устройству. */
+  function portableSettings(raw) {
+    const o = parseSettings(raw);
+    if (!o) return null;
+    const out = {};
+    for (const k in o) if (!DEVICE_SETTINGS.has(k)) out[k] = o[k];
+    return out;
+  }
+
+  /**
+   * Настройки этого устройства + предпочтения из облака.
+   * Локальные значения экрана, графики и управления остаются нетронутыми,
+   * даже если в сохранении они есть (старые сохранения полны ими).
+   */
+  function mergeSettings(localRaw, cloudRaw) {
+    const cloud = parseSettings(cloudRaw);
+    if (!cloud) return null;                    // нечего накладывать
+    const local = parseSettings(localRaw) || {};
+    const merged = Object.assign({}, local);
+    for (const k in cloud) if (!DEVICE_SETTINGS.has(k)) merged[k] = cloud[k];
+    // Ключи устройства берём строго местные — включая те, которых тут ещё нет.
+    DEVICE_SETTINGS.forEach((k) => {
+      if (k in local) merged[k] = local[k];
+      else delete merged[k];
+    });
+    return JSON.stringify(merged);
+  }
+
   /** Слепок прогресса с этого устройства. */
   function collect() {
     const blob = {};
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (isOurs(k)) blob[k] = localStorage.getItem(k);
+      if (!isOurs(k)) continue;
+      if (k === SETTINGS_KEY) {
+        const p = portableSettings(localStorage.getItem(k));
+        if (p) blob[k] = JSON.stringify(p);
+        continue;
+      }
+      blob[k] = localStorage.getItem(k);
     }
     return blob;
   }
@@ -51,17 +117,27 @@
     if (!blob || typeof blob !== 'object') return 0;
     let n = 0;
     // Сначала убираем то, чего в сохранении нет: иначе пройденные уровни с
-    // этого устройства «просочились» бы в загруженный прогресс.
+    // этого устройства «просочились» бы в загруженный прогресс. Настройки —
+    // исключение: их отсутствие в облаке не повод обнулять местные.
     const stale = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (isOurs(k) && !(k in blob)) stale.push(k);
+      if (isOurs(k) && k !== SETTINGS_KEY && !(k in blob)) stale.push(k);
     }
     stale.forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });
 
     for (const k in blob) {
       if (!isOurs(k)) continue;
-      try { localStorage.setItem(k, blob[k]); n++; } catch (e) {}
+      try {
+        if (k === SETTINGS_KEY) {
+          const merged = mergeSettings(localStorage.getItem(k), blob[k]);
+          if (merged === null) continue;        // в облаке мусор — не трогаем
+          localStorage.setItem(k, merged);
+        } else {
+          localStorage.setItem(k, blob[k]);
+        }
+        n++;
+      } catch (e) {}
     }
     return n;
   }
@@ -129,6 +205,12 @@
     const rows = await res.json().catch(() => []);
     const when = (rows && rows[0] && rows[0].updated_at) || new Date().toISOString();
     try { localStorage.setItem(SEEN_KEY, when); } catch (e) {}
+
+    // Заодно обновляем публичную сводку для друзей. Она открыта всем, а само
+    // сохранение приватно — поэтому это отдельная запись, а не часть блоба.
+    // Ошибку глушим: витрина не должна ронять сохранение прогресса.
+    try { if (window.Friends && window.Friends.publish) window.Friends.publish(); } catch (e) {}
+
     return when;
   }
 

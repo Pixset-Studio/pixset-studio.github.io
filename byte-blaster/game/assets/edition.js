@@ -7,6 +7,6 @@
 //   BB_BUILD_TYPE  "dev" | "demo" | "pre-alpha" | "alpha" | "beta" | "release"
 //   BB_FREE_LEVELS сколько уровней приключения открыто без лицензии
 //   BB_STORE_URL   куда ведёт кнопка «купить полную версию»
-window.BB_BUILD_TYPE = "dev";
+window.BB_BUILD_TYPE = "release";
 window.BB_FREE_LEVELS = 10;
 window.BB_STORE_URL = "https://pixset-studio.github.io/byte-blaster/buy/";

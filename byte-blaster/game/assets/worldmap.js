@@ -458,35 +458,35 @@
     hud.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
     hud.innerHTML = `
       <div id="mapHudTL" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: top left; pointer-events: none; z-index: 10; background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
-        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
-        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
-        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
+        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: calc(12px * var(--bbText, 1)); color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
+        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
+        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
       </div>
       <div id="mapWorldTitle" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); transform-origin: top center; z-index: 10; pointer-events: none; text-align: center;">
-        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: 20px; letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
-        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
-        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
+        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: calc(20px * var(--bbText, 1)); letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
+        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: calc(12px * var(--bbText, 1)); letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
+        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
       </div>
-      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
-      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
-      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
-      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer;">← BACK</button>
-      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
-      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
+      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: calc(26px * var(--bbText, 1)); cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
+      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: calc(26px * var(--bbText, 1)); cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
+      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
+      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px; cursor: pointer;">← BACK</button>
+      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
+      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
         ↑↓←→ / WASD — MOVE<br>
         ENTER / SPACE — START<br>
         ESC — BACK TO MENU
       </div>
       <div id="mapLevelPanel" style="position: fixed; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); transform-origin: bottom center; background: rgba(0,0,0,0.92); border: 2px solid #0ff; padding: 11px 28px; text-align: center; min-width: 310px; display: none; z-index: 11;">
-        <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: 12px; font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
-        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
-        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
-        <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px;"></div>
+        <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: calc(12px * var(--bbText, 1)); font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
+        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
+        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
+        <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px;"></div>
       </div>
     `;
 
@@ -588,9 +588,13 @@
     // info panels down to ~3px (invisible/untappable). Give them a bigger base
     // size on touch so that — even after scaling — they stay readable and meet
     // a comfortable touch-target size. Reset to the desktop size otherwise.
+    // Размер пишем через тот же множитель --bbText, что и вся остальная
+    // разметка: голое «13px» перебивало настройку размера текста, и эти две
+    // кнопки оставались мелкими, когда всё вокруг увеличилось.
+    const touchFS = 'calc(13px * var(--bbText, 1))';
     const achEl0 = mapOverlay.querySelector('#mapAchBtn');
-    if (achEl0)    { achEl0.style.fontSize  = isTouch ? '13px' : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
-    if (backTouch) { backTouch.style.fontSize = isTouch ? '13px' : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
+    if (achEl0)    { achEl0.style.fontSize  = isTouch ? touchFS : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
+    if (backTouch) { backTouch.style.fontSize = isTouch ? touchFS : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
 
     // One master scale `k` (≤1) shared by every panel so the chrome stays
     // proportional AND leaves the node field enough room. Constraints folded in:
