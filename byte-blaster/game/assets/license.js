@@ -112,25 +112,6 @@
     });
   }
 
-  /**
-   * Записывает сессию, дополнив её сроком годности.
-   *
-   * REST-ответ GoTrue гарантирует только `expires_in` (секунды): `expires_at`
-   * досчитывает клиентская библиотека, а мы ходим в API напрямую. Без него
-   * проверка «токен ещё жив» ниже всегда давала false, и игра обновляла токен
-   * при КАЖДОМ обращении — а раз refresh-токены одноразовые, лишние обновления
-   * гарантированно приводили к отказу «Already Used».
-   */
-  function saveSession(data) {
-    if (!data || !data.access_token) return null;
-    if (!data.expires_at) {
-      const life = Number(data.expires_in) || 3600;
-      data.expires_at = Math.floor(Date.now() / 1000) + life;
-    }
-    store.set(K_SESSION, JSON.stringify(data));
-    return data;
-  }
-
   async function login(email, password) {
     const res = await authFetch('/auth/v1/token?grant_type=password', { email, password });
     const data = await res.json();
@@ -139,7 +120,7 @@
       e.code = data.error_code || data.error;
       throw e;
     }
-    saveSession(data);
+    store.set(K_SESSION, JSON.stringify(data));
     return refresh();
   }
 
@@ -151,55 +132,6 @@
 
   function session() { return readJSON(K_SESSION); }
   function loggedIn() { return !!session(); }
-  /** id игрока в базе. Нужен там, где запрос фильтруется по обеим сторонам
-      пары (друзья): без него пришлось бы полагаться только на политику RLS. */
-  function userId() { const s = session(); return (s && s.user && s.user.id) || null; }
-
-  /* ── Обновление сессии ──────────────────────────────────────────────────
-     Здесь игрока выкидывало из аккаунта при каждом перезапуске: ник и лицензия
-     оставались (они в подписанном токене), а сессия исчезала, и игра снова
-     просила почту с паролем. Причин было три, и все три ниже закрыты.
-
-       1. Срок сессии не досчитывался (см. saveSession) — обновление шло на
-          каждый чих.
-       2. Обновления не были одиночными: старт игры, экран аккаунта и облачные
-          сохранения могли одновременно отправить ОДИН И ТОТ ЖЕ refresh-токен.
-          Он одноразовый: первый запрос выдавал новую сессию, второй получал
-          «Already Used» — и стирал только что выданную. Теперь параллельные
-          вызовы ждут один общий запрос.
-       3. Сессия удалялась при ЛЮБОМ неуспешном ответе. Упавший сервер,
-          лимит запросов, страница-заглушка провайдера — и честный вход
-          потерян навсегда. Теперь удаляем, только когда сервер прямо говорит,
-          что токен недействителен. */
-  let _refreshing = null;   // общий запрос обновления для всех, кто ждёт
-
-  /** Ответ, после которого сессию действительно надо забыть. */
-  function _tokenRejected(status, body) {
-    if (status !== 400 && status !== 401 && status !== 403) return false;
-    const msg = String((body && (body.error_description || body.msg || body.message || body.error)) || '')
-      .toLowerCase();
-    // «Already Used» — это гонка запросов, а не потерянный вход: в хранилище
-    // уже лежит сессия, которую выдал победивший запрос.
-    if (msg.includes('already used')) return false;
-    return true;
-  }
-
-  async function _doRefresh(refreshToken) {
-    const res = await authFetch('/auth/v1/token?grant_type=refresh_token',
-      { refresh_token: refreshToken });
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      if (_tokenRejected(res.status, data)) { store.remove(K_SESSION); return null; }
-      // Временная беда — вход сохраняем и попробуем в следующий раз.
-      lastError = 'auth_' + res.status;
-      const now = session();
-      // Пока мы ходили в сеть, параллельный запрос мог обновить сессию.
-      return (now && now.refresh_token !== refreshToken) ? now.access_token : null;
-    }
-    const saved = saveSession(data);
-    return saved ? saved.access_token : null;
-  }
 
   /** Обновляет access_token, если он протух. */
   async function accessToken() {
@@ -208,11 +140,12 @@
     const alive = s.expires_at && s.expires_at - 60 > Math.floor(Date.now() / 1000);
     if (alive) return s.access_token;
 
-    if (_refreshing) return _refreshing;
-    _refreshing = _doRefresh(s.refresh_token)
-      .catch(() => null)                       // нет сети — вход остаётся
-      .finally(() => { _refreshing = null; });
-    return _refreshing;
+    const res = await authFetch('/auth/v1/token?grant_type=refresh_token',
+      { refresh_token: s.refresh_token });
+    if (!res.ok) { store.remove(K_SESSION); return null; }
+    const data = await res.json();
+    store.set(K_SESSION, JSON.stringify(data));
+    return data.access_token;
   }
 
   /**
@@ -333,7 +266,7 @@
 
   window.License = {
     init, login, logout, refresh, refreshQuietly,
-    hasGame, stale, nickname, email, problem, loggedIn, isReady, userId,
+    hasGame, stale, nickname, email, problem, loggedIn, isReady,
     memberSince, country, deviceCount, expiresAt, licence, setNickname,
     platformLabel: label,
     // Нужен модулю облачных сохранений: он ходит в базу от имени игрока,

@@ -1,0 +1,70 @@
+<!-- Pixset Studio — вход по коду.
+     Supabase → Authentication → Email Templates → Magic Link.
+     Про вёрстку и двуязычность см. комментарий в confirm-signup.html. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:#0b0b12;margin:0;padding:28px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="max-width:520px;background:#12121c;border:1px solid #1f2f4a;border-radius:10px;">
+
+      <tr><td style="padding:26px 28px 8px;text-align:center;">
+        <div style="font-family:'Courier New',Consolas,monospace;font-size:20px;font-weight:bold;
+                    letter-spacing:4px;color:#00e5ff;">PIXSET STUDIO</div>
+        <div style="font-family:'Courier New',Consolas,monospace;font-size:11px;
+                    letter-spacing:2px;color:#5f7a99;margin-top:6px;">
+          ВХОД В АККАУНТ &nbsp;·&nbsp; SIGN IN</div>
+      </td></tr>
+
+      <tr><td style="padding:0 28px;">
+        <div style="height:1px;background:#1f2f4a;margin:16px 0 20px;"></div>
+      </td></tr>
+
+      <tr><td style="padding:0 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;
+                     line-height:1.65;color:#d5dde8;">
+        <p style="margin:0 0 20px;">Код для входа в аккаунт Pixset Studio:</p>
+      </td></tr>
+
+      <tr><td style="padding:0 28px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="background:#0a1420;border:1px solid #00e5ff;border-radius:8px;">
+          <tr><td align="center" style="padding:20px 12px;">
+            <div style="font-family:'Courier New',Consolas,monospace;font-size:34px;
+                        font-weight:bold;letter-spacing:10px;color:#00e5ff;">{{ .Token }}</div>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;
+                     font-size:13px;line-height:1.6;color:#8fa3b8;">
+        <p style="margin:0 0 10px;">Код действует один час и работает один раз.</p>
+        <p style="margin:0;color:#e0a0a0;">
+          Если вы не пытались войти — кто-то ввёл вашу почту. Код никому не сообщайте:
+          он даёт полный доступ к аккаунту и купленным играм.
+        </p>
+      </td></tr>
+
+      <tr><td style="padding:0 28px;">
+        <div style="height:1px;background:#1f2f4a;margin:22px 0 18px;"></div>
+      </td></tr>
+      <tr><td style="padding:0 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;
+                     line-height:1.6;color:#a8b8c8;">
+        <p style="margin:0 0 12px;">Here is your sign-in code for Pixset Studio.</p>
+        <p style="margin:0;font-size:13px;color:#e0a0a0;">
+          It expires in one hour and works once. Never share it — the code gives full
+          access to your account and the games you own.
+        </p>
+      </td></tr>
+
+      <tr><td style="padding:22px 28px 26px;">
+        <div style="height:1px;background:#1f2f4a;margin-bottom:14px;"></div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#5f7a99;line-height:1.6;">
+          Письмо отправлено автоматически, отвечать на него не нужно.<br>
+          This is an automated message — no need to reply.<br>
+          <a href="mailto:pixset.studio.offical@gmail.com"
+             style="color:#00e5ff;text-decoration:none;">pixset.studio.offical@gmail.com</a>
+        </div>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>

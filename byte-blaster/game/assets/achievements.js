@@ -112,31 +112,20 @@
   };
 
   function loadAchievements() {
-    // Проверяется не только разбор, но и форма: "null", число или объект тоже
-    // проходят JSON.parse, а дальше по коду список открытых достижений
-    // используется как массив (includes/push) — на таком значении экран
-    // достижений падал бы. Списки внутри stats — по той же причине.
     try {
       const saved = localStorage.getItem('bbAchievements');
-      const parsed = saved ? JSON.parse(saved) : null;
-      if (Array.isArray(parsed)) unlockedAchievements = parsed;
-      else if (parsed != null) console.warn('bbAchievements has an unexpected shape — starting with none unlocked.');
+      if (saved) {
+        unlockedAchievements = JSON.parse(saved);
+      }
     } catch (e) {
       console.error('Failed to load achievements:', e);
     }
     try {
       const s = localStorage.getItem('bbAchStats');
-      const parsed = s ? JSON.parse(s) : null;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) stats = Object.assign(stats, parsed);
-      else if (parsed != null) console.warn('bbAchStats has an unexpected shape — starting from zero.');
+      if (s) stats = Object.assign(stats, JSON.parse(s));
     } catch (e) {
       console.error('Failed to load achievement stats:', e);
     }
-    // Наборы (миры с музыкой, просмотренные катсцены) обязаны остаться
-    // массивами: сохранение из другой сборки могло принести что угодно.
-    ['musicWorlds', 'cutscenes'].forEach((k) => {
-      if (!Array.isArray(stats[k])) stats[k] = [];
-    });
   }
 
   function saveAchievements() {
@@ -228,13 +217,13 @@
     `;
 
     notification.innerHTML = `
-      <div style="color: #ffd700; font-size: calc(10px * var(--bbText, 1)); margin-bottom: 8px; text-shadow: 0 0 10px #ffd700;">🏆 ${unlockText}</div>
+      <div style="color: #ffd700; font-size: 10px; margin-bottom: 8px; text-shadow: 0 0 10px #ffd700;">🏆 ${unlockText}</div>
       <div style="display: flex; align-items: center; gap: 12px;">
-        <div style="font-size: calc(32px * var(--bbText, 1));">${achievement.icon}</div>
+        <div style="font-size: 32px;">${achievement.icon}</div>
         <div style="flex: 1;">
-          <div style="color: #fff; font-size: calc(11px * var(--bbText, 1)); margin-bottom: 4px;">${name}</div>
-          <div style="color: #aaa; font-size: calc(7px * var(--bbText, 1)); font-family: 'Share Tech Mono', monospace; line-height: 1.4;">${desc}</div>
-          <div style="color: #888; font-size: calc(6px * var(--bbText, 1)); margin-top: 4px;">${tt('achRarity')}: ${achievement.rarity}%</div>
+          <div style="color: #fff; font-size: 11px; margin-bottom: 4px;">${name}</div>
+          <div style="color: #aaa; font-size: 7px; font-family: 'Share Tech Mono', monospace; line-height: 1.4;">${desc}</div>
+          <div style="color: #888; font-size: 6px; margin-top: 4px;">${tt('achRarity')}: ${achievement.rarity}%</div>
         </div>
       </div>
     `;
@@ -310,12 +299,12 @@
 
     container.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-        <h2 style="color: #ffd700; font-family: 'Press Start 2P', monospace; font-size: calc(18px * var(--bbText, 1)); text-shadow: 0 0 10px #ffd700;">🏆 ${title}</h2>
-        <div style="color: #ffd700; font-family: 'Share Tech Mono', monospace; font-size: calc(12px * var(--bbText, 1));">${unlockedCount} / ${totalCount} ${unlockedText}</div>
+        <h2 style="color: #ffd700; font-family: 'Press Start 2P', monospace; font-size: 18px; text-shadow: 0 0 10px #ffd700;">🏆 ${title}</h2>
+        <div style="color: #ffd700; font-family: 'Share Tech Mono', monospace; font-size: 12px;">${unlockedCount} / ${totalCount} ${unlockedText}</div>
       </div>
       <div id="achievementsList" style="flex: 1; overflow-y: auto; padding-right: 10px;"></div>
       <div style="display: flex; justify-content: center; margin-top: 18px; padding-top: 14px; border-top: 1px solid #ffd70044;">
-        <button id="closeAchievementsBtn" data-i18n="close" style="padding: 12px 24px; font-family: 'Press Start 2P', monospace; font-size: calc(11px * var(--bbText, 1)); background: #0a0a20; color: #ffd700; border: 2px solid #ffd700; border-radius: 4px; cursor: pointer; transition: all 0.2s;">CLOSE</button>
+        <button id="closeAchievementsBtn" data-i18n="close" style="padding: 12px 24px; font-family: 'Press Start 2P', monospace; font-size: 11px; background: #0a0a20; color: #ffd700; border: 2px solid #ffd700; border-radius: 4px; cursor: pointer; transition: all 0.2s;">CLOSE</button>
       </div>
     `;
 
@@ -371,13 +360,13 @@
       const rarityColor = achievement.rarity >= 50 ? '#aaa' : achievement.rarity >= 20 ? '#4af' : achievement.rarity >= 5 ? '#a0f' : achievement.rarity >= 1 ? '#f80' : '#f44';
 
       item.innerHTML = `
-        <div style="font-size: calc(36px * var(--bbText, 1)); filter: ${unlocked ? 'none' : 'grayscale(1) brightness(0.3)'};">${achievement.icon}</div>
+        <div style="font-size: 36px; filter: ${unlocked ? 'none' : 'grayscale(1) brightness(0.3)'};">${achievement.icon}</div>
         <div style="flex: 1;">
-          <div style="color: ${unlocked ? '#ffd700' : '#555'}; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); margin-bottom: 4px;">${unlocked || !achievement.secret ? name : tt('achSecretName', '???')}</div>
-          <div style="color: ${unlocked ? '#ccc' : '#444'}; font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); line-height: 1.4; margin-bottom: 4px;">${unlocked || !achievement.secret ? desc : tt('achSecretDesc', 'Secret achievement - unlock to reveal')}</div>
-          <div style="color: ${rarityColor}; font-family: 'Share Tech Mono', monospace; font-size: calc(7px * var(--bbText, 1));">${tt('achRarity', 'Rarity')}: ${achievement.rarity}%</div>
+          <div style="color: ${unlocked ? '#ffd700' : '#555'}; font-family: 'Press Start 2P', monospace; font-size: 10px; margin-bottom: 4px;">${unlocked || !achievement.secret ? name : tt('achSecretName', '???')}</div>
+          <div style="color: ${unlocked ? '#ccc' : '#444'}; font-family: 'Share Tech Mono', monospace; font-size: 8px; line-height: 1.4; margin-bottom: 4px;">${unlocked || !achievement.secret ? desc : tt('achSecretDesc', 'Secret achievement - unlock to reveal')}</div>
+          <div style="color: ${rarityColor}; font-family: 'Share Tech Mono', monospace; font-size: 7px;">${tt('achRarity', 'Rarity')}: ${achievement.rarity}%</div>
         </div>
-        ${unlocked ? '<div style="color: #0f0; font-size: calc(24px * var(--bbText, 1));">✓</div>' : ''}
+        ${unlocked ? '<div style="color: #0f0; font-size: 24px;">✓</div>' : ''}
       `;
 
       container.appendChild(item);

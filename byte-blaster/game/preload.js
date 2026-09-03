@@ -71,10 +71,6 @@ contextBridge.exposeInMainWorld('localeAPI', {
 // under file://, where fetch() of local files is blocked by Chromium.
 contextBridge.exposeInMainWorld('audioAPI', {
   read: (rel) => ipcRenderer.invoke('audio:read', rel),
-  // Кэш догружаемого набора музыки: на file:// браузерный Cache Storage
-  // недоступен, поэтому файлы хранит главный процесс.
-  cacheGet: (rel) => ipcRenderer.invoke('audio:cacheGet', rel),
-  cachePut: (rel, b64) => ipcRenderer.invoke('audio:cachePut', rel, b64),
 });
 
 // Expose electron info
@@ -126,15 +122,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LAN relay info for the in-game LOCAL lobby: whether the embedded relay is
   // running and this machine's LAN IPs (so the host can share them).
   getLanInfo: () => ipcRenderer.invoke('net:lanInfo'),
-});
-
-// Системные уведомления. Страница живёт на file://, откуда веб-уведомления до
-// Windows не доходят, поэтому показ отдан главному процессу. Разрешение здесь
-// спрашивать не у кого — если система умеет показывать тосты, значит умеет.
-contextBridge.exposeInMainWorld('notifyAPI', {
-  supported: () => ipcRenderer.invoke('notify:supported'),
-  show: (opts) => ipcRenderer.invoke('notify:show', opts),
-  // Игрок нажал на тост: возвращаем управление игре вместе с меткой, по которой
-  // она поймёт, что делать (например, зайти в комнату друга).
-  onClick: (fn) => ipcRenderer.on('notify:clicked', (_e, tag) => { try { fn(tag); } catch (e) {} }),
 });

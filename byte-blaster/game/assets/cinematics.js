@@ -222,7 +222,7 @@
       var cv = document.createElement('canvas'); cv.id = 'cinCv'; cv.width = 1280; cv.height = 720;
       cv.style.cssText = 'width:100%;height:100%;display:block;image-rendering:pixelated;'; ov.appendChild(cv);
       var sk = document.createElement('div'); sk.id = 'cinSkip';
-      sk.style.cssText = 'position:absolute;bottom:18px;right:24px;font-family:"Press Start 2P",monospace;font-size:calc(9px * var(--bbText, 1));color:#0ff;opacity:0;transition:opacity .5s;text-shadow:0 0 8px #0ff;pointer-events:none;letter-spacing:2px;';
+      sk.style.cssText = 'position:absolute;bottom:18px;right:24px;font-family:"Press Start 2P",monospace;font-size:9px;color:#0ff;opacity:0;transition:opacity .5s;text-shadow:0 0 8px #0ff;pointer-events:none;letter-spacing:2px;';
       ov.appendChild(sk); document.body.appendChild(ov);
     }
     var cv = document.getElementById('cinCv'), c = cv.getContext('2d'), W = cv.width, H = cv.height;

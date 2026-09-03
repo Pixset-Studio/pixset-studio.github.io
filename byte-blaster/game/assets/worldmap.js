@@ -212,35 +212,6 @@
   // ═══════════════════════════════════════════════
 
   let mapCanvas, mapCtx;
-
-  /**
-   * Текст, отцентрованный по САМИМ ЧЕРНИЛАМ глифа, а не по эм-квадрату шрифта.
-   *
-   * textBaseline='middle' центрирует по метрике шрифта, в которую заложены
-   * подстрочные и надстрочные запасы. Для цифр видимый центр оказывается выше
-   * геометрического, и номер уровня сидит в кружке не по центру. Раньше это
-   * лечили сдвигом на один пиксель — но подходил он ровно для одного размера
-   * шрифта, а на телефоне и кружки, и шрифт другие.
-   *
-   * Здесь берём фактические границы отрисованных пикселей и по ним и центруем.
-   * Заодно округляем до целых пикселей устройства: на дробной позиции глиф
-   * размывается, и это тоже читается как «криво».
-   */
-  function inkText(ctx, text, cx, cy) {
-    const s = String(text);
-    const m = ctx.measureText(s);
-    const l = m.actualBoundingBoxLeft, r = m.actualBoundingBoxRight;
-    const a = m.actualBoundingBoxAscent, d = m.actualBoundingBoxDescent;
-    const ok = [l, r, a, d].every(v => typeof v === 'number' && isFinite(v));
-    if (!ok) { ctx.fillText(s, cx, cy); return; }   // старый движок — как было
-    const prevAlign = ctx.textAlign, prevBase = ctx.textBaseline;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    const snap = (v) => Math.round(v * mapDpr) / mapDpr;
-    ctx.fillText(s, snap(cx - (r - l) / 2), snap(cy + (a - d) / 2));
-    ctx.textAlign = prevAlign;
-    ctx.textBaseline = prevBase;
-  }
   let mapOverlay;
   // Live canvas dimensions (follow the window/resolution) and node-size factor.
   // mapW/mapH are LOGICAL (CSS) pixels — all drawing uses them. mapDpr is the
@@ -272,8 +243,6 @@
     // proportional squeeze can otherwise slide the bottom node under the level
     // panel on a very short screen.
     let centreTop = 0, centreBot = Infinity;
-    // Фактические границы панелей — по ним доводим кольцо к центру экрана.
-    let chromeTop = 0, chromeBot = mapH;
     let mapRects = null;
     if (mapOverlay) {
       const rectOf = sel => {
@@ -285,12 +254,11 @@
       mapRects = rectOf;
       let topB = 0;
       [rectOf('#mapHudTL'), rectOf('#mapAchBtn'), rectOf('#mapWorldTitle')].forEach(r => { if (r) topB = Math.max(topB, r.bottom); });
-      if (topB > 0) { PAD_T = clampN(topB + 16, 90, mapH * 0.42); chromeTop = topB; }
+      if (topB > 0) PAD_T = clampN(topB + 16, 90, mapH * 0.42);
       let botTop = mapH;
       ['#mapZoneTag', '#mapBackTouch', '#mapKbdHint', '#mapLevelPanel'].forEach(sel => {
         const r = rectOf(sel); if (r) botTop = Math.min(botTop, r.top);
       });
-      if (botTop < mapH) chromeBot = botTop;
       const measuredB = botTop < mapH ? (mapH - botTop) : 0;
       PAD_B = clampN(Math.max(measuredB + 16, 150), 110, mapH * 0.46);
       // Keep clear of the left/right arrow buttons too. Their edges double as
@@ -322,26 +290,10 @@
     [PAD_T, PAD_B] = squeeze(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5), 0, 0);
     [PAD_L, PAD_R] = squeeze(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6), ARROW_L, ARROW_R);
 
-    // Кольцо ставим ровно в центр ЭКРАНА, а не в центр свободной полосы.
-    // Отступы сверху и снизу (заголовок против панели уровня) и слева-справа
-    // (стрелки миров) почти никогда не равны, и центр полосы оказывается
-    // смещённым — на телефоне это сразу заметно как перекос. Берём больший из
-    // двух отступов на обе стороны: так кольцо и стоит по центру, и по-прежнему
-    // не залезает ни под одну панель. Если после выравнивания места остаётся
-    // слишком мало, возвращаемся к прежнему несимметричному варианту — лучше
-    // небольшой перекос, чем узлы под панелью.
-    const centreBand = (padA, padB, total, minBand) => {
-      const p = Math.max(padA, padB);
-      return (total - 2 * p >= minBand) ? [p, p] : [padA, padB];
-    };
-    [PAD_T, PAD_B] = centreBand(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5));
-    [PAD_L, PAD_R] = centreBand(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6));
-
     const safeX = PAD_L, safeY = PAD_T;
     const safeW = Math.max(120, mapW - PAD_L - PAD_R);
     const safeH = Math.max(90, mapH - PAD_T - PAD_B);
-    // Не const: ниже кольцо ещё придвигается к центру экрана.
-    let cx = safeX + safeW / 2, cy = safeY + safeH / 2;
+    const cx = safeX + safeW / 2, cy = safeY + safeH / 2;
 
     // Game Scale widens/narrows the ring radius.
     const gs = (window.gameSettings && window.gameSettings.gameScale) || 0;
@@ -443,25 +395,6 @@
     }
     nodeScale = rTarget / 16; // 16 = base normal-node radius
 
-    // ── Доводка до центра экрана ────────────────────────────────────────
-    // Выше кольцо ставилось в середину СВОБОДНОЙ ПОЛОСЫ между панелями. Но
-    // сверху и снизу их высота разная (заголовок мира выше, чем нижняя
-    // панель), и центр полосы не совпадает с центром экрана: на портретном
-    // телефоне кольцо уезжало вниз почти на сотню пикселей.
-    //
-    // Само кольцо при этом обычно заметно меньше доступного места — его
-    // ограничивают стрелки миров по бокам. Значит, его можно просто придвинуть
-    // к центру экрана: настолько, насколько позволяют панели, и ни пикселем
-    // больше. Если места нет вовсе, останется как было.
-    const pull = (c, r, total, padA, padB) => {
-      const half = r + rTarget + 4;          // радиус кольца плюс сам узел
-      const lo = padA + half, hi = total - padB - half;
-      if (hi < lo) return c;                 // места нет — не трогаем
-      return clampN(total / 2, lo, hi);
-    };
-    cx = pull(cx, rx, mapW, PAD_L, PAD_R);
-    cy = pull(cy, ry, mapH, Math.max(PAD_T, chromeTop + 6), Math.max(PAD_B, mapH - chromeBot + 6));
-
     const w = MAP_STATE.activeWorld;
     const startIdx = w * LEVELS_PER_WORLD;
     const angles = arcAngles(rx, ry, LEVELS_PER_WORLD);
@@ -525,35 +458,35 @@
     hud.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
     hud.innerHTML = `
       <div id="mapHudTL" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: top left; pointer-events: none; z-index: 10; background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
-        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: calc(12px * var(--bbText, 1)); color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
-        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
-        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
+        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
+        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
+        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
       </div>
       <div id="mapWorldTitle" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); transform-origin: top center; z-index: 10; pointer-events: none; text-align: center;">
-        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: calc(20px * var(--bbText, 1)); letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
-        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: calc(12px * var(--bbText, 1)); letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
-        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
+        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: 20px; letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
+        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
+        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
       </div>
-      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: calc(26px * var(--bbText, 1)); cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
-      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: calc(26px * var(--bbText, 1)); cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
-      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
-      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px; cursor: pointer;">← BACK</button>
-      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
-      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
+      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
+      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
+      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
+      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer;">← BACK</button>
+      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
+      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
         ↑↓←→ / WASD — MOVE<br>
         ENTER / SPACE — START<br>
         ESC — BACK TO MENU
       </div>
       <div id="mapLevelPanel" style="position: fixed; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); transform-origin: bottom center; background: rgba(0,0,0,0.92); border: 2px solid #0ff; padding: 11px 28px; text-align: center; min-width: 310px; display: none; z-index: 11;">
-        <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: calc(12px * var(--bbText, 1)); font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
-        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
-        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
-        <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px;"></div>
+        <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: 12px; font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
+        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
+        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
+        <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px;"></div>
       </div>
     `;
 
@@ -655,13 +588,9 @@
     // info panels down to ~3px (invisible/untappable). Give them a bigger base
     // size on touch so that — even after scaling — they stay readable and meet
     // a comfortable touch-target size. Reset to the desktop size otherwise.
-    // Размер пишем через тот же множитель --bbText, что и вся остальная
-    // разметка: голое «13px» перебивало настройку размера текста, и эти две
-    // кнопки оставались мелкими, когда всё вокруг увеличилось.
-    const touchFS = 'calc(13px * var(--bbText, 1))';
     const achEl0 = mapOverlay.querySelector('#mapAchBtn');
-    if (achEl0)    { achEl0.style.fontSize  = isTouch ? touchFS : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
-    if (backTouch) { backTouch.style.fontSize = isTouch ? touchFS : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
+    if (achEl0)    { achEl0.style.fontSize  = isTouch ? '13px' : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
+    if (backTouch) { backTouch.style.fontSize = isTouch ? '13px' : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
 
     // One master scale `k` (≤1) shared by every panel so the chrome stays
     // proportional AND leaves the node field enough room. Constraints folded in:
@@ -1132,7 +1061,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = accent;
-    inkText(ctx, world.icon, pos.cx, pos.cy);
+    ctx.fillText(world.icon, pos.cx, pos.cy);
     ctx.restore();
   }
 
@@ -1260,38 +1189,38 @@
       ctx.globalAlpha = 0.15;
       ctx.font = `bold ${R * 0.4}px "Share Tech Mono", monospace`;
       ctx.fillStyle = '#666';
-      inkText(ctx, level.num, level.x, level.y + R * 0.7);
+      ctx.fillText(level.num, level.x, level.y + R * 0.7);
     } else if (level.completed) {
       // Checkmark on top
       ctx.font = `bold ${R * 0.7}px monospace`;
       ctx.fillStyle = '#00ee44';
       ctx.shadowBlur = 14;
       ctx.shadowColor = '#00ff44';
-      inkText(ctx, '✓', level.x, level.y - R * 0.25);
+      ctx.fillText('✓', level.x, level.y - R * 0.25);
       // Level number below checkmark
       ctx.shadowBlur = 0;
       ctx.font = `bold ${R * 0.45}px "Share Tech Mono", monospace`;
       ctx.fillStyle = worldAccent(world);
       ctx.globalAlpha = 0.7;
-      inkText(ctx, level.num, level.x, level.y + R * 0.35);
+      ctx.fillText(level.num, level.x, level.y + R * 0.35);
     } else if (level.type === 'boss') {
       // Boss icon on top
       ctx.font = `bold ${R * 0.65}px monospace`;
       ctx.fillStyle = worldAccent(world);
       ctx.shadowBlur = isCurrent ? 14 : 0;
       ctx.shadowColor = worldAccent(world);
-      inkText(ctx, '👑', level.x, level.y - R * 0.2);
+      ctx.fillText('👑', level.x, level.y - R * 0.2);
       // Level number below crown
       ctx.shadowBlur = 0;
       ctx.font = `bold ${R * 0.4}px "Share Tech Mono", monospace`;
-      inkText(ctx, level.num, level.x, level.y + R * 0.4);
+      ctx.fillText(level.num, level.x, level.y + R * 0.4);
     } else {
       // Level number (centered)
       ctx.font = `bold ${R * 0.55}px "Share Tech Mono", monospace`;
       ctx.fillStyle = worldAccent(world);
       ctx.shadowBlur = isCurrent ? 12 : 0;
       ctx.shadowColor = worldAccent(world);
-      inkText(ctx, level.num, level.x, level.y);
+      ctx.fillText(level.num, level.x, level.y + 1);
     }
 
     // Star rating row (completed levels only): 3 tiny stars below the node.

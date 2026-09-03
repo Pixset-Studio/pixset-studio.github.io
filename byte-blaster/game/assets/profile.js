@@ -29,10 +29,6 @@
   };
 
   const ACCENT = '#0ff';
-  // Ники и ответы сервера попадают в innerHTML — экранируем. Свой ник игрок
-  // задаёт сам, но чужой приходит из базы, и доверять ему нечего.
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ── Avatars ───────────────────────────────────────────────────────────────
   // Robot colour schemes mirror the multiplayer presets so the avatar and the
@@ -111,21 +107,7 @@
     try { return (window.Achievements && window.Achievements.getStat) ? (window.Achievements.getStat(k) || 0) : 0; }
     catch (e) { return 0; }
   }
-  // Прогресс читается прямо из хранилища, а не из состояния игры, поэтому его
-  // форму приходится проверять здесь заново: JSON.parse пропускает и число, и
-  // объект без done, а этот экран считает по нему длины и суммы. Игра такое
-  // значение чинит у себя в памяти (loadAdv в game.js), но в хранилище оно
-  // остаётся — намеренно, чтобы битый файл не уехал в облако поверх целого.
-  function prog(hard) {
-    const raw = LS.json(hard ? 'bbAdvH' : 'bbAdv3', null);
-    const p = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
-    return {
-      max: (Number(p.max) >= 1) ? Math.floor(Number(p.max)) : 1,
-      done: Array.isArray(p.done) ? p.done : [],
-      stars: obj(p.stars), scores: obj(p.scores), shards: obj(p.shards),
-    };
-  }
-  function obj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+  function prog(hard) { return LS.json(hard ? 'bbAdvH' : 'bbAdv3', { max: 1, done: [], stars: {}, scores: {}, shards: {} }); }
   // Derived from the SAME stored progress the rest of this screen reads, rather
   // than from advTotalLevels() — that one reflects live in-game state, so the
   // profile could disagree with itself when opened before any level was loaded.
@@ -134,7 +116,7 @@
     // measured against those — otherwise a finished demo would read "9%".
     if (window.Demo && window.Demo.on) return window.Demo.levels;
     const p = prog(false), ph = prog(true);
-    const rainbow = obj(LS.json('bbRainbow', {}));
+    const rainbow = LS.json('bbRainbow', {});
     const gotAll = Object.keys(rainbow).filter(k => rainbow[k]).length >= 10;
     const past100 = (p.max | 0) > 100 || (ph.max | 0) > 100 ||
       (p.done || []).some(n => n > 100) || (ph.done || []).some(n => n > 100);
@@ -145,8 +127,8 @@
 
   function snapshot() {
     const p = prog(false), ph = prog(true);
-    const rec = obj(LS.json('bbRecords', { infinite: 0, adventure: 0 }));
-    const rainbow = obj(LS.json('bbRainbow', {}));
+    const rec = LS.json('bbRecords', { infinite: 0, adventure: 0 });
+    const rainbow = LS.json('bbRainbow', {});
     const rainbowN = Object.keys(rainbow).filter(k => rainbow[k]).length;
     const ach = (window.Achievements && window.Achievements.getAll) ? window.Achievements.getAll() : [];
     const achUnlocked = (window.Achievements && window.Achievements.getUnlocked) ? window.Achievements.getUnlocked() : [];
@@ -223,18 +205,12 @@
    settings 2000 < save slots 2500 < world map 3000 < profile 4000 < toasts 10000. */
 #bbProfile{position:fixed;inset:0;z-index:4000;display:none;align-items:center;justify-content:center;
   background:radial-gradient(120% 120% at 50% 0%,#0b1030f2,#04040ff8);font-family:'Press Start 2P',monospace}
-/* vw/vh делятся на масштаб интерфейса (--bbUI): окно увеличивается zoom-ом, и
-   без деления «95% ширины экрана» стали бы 190%. Пиксельный предел не делим —
-   ему как раз и положено расти вместе с интерфейсом. */
-#bbProfile .pf-win{width:min(1000px,calc(95vw / var(--bbUI, 1)));height:min(660px,calc(92vh / var(--bbUI, 1)));display:flex;flex-direction:column;
+#bbProfile .pf-win{width:min(1000px,95vw);height:min(660px,92vh);display:flex;flex-direction:column;
   background:#06061a;border:2px solid ${ACCENT};box-shadow:0 0 34px #0ff4,inset 0 0 60px #0ff08}
-/* flex-wrap: при увеличенном размере текста заголовок и кнопка перестают
-   помещаться в строку на телефоне — пусть переносятся, а не вылезают. */
 #bbProfile .pf-head{display:flex;align-items:center;justify-content:space-between;gap:14px;
-  padding:14px 18px;border-bottom:1px solid #0ff3;flex:0 0 auto;flex-wrap:wrap}
-#bbProfile .pf-title{font-size:calc(12px * var(--bbText, 1));color:${ACCENT};letter-spacing:4px;text-shadow:0 0 12px #0ff8;
-  min-width:0;overflow-wrap:anywhere}
-#bbProfile .pf-x{font-family:inherit;font-size:calc(8px * var(--bbText, 1));padding:9px 13px;background:#0a0a20;color:${ACCENT};
+  padding:14px 18px;border-bottom:1px solid #0ff3;flex:0 0 auto}
+#bbProfile .pf-title{font-size:12px;color:${ACCENT};letter-spacing:4px;text-shadow:0 0 12px #0ff8}
+#bbProfile .pf-x{font-family:inherit;font-size:8px;padding:9px 13px;background:#0a0a20;color:${ACCENT};
   border:2px solid ${ACCENT};cursor:pointer;letter-spacing:1px}
 #bbProfile .pf-x:hover{background:#0ff2}
 #bbProfile .pf-body{flex:1 1 auto;display:flex;min-height:0}
@@ -242,66 +218,49 @@
   display:flex;flex-direction:column;align-items:center;gap:12px;overflow-y:auto;overflow-x:hidden}
 #bbProfile .pf-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
 #bbProfile .pf-tabs{display:flex;gap:6px;padding:12px 16px 0;flex:0 0 auto;flex-wrap:wrap}
-/* max-width/перенос — на случай крупного текста: одна вкладка иначе шире
-   колонки, и ряд вкладок вылезал за окно профиля. */
-#bbProfile .pf-tab{font-family:inherit;font-size:calc(8px * var(--bbText, 1));letter-spacing:1px;padding:9px 12px;cursor:pointer;
-  background:transparent;color:#5a7a9a;border:1px solid #0ff3;border-bottom:none;
-  max-width:100%;overflow-wrap:anywhere}
+#bbProfile .pf-tab{font-family:inherit;font-size:8px;letter-spacing:1px;padding:9px 12px;cursor:pointer;
+  background:transparent;color:#5a7a9a;border:1px solid #0ff3;border-bottom:none}
 #bbProfile .pf-tab.on{color:${ACCENT};background:#0ff1;border-color:${ACCENT};text-shadow:0 0 8px #0ff8}
 #bbProfile .pf-pane{flex:1 1 auto;overflow-y:auto;padding:16px;border-top:1px solid #0ff3}
 #bbProfile .pf-avwrap{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center}
-/* Кольцо прогресса. width/height обязательны: canvas — заменяемый элемент, и
-   при width:auto браузер берёт СОБСТВЕННЫЙ размер холста (300×300, он такой
-   ради чёткости на плотных экранах), а не размер рамки — inset:0 в этом случае
-   игнорируется. Кольцо получалось вдвое больше рамки и наезжало на позывной,
-   звание и кнопки под ним. Проценты считаются от .pf-avwrap, поэтому мобильное
-   правило min(150px,42vw) ниже продолжает работать. */
-#bbProfile .pf-avring{position:absolute;inset:0;width:100%;height:100%}
+#bbProfile .pf-avring{position:absolute;inset:0}
 #bbProfile .pf-av{width:104px;height:104px;image-rendering:pixelated}
-#bbProfile .pf-nick{font-size:calc(11px * var(--bbText, 1));color:#fff;letter-spacing:2px;text-align:center;word-break:break-word}
-#bbProfile .pf-rank{font-family:'Share Tech Mono',monospace;font-size:calc(11px * var(--bbText, 1));color:#f0f;letter-spacing:2px}
-#bbProfile .pf-btn{font-family:inherit;font-size:calc(7px * var(--bbText, 1));letter-spacing:1px;padding:8px 10px;cursor:pointer;
+#bbProfile .pf-nick{font-size:11px;color:#fff;letter-spacing:2px;text-align:center;word-break:break-word}
+#bbProfile .pf-rank{font-family:'Share Tech Mono',monospace;font-size:11px;color:#f0f;letter-spacing:2px}
+#bbProfile .pf-btn{font-family:inherit;font-size:7px;letter-spacing:1px;padding:8px 10px;cursor:pointer;
   background:#0a0a20;color:${ACCENT};border:1px solid ${ACCENT};width:100%}
 #bbProfile .pf-btn:hover{background:#0ff2}
-#bbProfile .pf-input{font-family:'Share Tech Mono',monospace;font-size:calc(13px * var(--bbText, 1));letter-spacing:1px;width:100%;
+#bbProfile .pf-input{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:1px;width:100%;
   padding:8px;background:#020210;color:#fff;border:1px solid ${ACCENT};text-align:center}
 #bbProfile .pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
 #bbProfile .pf-card{background:#0a0a1e;border:1px solid #0ff2;padding:11px 12px}
-#bbProfile .pf-k{font-family:'Share Tech Mono',monospace;font-size:calc(10px * var(--bbText, 1));color:#5a7a9a;letter-spacing:1px}
-#bbProfile .pf-v{font-size:calc(13px * var(--bbText, 1));color:#fff;margin-top:7px;letter-spacing:1px}
-#bbProfile .pf-sec{font-size:calc(9px * var(--bbText, 1));color:#f0f;letter-spacing:2px;margin:16px 0 9px;line-height:1.6}
+#bbProfile .pf-k{font-family:'Share Tech Mono',monospace;font-size:10px;color:#5a7a9a;letter-spacing:1px}
+#bbProfile .pf-v{font-size:13px;color:#fff;margin-top:7px;letter-spacing:1px}
+#bbProfile .pf-sec{font-size:9px;color:#f0f;letter-spacing:2px;margin:16px 0 9px;line-height:1.6}
 #bbProfile .pf-sec:first-child{margin-top:0}
 #bbProfile .pf-avpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:8px}
 #bbProfile .pf-avopt{background:#0a0a1e;border:1px solid #0ff2;padding:5px;cursor:pointer;text-align:center}
 #bbProfile .pf-avopt.on{border-color:${ACCENT};box-shadow:0 0 12px #0ff6;background:#0ff1}
 #bbProfile .pf-avopt canvas{width:100%;height:auto;image-rendering:pixelated;display:block}
-#bbProfile .pf-avopt span{font-family:'Share Tech Mono',monospace;font-size:calc(8px * var(--bbText, 1));color:#7ba;display:block;margin-top:4px}
+#bbProfile .pf-avopt span{font-family:'Share Tech Mono',monospace;font-size:8px;color:#7ba;display:block;margin-top:4px}
 #bbProfile .pf-ach{display:flex;gap:11px;align-items:flex-start;background:#0a0a1e;border:1px solid #0ff2;padding:11px}
 #bbProfile .pf-ach.lock{opacity:.42}
-#bbProfile .pf-ach .ic{font-size:calc(20px * var(--bbText, 1));line-height:1;flex:0 0 auto}
-#bbProfile .pf-ach .nm{font-size:calc(9px * var(--bbText, 1));color:#fff;letter-spacing:1px}
-#bbProfile .pf-ach .ds{font-family:'Share Tech Mono',monospace;font-size:calc(10px * var(--bbText, 1));color:#7ba;margin-top:5px;line-height:1.5}
+#bbProfile .pf-ach .ic{font-size:20px;line-height:1;flex:0 0 auto}
+#bbProfile .pf-ach .nm{font-size:9px;color:#fff;letter-spacing:1px}
+#bbProfile .pf-ach .ds{font-family:'Share Tech Mono',monospace;font-size:10px;color:#7ba;margin-top:5px;line-height:1.5}
 #bbProfile .pf-logs{display:flex;gap:12px;min-height:0;height:100%}
 #bbProfile .pf-loglist{width:44%;min-width:190px;overflow-y:auto;padding-right:6px}
-#bbProfile .pf-logread{flex:1 1 auto;overflow-y:auto;font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbText, 1));
+#bbProfile .pf-logread{flex:1 1 auto;overflow-y:auto;font-family:'Share Tech Mono',monospace;font-size:12px;
   line-height:1.9;color:#9cf;border-left:1px solid #0ff3;padding-left:14px}
 #bbProfile .pf-logrow{display:block;width:100%;text-align:left;margin:2px 0;padding:7px 8px;cursor:pointer;
-  font-family:'Share Tech Mono',monospace;font-size:calc(11px * var(--bbText, 1));letter-spacing:1px;background:transparent;
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;background:transparent;
   border:1px solid #0ff3;color:#9cf}
 #bbProfile .pf-logrow:hover:not(:disabled){background:#0ff1}
 #bbProfile .pf-logrow:disabled{border-color:#3336;color:#445;cursor:default}
 #bbProfile .pf-mini{width:100%;margin-top:6px;display:flex;flex-direction:column;gap:7px}
 #bbProfile .pf-mini .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
-  font-family:'Share Tech Mono',monospace;font-size:calc(11px * var(--bbText, 1));color:#5a7a9a;letter-spacing:1px}
+  font-family:'Share Tech Mono',monospace;font-size:11px;color:#5a7a9a;letter-spacing:1px}
 #bbProfile .pf-mini .row b{color:#fff;font-weight:normal}
-/* Друзья: строка списка и мелкие кнопки при ней. */
-#bbProfile .pf-frow{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
-#bbProfile .pf-fname{flex:1 1 120px;min-width:0;text-align:left;background:none;border:none;cursor:pointer;
-  font-family:inherit;font-size:calc(10px * var(--bbText, 1));color:#fff;letter-spacing:1px;
-  padding:8px 0;overflow-wrap:anywhere}
-#bbProfile .pf-fname:hover{color:${ACCENT}}
-#bbProfile .pf-fmini{width:auto;flex:0 0 auto;padding:8px 12px}
-#bbProfile .pf-fadd{flex:1 1 140px;width:auto;text-align:left}
 #bbProfile .pf-bar{height:7px;background:#0a0a20;border:1px solid #0ff3;margin-top:8px;overflow:hidden}
 #bbProfile .pf-bar>i{display:block;height:100%;background:linear-gradient(90deg,#0af,#0ff);box-shadow:0 0 8px #0ff}
 @media (max-width:760px){
@@ -326,9 +285,9 @@
    tall. These rules enlarge the controls AT DESIGN SIZE so that after the scale
    they are still big enough to hit with a thumb. */
 @media (max-width:900px){
-  #bbProfile .pf-tab{font-size:calc(13px * var(--bbText, 1));padding:14px 18px}
-  #bbProfile .pf-x{font-size:calc(12px * var(--bbText, 1));padding:14px 18px}
-  #bbProfile .pf-btn{font-size:calc(11px * var(--bbText, 1));padding:14px 12px}
+  #bbProfile .pf-tab{font-size:13px;padding:14px 18px}
+  #bbProfile .pf-x{font-size:12px;padding:14px 18px}
+  #bbProfile .pf-btn{font-size:11px;padding:14px 12px}
   #bbProfile .pf-avopt{min-height:64px}
   #bbProfile .pf-logrow{padding:12px 10px}
 }`;
@@ -378,128 +337,7 @@
     { id: 'stats', key: 'profileTabStats' },
     { id: 'ach', key: 'profileTabAch' },
     { id: 'logs', key: 'profileTabLogs' },
-    { id: 'friends', key: 'profileTabFriends' },
   ];
-
-  /* ── Друзья ──────────────────────────────────────────────────────────────
-     Аккаунт один на игру и сайт, поэтому список здесь тот же, что на сайте
-     студии: добавили там — видно тут. Сеть живёт в assets/friends.js, здесь
-     только показ. Без входа в аккаунт вкладка честно говорит, что нужен вход,
-     а не показывает пустой список. */
-  let friendsCache = null;     // последний успешный список
-  let friendsBusy = false;
-  let friendView = null;       // открытая карточка друга (ник)
-
-  function friendsAvailable() {
-    return !!(window.Friends && window.License && window.License.loggedIn());
-  }
-
-  async function friendsReload() {
-    if (!friendsAvailable()) { friendsCache = null; return; }
-    friendsBusy = true;
-    try { friendsCache = await window.Friends.list(); }
-    catch (e) { friendsCache = { error: e }; }
-    friendsBusy = false;
-    if (isOpen() && activeTab === 'friends') render();
-  }
-
-  const KIND_ORDER = [
-    { kind: 'incoming', key: 'friendsIncoming' },
-    { kind: 'friend', key: 'friendsList' },
-    { kind: 'outgoing', key: 'friendsOutgoing' },
-  ];
-
-  function paneFriends() {
-    if (!friendsAvailable()) {
-      return '<div class="pf-sec">' + T('profileTabFriends') + '</div>' +
-             '<div class="pf-card"><div class="pf-k">' + esc(T('friendsNeedAccount')) + '</div></div>';
-    }
-    if (friendView) return paneFriendCard();
-
-    const rows = [];
-    if (friendsBusy && !friendsCache) rows.push('<div class="pf-k">' + esc(T('friendsLoading')) + '</div>');
-    else if (friendsCache && friendsCache.error) {
-      rows.push('<div class="pf-k">' + esc(T('friendsOffline')) + '</div>');
-    } else {
-      const list = Array.isArray(friendsCache) ? friendsCache : [];
-      for (const g of KIND_ORDER) {
-        const items = list.filter(f => f.kind === g.kind);
-        if (!items.length) continue;
-        rows.push('<div class="pf-sec">' + esc(T(g.key)) + '</div>');
-        rows.push(items.map(f =>
-          '<div class="pf-frow">' +
-            '<button class="pf-fname" data-open="' + esc(f.nickname) + '">' + esc(f.nickname) + '</button>' +
-            (f.kind === 'incoming'
-              ? '<button class="pf-btn pf-fmini" data-accept="' + esc(f.id) + '">' + esc(T('friendsAccept')) + '</button>'
-              : '') +
-            '<button class="pf-btn pf-fmini" data-remove="' + esc(f.id) + '">' +
-              esc(f.kind === 'friend' ? T('friendsRemove') : T('friendsCancel')) + '</button>' +
-          '</div>').join(''));
-      }
-      if (!list.length) rows.push('<div class="pf-card"><div class="pf-k">' + esc(T('friendsEmpty')) + '</div></div>');
-    }
-
-    return '<div class="pf-sec">' + esc(T('friendsAdd')) + '</div>' +
-      '<div class="pf-frow">' +
-        '<input class="pf-input pf-fadd" id="pfFriendNick" maxlength="20" placeholder="' + esc(T('friendsNickHint')) + '">' +
-        '<button class="pf-btn pf-fmini" id="pfFriendGo">' + esc(T('friendsInvite')) + '</button>' +
-      '</div>' +
-      '<div class="pf-k" id="pfFriendMsg" style="margin:6px 0 2px"></div>' +
-      rows.join('');
-  }
-
-  /** Карточка друга: его прогресс в Byte Blaster, взятый из общей витрины. */
-  function paneFriendCard() {
-    const p = friendView;
-    if (p.loading) return '<div class="pf-card"><div class="pf-k">' + esc(T('friendsLoading')) + '</div></div>';
-    if (!p.data) {
-      return '<button class="pf-btn" id="pfFriendBack">' + esc(T('back')) + '</button>' +
-             '<div class="pf-card"><div class="pf-k">' + esc(T('friendsOffline')) + '</div></div>';
-    }
-    const games = Array.isArray(p.data.games) ? p.data.games : [];
-    const bb = games.find(g => g.game_slug === 'byte-blaster');
-    const d = (bb && bb.data) || null;
-    const card = (k, v) => '<div class="pf-card"><div class="pf-k">' + esc(k) + '</div><div class="pf-v">' + esc(v) + '</div></div>';
-    const body = d
-      ? '<div class="pf-grid">' +
-          card(T('profileLevels'), (d.levels | 0) + ' / ' + (d.levelsMax | 0)) +
-          card(T('profileStars'), '★ ' + (d.stars | 0) + ' / ' + (d.starsMax | 0)) +
-          card(T('profileCrystals'), '◆ ' + (d.crystals | 0) + ' / ' + (d.crystalsMax | 0)) +
-          card(T('profileAch'), (d.ach | 0) + ' / ' + (d.achMax | 0)) +
-          card(T('total'), (d.score | 0).toLocaleString()) +
-          card(T('profilePlaytime'), fmtTime(d.playtime | 0)) +
-        '</div>'
-      : '<div class="pf-card"><div class="pf-k">' + esc(T('friendsNoStats')) + '</div></div>';
-
-    return '<button class="pf-btn" id="pfFriendBack">' + esc(T('back')) + '</button>' +
-           '<div class="pf-sec">' + esc(p.data.nickname || p.nick) + '</div>' + body;
-  }
-
-  function friendMsg(text) {
-    const el = root && root.querySelector('#pfFriendMsg');
-    if (el) el.textContent = text || '';
-  }
-
-  async function friendInvite(nick) {
-    const clean = String(nick || '').trim();
-    if (!clean) return;
-    friendMsg(T('friendsLoading'));
-    try {
-      const res = await window.Friends.request(clean);
-      friendMsg(res === 'accepted' ? T('friendsNowFriends', clean) : T('friendsSent', clean));
-      await friendsReload();
-    } catch (e) { friendMsg(friendError(e)); }
-  }
-
-  /** Отказ сервера в понятном виде. Отдельная функция: тексты идут из локалей. */
-  function friendError(e) {
-    const m = String((e && (e.detail || e.message)) || '').toLowerCase();
-    if (m.includes('player_not_found')) return T('friendsNotFound');
-    if (m.includes('cannot_add_self')) return T('friendsSelf');
-    if (m.includes('could not find the function') || m.includes('schema cache')) return T('friendsNotReady');
-    if (m.includes('not_logged_in')) return T('friendsNeedAccount');
-    return T('friendsOffline');
-  }
 
   function drawRing(pct) {
     const cv = root.querySelector('.pf-avring');
@@ -555,7 +393,7 @@
     h += '<div class="pf-sec">' + T('profileSecNick') + '</div>' +
       '<div style="max-width:340px"><input class="pf-input pf-nickinput" maxlength="16" value="' +
         String(nick()).replace(/"/g, '&quot;') + '"/>' +
-      '<div style="font-family:\'Share Tech Mono\',monospace;font-size:calc(10px * var(--bbText, 1));color:#5a7a9a;margin-top:8px;line-height:1.6">' +
+      '<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:#5a7a9a;margin-top:8px;line-height:1.6">' +
         T('profileNickHint') + '</div>' +
       '<button class="pf-btn pf-savenick" style="margin-top:10px">' + T('profileSaveNick') + '</button></div>';
     return h;
@@ -630,7 +468,7 @@
     let h = '';
     for (const l of lines) {
       h += '<div style="margin-bottom:14px">' +
-        '<div style="font-family:\'Press Start 2P\',monospace;font-size:calc(7px * var(--bbText, 1));letter-spacing:2px;margin-bottom:5px;color:' +
+        '<div style="font-family:\'Press Start 2P\',monospace;font-size:7px;letter-spacing:2px;margin-bottom:5px;color:' +
         (SPEAKER_COLOUR[l.k] || '#fff') + '">' + (l.sp || '') + '</div>' +
         '<div>' + (l.text || '') + '</div></div>';
     }
@@ -677,43 +515,7 @@
       activeTab === 'overview' ? paneOverview(s) :
       activeTab === 'avatar' ? paneAvatar() :
       activeTab === 'stats' ? paneStats(s) :
-      activeTab === 'ach' ? paneAch() :
-      activeTab === 'friends' ? paneFriends() : paneLogs();
-
-    if (activeTab === 'friends') {
-      const q = (sel) => paneHost.querySelector(sel);
-      const go = q('#pfFriendGo'), inp = q('#pfFriendNick');
-      if (go && inp) {
-        go.onclick = () => friendInvite(inp.value);
-        inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); friendInvite(inp.value); } };
-      }
-      const back = q('#pfFriendBack');
-      if (back) back.onclick = () => { friendView = null; render(); };
-
-      paneHost.querySelectorAll('[data-accept]').forEach((b) => {
-        b.onclick = async () => {
-          b.disabled = true;
-          try { await window.Friends.accept(b.dataset.accept); } catch (e) { friendMsg(friendError(e)); }
-          await friendsReload();
-        };
-      });
-      paneHost.querySelectorAll('[data-remove]').forEach((b) => {
-        b.onclick = async () => {
-          b.disabled = true;
-          try { await window.Friends.remove(b.dataset.remove); } catch (e) { friendMsg(friendError(e)); }
-          await friendsReload();
-        };
-      });
-      paneHost.querySelectorAll('[data-open]').forEach((b) => {
-        b.onclick = async () => {
-          friendView = { nick: b.dataset.open, loading: true, data: null };
-          render();
-          try { friendView = { nick: b.dataset.open, loading: false, data: await window.Friends.profile(b.dataset.open) }; }
-          catch (e) { friendView = { nick: b.dataset.open, loading: false, data: null }; }
-          if (isOpen() && activeTab === 'friends') render();
-        };
-      });
-    }
+      activeTab === 'ach' ? paneAch() : paneLogs();
 
     if (activeTab === 'avatar') {
       paneHost.querySelectorAll('.pf-avopt').forEach(el => {
@@ -746,12 +548,8 @@
   function show(tab) {
     if (!root) build();
     activeTab = tab || 'overview';
-    friendView = null;                 // всегда открываем список, а не чужую карточку
     render();
     root.style.display = 'flex';
-    // Список друзей мог измениться, пока экран был закрыт: заявку принимают и
-    // на сайте. Обновляем в фоне — экран уже показан со старым списком.
-    if (friendsAvailable()) friendsReload();
   }
   function hide() { if (root) root.style.display = 'none'; }
   function isOpen() { return !!root && root.style.display === 'flex'; }

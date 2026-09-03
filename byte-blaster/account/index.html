@@ -260,6 +260,15 @@ const hide = (el) => { el.hidden = true; };
 const bi = (ru, en) =>
   `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`;
 
+/* Простой текст на языке страницы.
+   bi() возвращает РАЗМЕТКУ — оба языка сразу, лишний прячется через CSS. Это
+   годится только для вставки в DOM. В prompt(), confirm() и alert() браузер
+   показывает строку как есть, поэтому туда нужен обычный текст: иначе игрок
+   видит сырые теги вместо вопроса. */
+const uiLang = () =>
+  document.documentElement.getAttribute('data-site-lang') === 'en' ? 'en' : 'ru';
+const txt = (ru, en) => (uiLang() === 'en' ? en : ru);
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -568,12 +577,17 @@ $('savePass').onclick = (e) => busy(e.currentTarget, async () => {
 });
 
 // Удаление необратимо, поэтому спрашиваем дважды — второй раз словом.
+// Раньше здесь стояла bi(): в диалог уезжала разметка, а сравнение шло с той же
+// строкой вместе с тегами — совпасть с ней ввод не мог никогда, и удаление не
+// срабатывало вообще. Диалог браузера умеет только текст, поэтому txt().
 $('deleteAcc').onclick = (e) => {
-  const word = bi('УДАЛИТЬ', 'DELETE');
-  const typed = prompt(bi(
+  const word = txt('УДАЛИТЬ', 'DELETE');
+  const typed = prompt(txt(
     'Аккаунт, лицензии и покупки будут удалены навсегда. Введите ' + word + ' для подтверждения:',
     'Your account, licences and purchases will be gone forever. Type ' + word + ' to confirm:'));
-  if (!typed || typed.trim().toUpperCase() !== word) return;
+  // Принимаем оба слова независимо от языка страницы: человек мог переключить
+  // язык или набрать привычное ему — отказывать из-за раскладки незачем.
+  if (!typed || !['УДАЛИТЬ', 'DELETE'].includes(typed.trim().toUpperCase())) return;
 
   return busy(e.currentTarget, async () => {
     try { await deleteAccount(); location.replace('/byte-blaster/'); }

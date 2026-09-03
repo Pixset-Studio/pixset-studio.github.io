@@ -131,12 +131,32 @@ function say(text, kind = 'err') {
    просто не выводятся, а не ломают карточку. Добавили игре новое число —
    допишите строку сюда, менять больше ничего не нужно. */
 const STAT_FIELDS = [
+  // Прогресс
   { key: 'levels',   label: 'Уровни',      max: 'levelsMax' },
+  { key: 'worlds',   label: 'Миры',        max: 'worldsMax' },
   { key: 'stars',    label: 'Звёзды',      max: 'starsMax' },
   { key: 'crystals', label: 'Кристаллы',   max: 'crystalsMax' },
+  { key: 'rainbow',  label: 'Радужные',    max: 'rainbowMax' },
   { key: 'ach',      label: 'Достижения',  max: 'achMax' },
+  { key: 'logs',     label: 'Архив',       max: 'logsMax' },
+  // Итоги и рекорды
   { key: 'score',    label: 'Счёт' },
+  { key: 'bestAdv',  label: 'Рекорд кампании' },
+  { key: 'bestInf',  label: 'Рекорд бесконечного' },
+  { key: 'coins',    label: 'Монеты' },
   { key: 'playtime', label: 'В игре',      fmt: 'time' },
+  // Мастерство
+  { key: 'bosses',   label: 'Боссы' },
+  { key: 'secrets',  label: 'Секретные выходы' },
+  { key: 'perfect',  label: 'Идеальных уровней' },
+  { key: 'streak',   label: 'Серия без смертей' },
+  { key: 'hardcore', label: 'Хардкор' },
+  // Боевой почерк — по нему видно, КАК игрок проходит игру
+  { key: 'stompKills',   label: 'Прыжком' },
+  { key: 'blasterKills', label: 'Бластером' },
+  { key: 'burnKills',    label: 'Огнём' },
+  { key: 'freezeKills',  label: 'Льдом' },
+  { key: 'jumps',        label: 'Прыжков' },
 ];
 
 const fmtNum = (n) => Number(n || 0).toLocaleString('ru-RU');

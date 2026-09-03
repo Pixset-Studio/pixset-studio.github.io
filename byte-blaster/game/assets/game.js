@@ -301,42 +301,6 @@ function prismFilter(hue,sat,bright){
   const h=(((hue-_PRISM_SEPIA_HUE)%360)+360)%360;
   return 'grayscale(1) sepia(1) saturate('+(sat||7)+') hue-rotate('+h+'deg) brightness('+(bright||1.15)+')';
 }
-
-// ── Преломление объектов: включено или нет ─────────────────────────────────
-// ctx.filter — самая дорогая операция canvas2d: каждый объект с фильтром
-// уходит в отдельный проход растеризации. Замер на этой же машине: двадцать
-// кирпичей с этим фильтром — 145 мс на кадр против 0.9 мс без него, при
-// бюджете кадра 16.7 мс. Квантование оттенка (оно уже было) стоимость
-// уменьшает, но не меняет порядок. Именно это и делает 11-й мир неиграбельным
-// на телефоне, где GPU слабее, а экран плотнее.
-//
-// Настройка «Радужный мир → Преломление» (вкладка «Графика») оставляет выбор
-// игроку: 'on' — как задумано, 'off' — кирпичи, шипы и враги в своих обычных
-// цветах, 'auto' — выключено там, где не потянет. Всё остальное (спектральное
-// небо, призма, платформы, декор) работает в любом случае: оно рисуется
-// градиентами и кэшируется, фильтров там нет.
-const _prismIsTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
-function prismFxOn(){
-  const s=window.gameSettings;
-  const v=(s&&s.prismFx)||'auto';
-  if(v==='on')return true;
-  if(v==='off')return false;
-  if(_prismIsTouch||(s&&s.touchControls==='on'))return false;   // телефон/планшет
-  const g=(s&&s.gfx)||{};                                        // слабый тир графики
-  return !((g.glow!=null&&g.glow<0.6)||(g.bgDetail!=null&&g.bgDetail<0.6));
-}
-window.prismFxOn=prismFxOn;
-// Дешёвая замена преломлению для КИРПИЧЕЙ. Блок — непрозрачный прямоугольник,
-// поэтому подкрасить его можно обычным fillRect поверх: фон вокруг не задет,
-// а мир не выглядит так, будто кирпичи привезли из соседнего уровня. Для шипов
-// и врагов такой приём не годится — они не прямоугольные, и заливка испачкала
-// бы фон внутри их габаритов (ровно поэтому здесь и появился фильтр).
-function prismTintRect(x,y,w,h,hue){
-  ctx.globalAlpha=0.42;
-  ctx.fillStyle='hsl('+hue+',85%,55%)';
-  ctx.fillRect(x,y,w,h);
-  ctx.globalAlpha=1;
-}
 // transition wipe in every world whose main colour is shorthand.
 // This expands shorthand first, so the result is always a valid 8-digit hex.
 function withAlpha(col,aa){
@@ -561,24 +525,18 @@ function tone(freq,type,dur,vol=.22,dst=null,detune=0){
     o.connect(g);o.start(now);o.stop(now+dur+.02);
   }catch(e){}
 }
-// atk — время нарастания. Без него свип всегда врубается на полной громкости и
-// щёлкает; нарастающим звукам (зарядка, щит) это нужно.
-function sweep(f0,f1,type,dur,vol=.2,dst=null,atk=0){
+function sweep(f0,f1,type,dur,vol=.2,dst=null){
   if(!AC||!audioOn)return;
   try{
     const now=AC.currentTime;
     const g=AC.createGain();g.connect(dst||SG);
-    if(atk>0){g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(vol,now+atk);}
-    else g.gain.setValueAtTime(vol,now);
-    g.gain.exponentialRampToValueAtTime(.0001,now+dur);
+    g.gain.setValueAtTime(vol,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);
     const o=AC.createOscillator();o.type=type;
     o.frequency.setValueAtTime(f0,now);o.frequency.exponentialRampToValueAtTime(f1,now+dur);
     o.connect(g);o.start(now);o.stop(now+dur+.02);
   }catch(e){}
 }
-// flt — {type,freq,Q}. Белый шум звучит как помеха; отфильтрованный читается
-// как материал: полосовой — металл, низкочастотный — земля, высокий — воздух.
-function noise(dur,vol=.15,dst=null,flt=null){
+function noise(dur,vol=.15,dst=null){
   if(!AC||!audioOn)return;
   try{
     const now=AC.currentTime,sz=AC.sampleRate*dur|0;
@@ -587,46 +545,49 @@ function noise(dur,vol=.15,dst=null,flt=null){
     const src=AC.createBufferSource();src.buffer=buf;
     const g=AC.createGain();g.connect(dst||SG);
     g.gain.setValueAtTime(vol,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);
-    if(flt){
-      const bq=AC.createBiquadFilter();bq.type=flt.type;bq.frequency.value=flt.freq;
-      if(flt.Q)bq.Q.value=flt.Q;
-      src.connect(bq);bq.connect(g);
-    }else src.connect(g);
-    src.start(now);
+    src.connect(g);src.start(now);
   }catch(e){}
 }
 
 // ── SFX library (procedural fallback). When the baked .mp3 samples are loaded
 // (window.AudioFiles), the wrapper SFX below plays those instead — cheaper and
 // glitch-free on phones. Names here MUST match the SFX file names.
-// Звуки описаны в assets/sfx-data.js — там же, откуда их берёт генератор mp3.
-// Раньше определения жили двумя копиями и разъезжались, а часть была пустыми
-// заглушками: land() не издавал вообще ничего.
-const SFX_PROC={};
-(function(){
-  const D=window.BBSfx;
-  if(!D)return;
-  const play=(ev)=>{
-    const go=()=>{
-      if(ev.k==='tone')tone(ev.f,ev.type,ev.dur,ev.vol,null,ev.detune||0);
-      else if(ev.k==='sweep')sweep(ev.f0,ev.f1,ev.type,ev.dur,ev.vol,null,ev.attack||0);
-      else if(ev.k==='noise')noise(ev.dur,ev.vol,null,ev.filter||null);
-    };
-    // Ноль играем сразу: на нулевой задержке setTimeout только добавил бы
-    // дрожание там, где точность важнее всего — в момент удара.
-    if(ev.start>0.001)setTimeout(go,ev.start*1000); else go();
-  };
-  for(const name of D.names){
-    const evs=D.SFX[name];
-    SFX_PROC[name]=function(){ for(let i=0;i<evs.length;i++)play(evs[i]); };
-  }
-})();
-// Реплика диалогов: высота меняется от вызова к вызову, поэтому запечь её в
-// файл нельзя — получился бы один и тот же повторяющийся писк.
-SFX_PROC.voiceBlip=function(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);};
-// Убраны намеренно: постоянный писк таймера раздражал.
-SFX_PROC.timerTick=function(){};
-SFX_PROC.timeLow=function(){};
+const SFX_PROC={
+  jump(){sweep(280,540,'square',.12,.18);noise(.04,.05);},
+  dblJump(){sweep(440,800,'square',.1,.16);setTimeout(()=>sweep(600,1000,'square',.08,.12),55);},
+  land(){/* quiet landing */},
+  shoot(){sweep(900,600,'square',.07,.2);tone(1200,'square',.03,.1);},
+  coin(){tone(988,'triangle',.05,.12);tone(880,'sine',.06,.2);setTimeout(()=>tone(1320,'sine',.07,.18),55);setTimeout(()=>tone(1760,'sine',.05,.1),110);},
+  powerup(){[440,550,660,880,1100,1320].forEach((f,i)=>setTimeout(()=>tone(f,'square',.12,.25),i*60));setTimeout(()=>{tone(1760,'sine',.3,.12);tone(2640,'sine',.25,.07);},380);},
+  stomp(){noise(.05,.28);sweep(220,70,'sine',.12,.26);tone(160,'square',.06,.16);},
+  hit(){sweep(300,120,'sawtooth',.09,.22);noise(.04,.2);},
+  enemyDie(){sweep(440,110,'sawtooth',.18,.24);noise(.06,.18);tone(80,'sine',.12,.16);},
+  playerHurt(){sweep(600,80,'sawtooth',.3,.28);noise(.12,.25);tone(100,'square',.4,.22);},
+  block(){tone(220,'square',.06,.22);noise(.03,.15);},
+  clear(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,'square',.18,.28),i*100));},
+  menu(){tone(660,'square',.05,.14);setTimeout(()=>tone(880,'square',.05,.12),50);},
+  back(){tone(440,'square',.05,.14);setTimeout(()=>tone(330,'square',.05,.12),50);},
+  pause(){sweep(440,880,'sine',.12,.18);},
+  resume(){sweep(880,440,'sine',.12,.18);},
+  timerTick(){/* removed — was causing annoying persistent beep */},
+  flagReach(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,'square',.14,.3),i*80));},
+  respawn(){[300,440,600].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.08,.18),i*75));},
+  timeLow(){/* removed */},
+  secret(){[440,495,523,587,659,698,784,880].forEach((f,i)=>setTimeout(()=>tone(f,'triangle',.1,.18),i*55));},
+  // Triumphant fanfare for unlocking an achievement (chord arpeggio + sparkle).
+  achievement(){
+    [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,'square',.22,.26),i*70));
+    setTimeout(()=>{tone(1319,'triangle',.45,.22);tone(1047,'triangle',.45,.16);},300);
+    setTimeout(()=>tone(1568,'sine',.3,.14),380);
+  },
+  droneBuzz(){tone(180,'sawtooth',.08,.08);},
+  walk(){noise(.03,.06);}, // light footstep
+  // Classic RPG-style dialogue "blip": short, high-pitched, fast-decay pulse
+  // played per revealed character during the cutscene typewriter effect (see
+  // _csShowLine). Slight per-call pitch jitter keeps a whole sentence from
+  // sounding like a single repeated beep.
+  voiceBlip(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);},
+};
 // Public SFX: prefer the baked .mp3 sample, fall back to the procedural voice.
 // Built as a wrapper over SFX_PROC so every existing SFX.xxx() call site is
 // unchanged. Empty procedural entries (land/timerTick/timeLow) just no-op.
@@ -678,8 +639,23 @@ function _drumSnare(now,vol){
 }
 function hz(b,s){return b*Math.pow(2,s/12);}
 const SC={PENT:[0,2,4,7,9,12,14,16],MIN:[0,3,5,7,10,12,15,17],HARM:[0,2,3,7,8,12,14,15],CHR:[0,1,4,7,8,12,13,16],DORI:[0,2,3,7,9,12,14,15]};
-// Паттерны музыки переехали в assets/music-data.js: там же, откуда берёт ноты
-// генератор mp3, чтобы две копии больше не расходились.
+const MMUSIC={bpm:118,base:261.63,sc:SC.PENT,wave:'square',   mel:[0,4,7,9,7,4,2,0,9,7,4,2,0,2,4,7],bass:[0,0,7,0,5,0,7,0]};
+const GMUSIC=[
+  {bpm:140,base:261.63,sc:SC.PENT,wave:'square',   mel:[0,4,7,12,7,4,2,0,4,7,9,12,9,7,4,2],bass:[0,0,7,0,7,0,5,0]},
+  {bpm:128,base:220,   sc:SC.MIN, wave:'sawtooth', mel:[0,3,7,10,7,3,5,0,3,5,7,10,7,5,3,0],bass:[0,0,5,3,7,0,5,3]},
+  {bpm:162,base:293.66,sc:SC.HARM,wave:'sawtooth', mel:[0,2,7,8,7,2,3,0,2,7,8,12,8,7,2,0],bass:[0,0,7,0,8,0,7,0]},
+  {bpm:112,base:246.94,sc:SC.PENT,wave:'triangle', mel:[12,9,7,4,7,9,12,14,9,7,4,2,4,7,9,7],bass:[0,0,7,0,5,0,7,0]},
+  {bpm:133,base:220,   sc:SC.HARM,wave:'square',   mel:[0,3,7,8,7,3,2,0,7,8,12,8,7,8,3,0],bass:[0,0,8,0,7,0,3,0]},
+  {bpm:148,base:277.18,sc:SC.CHR, wave:'sawtooth', mel:[0,4,7,8,13,8,7,4,1,4,8,13,8,4,1,0],bass:[0,0,8,0,13,0,7,0]},
+  {bpm:116,base:196,   sc:SC.MIN, wave:'triangle', mel:[0,3,5,7,5,3,0,2,3,5,7,10,7,5,3,0],bass:[0,0,5,0,3,0,7,0]},
+  {bpm:155,base:233.08,sc:SC.CHR, wave:'sawtooth', mel:[0,1,4,7,8,7,4,1,4,7,8,13,8,7,1,0],bass:[0,0,7,8,4,0,7,0]},
+  {bpm:168,base:261.63,sc:SC.DORI,wave:'square',   mel:[0,2,4,9,7,12,9,7,4,7,9,12,14,12,9,7],bass:[0,0,9,0,7,0,4,0]},
+  {bpm:178,base:220,   sc:SC.HARM,wave:'sawtooth', mel:[0,2,7,8,12,8,7,2,3,7,8,12,15,12,8,7],bass:[0,0,8,7,3,7,8,12]},
+  // Theme 8 – Storm Peaks
+  {bpm:160,base:174.61,sc:SC.MIN, wave:'sawtooth', mel:[0,3,7,10,12,10,7,3,5,7,10,12,10,7,5,3],bass:[0,0,7,0,5,0,3,0]},
+  // Theme 9 – Final Fortress
+  {bpm:190,base:130.81,sc:SC.HARM,wave:'sawtooth', mel:[0,2,3,7,8,7,3,2,0,3,7,8,12,8,7,3],bass:[0,0,8,3,7,3,8,7]},
+];
 function stopMusic(){musicPlaying=false;if(mTimer){clearTimeout(mTimer);mTimer=null;}if(window.AudioFiles)window.AudioFiles.stopMusic();}
 // Remembers how to (re)start the current track, so when the .mp3 samples finish
 // decoding mid-session we can seamlessly switch from the procedural fallback to
@@ -697,77 +673,49 @@ function _tryMusicFile(name){
 // Called by AudioFiles once decoding completes: upgrade the currently-playing
 // procedural track to its .mp3 loop.
 window.onAudioFilesReady=function(){ if(musicPlaying&&_curMusicStart)_curMusicStart(); };
-// Партитуру берём из assets/music-data.js — того же файла, из которого печётся
-// Audio/Music/*.mp3, поэтому запасной движок и готовые треки звучат одинаково.
-// Разбор формы стоит пары миллисекунд, но при паузе/возобновлении музыка
-// перезапускается часто, поэтому результат держим в кэше.
-const _songCache={};
-let _song=null,_songMap=null;
-function _getSong(name){
-  if(!_songCache[name]&&window.BBMusic){
-    const s=window.BBMusic.buildSong(name);
-    if(s){s.map=window.BBMusic.byStep(s);_songCache[name]=s;}
+function _mTick(pat,step){
+  if(!musicPlaying||!AC||!audioOn)return;
+  const{bpm,base,sc,wave,mel,bass}=pat,spb=60000/bpm/4,sec=spb/1000;
+  const now=AC.currentTime;
+  // Lead melody — doubled with a slightly detuned voice for a fuller, warmer tone.
+  const mi=mel[step%mel.length],ms=sc[mi%sc.length]+(mi>=sc.length?12:0);
+  const lf=hz(base,ms);
+  tone(lf,wave,sec*.36,.11,MTONE,7);
+  tone(lf,wave,sec*.36,.05,MTONE,-9);
+  // Bass — root plus a sub-octave for weight.
+  if(step%2===0){
+    const bi=bass[(step>>1)%bass.length],bs=sc[bi%sc.length];
+    tone(hz(base*.5,bs),wave,sec*.8,.15,MTONE);
+    tone(hz(base*.25,bs),'triangle',sec*.8,.07,MTONE);
   }
-  return _songCache[name]||null;
+  // Counter-harmony stab on the off-beats.
+  if(step%8===4){const ci=mel[(step+4)%mel.length],cs=sc[ci%sc.length];tone(hz(base,cs+7),wave,sec*.22,.06,MTONE,step%16===4?-10:10);}
+  // ── Percussion groove: kick on every beat (4-on-the-floor), snare backbeat,
+  //    hi-hats on the off-beats with lighter ghost hats in between.
+  if(step%4===0) _drumKick(now,.42);
+  if(step%8===4) _drumSnare(now,.15);
+  if(step%2===1) _drumHat(now,.05);
+  else if(step%4!==0) _drumHat(now,.028);
+  mTimer=setTimeout(()=>_mTick(pat,step+1),spb);
 }
-// Запасной движок тоже знает про стиль: иначе на телефоне до загрузки файлов
-// всегда играл бы чиптюн, даже когда выбран обычный звук.
-//
-// Фильтр общий на всю музыку, а не на ноту: отдельный узел на каждую ноту
-// съел бы весь смысл экономии, ради которой запасной движок и существует.
-let _mLP=null;
-function _modernMusic(){ return !(window.gameSettings&&window.gameSettings.musicStyle==='chip'); }
-function _mBus(){
-  if(!_modernMusic())return MTONE;
-  if(!_mLP&&AC){
-    try{ _mLP=AC.createBiquadFilter();_mLP.type='lowpass';_mLP.frequency.value=4600;_mLP.Q.value=.5;_mLP.connect(MTONE); }
-    catch(e){ _mLP=null; }
-  }
-  return _mLP||MTONE;
-}
-function _mTick(step){
-  if(!musicPlaying||!AC||!audioOn||!_song)return;
-  const sec=_song.spb,now=AC.currentTime;
-  const list=_songMap[step%_song.steps];
-  const modern=_modernMusic(),bus=_mBus();
-  if(list)for(let i=0;i<list.length;i++){
-    const e=list[i];
-    // Нота звучит почти всю свою длительность: короткие огрызки и превращали
-    // мелодию в долбёжку.
-    const d=sec*(e.len||1)*.9;
-    // Тембр берём из события: он свой у каждого слоя и у каждого мира.
-    // В обычном стиле пилу и квадрат смягчаем до треугольника: наивные волны
-    // Web Audio и дают ту самую восьмибитную жёсткость.
-    const w=modern?(e.w==='sawtooth'||e.w==='square'?'triangle':e.w||'sine'):(e.w||'square');
-    switch(e.k){
-      // Второй расстроенный голос добавляет толщины — в чиптюне он не нужен.
-      case 'lead': tone(e.f,w,d,e.vol,bus,7); if(modern)tone(e.f,w,d,e.vol*.5,bus,-11); break;
-      case 'lead2':tone(e.f,w,d,e.vol,bus,-9); break;
-      case 'bass': tone(e.f,w,d,e.vol,bus); break;
-      case 'sub':  tone(e.f,modern?'sine':w,d,e.vol,bus); break;
-      case 'arp':  tone(e.f,w,sec*(e.len||1)*.7,e.vol,bus,4); break;
-      case 'kick': _drumKick(now,e.vol); break;
-      case 'snare':_drumSnare(now,e.vol); break;
-      case 'hat':  _drumHat(now,e.vol); break;
-    }
-  }
-  mTimer=setTimeout(()=>_mTick(step+1),sec*1000);
-}
-function startMusic(name){
-  if(!AC||!audioOn)return;
-  const s=_getSong(name);
-  if(!s)return;
-  stopMusic();
-  _song=s;_songMap=s.map;musicPlaying=true;_mTick(0);
-}
-function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic('menu');}
-// У Призматической аномалии (мир 10) теперь своя тема — раньше секретный мир
-// доигрывал музыку Финальной крепости.
-function startGameMusic(){const wi=Math.min(CT.id,10);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(Math.min(wi,9));if(_tryMusicFile('world'+wi))return;startMusic('world'+wi);}
-function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic('boss');}
-function startMapMusic(){_curMusicStart=startMapMusic;if(_tryMusicFile('worldmap'))return;startMusic('worldmap');}
-function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic('star');}
-function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic('victory');}
+function startMusic(pat){if(!AC||!audioOn)return;stopMusic();musicPlaying=true;_mTick(pat,0);}
+function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic(MMUSIC);}
+function startGameMusic(){const wi=Math.min(CT.id,9);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(wi);if(_tryMusicFile('world'+wi))return;startMusic(GMUSIC[wi]);}
+// Boss music — intense, fast, minor key
+const BMUSIC={bpm:195,base:110,sc:SC.MIN,wave:'sawtooth',
+  mel:[0,3,5,7,3,0,5,7, 0,3,5,10,7,5,3,0],
+  bass:[0,0,5,3,7,0,5,7]};
+function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic(BMUSIC);}
+// Star power music — fast, major, joyful
+const STAR_MUSIC={bpm:240,base:329.63,sc:SC.PENT,wave:'square',
+  mel:[0,2,4,7,9,12,9,7, 4,7,9,12,14,12,9,4],
+  bass:[0,4,7,4,0,4,7,4]};
+function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic(STAR_MUSIC);}
+// Victory music — triumphant, major, uplifting (plays during the ending cinematic)
+const VMUSIC={bpm:120,base:261.63,sc:SC.PENT,wave:'triangle',
+  mel:[0,2,4,7,9,7,4,2, 7,9,12,9,7,4,2,0, 4,7,9,12,14,12,9,7, 12,14,16,14,12,9,7,4],
+  bass:[0,0,4,4,7,7,4,0]};
+function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic(VMUSIC);}
 
 function showBossIntro(b){
   const ov=document.getElementById('bossIntroOv');
@@ -873,9 +821,6 @@ function _audioUnlock(){
 document.addEventListener('pointerdown',_audioUnlock,{once:true});
 
 function doEsc(){
-  // Экран итогов обрабатывает Escape сам (уйти на карту / в меню). Без этой
-  // проверки на одно нажатие приходилось бы два звука и две реакции.
-  if(window.Results&&window.Results.isOpen&&window.Results.isOpen())return;
   SFX.back();
   if(navScr==='playType')    {navScr='main';showMain();}
   else if(navScr==='netType'){navScr='playType';showPlayType();}
@@ -1052,10 +997,8 @@ var _csShownWorlds={};                       // Tracks which world-intro cutscen
 // doesn't carry one profile's "already seen" cutscenes over to another, and a
 // fresh slot always sees every cutscene again.
 function loadCsFired(){
-  // _plainMap: значение вида "null" или массива тоже разбирается без ошибки,
-  // а дальше по коду с ним работают как с объектом — см. _normProg.
-  try{const s=localStorage.getItem('bbCsFired');_csFired=_plainMap(s?JSON.parse(s):{});}catch(e){_csFired={};}
-  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=_plainMap(s2?JSON.parse(s2):{});}catch(e){_csShownWorlds={};}
+  try{const s=localStorage.getItem('bbCsFired');_csFired=s?JSON.parse(s):{};}catch(e){_csFired={};}
+  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=s2?JSON.parse(s2):{};}catch(e){_csShownWorlds={};}
 }
 function saveCsFired(){try{localStorage.setItem('bbCsFired',JSON.stringify(_csFired));}catch(e){}}
 function saveCsShownWorlds(){try{localStorage.setItem('bbCsWorlds',JSON.stringify(_csShownWorlds));}catch(e){}}
@@ -1119,98 +1062,6 @@ let fireBalls=[],iceBalls=[];
 let checkpoints=[];        // mid-level checkpoint flags
 let _cpSafeZone=null;      // {x,y,w,h} — area around the checkpoint kept hazard-free
 let cpSave=null;           // {lvl,color} — checkpoint to resume from on adventure retry
-
-/* ── ЖИЗНИ ────────────────────────────────────────────────────────────────────
-   Раньше жизни ни на что не влияли: кончились — уровень просто начинался
-   заново с тремя новыми. Теперь у них есть цена, и она разная в двух режимах.
-
-   Обычный режим. Жизнь тратится на возвращение к чекпоинту. Кончились —
-   уровень с самого начала: чекпоинт снимается, и участок до него приходится
-   пройти заново. Записанные достижения уровня (лучшие звёзды и кристаллы) при
-   этом не понижаются: отнимать уже заслуженное — наказание, которого никто не
-   ждёт. Сбрасывается только текущая попытка.
-
-   Хардкор. Жизни общие на весь мир, а не на уровень: десять уровней проходятся
-   на одном запасе. Кончились — мир начинается с первого уровня, и прогресс
-   ЭТОГО мира откатывается.
-
-   Что именно откатывается в хардкоре: у хардкора отдельное хранилище
-   (advProgHard, ключ bbAdvH), поэтому обычное прохождение не затрагивается
-   вообще. Внутри хардкорного прогресса чистятся только десять уровней текущего
-   мира — отметки о прохождении, звёзды и кристаллы, — а `max` возвращается к
-   первому уровню мира. Другие миры остаются как были. */
-const HARD_WORLD_LIVES=5;   // запас на весь мир в хардкоре
-let hardWorldLives=HARD_WORLD_LIVES;
-let hardWorldIdx=-1;        // для какого мира выдан запас
-
-const worldOf=(lvl)=>Math.floor((Math.max(1,lvl)-1)/10);
-const worldFirstLevel=(w)=>w*10+1;
-
-/** Начало мира в хардкоре: выдаём общий запас жизней один раз на мир. */
-function _hardEnterWorld(lvl){
-  const w=worldOf(lvl);
-  if(w!==hardWorldIdx){hardWorldIdx=w;hardWorldLives=HARD_WORLD_LIVES;}
-}
-
-/**
- * Жизни кончились. Куда возвращать — зависит от режима.
- * Зовётся из кнопки «ещё раз» на экране поражения.
- */
-function _outOfLives(){
-  lives2=3;
-  if(hardMode&&advMode){
-    const first=_hardWipeWorld(advLevel);
-    lives=hardWorldLives;
-    cpSave=null;                    // мир начинается заново, чекпоинт не нужен
-    startAdv(first,false);
-    return;
-  }
-  // Обычный режим: тот же уровень, но с самого начала.
-  lives=3;
-  cpSave=null;
-  startAdv(advLevel,false);
-}
-
-/**
- * Хардкор: запас на мир кончился. Откатываем прогресс этого мира и
- * возвращаемся к его первому уровню.
- */
-function _hardWipeWorld(lvl){
-  const w=worldOf(lvl),first=worldFirstLevel(w),last=first+9;
-  const prog=advProgHard;
-  prog.done=(prog.done||[]).filter(n=>n<first||n>last);
-  if(prog.stars)for(let n=first;n<=last;n++)delete prog.stars[n];
-  if(prog.shards)for(let n=first;n<=last;n++)delete prog.shards[n];
-  // max не опускаем ниже начала мира — иначе игрок потеряет и прошлые миры.
-  prog.max=Math.max(1,Math.min(prog.max,first));
-  saveAdvH();
-  if(window.WorldMap&&window.WorldMap.refresh)window.WorldMap.refresh(true);
-  hardWorldIdx=w;hardWorldLives=HARD_WORLD_LIVES;
-  return first;
-}
-
-/**
- * Возвращает мир к состоянию на момент взятия чекпоинта.
- *
- * Без этого смерть после чекпоинта отматывала уровень целиком: враги, которых
- * игрок уже прошёл, оживали, а собранные монеты появлялись снова — и участок до
- * чекпоинта приходилось проходить заново, хотя возрождение происходило после
- * него. Кристаллы так восстанавливались и раньше, остальное — нет.
- *
- * Уровень строится детерминированно по номеру, поэтому при пересборке порядок
- * элементов тот же и снимка по позициям достаточно. Длины сверяем на всякий
- * случай: враги умеют делиться на лету, и в живом забеге массив длиннее, чем
- * при чистой генерации.
- */
-function _restoreCpWorld(){
-  if(!cpSave)return;
-  if(cpSave.coins&&typeof coins!=='undefined')
-    for(let i=0;i<coins.length&&i<cpSave.coins.length;i++) if(cpSave.coins[i])coins[i].got=true;
-  if(cpSave.enemies&&typeof enemies!=='undefined')
-    for(let i=0;i<enemies.length&&i<cpSave.enemies.length;i++) if(cpSave.enemies[i])enemies[i].alive=false;
-  if(cpSave.powerups&&typeof powerups!=='undefined')
-    for(let i=0;i<powerups.length&&i<cpSave.powerups.length;i++) if(cpSave.powerups[i])powerups[i].got=true;
-}
 let player2=null;          // P2 object (null = not in use)
 let lives2=3;              // P2 lives (separate from P1)
 let twoPlayer=false;       // 2-player mode active?
@@ -1231,7 +1082,7 @@ const RAINBOW_LEVEL_IN_WORLD=[4,7,2,8,5,1,9,3,6,2];
 let rainbowItem=null;            // the current level's rainbow shard entity, or null
 let rainbowCollected={};         // {worldIndex: true} — persisted, see loadRainbow()/markRainbowCollected()
 function loadRainbow(){
-  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=_plainMap(s?JSON.parse(s):{});}catch(e){rainbowCollected={};}
+  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=s?JSON.parse(s):{};}catch(e){rainbowCollected={};}
 }
 function saveRainbow(){try{localStorage.setItem('bbRainbow',JSON.stringify(rainbowCollected));}catch(e){}}
 function rainbowCount(){return Object.keys(rainbowCollected).filter(k=>rainbowCollected[k]).length;}
@@ -1258,7 +1109,7 @@ function _checkCoinHp(cx,cy,p){
       burst(cx+7,cy+7,'#4f8',22,5,6);
       floatTxt(cx,cy-18,T('repaired'),'#4f8');
     } else {
-      lives++;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
+      lives++;
       burst(cx+7,cy+7,'#ff2266',22,5,6);
       floatTxt(cx,cy-18,T('hpBonus'),'#ff2266');
     }
@@ -1335,64 +1186,35 @@ let exitBonus=0;        // height bonus text
 let exitBonusTier='';   // "PERFECT" / "GREAT" / "GOOD" / "BASE"
 let exitStars=0;        // stars (1–3) earned on the level just completed
 let exitStarsNew=false; // did this run beat the previous best star rating?
-let exitTimeBonus=0;    // points awarded for the time left on the clock
-let exitBonusCol='';    // colour of the flag tier (shared with the results screen)
 let exitLevelScore=0;   // per-level score earned on the level just completed
 let spawnX=60,spawnY=H-100;
 let boss=null; // active boss object
 let bossArenaX=0;      // x coordinate where boss arena begins
 let bossArenaTriggered=false; // has player entered the arena?
 
-// ── Загрузка сохранений: форма важна не меньше синтаксиса ───────────────────
-// JSON.parse спасает только от синтаксического мусора. Но "null", число или
-// объект без поля done — тоже валидный JSON, и такое значение проходило мимо
-// catch: игра падала уже в меню («Cannot read properties of undefined»), то
-// есть на чёрный экран. Прийти такое может из облачного сохранения, из
-// недописанного файла и из ручной правки. Теперь у прогресса проверяется ещё
-// и форма, а испорченное значение так же откладывается в <ключ>_corrupt.
-function _backupCorrupt(key){
-  try{const raw=localStorage.getItem(key);if(raw)localStorage.setItem(key+'_corrupt',raw);}catch(e){}
-}
-// Простая карта «ключ → значение» (катсцены, радужные осколки, звёзды, очки).
-function _plainMap(v){return (v&&typeof v==='object'&&!Array.isArray(v))?v:{};}
-// Приводит прогресс к рабочему виду. `key` нужен только для отметки о порче.
-function _normProg(o,key){
-  const ok=!!o&&typeof o==='object'&&!Array.isArray(o)&&Array.isArray(o.done);
-  if(!ok){
-    if(o!==null&&o!==undefined){
-      console.warn(key+' save has an unexpected shape, falling back to a fresh profile. Raw value backed up under '+key+'_corrupt for support/recovery.');
-      _backupCorrupt(key);
-    }
-    o={max:1,done:[]};
-  }
-  const max=Number(o.max);
-  o.max=(isFinite(max)&&max>=1)?Math.floor(max):1;
-  o.stars=_plainMap(o.stars);o.scores=_plainMap(o.scores);o.shards=_plainMap(o.shards);
-  return o;
-}
 function saveAdv(){try{localStorage.setItem('bbAdv3',JSON.stringify(advProg));}catch(e){}}
 function loadAdv(){
-  let parsed=null;
   try{
     const s=localStorage.getItem('bbAdv3');
-    parsed=s?JSON.parse(s):{max:1,done:[]};
+    advProg=s?JSON.parse(s):{max:1,done:[]};
   }catch(e){
     console.warn('bbAdv3 save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdv3_corrupt for support/recovery.',e);
-    _backupCorrupt('bbAdv3');
+    try{ const raw=localStorage.getItem('bbAdv3'); if(raw) localStorage.setItem('bbAdv3_corrupt',raw); }catch(e2){}
+    advProg={max:1,done:[]};
   }
-  advProg=_normProg(parsed,'bbAdv3');
+  if(!advProg.stars)advProg.stars={};if(!advProg.scores)advProg.scores={};if(!advProg.shards)advProg.shards={};
 }
 function saveAdvH(){try{localStorage.setItem('bbAdvH',JSON.stringify(advProgHard));}catch(e){}}
 function loadAdvH(){
-  let parsed=null;
   try{
     const s=localStorage.getItem('bbAdvH');
-    parsed=s?JSON.parse(s):{max:1,done:[]};
+    advProgHard=s?JSON.parse(s):{max:1,done:[]};
   }catch(e){
     console.warn('bbAdvH save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdvH_corrupt for support/recovery.',e);
-    _backupCorrupt('bbAdvH');
+    try{ const raw=localStorage.getItem('bbAdvH'); if(raw) localStorage.setItem('bbAdvH_corrupt',raw); }catch(e2){}
+    advProgHard={max:1,done:[]};
   }
-  advProgHard=_normProg(parsed,'bbAdvH');
+  if(!advProgHard.stars)advProgHard.stars={};if(!advProgHard.scores)advProgHard.scores={};if(!advProgHard.shards)advProgHard.shards={};
 }
 
 // ── STAR RATINGS (1–3 per level) ──
@@ -1460,15 +1282,12 @@ window.bbPlaytime=()=>playSeconds;
 function loadRecords(){
   try{
     const s=localStorage.getItem('bbRecords');
-    bestRecords=Object.assign({infinite:0,adventure:0},_plainMap(s?JSON.parse(s):{}));
+    bestRecords=s?Object.assign({infinite:0,adventure:0},JSON.parse(s)):{infinite:0,adventure:0};
   }catch(e){
     console.warn('bbRecords save is corrupted, falling back to fresh records. Raw value backed up under bbRecords_corrupt for support/recovery.',e);
-    _backupCorrupt('bbRecords');
+    try{ const raw=localStorage.getItem('bbRecords'); if(raw) localStorage.setItem('bbRecords_corrupt',raw); }catch(e2){}
     bestRecords={infinite:0,adventure:0};
   }
-  // Рекорд сравнивается числом; строка из чужого файла делала бы сравнение
-  // лексикографическим («9» > «100»), и настоящий рекорд не записывался бы.
-  ['infinite','adventure'].forEach(k=>{const n=Number(bestRecords[k]);bestRecords[k]=isFinite(n)&&n>0?Math.floor(n):0;});
 }
 function saveRecords(){try{localStorage.setItem('bbRecords',JSON.stringify(bestRecords));}catch(e){}}
 function recordScore(mode,sc){sc=sc|0;if(mode!=='infinite'&&mode!=='adventure')return;if(sc>(bestRecords[mode]||0)){bestRecords[mode]=sc;saveRecords();}}
@@ -4283,17 +4102,17 @@ function buildMapH(){
     const TH=THEMES[ti];
     const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color='#f44';
-    lbl.innerHTML='<span style="font-size:calc(11px * var(--bbText, 1))">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
+    lbl.innerHTML='<span style="font-size:11px">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>prog.max,done=prog.done.includes(n),avail=n===prog.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
-      if(locked){btn.disabled=true;btn.innerHTML='<span style="opacity:.45;font-size:calc(9px * var(--bbText, 1))">🔒</span><span class="lvlN">'+n+'</span>';}
+      if(locked){btn.disabled=true;btn.innerHTML='<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">'+n+'</span>';}
       else{
         btn.style.borderColor='#f446';btn.style.setProperty('--mc','#f44');
-        if(done){btn.style.background='#f4420';btn.style.color='#f44';btn.innerHTML='<span style="font-size:calc(8px * var(--bbText, 1))">✓</span><span class="lvlN">'+n+'</span>';}
+        if(done){btn.style.background='#f4420';btn.style.color='#f44';btn.innerHTML='<span style="font-size:8px">✓</span><span class="lvlN">'+n+'</span>';}
         else{btn.style.color='#f44';if(avail){btn.classList.add('avail');btn.style.borderColor='#f44';btn.style.boxShadow='0 0 9px #f449';}
-          btn.innerHTML='<span style="font-size:calc(9px * var(--bbText, 1))">'+(avail?'▶':'')+'</span><span class="lvlN">'+n+'</span>';}
+          btn.innerHTML='<span style="font-size:9px">'+(avail?'▶':'')+'</span><span class="lvlN">'+n+'</span>';}
         btn.onclick=()=>{SFX.menu();startAdv(n,true);};
       }
       row.appendChild(btn);
@@ -4306,9 +4125,6 @@ function showMap(){
   // Stop the in-game render loop while the map is open (see showMapH).
   if(raf){cancelAnimationFrame(raf);raf=0;}
   navScr='map';
-  // У карты своя тема: раньше здесь доигрывала музыка меню, и переход между
-  // выбором уровня и самой картой был неслышен.
-  startMapMusic();
   if (window.WorldMap) {
     window.WorldMap.show(false);
   } else {
@@ -4413,17 +4229,17 @@ function buildMap(){
     const TH=THEMES[ti];
     const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=withAlpha(TH.mc,'55');sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color=TH.mc;
-    lbl.innerHTML=`<span style="font-size:calc(11px * var(--bbText, 1))">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
+    lbl.innerHTML=`<span style="font-size:11px">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>advProg.max,done=advProg.done.includes(n),avail=n===advProg.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
-      if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:calc(9px * var(--bbText, 1))">🔒</span><span class="lvlN">${n}</span>`;}
+      if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">${n}</span>`;}
       else{
         btn.style.borderColor=withAlpha(TH.mc,'88');btn.style.setProperty('--mc',TH.mc);
-        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:calc(8px * var(--bbText, 1))">✓</span><span class="lvlN">${n}</span>`;}
+        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
         else{btn.style.color=TH.mc;if(avail){btn.classList.add('avail');btn.style.borderColor=TH.mc;btn.style.boxShadow=`0 0 9px ${TH.mc}99`;}
-          btn.innerHTML=`<span style="font-size:calc(9px * var(--bbText, 1))">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
+          btn.innerHTML=`<span style="font-size:9px">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
         btn.onclick=()=>{SFX.menu();startAdv(n,true);};
       }
       row.appendChild(btn);
@@ -4448,13 +4264,7 @@ function startInf(fresh=true){
   updModeLabel();startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
 }
 function startAdv(n,freshLives=false){
-  // В хардкоре запас общий на весь мир и переносится между уровнями;
-  // в обычном режиме — свой на каждый заход.
-  if(hardMode&&advMode){
-    _hardEnterWorld(n);
-    if(freshLives)cpSave=null;
-    lives=hardWorldLives;
-  } else if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
+  if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
   // Reset coin progress when starting fresh adventure from level 1
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -4476,7 +4286,6 @@ function startAdv(n,freshLives=false){
       dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
       shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
     }
-    _restoreCpWorld();
   }
   timeLeft=lvlTime(n);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
@@ -4750,7 +4559,7 @@ function updatePlayer(){
   for(const pu of powerups){
     if(!pu.got&&aabb(p,pu)){pu.got=true;SFX.powerup();
       if(pu.type==='blast'){p.blaster=true;p.bTimer=1800;burst(pu.x+12,pu.y+12,CT.mc,18,4,6);floatTxt(pu.x,pu.y,T('pBlaster'),CT.mc);camShake=9;}
-      else if(pu.type==='life'){lives++;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);burst(pu.x+12,pu.y+12,'#ff2266',22,5,6);floatTxt(pu.x,pu.y,T('pLife'),'#ff2266');camShake=8;[440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));}
+      else if(pu.type==='life'){lives++;burst(pu.x+12,pu.y+12,'#ff2266',22,5,6);floatTxt(pu.x,pu.y,T('pLife'),'#ff2266');camShake=8;[440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));}
       else if(pu.type==='boots'){p.boots=true;p.bootsTimer=900;p.jl=Math.max(p.jl,3);burst(pu.x+12,pu.y+12,'#0ff',18,4,6);floatTxt(pu.x,pu.y,T('pBoots'),'#0ff');camShake=7;}
       else if(pu.type==='star'){p.starMode=true;p.starTimer=600;p.inv=601;burst(pu.x+12,pu.y+12,'#ff0',24,5,7);floatTxt(pu.x,pu.y,T('pStar'),'#ff0');camShake=12;startStarMusic();AchTrack.star();}
       else if(pu.type==='fire'){p.fireMode=true;p.iceMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#ff4400',18,4,6);floatTxt(pu.x,pu.y,T('pFire'),'#ff4400');camShake=9;}
@@ -4887,19 +4696,6 @@ function updatePlayer(){
 // Persist this client's adventure progress + achievements for the level it just
 // finished. Extracted from the level-advance flow so it can run both in single
 // player AND the moment a co-op player reaches the flag (before the room advances).
-// Публичная сводка прогресса уходит на сервер не чаще раза в две минуты:
-// её смотрят друзья на сайте, и обновлять её после каждого уровня незачем —
-// а вот отправлять запрос после каждого точно не стоит.
-let _statsPubT=0;
-function _publishStatsSoon(){
-  if(!window.Friends||!window.Friends.publish)return;
-  if(window.bbStatsAutoOn&&!window.bbStatsAutoOn())return;   // игрок выключил
-  const now=Date.now();
-  if(now-_statsPubT<120000)return;
-  _statsPubT=now;
-  try{window.Friends.publish();}catch(e){}
-}
-
 function _persistAdvProgress(){
   savePlaytime();
   const prog=hardMode?advProgHard:advProg;
@@ -4921,7 +4717,6 @@ function _persistAdvProgress(){
   // Persist the best crystal (data-shard) count for this level.
   recordLevelShards(advLevel,dataShardsGot,hardMode);
   if(hardMode)saveAdvH();else saveAdv();
-  _publishStatsSoon();   // витрина для друзей — см. комментарий выше
   // Refresh WorldMap if it's loaded — mark this level done explicitly so the
   // final level (100) reliably shows its checkmark even though it ends in the
   // win/ending flow rather than loading a next level.
@@ -5003,7 +4798,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     if(timMax>0&&timeLeft>=timMax/2)AchTrack.speed();
     AchTrack.score(score);
 
-    exitBonus=hBonus;exitBonusTier=tier;exitBonusCol=tierCol;exitTimeBonus=tBonus;
+    exitBonus=hBonus;exitBonusTier=tier;
 
     // Burst at touch point
     burst(flagX+5,touchY,CT.clr,28+Math.floor(heightFrac*20),5,6);
@@ -5014,7 +4809,6 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     // Show score breakdown
     floatTxt(flagX+5,touchY-30,`+${hBonus} ${tier}`,tierCol);
     floatTxt(flagX+5,touchY-52,`+${tBonus} TIME`,CT.mc);
-    if(hardMode&&advMode)hardWorldLives=lives;  // запас переходит на следующий уровень мира
     cpSave=null;             // level cleared — checkpoint no longer needed
 
     // ── Network co-op: WAIT for every player to reach the flag ────────────
@@ -5035,9 +4829,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     exitAnim=true;
     exitTimer=0;
 
-    // Что происходит после анимации выхода. Раньше это вызывалось таймером
-    // напрямую и уровень сменялся сам; теперь между ними встаёт экран итогов
-    // (см. _showLevelResults) — игрок идёт дальше сам.
+    // Schedule next level
     const _goNext=()=>{
       _goNextTimer=0;
       if(gState!=='levelclear')return; // aborted by death/pause/menu
@@ -5067,68 +4859,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
       }
     };
     if(_goNextTimer)clearTimeout(_goNextTimer);
-    // Экран итогов показывается раньше, чем закончилась бы старая пауза: он и
-    // есть остановка, тянуть её ещё секунду незачем.
-    _goNextTimer=setTimeout(()=>{
-      _goNextTimer=0;
-      if(gState!=='levelclear')return;
-      if(!_showLevelResults(_goNext))_goNext();
-    }, 2600);
-}
-
-// Экран итогов уровня. Возвращает false, если показать его нечем (нет модуля) —
-// тогда вызывающий просто идёт дальше, как раньше.
-function _showLevelResults(goNext){
-  if(!window.Results||typeof window.Results.showLevel!=='function')return false;
-  if(window.netActive)return false;   // темп сетевой комнаты задаёт хост
-  // Прогресс записываем ДО показа: с этого экрана игрок может уйти на карту, а
-  // раньше запись стояла в _goNext, то есть только на пути «дальше». Функция
-  // идемпотентна (done через includes, счёт и звёзды — по максимуму).
-  if(advMode)_persistAdvProgress();
-  if(raf){cancelAnimationFrame(raf);raf=0;}
-  const lvNum=advMode?advLevel:level;
-  const tierCols={};
-  tierCols[T('tierPerfect')]='#ff0';tierCols[T('tierGreat')]='#0ff';
-  tierCols[T('tierGood')]='#0f8';tierCols[T('tierBase')]='#888';
-  // Общий счёт кампании: банк по всем уровням плюс вклад этого забега.
-  let total=score;
-  if(advMode){
-    const banked=Math.max(levelScore(advLevel,hardMode),exitLevelScore);
-    total=totalScore(hardMode)-levelScore(advLevel,hardMode)+banked;
-  }
-  const data={
-    levelNum:lvNum,
-    accent:exitBonusCol||tierCols[exitBonusTier]||'#0ff',
-    tier:exitBonusTier,
-    flagBonus:exitBonus,
-    timeBonus:exitTimeBonus,
-    coins:coinsTotal|0,
-    levelScore:exitLevelScore,
-    score:total,
-    stars:advMode?exitStars:null,
-    starsNew:exitStarsNew,
-    subtitle:advMode&&dataShards&&dataShards.length
-      ? T('crystals')+': '+dataShardsGot+' / '+dataShards.length : '',
-  };
-  const leave=()=>{
-    stopMusic();
-    gState='menu';
-    if(advMode){
-      const open=hardMode?showMapH:showMap;
-      if(typeof open==='function')open(); else showMain();
-    }
-    else { if(window.InfSave)window.InfSave.save(); showMain(); }
-  };
-  const actions={
-    // Если состояние почему-то уже не 'levelclear', goNext() молча ничего не
-    // сделает и игрок остался бы перед пустым экраном — уводим его на карту.
-    next:()=>{ if(gState==='levelclear')goNext(); else leave(); },
-    retry:()=>{ if(advMode)startAdv(advLevel,false); else startInf(false); },
-    leaveLabel:advMode?T('map'):T('menu'),
-    leave:leave,
-  };
-  window.Results.showLevel(data,actions);
-  return true;
+    _goNextTimer=setTimeout(_goNext, 4000);
 }
 
 // ── PLAYER 2 UPDATE (arrow keys + ./, for shoot) ──
@@ -5410,7 +5141,7 @@ function doHurtPlayer(fromFall=false){
   // life and respawn in place / at the checkpoint, keeping gState==='playing'.
   if(window.netActive){
     if(infiniteLives)lives=Math.max(lives,3);
-    lives--;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
+    lives--;
     AchTrack.death();
     SFX.playerHurt();camShake=12;
     p.broken=false;
@@ -5443,7 +5174,7 @@ function doHurtPlayer(fromFall=false){
     return;
   }
   if(infiniteLives)lives=Math.max(lives,3);
-  lives--;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
+  lives--;
   AchTrack.death();
   if(lives<=0){
     // In 2-player mode, only trigger game over if BOTH players are dead
@@ -5470,7 +5201,7 @@ function doHurtPlayer(fromFall=false){
     stopMusic();
     burst(p.x+p.w/2,p.y+p.h/2,'#f44',20,5,5);camShake=18;SFX.playerHurt();
     gState='gameover';
-    const retry=advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
+    const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
                        :()=>{SFX.menu();startInf(true);};
     setTimeout(()=>{showGameover(retry);},400);
     return;
@@ -5537,7 +5268,7 @@ function doHurtPlayer2(fromFall=false){
       }
       stopMusic();
       gState='gameover';
-      const retry=advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
+      const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
                          :()=>{SFX.menu();startInf(true);};
       setTimeout(()=>{showGameover(retry);},400);
     }
@@ -5631,32 +5362,6 @@ function showGameover(retry,titleTxt,subTxt){
   // continue past death, which is the one thing an endless mode cannot allow.
   if(window.InfSave&&!advMode)window.InfSave.clear();
   if(raf){cancelAnimationFrame(raf);raf=0;}
-  recordScore(advMode?'adventure':'infinite',score);   // рекорд банкуем в любом случае
-  // Экран итогов вместо главного меню с перекрашенным заголовком: видно, чем
-  // кончилась попытка, и есть куда уйти кроме «Заново» — раньше выхода на карту
-  // и в меню отсюда не было вовсе.
-  if(window.Results&&typeof window.Results.showGameOver==='function'){
-    hideAll();
-    window.Results.showGameOver({
-      title:titleTxt||T('gameOver'),
-      sub:(subTxt!=null)?subTxt:(advMode?T('levelFailed',advLevel):T('betterLuck')),
-      levelNum:advMode?advLevel:level,
-      coins:coinsTotal|0,
-      score:score,
-      best:bestRecords[advMode?'adventure':'infinite']|0,
-    },{
-      retry:retry,
-      leaveLabel:advMode?T('map'):T('menu'),
-      leave:()=>{
-        if(advMode){
-          const open=hardMode?showMapH:showMap;
-          if(typeof open==='function')open(); else showMain();
-        } else showMain();
-      },
-      menu:advMode?(()=>showMain()):null,
-    });
-    return;
-  }
   // Clear every in-game layer first. Without this the score/lives/timer HUD and
   // the level-modifier banner stayed painted on top of the Game Over screen
   // (hideAll() is what normally takes them down, and nothing called it here).
@@ -6017,14 +5722,7 @@ function touchCheckpoints(p){
       // Also snapshot the crystals (data-shards) collected so far, so dying after
       // the checkpoint keeps them instead of resetting the level's crystal count.
       if(advMode){
-        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot,
-          // Снимок мира на момент касания: убитые враги остаются убитыми, а
-          // собранные монеты — собранными. Уровень строится детерминированно по
-          // номеру, поэтому порядок элементов при пересборке тот же, и хватает
-          // флагов по позициям.
-          coins:coins.map(c=>!!c.got),
-          enemies:enemies.map(e=>e.alive===false),
-          powerups:powerups.map(u=>!!u.got)};
+        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot};
         // Persist the crystals reached up to this checkpoint right away (keeps the
         // best, so they're saved even if the player dies before finishing).
         if(typeof recordLevelShards==='function')recordLevelShards(advLevel,dataShardsGot,hardMode);
@@ -6884,24 +6582,919 @@ function _sceneryBand(cfg,bd){
 
 // Draw the whole scenery stack for a world. Worlds without an entry (Cyber City
 // has its bespoke skyline, Prism Anomaly its refraction field) simply skip.
-// Многослойные фоны миров удалены: их заменил один запечённый слой
-// (assets/backdrops.js). Здесь было ~950 строк — небо, зарево, дымка, звёзды,
-// светлячки, окна домов и полосы силуэтов с параллаксом у каждого из 11 миров.
+function drawWorldScenery(id,bd){
+  const layers=WORLD_SCENERY[id];
+  if(!layers)return;
+  ctx.save();
+  ctx.shadowBlur=0;
+  for(const l of layers)_sceneryBand(l,bd);
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════════
+//  BACKGROUND ATMOSPHERE
+// ════════════════════════════════════════════════
+// Each world's sky/backdrop lives in its own function in WORLD_ATMOSPHERE
+// instead of one long if/else chain inside drawBG(), so a world can be
+// redesigned without touching the other ten.
+//
+// The heavy parts (city skylines, cavern ceilings, refinery silhouettes) are
+// hundreds of small rects. Drawing them every frame was the most expensive
+// thing in the background — so they are rasterised ONCE into an offscreen tile
+// of exactly one screen width and then blitted twice with a parallax offset.
+// Two drawImage calls replace hundreds of fillRects, and the picture is
+// identical because the layout is deterministic anyway.
+
+const _bgTiles={};
+let _bgTilesTheme=-1;
+// At most one cached layer may be re-rasterised per frame. Without this, a
+// world with three animated layers rebuilds all of them on the same frame every
+// time their TTL expires — a few hundred rects in one go, which on a weak
+// device is a visible hitch twice a second. Spreading the rebuilds means a tile
+// is at worst one or two frames stale, which is invisible.
+let _bgRebuildBudget=0;
+
+// Render (or reuse) a cached, horizontally-tiling background layer.
+//   key   — unique per layer
+//   h     — tile height in logical pixels
+//   build — (c, w, h) => draws the layer with its baseline at y = h
+//   ttl   — optional: rebuild after this many ticks (for slowly-animated layers
+//           such as blinking windows; omit for fully static layers)
+function bgLayer(key,h,build,ttl){
+  // Drop every cached tile when the world changes — 11 worlds × 3 layers of
+  // screen-sized canvases would otherwise pile up tens of megabytes.
+  if(_bgTilesTheme!==CT.id){for(const k in _bgTiles)delete _bgTiles[k];_bgTilesTheme=CT.id;}
+  const rs=Math.max(1,Math.min(2,_renderScale||1));
+  let t=_bgTiles[key];
+  const needNew=!t||t.h!==h||t.rs!==rs;
+  // A first build must always happen (there is nothing to show otherwise); a
+  // refresh waits its turn if another layer already rebuilt this frame.
+  const wantRefresh=!needNew&&ttl&&tick-t.built>=ttl&&_bgRebuildBudget>0;
+  if(needNew||wantRefresh){
+    if(!needNew)_bgRebuildBudget--;
+    if(needNew){
+      const cv=document.createElement('canvas');
+      cv.width=Math.ceil(W*rs);cv.height=Math.ceil(h*rs);
+      t={cv:cv,c:cv.getContext('2d'),h:h,rs:rs,built:-1};
+      _bgTiles[key]=t;
+    }
+    const c=t.c;
+    c.setTransform(1,0,0,1,0,0);
+    c.clearRect(0,0,t.cv.width,t.cv.height);
+    c.setTransform(rs,0,0,rs,0,0);
+    build(c,W,h);
+    t.built=tick;
+  }
+  return t;
+}
+// Blit a cached tile twice so it wraps seamlessly at the given parallax factor.
+function blitLayer(t,par,y,alpha){
+  const off=((camX*par)%W+W)%W;
+  ctx.globalAlpha=alpha;
+  ctx.drawImage(t.cv,-off,y,W,t.h);
+  ctx.drawImage(t.cv,W-off,y,W,t.h);
+  ctx.globalAlpha=1;
+}
+// Stable pseudo-random for deterministic prop layouts (same helper the parallax
+// silhouettes use).
+const _bgRnd=_sceneryRnd;
+
+// A field of stars that twinkles. Shared by several night skies.
+function _atmStars(count,maxY,tintBright,gl){
+  ctx.fillStyle='#fff';
+  for(let i=0;i<count;i++){
+    const sx=(i*137.5+11)%W, sy=(i*97.3+7)%maxY;
+    const tw=Math.sin(tick*.04+i*0.9)*.45+.55;
+    const big=i%20===0;
+    ctx.globalAlpha=tw*(big?.9:.45);
+    ctx.fillStyle=big?tintBright:'#ffffff';
+    const sz=big?1.8:i%7===0?1.2:0.8;
+    ctx.fillRect(sx-sz/2,sy-sz/2,sz,sz);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 0 · CYBER CITY ─────────────────────────────────────────────────────────
+// Three cached skyline bands: a pale distant grid of towers, a mid band that
+// carries most of the window light, and a near band of dark blocks with
+// antennae and vertical neon signs.
+function _cityBand(c,w,h,o){
+  const step=w/o.count;
+  for(let i=0;i<o.count;i++){
+    const bw=step*(0.6+_bgRnd(i,o.seed)*0.32);
+    const bx=i*step+(step-bw)/2;
+    const bh=h*(0.30+_bgRnd(i,o.seed+1)*0.66);
+    const by=h-bh;
+    c.fillStyle=o.body;
+    c.fillRect(bx,by,bw,bh);
+    // Crown: a setback block, a spire, or a flat roof — gives the skyline a
+    // varied profile instead of a row of identical rectangles.
+    const crown=_bgRnd(i,o.seed+2);
+    if(crown>0.7)c.fillRect(bx+bw*0.18,by-h*0.09,bw*0.64,h*0.09);
+    else if(crown>0.45)c.fillRect(bx+bw*0.44,by-h*0.15,bw*0.12,h*0.15);
+    if(!o.windows)continue;
+    // Windows: a dense grid, mostly dark, with a scattering lit in cyan and a
+    // few in warm amber. Two lit colours is what makes it read as a living city
+    // rather than confetti.
+    const cols=Math.max(2,Math.floor(bw/6)),rows=Math.max(2,Math.floor(bh/9));
+    for(let r=0;r<rows;r++){
+      for(let q=0;q<cols;q++){
+        const wx=bx+3+q*((bw-6)/cols), wy=by+5+r*((bh-8)/rows);
+        if(wy>h-3)continue;
+        const s=_bgRnd(i*97+r*13+q,o.seed+3);
+        const lit=(s+o.blink)%1;
+        if(lit>0.72)c.fillStyle=o.lit;
+        else if(lit>0.62)c.fillStyle=o.lit2;
+        else c.fillStyle=o.dark;
+        c.fillRect(wx,wy,2,3);
+      }
+    }
+    // Vertical neon sign on a few towers.
+    if(_bgRnd(i,o.seed+4)>0.82&&o.sign){
+      c.fillStyle=o.sign;
+      c.fillRect(bx+bw*0.5-1,by+bh*0.18,2,bh*0.42);
+    }
+    // Antenna with a beacon.
+    if(_bgRnd(i,o.seed+5)>0.75){
+      c.fillStyle=o.body;
+      c.fillRect(bx+bw*0.5-0.5,by-h*0.07,1,h*0.07);
+      c.fillStyle=o.beacon;
+      c.fillRect(bx+bw*0.5-1.5,by-h*0.075,3,3);
+    }
+  }
+}
+function _atmCyberCity(bd,gl){
+  // Distant city glow on the horizon
+  const hgz=ctx.createLinearGradient(0,H*.5,0,H*.9);
+  hgz.addColorStop(0,'#00243d');hgz.addColorStop(1,'transparent');
+  ctx.globalAlpha=.85;ctx.fillStyle=hgz;ctx.fillRect(0,H*.5,W,H*.4);
+
+  _atmStars(Math.round(70*bd),H*.5,'#aaddff',gl);
+
+  // Moon
+  ctx.globalAlpha=.9;
+  if(gl>0){ctx.shadowColor='#aaccff';ctx.shadowBlur=14;}
+  ctx.fillStyle='#c8dff0';
+  ctx.beginPath();ctx.arc(W*.84,H*.11,26,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.globalAlpha=.22;ctx.fillStyle='#8aaabb';
+  ctx.beginPath();ctx.arc(W*.84+8,H*.11+6,6,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(W*.84-10,H*.11-5,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(W*.84+4,H*.11-11,3,0,Math.PI*2);ctx.fill();
+
+  // Three cached skyline bands. `blink` advances slowly, and the tiles rebuild
+  // only every 30 ticks — the window pattern changes on a ~2 s cadence, which
+  // is exactly how it looked when it was rebuilt from scratch every frame.
+  // ONE skyline plus one rooftop band. There used to be three bands of towers
+  // stacked on top of each other: at these sizes they don't read as depth, they
+  // read as one blurry pile of overlapping rectangles.
+  const blink=Math.floor(tick/30)*0.11;
+  const mid=bgLayer('w0mid',190,(c,w,h)=>_cityBand(c,w,h,{count:17,seed:7,blink:blink,windows:1,
+    body:'#060c18',lit:'#2fd8ff',lit2:'#ffb347',dark:'#050a12',sign:'#ff3fa4',beacon:'#ff3020'}),31);
+  blitLayer(mid,0.20,H*.74-190,0.85);
+
+  // Nearest band is deliberately NOT a third row of skyscrapers — three layers
+  // of the same towers just read as one blurry repeated object. This is the
+  // rooftop level the player is running along: parapets, water tanks, billboard
+  // frames and aerial masts, drawn as a solid dark cut-out.
+  const near=bgLayer('w0near',130,(c,w,h)=>{
+    const span=w/4;
+    c.fillStyle='#02060b';
+    c.fillRect(0,h-h*0.16,w,h*0.16);                    // parapet the props stand on
+    for(let i=0;i<4;i++){
+      const x=i*span, base=h-h*0.16;
+      const s=(k)=>_bgRnd(i,k+41);
+      // Water tank on legs
+      const tw=span*0.16,th=h*(0.24+s(1)*0.16),tx=x+span*0.10;
+      c.fillStyle='#02060b';
+      c.fillRect(tx,base-th,tw,th);
+      c.fillRect(tx-tw*0.16,base-th-h*0.05,tw*1.32,h*0.05);
+      // Billboard frame with a lit panel
+      const bx=x+span*0.42,bw=span*0.36,bh=h*(0.26+s(2)*0.16);
+      c.fillStyle='#02060b';
+      c.fillRect(bx,base-bh,3,bh);c.fillRect(bx+bw-3,base-bh,3,bh);
+      c.fillRect(bx,base-bh,bw,4);c.fillRect(bx,base-bh*0.18,bw,4);
+      c.fillStyle=i%2?'rgba(255,63,164,0.22)':'rgba(47,216,255,0.20)';
+      c.fillRect(bx+3,base-bh+4,bw-6,bh*0.8);
+      // Aerial mast with a beacon
+      const mx=x+span*0.86;
+      c.fillStyle='#02060b';
+      c.fillRect(mx,base-h*0.52,3,h*0.52);
+      c.fillRect(mx-span*0.05,base-h*0.40,span*0.12,2);
+      c.fillRect(mx-span*0.035,base-h*0.28,span*0.09,2);
+      c.fillStyle='rgba(255,40,20,0.75)';c.fillRect(mx-1,base-h*0.55,5,4);
+      // Vent boxes
+      c.fillStyle='#02060b';
+      c.fillRect(x+span*0.66,base-h*0.09,span*0.12,h*0.09);
+    }
+  },0);
+  blitLayer(near,0.36,H*.88-130,0.96);
+
+  // Flying vehicles — tiny blinking lights gliding across the sky.
+  for(let v=0;v<3;v++){
+    const speed=v===0?0.4:v===1?0.25:0.6;
+    const span=W+120;
+    const vx=(((tick*speed+v*280)%span)+span)%span-60;
+    const vy=H*.08+v*H*.06;
+    if(vx<-20||vx>W+20)continue;
+    const blinkOn=Math.floor(tick*.12+v*2)%4>1;
+    ctx.globalAlpha=blinkOn?.8:.2;
+    ctx.fillStyle=v%2===0?'#f00':'#0ff';
+    ctx.fillRect(vx-1.5,vy-1.5,3,3);
+    ctx.globalAlpha=.12;ctx.strokeStyle=v%2===0?'#f00':'#0ff';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-18,vy);ctx.stroke();
+  }
+  // Wet-street light streaks along the ground
+  ctx.globalAlpha=.05;ctx.strokeStyle='#0ff';ctx.lineWidth=0.5;
+  ctx.beginPath();
+  for(let xi=0;xi<W;xi+=40){const gx=(xi-camX*.05)%W;ctx.moveTo(gx,H*.82);ctx.lineTo(gx+W*.3,H);}
+  ctx.stroke();
+}
+
+// ── 1 · NEON JUNGLE ────────────────────────────────────────────────────────
+// A hanging canopy across the top of the screen with vines and glowing spores,
+// plus light shafts breaking through it.
+function _atmJungle(bd,gl){
+  const gz=ctx.createLinearGradient(0,0,0,H*.7);
+  gz.addColorStop(0,'#0a2a12');gz.addColorStop(1,'transparent');
+  ctx.globalAlpha=.32;ctx.fillStyle=gz;ctx.fillRect(0,0,W,H*.7);
+
+  // Light shafts through the leaves
+  ctx.globalAlpha=.05;
+  for(let s=0;s<4;s++){
+    const sx=(s*231+((camX*.12)%W))%W;
+    const g=ctx.createLinearGradient(sx,0,sx+70,H*.75);
+    g.addColorStop(0,'#cfffa0');g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx+34,0);ctx.lineTo(sx+96,H*.75);ctx.lineTo(sx+30,H*.75);ctx.closePath();ctx.fill();
+  }
+
+  // Cached canopy: overlapping leaf lobes hanging from the top edge, with vines.
+  const canopy=bgLayer('w1canopy',120,(c,w,h)=>{
+    for(let i=0;i<16;i++){
+      const cx=i*(w/16)+_bgRnd(i,2)*20;
+      const r=26+_bgRnd(i,3)*26;
+      const cy=_bgRnd(i,4)*26;
+      c.fillStyle=i%3===0?'#0c2a12':'#071c0c';
+      c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fill();
+      // leaf rim
+      c.strokeStyle='rgba(90,255,150,0.14)';c.lineWidth=1.5;
+      c.beginPath();c.arc(cx,cy,r,0.15,Math.PI-0.15);c.stroke();
+    }
+    // Vines dangling out of the canopy
+    c.strokeStyle='rgba(60,180,100,0.30)';c.lineWidth=1.5;
+    for(let v=0;v<12;v++){
+      const vx=v*(w/12)+_bgRnd(v,5)*24;
+      const len=26+_bgRnd(v,6)*62;
+      c.beginPath();c.moveTo(vx,10);
+      for(let y=10;y<len;y+=12)c.lineTo(vx+Math.sin(y*.18+v)*5,y);
+      c.stroke();
+      c.fillStyle='rgba(120,255,160,0.20)';
+      c.beginPath();c.arc(vx+Math.sin(len*.18+v)*5,len,2.5,0,Math.PI*2);c.fill();
+    }
+  });
+  blitLayer(canopy,0.14,0,0.9);
+  const canopy2=bgLayer('w1canopy2',80,(c,w,h)=>{
+    for(let i=0;i<11;i++){
+      const cx=i*(w/11)+_bgRnd(i,8)*24;
+      const r=22+_bgRnd(i,9)*22;
+      c.fillStyle='#030f06';
+      c.beginPath();c.arc(cx,_bgRnd(i,10)*12,r,0,Math.PI*2);c.fill();
+    }
+  });
+  blitLayer(canopy2,0.30,0,0.95);
+
+  // Fireflies / spores
+  for(let i=0,fn=Math.round(20*bd);i<fn;i++){
+    const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.62);
+    const on=Math.floor(tick*.07+i*1.4)%5>2;
+    if(!on)continue;
+    ctx.globalAlpha=.5;ctx.fillStyle='#ccff88';
+    ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();
+    if(gl>0)bloom(fx,fy,7,'#aaff44',0.30);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 2 · LAVA WORLD (unchanged design, kept compact) ────────────────────────
+function _atmLava(bd,gl){
+  ctx.globalAlpha=.14;
+  const hg=ctx.createLinearGradient(0,H*.3,0,H);
+  hg.addColorStop(0,'#ff2200');hg.addColorStop(1,'#220800');
+  ctx.fillStyle=hg;ctx.fillRect(0,H*.3,W,H*.7);
+  for(let i=0,en=Math.round(22*bd);i<en;i++){
+    const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%(H*.7)+H)%H;
+    ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';
+    ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 3 · ICE CAVES ──────────────────────────────────────────────────────────
+// Read as a CAVE, not an open sky: a cached ceiling of stalactites at the top,
+// frozen crystal clusters behind, aurora light leaking in, drifting snow.
+function _atmIce(bd,gl){
+  // Aurora leaking through cracks in the ceiling
+  for(let a=0;a<3;a++){
+    const phase=tick*.008+a*.9;
+    const ax=(a+1)*W*0.27+Math.sin(phase)*30;
+    ctx.globalAlpha=.06+Math.sin(phase)*.03;
+    const ag=ctx.createLinearGradient(ax,0,ax+70,H*.55);
+    ag.addColorStop(0,'transparent');
+    ag.addColorStop(.5,a%2===0?'#88ffee':'#8899ff');
+    ag.addColorStop(1,'transparent');
+    ctx.fillStyle=ag;ctx.fillRect(ax,0,70,H*.55);
+  }
+  // Cached cave ceiling with stalactites
+  const ceil=bgLayer('w3ceil',110,(c,w,h)=>{
+    c.fillStyle='#0a1826';c.fillRect(0,0,w,h*0.30);
+    for(let i=0;i<26;i++){
+      const x=i*(w/26)+_bgRnd(i,11)*12;
+      const len=h*(0.22+_bgRnd(i,12)*0.66);
+      const half=3+_bgRnd(i,13)*5;
+      const g=c.createLinearGradient(0,h*0.3,0,h*0.3+len);
+      g.addColorStop(0,'#1b3450');g.addColorStop(1,'#0d2036');
+      c.fillStyle=g;
+      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x+half,h*0.3);c.lineTo(x,h*0.3+len);c.closePath();c.fill();
+      c.strokeStyle='rgba(170,230,255,0.22)';c.lineWidth=1;
+      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x,h*0.3+len);c.stroke();
+    }
+  });
+  blitLayer(ceil,0.16,0,0.92);
+
+  // Drifting snow
+  ctx.fillStyle='#dff';
+  for(let i=0,sn=Math.round(30*bd);i<sn;i++){
+    const sx=(i*163+tick*.35+Math.sin(tick*.02+i)*14)%W;
+    const sy=(i*71+tick*.5)%H;
+    ctx.globalAlpha=.20+(i%4)*.08;
+    ctx.fillRect(sx,sy,1.4,1.4);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 4 · DESERT RUINS (unchanged design) ────────────────────────────────────
+function _atmDesert(bd,gl){
+  ctx.globalAlpha=.9;
+  if(gl>0){ctx.shadowColor='#ffdd44';ctx.shadowBlur=20;}
+  ctx.fillStyle='#ffee88';ctx.beginPath();ctx.arc(W*.8,H*.12,22,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.globalAlpha=.05;ctx.fillStyle='#ffcc44';
+  for(let r=0;r<6;r++){const hy=H*.5+r*16+Math.sin(tick*.03+r)*4;ctx.fillRect(0,hy,W,8);}
+  ctx.globalAlpha=1;
+}
+
+// ── 5 · SPACE STATION ──────────────────────────────────────────────────────
+// The old background silhouettes were a box with a wide bar through it, which
+// read as a row of burgers. Replaced with a proper orbital structure: a truss
+// spine carrying cylindrical modules and solar-panel wings, plus a ringed
+// planet to give the scene scale.
+function _atmSpace(bd,gl){
+  _atmStars(Math.round(85*bd),H*.85,'#dde6ff',gl);
+  // Nebula
+  ctx.globalAlpha=.055;
+  ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(W*.32,H*.24,120,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0044ff';ctx.beginPath();ctx.arc(W*.72,H*.4,84,0,Math.PI*2);ctx.fill();
+  // Ringed planet
+  const px=W*.17-((camX*.03)%(W*2)), py=H*.22, pr=46;
+  ctx.globalAlpha=.9;
+  const pg=ctx.createRadialGradient(px-pr*.35,py-pr*.35,pr*.15,px,py,pr);
+  pg.addColorStop(0,'#5a4a9a');pg.addColorStop(1,'#1a1240');
+  ctx.fillStyle=pg;ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=.5;ctx.strokeStyle='#9a86d8';ctx.lineWidth=3;
+  ctx.save();ctx.translate(px,py);ctx.rotate(-0.35);ctx.scale(1,0.26);
+  ctx.beginPath();ctx.arc(0,0,pr*1.7,0,Math.PI*2);ctx.stroke();ctx.restore();
+
+  // Cached station structure
+  // One station section: a cylindrical pressure module with capped ends, a lit
+  // window strip, a solar wing on a boom and a docking node. Drawn at varying
+  // heights so the band is a structure, not a washing line.
+  function _stationSection(c,x,y,scale,i,pal){
+    const mw=(64+_bgRnd(i,21)*40)*scale, mh=(22+_bgRnd(i,22)*10)*scale;
+    const r=mh/2;
+    // Hull (rounded cylinder)
+    const hull=c.createLinearGradient(0,y-mh,0,y);
+    hull.addColorStop(0,pal.hi);hull.addColorStop(0.45,pal.body);hull.addColorStop(1,pal.lo);
+    c.fillStyle=hull;
+    c.beginPath();
+    c.moveTo(x+r,y-mh);c.lineTo(x+mw-r,y-mh);
+    c.arc(x+mw-r,y-r,r,-Math.PI/2,Math.PI/2);
+    c.lineTo(x+r,y);c.arc(x+r,y-r,r,Math.PI/2,-Math.PI/2);
+    c.closePath();c.fill();
+    // Hull ribs
+    c.strokeStyle=pal.rib;c.lineWidth=1;
+    c.beginPath();
+    for(let s=1;s<4;s++){const sx=x+mw*s/4;c.moveTo(sx,y-mh+2);c.lineTo(sx,y-2);}
+    c.stroke();
+    // Lit window strip
+    c.fillStyle=pal.win;
+    for(let p=0;p<Math.floor(mw/(14*scale));p++)c.fillRect(x+8*scale+p*14*scale,y-mh*0.62,3*scale,3*scale);
+    // Solar wing on a boom
+    const bx=x+mw*0.5, by=y-mh;
+    c.fillStyle=pal.rib;c.fillRect(bx-1,by-18*scale,2,18*scale);
+    const pw=46*scale, ph=15*scale, px2=bx-pw/2, py2=by-18*scale-ph;
+    c.fillStyle=pal.panel;c.fillRect(px2,py2,pw,ph);
+    c.strokeStyle=pal.panelLine;c.lineWidth=1;
+    c.beginPath();
+    for(let s=0;s<=5;s++){const sx=px2+pw*s/5;c.moveTo(sx,py2);c.lineTo(sx,py2+ph);}
+    c.moveTo(px2,py2+ph/2);c.lineTo(px2+pw,py2+ph/2);
+    c.stroke();
+    // Docking node
+    c.strokeStyle=pal.rib;c.lineWidth=2*scale;
+    c.beginPath();c.arc(x+mw+6*scale,y-r,5*scale,0,Math.PI*2);c.stroke();
+    return mw;
+  }
+  const truss=bgLayer('w5truss',170,(c,w,h)=>{
+    const pal={hi:'#39406f',body:'#232848',lo:'#141830',rib:'#4b5490',win:'#7fe3ff',
+               panel:'#1b4a7c',panelLine:'#3d84c4'};
+    let x=8;
+    for(let i=0;i<5&&x<w;i++){
+      const y=h*(0.72+_bgRnd(i,25)*0.22);
+      const mw=_stationSection(c,x,y,1,i,pal);
+      // Connecting truss to the next section
+      c.fillStyle=pal.rib;c.fillRect(x+mw+11,y-12,w/5-mw-11,3);
+      x+=Math.max(mw+34,w/5);
+    }
+  });
+  blitLayer(truss,0.13,H*.62-170,0.7);
+  // A single station band: two rows of modules just overlapped into clutter.
+
+  ctx.globalAlpha=1;
+}
+
+// ── 6 · DARK FOREST ────────────────────────────────────────────────────────
+// Almost lightless: a black canopy overhead, pale mist between the trunks,
+// a shaft of moonlight, and pairs of eyes watching from the dark.
+function _atmDarkForest(bd,gl){
+  ctx.globalAlpha=.85;
+  if(gl>0){ctx.shadowColor='#aaaacc';ctx.shadowBlur=10;}
+  ctx.fillStyle='#ccccee';ctx.beginPath();ctx.arc(W*.15,H*.1,16,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#060a04';ctx.globalAlpha=.25;
+  ctx.beginPath();ctx.arc(W*.15+5,H*.1-3,13,0,Math.PI*2);ctx.fill();
+
+  // Moonlight shaft
+  ctx.globalAlpha=.045;
+  const mg=ctx.createLinearGradient(W*.15,H*.1,W*.42,H*.85);
+  mg.addColorStop(0,'#cfe0ff');mg.addColorStop(1,'transparent');
+  ctx.fillStyle=mg;
+  ctx.beginPath();ctx.moveTo(W*.10,H*.1);ctx.lineTo(W*.22,H*.1);ctx.lineTo(W*.55,H*.85);ctx.lineTo(W*.24,H*.85);ctx.closePath();ctx.fill();
+
+  // Mist bands
+  for(let i=0;i<7;i++){
+    ctx.globalAlpha=.05+i*.005;ctx.fillStyle='#0a1408';
+    const fy=H*.5+i*12+Math.sin(tick*.02+i)*8;
+    ctx.fillRect(0,fy,W,20);
+  }
+
+  // Cached black canopy overhead
+  const canopy=bgLayer('w6canopy',96,(c,w,h)=>{
+    c.fillStyle='#020601';c.fillRect(0,0,w,h*0.24);
+    for(let i=0;i<20;i++){
+      const cx=i*(w/20)+_bgRnd(i,41)*16;
+      const r=20+_bgRnd(i,42)*24;
+      c.fillStyle='#020601';
+      c.beginPath();c.arc(cx,h*0.24+_bgRnd(i,43)*10,r,0,Math.PI*2);c.fill();
+    }
+    // Bare branches reaching down out of the canopy. Kept short, thick and dark
+    // — long thin strokes read as scratches on the screen, not as wood.
+    c.strokeStyle='rgba(10,22,10,0.95)';c.lineWidth=3;c.lineCap='round';
+    for(let b=0;b<9;b++){
+      const bx=b*(w/9)+_bgRnd(b,44)*22;
+      c.beginPath();c.moveTo(bx,h*0.28);
+      c.lineTo(bx+6,h*0.46);c.lineTo(bx-3,h*0.60);
+      c.stroke();
+    }
+    c.lineCap='butt';
+  });
+  blitLayer(canopy,0.12,0,1);
+
+  // Eyes blinking in the dark
+  for(let e=0;e<5;e++){
+    const cycle=(tick+e*137)%420;
+    if(cycle>70)continue;
+    const ex=((e*263+140)-(camX*0.22))%W;
+    const exx=((ex%W)+W)%W;
+    const ey=H*.46+((e*89)%Math.round(H*.28));
+    ctx.globalAlpha=Math.min(1,(70-cycle)/22)*0.75;
+    ctx.fillStyle=e%2?'#ff6a4a':'#9dff6a';
+    ctx.fillRect(exx,ey,3,2);ctx.fillRect(exx+7,ey,3,2);
+    if(gl>0)bloom(exx+5,ey+1,10,e%2?'#f64':'#9f6',0.22);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 7 · TOXIC ZONE ─────────────────────────────────────────────────────────
+// A chemical refinery: tanks and chimneys venting smoke, acid haze, bubbles.
+function _atmToxic(bd,gl){
+  // The smog used to be a flat wash over the whole upper screen, which turned
+  // every pixel the same olive green and killed all contrast. Now it hugs the
+  // horizon (where the plant is) and leaves the sky above it dark.
+  ctx.globalAlpha=.17;
+  const hg=ctx.createLinearGradient(0,H*.28,0,H*.72);
+  hg.addColorStop(0,'rgba(120,150,0,0)');
+  hg.addColorStop(0.75,'rgba(140,180,0,0.40)');
+  hg.addColorStop(1,'rgba(40,60,0,0.15)');
+  ctx.fillStyle=hg;ctx.fillRect(0,H*.28,W,H*.44);
+
+  const plant=bgLayer('w7plant',170,(c,w,h)=>{
+    const base=h;
+    for(let i=0;i<5;i++){
+      const bx=i*(w/5)+10;
+      // Storage tank
+      const tw=52+_bgRnd(i,51)*26, th=44+_bgRnd(i,52)*30;
+      c.fillStyle='#101a06';c.fillRect(bx,base-th,tw,th);
+      c.fillStyle='#18280a';c.fillRect(bx+3,base-th+3,tw-6,6);
+      c.strokeStyle='rgba(190,240,40,0.20)';c.lineWidth=1;
+      c.strokeRect(bx+0.5,base-th+0.5,tw-1,th-1);
+      c.beginPath();c.moveTo(bx,base-th*0.5);c.lineTo(bx+tw,base-th*0.5);c.stroke();
+      // Chimney
+      const cx2=bx+tw+14+_bgRnd(i,53)*14, ch=80+_bgRnd(i,54)*54;
+      c.fillStyle='#0c1405';c.fillRect(cx2,base-ch,13,ch);
+      c.fillStyle='#1a2a08';c.fillRect(cx2-2,base-ch,17,6);
+      c.fillStyle='rgba(210,255,60,0.30)';c.fillRect(cx2+4,base-ch+12,5,4);
+      // Pipe run to the next unit
+      c.fillStyle='#0e1806';c.fillRect(bx,base-th-8,w/5,5);
+    }
+  });
+  blitLayer(plant,0.12,H*.78-170,0.88);
+
+  // Chimney smoke — a few soft blobs rising, cheap and only where a stack is.
+  for(let s=0;s<6;s++){
+    const sx=((s*(W/3)+60)-(camX*0.12))%W;
+    const sxx=((sx%W)+W)%W;
+    const t=(tick*0.5+s*40)%160;
+    ctx.globalAlpha=.10*(1-t/160);
+    ctx.fillStyle='#9bbf20';
+    ctx.beginPath();ctx.arc(sxx+Math.sin(t*.05)*8,H*.42-t*0.9,7+t*0.09,0,Math.PI*2);ctx.fill();
+  }
+
+  // Acid haze ellipses, kept low in the frame so they read as ground fog
+  for(let i=0,sn=Math.round(8*bd);i<sn;i++){
+    const sx=(i*193+tick*.4)%W,sy=H*.36+(i*53)%(H*.36);
+    ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;
+    ctx.fillStyle='#a8e000';
+    ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,12,0,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 8 · STORM PEAKS ────────────────────────────────────────────────────────
+// A heavy cloud bank with bolts that strike a DIFFERENT place every time, rain,
+// and the full-screen flash from the nearest strike.
+let _stormBolt=null;
+function _atmStorm(bd,gl){
+  // Cloud bank
+  const clouds=bgLayer('w8clouds',120,(c,w,h)=>{
+    c.fillStyle='#0b0e1c';c.fillRect(0,0,w,h*0.35);
+    for(let i=0;i<18;i++){
+      const cx=i*(w/18)+_bgRnd(i,61)*22;
+      const r=24+_bgRnd(i,62)*30;
+      c.fillStyle=i%3===0?'#101526':'#0a0e1e';
+      c.beginPath();c.arc(cx,h*0.35+_bgRnd(i,63)*16,r,0,Math.PI*2);c.fill();
+    }
+  });
+  blitLayer(clouds,0.10,0,0.95);
+
+  // A bolt every ~2.5 s, each at a fresh position with a fresh zigzag.
+  const strikeIdx=Math.floor(tick/150);
+  const phase=tick%150;
+  if(phase<10){
+    if(!_stormBolt||_stormBolt.idx!==strikeIdx){
+      _stormBolt={idx:strikeIdx,x:_bgRnd(strikeIdx,71)*W,seed:_bgRnd(strikeIdx,72)*100,
+                  len:H*(0.55+_bgRnd(strikeIdx,73)*0.4)};
+    }
+    const b=_stormBolt;
+    const fade=1-phase/10;
+    // Sky flash from the strike
+    ctx.globalAlpha=fade*0.20;ctx.fillStyle='#8899ff';ctx.fillRect(0,0,W,H);
+    // The bolt itself
+    ctx.globalAlpha=fade;
+    ctx.strokeStyle='#e8ecff';ctx.lineWidth=2;
+    if(gl>0){ctx.shadowColor='#8899ff';ctx.shadowBlur=16;}
+    ctx.beginPath();
+    let lx=b.x,ly=H*0.12;
+    ctx.moveTo(lx,ly);
+    const pts=[];
+    while(ly<b.len){
+      ly+=16;
+      lx+=Math.sin(ly*0.21+b.seed)*17;
+      ctx.lineTo(lx,ly);
+      pts.push([lx,ly]);
+    }
+    ctx.stroke();
+    // One branch off the middle
+    if(pts.length>3){
+      const p=pts[Math.floor(pts.length*0.45)];
+      ctx.lineWidth=1;ctx.globalAlpha=fade*0.6;
+      ctx.beginPath();ctx.moveTo(p[0],p[1]);
+      ctx.lineTo(p[0]+34,p[1]+30);ctx.lineTo(p[0]+22,p[1]+62);
+      ctx.stroke();
+    }
+    ctx.shadowBlur=0;
+  }
+
+  // Rain
+  ctx.globalAlpha=.18;ctx.strokeStyle='#7f90c8';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=0,rn=Math.round(60*bd);i<rn;i++){
+    const rx=(i*137+tick*5)%W, ry=(i*83+tick*13)%H;
+    ctx.moveTo(rx,ry);ctx.lineTo(rx-3,ry+11);
+  }
+  ctx.stroke();
+  ctx.globalAlpha=1;
+}
+
+// ── 9 · FINAL FORTRESS ─────────────────────────────────────────────────────
+// A siege wall filling the horizon: towers, buttresses, glowing furnace slits,
+// banners, and searchlights sweeping the burning sky.
+function _atmFortress(bd,gl){
+  // A burning sky, not a black one — the world was so dark that the wall, the
+  // platforms and the enemies all disappeared into the same void.
+  ctx.globalAlpha=.5;
+  const hg=ctx.createLinearGradient(0,0,0,H*.78);
+  hg.addColorStop(0,'#3a0508');hg.addColorStop(0.55,'#6a1206');hg.addColorStop(1,'#120203');
+  ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.78);
+  // Smoke bands rolling across the glow
+  ctx.globalAlpha=.16;ctx.fillStyle='#180608';
+  for(let i=0;i<5;i++){
+    const sy=H*.10+i*H*.11+Math.sin(tick*.006+i)*7;
+    ctx.beginPath();ctx.ellipse(((i*247-camX*0.05)%W+W)%W,sy,190,17,0,0,Math.PI*2);ctx.fill();
+  }
+
+  // Searchlight beams from the towers
+  for(let s=0;s<2;s++){
+    const ang=-1.15+Math.sin(tick*0.006+s*2.1)*0.42;
+    const ox=W*(0.24+s*0.52)-((camX*0.22)%W);
+    const oxx=((ox%W)+W)%W;
+    const oy=H*0.52;
+    ctx.globalAlpha=.055;
+    const bg=ctx.createLinearGradient(oxx,oy,oxx+Math.cos(ang)*H,oy+Math.sin(ang)*H);
+    bg.addColorStop(0,'#ffb070');bg.addColorStop(1,'transparent');
+    ctx.fillStyle=bg;
+    ctx.beginPath();ctx.moveTo(oxx,oy);
+    ctx.lineTo(oxx+Math.cos(ang-0.07)*H*1.1,oy+Math.sin(ang-0.07)*H*1.1);
+    ctx.lineTo(oxx+Math.cos(ang+0.07)*H*1.1,oy+Math.sin(ang+0.07)*H*1.1);
+    ctx.closePath();ctx.fill();
+  }
+
+  // The wall has to be lighter than the sky behind it, not darker: this world's
+  // background is already almost pure black, so a near-black wall was simply
+  // invisible. Reading order is stone (lit from the furnaces below) → mortar →
+  // glowing slits.
+  const wall=bgLayer('w9wall',200,(c,w,h)=>{
+    const base=h;
+    const wallH=h*0.52;
+    const stone=c.createLinearGradient(0,base-wallH,0,base);
+    stone.addColorStop(0,'#2e1116');stone.addColorStop(1,'#48181a');
+    c.fillStyle=stone;c.fillRect(0,base-wallH,w,wallH);
+    // Block courses
+    c.strokeStyle='rgba(0,0,0,0.45)';c.lineWidth=1;
+    c.beginPath();
+    for(let y=base-wallH+10;y<base;y+=14)  {c.moveTo(0,y);c.lineTo(w,y);}
+    for(let x=0;x<w;x+=26){c.moveTo(x,base-wallH);c.lineTo(x,base);}
+    c.stroke();
+    // Buttresses
+    c.fillStyle='#240d11';
+    for(let b=0;b<10;b++)c.fillRect(b*(w/10)+6,base-wallH,16,wallH);
+    // Merlons
+    c.fillStyle='#3a1417';
+    for(let m=0;m<Math.floor(w/22);m++)c.fillRect(m*22+4,base-wallH-10,12,10);
+    // Towers
+    for(let t=0;t<3;t++){
+      const tx=t*(w/3)+34, tw=46, th=wallH+40+_bgRnd(t,81)*34;
+      const tg=c.createLinearGradient(tx,base-th,tx+tw,base);
+      tg.addColorStop(0,'#3a161a');tg.addColorStop(1,'#200b0e');
+      c.fillStyle=tg;c.fillRect(tx,base-th,tw,th);
+      c.fillStyle='#451a1e';
+      for(let m=0;m<4;m++)c.fillRect(tx+2+m*12,base-th-9,8,9);
+      // Furnace slits, with a bloom around each
+      for(let r=0;r<3;r++){
+        const sy=base-th+22+r*22;
+        const gg=c.createRadialGradient(tx+tw*0.5,sy+5,1,tx+tw*0.5,sy+5,20);
+        gg.addColorStop(0,'rgba(255,140,60,0.55)');gg.addColorStop(1,'rgba(255,90,30,0)');
+        c.fillStyle=gg;c.fillRect(tx+tw*0.5-20,sy-15,40,40);
+        c.fillStyle='#ffb15a';c.fillRect(tx+tw*0.5-2,sy,4,10);
+      }
+      // Banner
+      c.fillStyle='rgba(190,30,35,0.75)';
+      c.fillRect(tx+tw+4,base-th+26,10,40);
+      c.fillStyle='rgba(255,160,60,0.5)';
+      c.fillRect(tx+tw+6,base-th+34,6,4);
+    }
+    // Wall arrow slits
+    for(let a=0;a<Math.floor(w/40);a++){
+      const ax=a*40+18, ay=base-wallH*0.55;
+      const gg=c.createRadialGradient(ax+1.5,ay+4,1,ax+1.5,ay+4,14);
+      gg.addColorStop(0,'rgba(255,110,40,0.45)');gg.addColorStop(1,'rgba(255,110,40,0)');
+      c.fillStyle=gg;c.fillRect(ax-13,ay-10,28,28);
+      c.fillStyle='#ff8a3a';c.fillRect(ax,ay,3,9);
+    }
+  });
+  blitLayer(wall,0.14,H*.86-200,0.92);
+
+  // Falling ash
+  ctx.fillStyle='#553333';
+  for(let i=0,an=Math.round(28*bd);i<an;i++){
+    const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);
+    ctx.globalAlpha=.3;ctx.fillRect(ax,ay,2,3);
+  }
+  ctx.globalAlpha=1;
+}
+
+// ── 10 · PRISM ANOMALY ─────────────────────────────────────────────────────
+// The old version washed the whole upper half in a hard-edged saturated rainbow
+// band and scattered confetti over it, which read as a broken test pattern.
+// The idea here instead: reality itself is refracting. A near-black void, one
+// huge slowly-turning prism throwing a soft spectral fan across the scene,
+// panes of broken glass drifting through it, and horizontal tears where the
+// world has come apart. Colour is used sparingly so the level stays readable.
+function _atmPrism(bd,gl){
+  // A genuinely spectral sky. The first attempt at this world was a hard-edged
+  // saturated rainbow band over half the screen; the second over-corrected into
+  // a near-black void that was really just "the purple level". This is the
+  // middle ground: the WHOLE sky runs through the spectrum, smoothly, with the
+  // hue band drifting sideways over time — but at a lightness low enough that
+  // the platforms and enemies still sit clearly on top of it.
+  //
+  // Cached: an 8-stop gradient plus a full-screen fill every frame is wasteful
+  // when the only thing changing is a slow hue drift.
+  const sky=bgLayer('w10sky',H,(c,w,h)=>{
+    const g=c.createLinearGradient(0,0,0,h);
+    const t=tick*0.25;
+    for(let s=0;s<=8;s++){
+      const hue=(t+s*45)%360;
+      // Darker toward the ground so the play area keeps its contrast.
+      const light=26-s*1.6;
+      g.addColorStop(s/8,`hsl(${hue},72%,${light}%)`);
+    }
+    c.fillStyle=g;c.fillRect(0,0,w,h);
+    // Horizontal spectral shimmer so the sky isn't a flat vertical ramp
+    const hg=c.createLinearGradient(0,0,w,0);
+    for(let s=0;s<=6;s++)hg.addColorStop(s/6,`hsla(${(t*1.7+s*60)%360},90%,55%,0.10)`);
+    c.fillStyle=hg;c.fillRect(0,0,w,h);
+  },14);
+  ctx.globalAlpha=1;
+  ctx.drawImage(sky.cv,0,0,W,H);
+
+  // Spectral aurora curtains drifting across the sky
+  for(let a=0;a<4;a++){
+    const phase=tick*0.006+a*1.4;
+    const ax=((a*W*0.31+Math.sin(phase)*70-camX*0.05)%W+W)%W;
+    const hue=(tick*0.9+a*90)%360;
+    ctx.globalAlpha=.10+Math.sin(phase*1.7)*.04;
+    const ag=ctx.createLinearGradient(ax,0,ax+90,H*0.8);
+    ag.addColorStop(0,'transparent');
+    ag.addColorStop(.5,`hsl(${hue},95%,62%)`);
+    ag.addColorStop(1,'transparent');
+    ctx.fillStyle=ag;ctx.fillRect(ax,0,90,H*0.8);
+  }
+  ctx.globalAlpha=1;
+
+  _atmStars(Math.round(40*bd),H*.8,'#ffffff',gl);
+
+  // The prism: a slowly rotating triangle high in the sky.
+  const pcx=W*0.5+Math.sin(tick*0.0035)*W*0.16, pcy=H*0.20, pr=34;
+  const rot=tick*0.004;
+
+  // Refraction fan — wide, very soft, spreading DOWN from the prism. Each ray is
+  // a triangle with a gradient so there is no visible edge.
+  // Deliberately faint and fading out well before the ground: at full strength
+  // the fan lit up the entire play area and the player lost track of the
+  // platforms behind a wall of colour.
+  //
+  // Seven full-height gradient triangles per frame was the single most
+  // expensive thing left in any background (0.59 ms). The prism drifts and the
+  // hues rotate slowly, so the whole fan is cached and refreshed a few times a
+  // second instead — indistinguishable in motion, ~10× cheaper.
+  const fan=bgLayer('w10fan',H,(c,w,h)=>{
+    for(let r=0;r<7;r++){
+      const hue=(r*46+tick*0.35)%360;
+      const spread=0.10+r*0.045;
+      const a0=Math.PI*0.5-0.36+r*0.12;
+      const g=c.createLinearGradient(pcx,pcy,pcx+Math.cos(a0)*h*1.2,pcy+Math.sin(a0)*h*1.2);
+      g.addColorStop(0,`hsla(${hue},95%,65%,0.16)`);
+      g.addColorStop(0.45,`hsla(${hue},95%,62%,0.05)`);
+      g.addColorStop(1,`hsla(${hue},95%,60%,0)`);
+      c.fillStyle=g;
+      c.beginPath();c.moveTo(pcx,pcy);
+      c.lineTo(pcx+Math.cos(a0-spread*0.5)*h*1.3,pcy+Math.sin(a0-spread*0.5)*h*1.3);
+      c.lineTo(pcx+Math.cos(a0+spread*0.5)*h*1.3,pcy+Math.sin(a0+spread*0.5)*h*1.3);
+      c.closePath();c.fill();
+    }
+  },10);
+  ctx.globalAlpha=1;
+  ctx.drawImage(fan.cv,0,0,W,H);
+
+  // Incoming white beam that feeds the prism
+  const ig=ctx.createLinearGradient(pcx-260,pcy-150,pcx,pcy);
+  ig.addColorStop(0,'rgba(255,255,255,0)');
+  ig.addColorStop(1,'rgba(255,255,255,0.22)');
+  ctx.fillStyle=ig;
+  ctx.beginPath();ctx.moveTo(pcx-280,pcy-168);ctx.lineTo(pcx-268,pcy-150);ctx.lineTo(pcx,pcy+3);ctx.lineTo(pcx,pcy-9);ctx.closePath();ctx.fill();
+
+  // The prism body
+  ctx.save();ctx.translate(pcx,pcy);ctx.rotate(rot);
+  const pg=ctx.createLinearGradient(-pr,-pr,pr,pr);
+  pg.addColorStop(0,'rgba(200,225,255,0.50)');
+  pg.addColorStop(0.5,'rgba(120,150,220,0.22)');
+  pg.addColorStop(1,'rgba(255,255,255,0.42)');
+  ctx.fillStyle=pg;
+  ctx.beginPath();ctx.moveTo(0,-pr);ctx.lineTo(pr*0.92,pr*0.62);ctx.lineTo(-pr*0.92,pr*0.62);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(230,240,255,0.75)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+  if(gl>0)bloom(pcx,pcy,pr*2.1,'#cfe0ff',0.30);
+
+  // Drifting glass panes — thin parallelograms catching a single hue each.
+  for(let i=0,sn=Math.round(14*bd);i<sn;i++){
+    const sx=(i*151+tick*.35)%W, sy=(i*97+tick*.16)%(H*0.9);
+    const hue=(i*37+tick*1.1)%360;
+    const a=tick*0.008+i;
+    const sz=7+((i*7)%9);
+    ctx.save();ctx.translate(sx,sy);ctx.rotate(a);
+    ctx.globalAlpha=.16+Math.sin(tick*.03+i)*.07;
+    ctx.fillStyle=`hsl(${hue},90%,70%)`;
+    ctx.beginPath();ctx.moveTo(-sz,-sz*0.35);ctx.lineTo(sz*0.6,-sz*0.7);ctx.lineTo(sz,sz*0.35);ctx.lineTo(-sz*0.6,sz*0.7);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=.30;ctx.strokeStyle=`hsl(${hue},100%,85%)`;ctx.lineWidth=1;ctx.stroke();
+    ctx.restore();
+  }
+
+  // Reality tears: thin horizontal rifts that slide and flicker.
+  for(let t=0;t<4;t++){
+    const ty=H*(0.18+t*0.19)+Math.sin(tick*0.01+t*2)*8;
+    const tw=W*(0.3+_bgRnd(t,91)*0.4);
+    const tx=((t*263+tick*0.6)%(W+tw))-tw;
+    const flick=0.10+Math.abs(Math.sin(tick*0.05+t))*0.14;
+    const hue=(t*90+tick*0.8)%360;
+    const g=ctx.createLinearGradient(tx,0,tx+tw,0);
+    g.addColorStop(0,`hsla(${hue},95%,70%,0)`);
+    g.addColorStop(0.5,`hsla(${hue},95%,70%,${flick})`);
+    g.addColorStop(1,`hsla(${hue},95%,70%,0)`);
+    ctx.fillStyle=g;ctx.fillRect(tx,ty,tw,1.5);
+  }
+  ctx.globalAlpha=1;
+}
+
+const WORLD_ATMOSPHERE={
+  0:_atmCyberCity, 1:_atmJungle, 2:_atmLava, 3:_atmIce, 4:_atmDesert,
+  5:_atmSpace, 6:_atmDarkForest, 7:_atmToxic, 8:_atmStorm, 9:_atmFortress,
+  10:_atmPrism,
+};
 
 function drawBG(){
-  // Фон — ОДИН слой, запечённый в холст (assets/backdrops.js).
-  //
-  // Раньше здесь собиралась многослойная сцена: небо, зарево, дымка, звёзды,
-  // светлячки, окна домов и полосы силуэтов с параллаксом — всё заново каждый
-  // кадр. Слои наезжали друг на друга, мир читался как каша, а на слабом
-  // устройстве это была самая дорогая работа за кадр.
-  //
-  // Теперь полотно печётся один раз на мир и размер экрана, а в кадре стоит
-  // два drawImage со сдвигом. Ничего лишнего — небо, линия горизонта и один
-  // акцент, если он этот мир характеризует.
-  if(window.BBBackdrop){ window.BBBackdrop.draw(ctx,W,H,CT,camX); return; }
-  // Запасной путь, если модуль фонов почему-то не загрузился.
-  ctx.fillStyle=CT.bg||'#04040f';ctx.fillRect(0,0,W,H);
+  // Sky + horizon glow + ground haze are three full-screen fills that depend on
+  // nothing but the theme, yet they were re-run every frame. Baked into a single
+  // cached tile: one drawImage replaces three screen-sized paints, which is the
+  // kind of thing that actually costs on a weak GPU (fill rate), not on a
+  // desktop where it barely shows up in a timer.
+  const skyTile=bgLayer('sky',H,(c,w,h)=>{
+    const g=c.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,CT.bg);
+    g.addColorStop(0.6,CT.bg2||CT.bg);
+    g.addColorStop(1,CT.bg2||CT.bg);
+    c.fillStyle=g;c.fillRect(0,0,w,h);
+    const hg=c.createLinearGradient(0,h*0.62,0,h);
+    hg.addColorStop(0,'transparent');
+    hg.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
+    c.globalAlpha=0.5;c.fillStyle=hg;c.fillRect(0,h*0.62,w,h*0.38);
+    c.globalAlpha=0.06;c.fillStyle=CT.grid||CT.mc||'#48f';c.fillRect(0,h*0.78,w,h*0.22);
+    c.globalAlpha=1;
+  });
+  ctx.globalAlpha=1;
+  ctx.drawImage(skyTile.cv,0,0,W,H);
+
+  const id=CT.id;
+
+  // Background-detail + glow budget for this tier. bd scales every decorative
+  // element count (stars, embers, fireflies, window lights…); gl gates shadowBlur.
+  const bd=(typeof GFX==='object'&&GFX&&typeof GFX.bgDetail==='number')?GFX.bgDetail:1;
+  const gl=(typeof GFX==='object'&&GFX&&typeof GFX.glow==='number')?GFX.glow:1;
+
+  // VERYLOW / "microwave" path: the per-theme parallax skylines, window-light
+  // grids and dense particle fields are the heaviest per-frame work in the whole
+  // game. On the lowest tier (or when the adaptive limiter has driven bgDetail
+  // right down) skip all of it and draw just a cheap sparse star field over the
+  // cached sky+horizon. Gameplay readability is unaffected.
+  // There used to be a "microwave" bail-out here that replaced every world's
+  // backdrop with a bare starfield whenever bgDetail dropped below 0.4 — so on
+  // the lowest graphics tier all ten worlds looked identical. That existed
+  // because the skylines and window grids were rebuilt from scratch every
+  // frame; now the heavy layers are cached tiles (two drawImage calls each) and
+  // every remaining element already scales its count by `bd`, so the low tier
+  // can keep its atmosphere and simply gets a thinner version of it.
+
+  // ── Per-theme atmospheric elements ────────────
+  ctx.save();
+
+  _bgRebuildBudget=1; // see bgLayer(): one cached layer may re-rasterise per frame
+  const atm=WORLD_ATMOSPHERE[id];
+  if(atm)atm(bd,gl);
+
+  // Parallax silhouette bands. Drawn last so they sit in FRONT of the sky
+  // washes/stars/embers above (they are the nearest background layer) but still
+  // behind everything the camera transform moves.
+  drawWorldScenery(id,bd);
+
+  ctx.restore();
 }
 function drawGrid(){
   ctx.save();ctx.globalAlpha=.04;ctx.strokeStyle=CT.grid;ctx.lineWidth=1;
@@ -7146,16 +7739,14 @@ function drawGlyph(ch,px,size,col,font){
 }
 function drawBlocks(){
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismWorld=(CT.id===10);
-  const _prismBlocks=_prismWorld&&prismFxOn();
+  const _prismBlocks=(CT.id===10);
   for(const b of blocks){
     if(b.x+b.w<vLeft||b.x>vRight)continue;
     ctx.save();
     // Prism Anomaly: bricks and gold blocks are the same brown/amber in every
     // world, which left them looking imported here. Refracted per block so they
     // keep their shape, lighting and readability.
-    const _bHue=_prismWorld?(((b.x*0.7+tick*0.8)%360)/20|0)*20:0;
-    if(_prismBlocks)ctx.filter=prismFilter(_bHue,6.5,1.3);
+    if(_prismBlocks)ctx.filter=prismFilter((((b.x*0.7+tick*0.8)%360)/20|0)*20,6.5,1.3);
     if(b.type==='b'){
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.strokeStyle='#261006';ctx.lineWidth=1;
@@ -7213,9 +7804,6 @@ function drawBlocks(){
         ctx.globalAlpha=1;ctx.shadowBlur=0;
       }
     }
-    // Преломление выключено, но мир радужный — подкрашиваем блок дёшево,
-    // чтобы кирпичи не остались единственным коричневым пятном в мире света.
-    if(_prismWorld&&!_prismBlocks)prismTintRect(b.x,b.y,b.w,b.h,_bHue);
     ctx.restore();
   }
 }
@@ -7317,7 +7905,7 @@ function drawJumpPads(){
 }
 function drawHazards(){
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismHz=(CT.id===10)&&prismFxOn();
+  const _prismHz=(CT.id===10);
   for(const hz of hazards){
     if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
     ctx.save();
@@ -8580,8 +9168,6 @@ function drawBossApproach(){
 // Enemies
 function drawEnemies(){
   const vLeft=camX-60,vRight=camX+W+60;// viewport culling
-  // Один раз на кадр, а не на врага: prismFxOn() читает настройки.
-  const _prismEnemies=(CT.id===10)&&prismFxOn();
   for(const e of enemies){
     if(!e.alive)continue;
     // Не рисуем за пределами экрана
@@ -8597,7 +9183,7 @@ function drawEnemies(){
     // bounding box as well, leaving a visible coloured square around it. The
     // filter only touches the pixels the sprite itself draws, so the enemy
     // keeps its shape, shading and readable silhouette.
-    const _prismTint=(_prismEnemies&&!e._frozen);
+    const _prismTint=(CT.id===10&&!e._frozen);
     if(_prismTint){
       // Quantised to 20° steps: a canvas filter is re-parsed whenever the
       // string changes, so snapping the hue lets consecutive enemies reuse the
@@ -9936,17 +10522,8 @@ function drawParticles(){
 // entire parallax background. It only changes when the world or the language
 // changes, so it is baked into an offscreen canvas and blitted.
 let _wmCanvas=null,_wmKey='';
-// Название мира: было постоянной подложкой во весь экран на 8% прозрачности.
-// Пока фон Кибергорода был тёмным месивом, надпись в нём терялась; на новом,
-// чистом небе она читается как забытый поверх картинки слой — игрок так её и
-// описал: «почему я всё ещё вижу старый слой какой-то?!». Смысл у надписи есть
-// (сказать, куда игрок попал), но только в первые секунды уровня — дальше она
-// просто мешает смотреть. Поэтому теперь она показывается и уходит.
-const _WM_HOLD=110, _WM_FADE=70;   // кадров держим, кадров растворяем
 function drawWatermark(){
   if(!advMode)return;
-  if(tick>_WM_HOLD+_WM_FADE)return;
-  const fade=tick<=_WM_HOLD?1:1-(tick-_WM_HOLD)/_WM_FADE;
   const txt=worldName(CT);
   const key=txt+'|'+CT.mc;
   if(_wmKey!==key){
@@ -9959,7 +10536,7 @@ function drawWatermark(){
     c.fillStyle=CT.mc;c.fillText(txt,W/2,35);
     _wmCanvas=cv;_wmKey=key;
   }
-  ctx.save();ctx.globalAlpha=.14*fade;
+  ctx.save();ctx.globalAlpha=.08;
   ctx.drawImage(_wmCanvas,0,H/2-35,W,70);
   ctx.restore();
 }
@@ -10218,13 +10795,7 @@ function patchedStartInf(fresh=true){
 // checkpoint-resume logic lives in _doRunLevel; keep this in sync but know it
 // does not run at runtime.
 function patchedStartAdv(n,freshLives=false){
-  // В хардкоре запас общий на весь мир и переносится между уровнями;
-  // в обычном режиме — свой на каждый заход.
-  if(hardMode&&advMode){
-    _hardEnterWorld(n);
-    if(freshLives)cpSave=null;
-    lives=hardWorldLives;
-  } else if(freshLives){lives=3;cpSave=null;}
+  if(freshLives){lives=3;cpSave=null;}
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   if(infiniteLives)lives=99;
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -10239,7 +10810,6 @@ function patchedStartAdv(n,freshLives=false){
     spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
     player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
     player.cpX=spawnX;player.cpY=spawnY;
-    _restoreCpWorld();
   }
   initP2();
   timeLeft=lvlTime(n);timMax=timeLeft;
@@ -10258,7 +10828,7 @@ document.getElementById('infCard').onclick=function(){
     const need=100-advProg.done.length;
     const el=document.getElementById('infCard');
     const msg=document.createElement('div');
-    msg.style.cssText='position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:"Share Tech Mono",monospace;font-size:calc(7px * var(--bbText, 1));color:#f80;white-space:nowrap;pointer-events:none;';
+    msg.style.cssText='position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:"Share Tech Mono",monospace;font-size:7px;color:#f80;white-space:nowrap;pointer-events:none;';
     msg.textContent=T('completeMore',need);
     el.style.position='relative';el.appendChild(msg);
     setTimeout(()=>msg.remove(),1800);
@@ -12399,7 +12969,7 @@ function playEndingCinematic(onDone){
     ov.appendChild(cv);
     const skip=document.createElement('div');
     skip.id='endingCinSkip';
-    skip.style.cssText='position:absolute;bottom:18px;right:24px;font-family:"Share Tech Mono",monospace;font-size:calc(13px * var(--bbText, 1));color:#0ff;opacity:0;transition:opacity .6s;text-shadow:0 0 8px #0ff;pointer-events:none;';
+    skip.style.cssText='position:absolute;bottom:18px;right:24px;font-family:"Share Tech Mono",monospace;font-size:13px;color:#0ff;opacity:0;transition:opacity .6s;text-shadow:0 0 8px #0ff;pointer-events:none;';
     ov.appendChild(skip);
     document.body.appendChild(ov);
   }

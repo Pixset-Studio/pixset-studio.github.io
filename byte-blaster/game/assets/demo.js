@@ -96,29 +96,29 @@
         align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;
         background:radial-gradient(ellipse at 50% 40%,#12002a 0%,#04040f 70%);
         font-family:'Press Start 2P',monospace;overflow-y:auto}
-      #bbDemoEnd .deTitle{font-size:calc(20px * var(--bbText, 1));color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff6;
+      #bbDemoEnd .deTitle{font-size:20px;color:#0ff;text-shadow:0 0 18px #0ff,0 0 40px #0ff6;
         letter-spacing:4px;line-height:1.6}
-      #bbDemoEnd .deSub{font-family:'Share Tech Mono',monospace;font-size:calc(13px * var(--bbText, 1));color:#ff0;
+      #bbDemoEnd .deSub{font-family:'Share Tech Mono',monospace;font-size:13px;color:#ff0;
         letter-spacing:2px;text-shadow:0 0 10px #ff08}
-      #bbDemoEnd .deBody{font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbText, 1));color:#9fd;
+      #bbDemoEnd .deBody{font-family:'Share Tech Mono',monospace;font-size:12px;color:#9fd;
         line-height:2;max-width:520px}
       #bbDemoEnd .deBody b{color:#0ff}
-      #bbDemoEnd .deCta{font-size:calc(9px * var(--bbText, 1));color:#f0f;text-shadow:0 0 12px #f0f;line-height:2;
+      #bbDemoEnd .deCta{font-size:9px;color:#f0f;text-shadow:0 0 12px #f0f;line-height:2;
         letter-spacing:2px;max-width:520px;margin-top:2px}
-      #bbDemoEnd .deUrl{font-family:'Share Tech Mono',monospace;font-size:calc(11px * var(--bbText, 1));color:#0ff8;
+      #bbDemoEnd .deUrl{font-family:'Share Tech Mono',monospace;font-size:11px;color:#0ff8;
         letter-spacing:1px;word-break:break-all}
-      #bbDemoEnd .deBtn{font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbText, 1));padding:12px 20px;
+      #bbDemoEnd .deBtn{font-family:'Press Start 2P',monospace;font-size:9px;padding:12px 20px;
         background:#0ff1;color:#0ff;border:2px solid #0ff;cursor:pointer;letter-spacing:2px;
         text-shadow:0 0 8px #0ff;transition:background .15s,box-shadow .15s}
       #bbDemoEnd .deBtn:hover{background:#0ff3;box-shadow:0 0 18px #0ff8}
       #bbDemoEnd .deBtn.deGet{color:#f0f;border-color:#f0f;background:#f0f1;text-shadow:0 0 8px #f0f}
       #bbDemoEnd .deBtn.deGet:hover{background:#f0f3;box-shadow:0 0 18px #f0f8}
       #bbDemoEnd .deRow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:6px}
-      #bbDemoEnd .deScore{font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbText, 1));color:#0f8;letter-spacing:2px}
+      #bbDemoEnd .deScore{font-family:'Share Tech Mono',monospace;font-size:12px;color:#0f8;letter-spacing:2px}
       @media (max-width:640px){
-        #bbDemoEnd .deTitle{font-size:calc(13px * var(--bbText, 1))}
-        #bbDemoEnd .deBody,#bbDemoEnd .deSub{font-size:calc(11px * var(--bbText, 1))}
-        #bbDemoEnd .deCta{font-size:calc(8px * var(--bbText, 1))}
+        #bbDemoEnd .deTitle{font-size:13px}
+        #bbDemoEnd .deBody,#bbDemoEnd .deSub{font-size:11px}
+        #bbDemoEnd .deCta{font-size:8px}
       }`;
     document.head.appendChild(css);
   }
