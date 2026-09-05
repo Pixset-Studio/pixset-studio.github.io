@@ -106,6 +106,23 @@
       score: s.score | 0,
       playtime: s.playtime | 0,
       hardcore: s.doneHard | 0,
+      // ── Витрина пошире ────────────────────────────────────────────────
+      // Всё это профиль уже считает; раньше наружу уходил только прогресс,
+      // и карточка игрока выглядела одинаково у всех, кто дошёл до конца.
+      coins: s.coins | 0,                       // собрано монет за всё время
+      bestAdv: s.bestAdv | 0,                   // рекорд в кампании
+      bestInf: s.bestInf | 0,                   // рекорд в бесконечном режиме
+      bosses: (s.bosses | 0) + (s.bossesHard | 0),
+      secrets: s.secrets | 0,                   // найдено секретных выходов
+      worlds: s.worlds | 0, worldsMax: s.worldsMax | 0,
+      rainbow: s.rainbow | 0, rainbowMax: 10,   // радужные осколки
+      logs: s.logs | 0, logsMax: s.logsMax | 0, // прочитано сюжетного архива
+      perfect: s.perfect | 0,                   // идеальных уровней
+      streak: s.streak | 0,                     // серия без смертей
+      // Боевой почерк: по чему видно, как именно игрок проходит игру.
+      stompKills: s.stompKills | 0, blasterKills: s.blasterKills | 0,
+      burnKills: s.burnKills | 0, freezeKills: s.freezeKills | 0,
+      jumps: s.jumps | 0,
     };
     try {
       if (typeof window.Profile.completion === 'function') {

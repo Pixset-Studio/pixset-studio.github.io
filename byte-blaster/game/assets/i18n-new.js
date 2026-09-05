@@ -51,18 +51,24 @@
   }
 
   let LANG = 'en';
-  let LOCALES = {};          // code -> { key: string }
+  let LOCALES = {};          // code -> { key: string } — только загруженные
+  let CODES = [];            // все доступные коды (файлы на диске), без загрузки
   let CURRENT = {};          // active language strings
   let LOADED = false;        // have the locale files finished loading?
   let PENDING_LANG = null;   // a setLanguage() request that arrived before load
+
+  // В папке локализации рядом с языками лежат служебные файлы (`_suspect_*`,
+  // `_cutscenes_en`, `_pre_en`) — заготовки и выгрузки проверки переводов.
+  // Языками они не являются, и в списке выбора им не место.
+  const isLangCode = (c) => typeof c === 'string' && c && c[0] !== '_' && c !== 'index';
 
   // Work out which locale files exist, without hard-coding the list.
   async function discoverCodes() {
     // 1) Electron — real directory listing.
     try {
       if (window.localeAPI && typeof window.localeAPI.list === 'function') {
-        const codes = await window.localeAPI.list();
-        if (Array.isArray(codes) && codes.length) return codes;
+        const codes = (await window.localeAPI.list() || []).filter(isLangCode);
+        if (codes.length) return codes;
       }
     } catch (e) { /* fall through */ }
 
@@ -71,8 +77,9 @@
       const res = await fetch(`${DIR}/index.json`);
       if (res.ok) {
         const list = await res.json();
-        if (Array.isArray(list) && list.length) return list;
-        if (list && Array.isArray(list.languages) && list.languages.length) return list.languages;
+        const arr = Array.isArray(list) ? list
+                  : (list && Array.isArray(list.languages)) ? list.languages : null;
+        if (arr) { const codes = arr.filter(isLangCode); if (codes.length) return codes; }
       }
     } catch (e) { /* fall through */ }
 
@@ -91,26 +98,23 @@
     return null;
   }
 
+  /** Догружает язык, если он ещё не в памяти. Возвращает: получилось ли. */
+  async function ensureLocale(code) {
+    if (!code) return false;
+    if (LOCALES[code]) return true;
+    try {
+      const data = await loadOne(code);
+      if (data) { LOCALES[code] = data; console.log(`✔ Loaded locale: ${code}`); return true; }
+    } catch (e) {
+      console.warn(`Failed to load locale ${code}:`, e);
+    }
+    return false;
+  }
+
   async function loadLocales() {
-    const codes = await discoverCodes();
+    CODES = await discoverCodes();
 
-    for (const code of codes) {
-      try {
-        const data = await loadOne(code);
-        if (data) {
-          LOCALES[code] = data;
-          console.log(`✔ Loaded locale: ${code}`);
-        }
-      } catch (e) {
-        console.warn(`Failed to load locale ${code}:`, e);
-      }
-    }
-
-    if (!LOCALES.en && Object.keys(LOCALES).length === 0) {
-      console.warn('No locale files loaded — UI will show raw keys.');
-    }
-
-    // Pick the active language: saved preference → system language → en.
+    // Какой язык нужен: сохранённый выбор → системный → английский.
     let sys = 'en';
     try { sys = (navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en'; } catch (e) {}
 
@@ -120,13 +124,27 @@
       if (s && s.language) saved = s.language;
     } catch (e) {}
 
-    LANG = (saved === 'auto' || !saved) ? sys : saved;
+    // Настройки могли попросить язык ещё до того, как мы сюда дошли.
+    const want = PENDING_LANG || ((saved === 'auto' || !saved) ? sys : saved);
+
+    // Грузим только нужный язык и английский. Английский нужен всегда: на нём
+    // работает подстановка недостающих ключей в t() и катсцены через i18nRawEn.
+    // Остальные сорок восемь догружаются в момент переключения — раньше игра
+    // качала их все, два мегабайта, на каждом запуске.
+    await ensureLocale('en');
+    if (want !== 'en') await ensureLocale(want);
+
+    if (Object.keys(LOCALES).length === 0) {
+      console.warn('No locale files loaded — UI will show raw keys.');
+    }
+
+    LANG = want;
     if (!LOCALES[LANG]) {
       console.warn(`Language "${LANG}" unavailable, falling back.`);
       LANG = LOCALES.en ? 'en' : (Object.keys(LOCALES)[0] || 'en');
     }
     CURRENT = LOCALES[LANG] || {};
-    console.log(`✔ Active language: ${LANG} (available: ${Object.keys(LOCALES).join(', ')})`);
+    console.log(`✔ Active language: ${LANG} (доступно: ${CODES.length}, загружено: ${Object.keys(LOCALES).join(', ')})`);
   }
 
   // Translate a key, filling {0}, {1}, … with the supplied args.
@@ -167,11 +185,40 @@
   };
   window.langEnglishName = function (code) { return ENGLISH_NAMES[code] || ''; };
 
+  // Родное название языка. Раньше оно бралось из самого файла (поле langName),
+  // и ради списка в настройках игра скачивала все пятьдесят файлов — два
+  // мегабайта на каждом запуске ради пятидесяти слов. Таблица здесь позволяет
+  // грузить только тот язык, на котором играют.
+  const NATIVE_NAMES = {
+    ar: 'العربية', az: 'Azərbaycan', be: 'Беларуская',
+    bg: 'Български', bn: 'বাংলা', cs: 'Čeština',
+    da: 'Dansk', de: 'Deutsch', el: 'Ελληνικά',
+    en: 'English', es: 'Español', et: 'Eesti',
+    fa: 'فارسی', fi: 'Suomi', fil: 'Filipino',
+    fr: 'Français', he: 'עברית', hi: 'हिन्दी',
+    hu: 'Magyar', hy: 'Հայերեն', id: 'Bahasa Indonesia',
+    it: 'Italiano', ja: '日本語', ka: 'ქართული',
+    kk: 'Қазақша', ko: '한국어', ky: 'Кыргызча',
+    lt: 'Lietuvių', lv: 'Latviešu', ms: 'Bahasa Melayu',
+    nb: 'Norsk bokmål', nl: 'Nederlands', pl: 'Polski',
+    pt: 'Português', 'pt-BR': 'Português (Brasil)', ro: 'Română',
+    ru: 'Русский', sk: 'Slovenčina', sr: 'Српски',
+    sv: 'Svenska', tg: 'Тоҷикӣ', th: 'ไทย',
+    tk: 'Türkmen', tr: 'Türkçe', uk: 'Українська',
+    ur: 'اردو', uz: 'Oʻzbek', vi: 'Tiếng Việt',
+    'zh-CN': '简体中文', 'zh-TW': '繁體中文',
+  };
+
   // Languages available for the picker: [{ code, name }] where name is
   // "Native (English)" (or just the native name when they're identical).
   window.getAvailableLanguages = function () {
-    return Object.keys(LOCALES).map(code => {
-      const native = (LOCALES[code] && LOCALES[code].langName) || code.toUpperCase();
+    // Список строится по файлам, которые ЕСТЬ, а не по загруженным: иначе ради
+    // одного выпадающего списка пришлось бы скачать все языки сразу.
+    const codes = (CODES && CODES.length) ? CODES : Object.keys(LOCALES);
+    return codes.map(code => {
+      const native = NATIVE_NAMES[code]
+        || (LOCALES[code] && LOCALES[code].langName)
+        || code.toUpperCase();
       const eng = ENGLISH_NAMES[code] || '';
       const name = (eng && eng !== native) ? `${native} (${eng})` : native;
       return { code, name };
@@ -196,7 +243,24 @@
     // Requests can arrive before the async locale load finishes (e.g. settings.js
     // applies the saved language on startup). Queue it and apply once loaded.
     if (!LOADED) { PENDING_LANG = lang; return; }
-    if (!LOCALES[lang]) { console.warn(`Language "${lang}" not available`); return; }
+    // В памяти держим только текущий язык и английский, поэтому выбранный из
+    // списка обычно ещё не загружен — качаем его и применяем, когда приедет.
+    if (!LOCALES[lang]) {
+      if (CODES.length && CODES.indexOf(lang) === -1) {
+        console.warn(`Language "${lang}" not available`);
+        return;
+      }
+      ensureLocale(lang).then((ok) => {
+        if (ok) applyLanguage(lang);
+        else console.warn(`Language "${lang}" not available`);
+      });
+      return;
+    }
+    applyLanguage(lang);
+  };
+
+  /** Ставит уже загруженный язык активным и обновляет всё, что его показывает. */
+  function applyLanguage(lang) {
     LANG = lang;
     CURRENT = LOCALES[lang];
     try {
@@ -210,15 +274,17 @@
     if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();
     applyDirection(LANG);
     console.log(`✔ Language changed to: ${LANG}`);
-  };
+  }
 
   // Load locales, then translate the DOM and let the rest of the UI know.
-  loadLocales().then(() => {
+  loadLocales().then(async () => {
     LOADED = true;
     // Apply any language request that arrived before loading finished.
+    // Файл мог и не быть загружен: теперь в память попадают только текущий
+    // язык и английский, поэтому запрошенный догружаем здесь же.
     if (PENDING_LANG) {
       const want = PENDING_LANG; PENDING_LANG = null;
-      if (LOCALES[want]) { LANG = want; CURRENT = LOCALES[want]; }
+      if (want !== LANG && await ensureLocale(want)) { LANG = want; CURRENT = LOCALES[want]; }
     }
     const done = () => {
       applyDOM();

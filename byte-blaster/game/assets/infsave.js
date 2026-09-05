@@ -88,32 +88,32 @@
 #bbInfResume{position:fixed;inset:0;z-index:2600;display:none;flex-direction:column;
   align-items:center;justify-content:center;gap:16px;padding:20px;text-align:center;
   background:#04040fee;font-family:'Press Start 2P',monospace}
-#bbInfResume h2{font-size:13px;color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px;margin:0}
-#bbInfResume .irSub{font-family:'Share Tech Mono',monospace;font-size:12px;color:#9fd;letter-spacing:2px}
+#bbInfResume h2{font-size:calc(13px * var(--bbText, 1));color:#0ff;text-shadow:0 0 14px #0ff;letter-spacing:4px;margin:0}
+#bbInfResume .irSub{font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbText, 1));color:#9fd;letter-spacing:2px}
 #bbInfResume .irCards{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
 #bbInfResume .irCard{background:#080820;border:2px solid #4af4;border-radius:8px;padding:16px 18px;
   cursor:pointer;transition:all .22s;text-align:center;min-width:150px}
 #bbInfResume .irCard:hover{border-color:#0ff;box-shadow:0 0 18px #0ff4;background:#0a0a30;transform:scale(1.04)}
-#bbInfResume .irIcon{font-size:24px;margin-bottom:7px}
-#bbInfResume .irTitle{font-size:8px;color:#0ff;letter-spacing:2px;margin-bottom:5px}
-#bbInfResume .irDesc{font-family:'Share Tech Mono',monospace;font-size:8px;color:#aaa;line-height:1.7}
+#bbInfResume .irIcon{font-size:calc(24px * var(--bbText, 1));margin-bottom:7px}
+#bbInfResume .irTitle{font-size:calc(8px * var(--bbText, 1));color:#0ff;letter-spacing:2px;margin-bottom:5px}
+#bbInfResume .irDesc{font-family:'Share Tech Mono',monospace;font-size:calc(8px * var(--bbText, 1));color:#aaa;line-height:1.7}
 #bbInfResume .irBack{margin-top:4px;background:none;border:1px solid #4af6;color:#4af;
-  font-family:'Press Start 2P',monospace;font-size:7px;padding:8px 14px;cursor:pointer;border-radius:4px}
+  font-family:'Press Start 2P',monospace;font-size:calc(7px * var(--bbText, 1));padding:8px 14px;cursor:pointer;border-radius:4px}
 #bbInfResume .irBack:hover{background:#4af2;color:#fff}
 @media (max-width:900px){
   /* This sheet is injected at runtime, i.e. after assets/ui-fix.css, so the
      phone sizing for these controls belongs here or ui-fix.css would lose. */
-  #bbInfResume h2{font-size:18px}
-  #bbInfResume .irSub{font-size:15px}
+  #bbInfResume h2{font-size:calc(18px * var(--bbText, 1))}
+  #bbInfResume .irSub{font-size:calc(15px * var(--bbText, 1))}
   #bbInfResume .irCard{min-width:210px;padding:26px}
-  #bbInfResume .irTitle{font-size:14px}
-  #bbInfResume .irDesc{font-size:12px}
-  #bbInfResume .irBack{font-size:15px;padding:18px 26px}
+  #bbInfResume .irTitle{font-size:calc(14px * var(--bbText, 1))}
+  #bbInfResume .irDesc{font-size:calc(12px * var(--bbText, 1))}
+  #bbInfResume .irBack{font-size:calc(15px * var(--bbText, 1));padding:18px 26px}
 }
 @media (max-width:900px) and (max-height:420px){
-  #bbInfResume h2{font-size:14px}
+  #bbInfResume h2{font-size:calc(14px * var(--bbText, 1))}
   #bbInfResume .irCard{min-width:175px;padding:18px 20px}
-  #bbInfResume .irBack{font-size:12px;padding:14px 20px}
+  #bbInfResume .irBack{font-size:calc(12px * var(--bbText, 1));padding:14px 20px}
 }`;
     document.head.appendChild(st);
   }

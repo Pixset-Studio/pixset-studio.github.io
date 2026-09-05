@@ -7,7 +7,35 @@
 (function(){
 'use strict';
 
-const SERVER_URL = 'wss://byte-blaster-server-production.up.railway.app';
+// Адрес релея. Встроенный — запасной: если студия задаст свой в Supabase
+// (таблица app_config, ключ bb_relay_url), игра переедет на него без пересборки
+// и без обновления у игроков. Пустое значение, отсутствующая строка, недоступный
+// Supabase, мусор вместо адреса — всё это молча оставляет встроенный.
+const SERVER_URL_BUILTIN = 'wss://byte-blaster-server-production.up.railway.app';
+let SERVER_URL = SERVER_URL_BUILTIN;
+const _CFG_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
+const _CFG_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
+(async function loadRelayFromConfig(){
+  try{
+    const res = await fetch(
+      _CFG_URL + '/rest/v1/app_config?key=eq.bb_relay_url&select=value',
+      { headers: { apikey: _CFG_KEY, Authorization: 'Bearer ' + _CFG_KEY } });
+    if(!res.ok) return;
+    const rows = await res.json();
+    const v = rows && rows[0] && String(rows[0].value || '').trim();
+    // Принимаем только настоящий WebSocket-адрес: опечатка в панели не должна
+    // отправлять всех игроков в никуда.
+    if(!v || !/^wss?:\/\/[^\s]+$/i.test(v)) return;
+    if(v === SERVER_URL) return;
+    SERVER_URL = v;
+    // Подключение могло уже подняться на встроенном адресе. Переезжаем сразу,
+    // но только вне игры — рвать живую комнату из-за настройки нельзя.
+    if(!window.netActive && _connectedUrl && _connectedUrl !== activeUrl()){
+      try{ if(ws) ws.close(); }catch(e){}
+      connect();
+    }
+  }catch(e){ /* нет сети или Supabase недоступен — остаёмся на встроенном */ }
+})();
 const MAX_NET_PLAYERS = 5;
 
 // ── Colour presets (10 popular rainbow hues, fixed s/l for good contrast) ───────────────────
@@ -127,7 +155,12 @@ const $gamePing    = document.getElementById('netGamePing');
     const vpH = (vv && vv.height) ? vv.height : window.innerHeight;
     const w = inner.offsetWidth, h = inner.offsetHeight;
     if(!w || !h) return;
-    let k = Math.min((vpW * 0.96) / w, (vpH * 0.96) / h, 1);
+    // offsetWidth/Height не учитывают zoom, а вьюпорт — реальный. Без деления
+    // на множитель интерфейса подгонка «не видела» увеличения и ужимала лобби
+    // ровно во столько же раз, во сколько игрок его увеличил.
+    const uz = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue('--bbUI')) || 1;
+    let k = Math.min((vpW * 0.96) / (w * uz), (vpH * 0.96) / (h * uz), 1);
     // READABILITY FLOOR. Scaling the whole lobby to fit meant every attempt to
     // make its buttons thumb-sized simply shrank k by the same factor — the
     // controls measured 23px tall on a phone no matter what the CSS said. Below
@@ -147,7 +180,8 @@ const $gamePing    = document.getElementById('netGamePing');
     inner.style.transformOrigin = floored ? 'top center' : 'center center';
     // A scaled box still reserves its UNSCALED height in the scroll container,
     // leaving a large empty gap. Reserve the visual height instead.
-    inner.style.marginBottom = floored ? (-(h * (1 - k)) + 'px') : '';
+    // Высоту резервируем видимую, а она с учётом увеличения — h * uz * k.
+    inner.style.marginBottom = floored ? (-(h * uz * (1 - k)) + 'px') : '';
   }
   window._netFitLobby = fitLobby;
   // Re-fit on any content/size change (switching connect<->room, player list,
@@ -285,7 +319,7 @@ function connect(){
     if(roomCode && $room.style.display !== 'none'){
       roomCode = null; isHost = false; isReady = false; players = [];
       $room.style.display = 'none';
-      $connect.style.display = 'flex';
+      $connect.style.display = '';
     }
     $connStatus.textContent = T('netDisconnected');
     $connStatus.classList.add('net-error');
@@ -369,6 +403,9 @@ function handleServerMsg(msg){
       refreshPlayerList();
       updateStartBtn();
       addChat('★', T('netPlayerJoined', esc(msg.player.nickname)));
+      netToast('👤', T('netPlayerJoined', msg.player.nickname), '#0f8');
+      // Зашёл посреди уровня — решаем, пускать ли (см. _onJoinDuringGame).
+      if(window.netActive) _onJoinDuringGame(msg.player);
       break;
 
     case 'player_left':
@@ -378,12 +415,22 @@ function handleServerMsg(msg){
         refreshPlayerList();
         updateStartBtn();
         if(gone) addChat('★', T('netPlayerLeft', esc(gone.nickname)));
+        if(gone) netToast('🚪', T('netPlayerLeft', gone.nickname), '#fc4');
         // Remove from live render map
         window.netPlayers.delete(msg.id);
+        // Смотреть за ушедшим нельзя: панель наблюдателя переводит камеру на
+        // следующего живого (или честно говорит, что смотреть не за кем).
+        _specRefresh();
         // If we're mid-level waiting on finishers, a leaver must not block the
         // room: drop them from the tally and re-check whether everyone left is done.
-        if(isHost && window.netActive && _netFinished && _netFinished.size > 0){
+        // Проверяем ВСЕГДА, а не только когда кто-то уже финишировал: раньше при
+        // пустом счётчике выход игрока не пересчитывал «X из N», и оставшиеся
+        // ждали ушедшего. Чистим и список дошедших до флага — иначе комната
+        // уезжала дальше по уровню, который прошёл только тот, кого уже нет.
+        if(isHost && window.netActive){
           _netFinished.delete(msg.id);
+          _netCleared.delete(msg.id);
+          _netPending.delete(msg.id);
           _hostBroadcastProgress();
         }
       }
@@ -410,6 +457,15 @@ function handleServerMsg(msg){
       if($lp2) $lp2.style.display = 'flex';
       setRoomStatus(T('netNowHost'));
       updateStartBtn();
+      // Смена хоста посреди уровня: счётчик финишировавших живёт только у хоста,
+      // и у нового он пуст. Те, кто уже дошёл до флага или выбыл, второй раз сами
+      // об этом не скажут — комната зависала у флага навсегда. Просим всех
+      // повторить своё состояние и добавляем себя.
+      if(window.netActive){
+        _netFinished = new Set(); _netCleared = new Set();
+        if(_iFinished) _hostMarkFinished(myId, _iEliminated, true);
+        wsSend({type:'game_event', event:'need_finish'});
+      }
       break;
 
     // The server reassigned the host (e.g. the previous host's tab froze and the
@@ -463,6 +519,12 @@ function handleServerMsg(msg){
       showNetCountdown(_netMode, _netLevel, () => {
         window._netLevelAdvancing = false; // new level — allow it to be completed
         if(typeof hardMode!=='undefined') hardMode=false; // keep co-op deterministic
+        // Тот, кто ждал в комнате (зашёл посреди уровня, а хост пускать не
+        // разрешил), входит здесь — на границе уровней. Ему нужен полный запуск
+        // сетевой игры, а не просто startAdv: иначе не будет ни чужих роботов,
+        // ни рассылки состояния.
+        if(!window.netActive){ startNetworkGame(players); return; }
+        reviveForNewLevel();   // именно здесь, а не на отсчёте
         if(_netMode === 'adventure'){
           if(typeof startAdv === 'function') startAdv(_netLevel, false);
         } else {
@@ -524,8 +586,11 @@ function handleServerMsg(msg){
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
 function enterRoomScreen(){
+  // Показываем пустой строкой, а не 'flex': инлайновый display перебивал бы
+  // grid из медиазапроса, панель осталась бы одной колонкой, а вторая —
+  // пустым местом справа. Проверки «!== 'none'» с пустой строкой работают.
   $connect.style.display = 'none';
-  $room.style.display    = 'flex';
+  $room.style.display    = '';
   $roomCode.textContent  = roomCode;
   isReady = false;
   $readyBtn.textContent  = T('netReady');
@@ -542,6 +607,54 @@ function enterRoomScreen(){
   else { setRoomStatus(T('netWaitHost')); }
   // Clear chat from any previous room
   $chat.innerHTML = '';
+  refreshFriendInvites();
+}
+
+/* ── Позвать друзей в эту комнату ────────────────────────────────────────
+   Список тот же, что в профиле и на сайте: аккаунт один. Показываем блок
+   только когда есть кого звать — пустой заголовок «пригласить друзей» в
+   комнате выглядит как сломанная кнопка.
+
+   Звать можно только друга, и это проверяет сервер (invite_to_room): иначе
+   код комнаты стал бы способом рассылать приглашения кому угодно. */
+function refreshFriendInvites(){
+  const box  = document.getElementById('netFriendsBox');
+  const list = document.getElementById('netFriendList');
+  const stat = document.getElementById('netInviteStatus');
+  if(!box || !list) return;
+  box.style.display = 'none';
+  list.innerHTML = '';
+  if(stat) stat.textContent = '';
+  if(!window.Friends || !window.License || !window.License.loggedIn()) return;
+
+  window.Friends.list().then((all) => {
+    const friends = (all || []).filter(f => f.kind === 'friend');
+    if(!friends.length || !roomCode) return;
+    box.style.display = 'flex';
+    friends.forEach((f) => {
+      const row = document.createElement('div');
+      row.className = 'net-friend';
+      const name = document.createElement('b');
+      name.textContent = f.nickname;
+      const btn = document.createElement('button');
+      btn.className = 'net-btn secondary';
+      btn.textContent = T('netInvite');
+      btn.onclick = () => {
+        btn.disabled = true;
+        // Источник комнаты передаём вместе с кодом: гость обязан подключиться
+        // туда же, иначе шесть символов кода ничего не значат.
+        const src = (_lobbyMode === 'lan') ? 'local' : 'server';
+        window.Friends.invite(f.nickname, roomCode, src)
+          .then(() => { btn.textContent = T('netInvited');
+                        if(stat) stat.textContent = T('netInviteSent', f.nickname); })
+          .catch((e) => { btn.disabled = false;
+                          if(stat) stat.textContent = T('netInviteFailed'); });
+      };
+      row.appendChild(name); row.appendChild(btn);
+      list.appendChild(row);
+    });
+    if(window._netFitLobby) window._netFitLobby();
+  }).catch(() => { /* нет сети или миграция не применена — блок просто не покажем */ });
 }
 
 function refreshPlayerList(){
@@ -592,7 +705,48 @@ function refreshPlayerList(){
   }
 }
 
+// Пускать ли новых игроков в уже начатый уровень. Решает хост; настройка живёт
+// на его стороне и переезжает между комнатами вместе с ним.
+let _allowLateJoin = false;
+try{ _allowLateJoin = localStorage.getItem('bb_net_latejoin') === '1'; }catch(e){}
+function _syncLateJoinUI(){
+  const row = document.getElementById('netAllowJoinRow');
+  const box = document.getElementById('netAllowJoinBox');
+  if(row) row.style.display = isHost ? 'flex' : 'none';
+  if(box) box.checked = _allowLateJoin;
+}
+// Новый призрак для игрока, зашедшего в уже идущий уровень.
+function _spawnGhost(p){
+  if(!p || p.id === myId || window.netPlayers.has(p.id)) return;
+  const pObj = mkPlayer(
+    (typeof spawnX !== 'undefined' ? spawnX : 60),
+    (typeof spawnY !== 'undefined' ? spawnY : 300),
+    p.color || {h:210,s:80,l:55}
+  );
+  pObj.nickname   = p.nickname;
+  pObj.isNetGhost = true;
+  window.netPlayers.set(p.id, { playerObj: pObj, lastUpdate: Date.now() });
+}
+// Кто-то зашёл, пока уровень уже идёт.
+function _onJoinDuringGame(pl){
+  _spawnGhost(pl);
+  // Снимок общего мира шлётся только при изменении, а у новичка уровень
+  // нетронутый — заставляем себя отправить полный снимок, иначе он будет
+  // собирать монеты, которые для остальных давно исчезли.
+  _lastWorldJson = '';
+  if(!isHost) return;
+  if(_allowLateJoin){
+    _netPending.delete(pl && pl.id);
+    wsSend({type:'game_event', event:'late_join', data:{mode:_netMode, level:_netLevel, seed:_netSeed}});
+  } else {
+    if(pl && pl.id) _netPending.add(pl.id);
+    wsSend({type:'game_event', event:'join_denied', data:{}});
+    _hostBroadcastProgress();   // знаменатель изменился — пересчитываем зачёт
+  }
+}
+
 function updateStartBtn(){
+  _syncLateJoinUI();
   if(!isHost) return;
   const allReady = players.filter(p=>p.id!==myId).every(p=>p.ready);
   const enough   = players.length >= 2;
@@ -670,13 +824,21 @@ let _netCleared = new Set();
 let _iFinished = false;
 function _resetFinishState(){
   _netFinished = new Set(); _netCleared = new Set();
+  _netPending = new Set();   // новый уровень — ждавшие входят вместе со всеми
   _iFinished = false; _iEliminated = false;
   window._netLevelAdvancing = false;
   _restoreWaitingChrome();
   hideNetWaiting();
-  // Eliminated players rejoin the next level able to play: without this they
-  // would be permanently dead for the rest of the session, which is not what
-  // "out for this level" means.
+  stopSpectate();   // новый уровень — снова играем, а не смотрим
+}
+
+/**
+ * Оживление выбывших. Раньше стояло в _resetFinishState, а та вызывается ДО
+ * отсчёта «3-2-1» — жизни возвращались ещё на затемнении, и на экране гибели
+ * игрок уже числился живым, хотя уровень не перезапустился. Теперь зовём это
+ * ровно там, где уровень действительно начинается заново.
+ */
+function reviveForNewLevel(){
   try { if(typeof lives !== 'undefined' && lives <= 0) lives = 3; } catch(e){}
   try { if(typeof lives2 !== 'undefined' && lives2 <= 0) lives2 = 3; } catch(e){}
   try { if(typeof player !== 'undefined' && player) player._netDone = false; } catch(e){}
@@ -698,14 +860,13 @@ function hideNetWaiting(){
 // Called from game.js when OUR local player reaches the flag.
 window.netReportFinish = function(){
   if(!window.netActive) return;
-  _iFinished = true; // from now on we may see the waiting overlay
-  if(isHost){
-    _hostMarkFinished(myId);
-  } else {
-    wsSend({type:'game_event', event:'finish'});
-    // Optimistic overlay; the host's finish_progress broadcast corrects the count.
-    showNetWaiting(1, players.length || 1);
-  }
+  _iFinished = true;
+  // Дошёл до флага — тоже наблюдатель. Раньше здесь висело затемнение «ждём
+  // игроков», и человек, прошедший уровень первым, минуту смотрел в серый
+  // экран вместо того, чтобы болеть за остальных.
+  startSpectate();
+  if(isHost) _hostMarkFinished(myId);
+  else wsSend({type:'game_event', event:'finish'});
 };
 
 // A player who runs out of lives is OUT FOR THIS LEVEL. They count as
@@ -713,6 +874,10 @@ window.netReportFinish = function(){
 // waiting for someone who can never reach it — and they come back with fresh
 // lives when the next level starts. This is the whole reason a co-op death
 // cannot use the single-player Game Over screen (see doHurtPlayer in game.js).
+// Кто зашёл посреди уровня и ждёт следующего (хост не пустил). В зачёте
+// «дошли X из N» они не участвуют — иначе комната ждала бы у флага человека,
+// который в этом уровне вообще не играет.
+let _netPending = new Set();
 let _iEliminated = false;
 window.netReportEliminated = function(){
   if(!window.netActive || _iEliminated) return;
@@ -723,25 +888,177 @@ window.netReportEliminated = function(){
     player.inv = Math.max(player.inv||0, 999999);
   }
   if(typeof stopMusic === 'function') stopMusic();
-  showNetEliminated();
+  startSpectate();
   if(isHost) _hostMarkFinished(myId, true);
   else {
     // Признак кладём в data: релей пересобирает game_event и сохраняет только
     // id/event/data — поле верхнего уровня до хоста не доедет.
     wsSend({type:'game_event', event:'finish', eliminated:true, data:{eliminated:true}});
-    showNetWaiting(1, players.length || 1);
   }
   if(typeof addChat === 'function') addChat('☠', T('netPlayerEliminated', esc(myNick||'?')));
 };
-// Dim overlay that replaces the Game Over screen while the level plays on.
-function showNetEliminated(){
-  const w = document.getElementById('netWaiting');
-  if(!w) return;
-  const title = document.getElementById('netWaitingTitle');
-  const sub   = document.getElementById('netWaitingSub');
-  if(title){ title.textContent = T('netEliminatedTitle'); title.style.color = '#f44'; title.style.textShadow = '0 0 16px #f44'; }
-  if(sub) sub.textContent = T('netEliminatedSub');
-  w.style.display = 'flex';
+
+// ── Всплывающие уведомления ──────────────────────────────────────────────────
+// Кто зашёл и кто вышел. Раньше об этом сообщал только чат в лобби — во время
+// игры чат не виден, и состав комнаты менялся молча.
+function netToast(icon, text, col){
+  const box = document.getElementById('netToasts');
+  if(!box) return;
+  const el = document.createElement('div');
+  el.style.cssText = "font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbFix, 1));"
+    + 'letter-spacing:1px;padding:calc(7px * var(--bbFix, 1)) calc(11px * var(--bbFix, 1));'
+    + 'border-radius:calc(4px * var(--bbFix, 1));background:#04040fe6;border:1px solid ' + (col||'#0ff') + '66;'
+    + 'color:' + (col||'#0ff') + ';text-shadow:0 0 8px ' + (col||'#0ff') + '55;'
+    + 'opacity:0;transform:translateX(-12px);transition:opacity .18s,transform .18s;'
+    + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  el.textContent = icon + ' ' + text;
+  box.appendChild(el);
+  requestAnimationFrame(()=>{ el.style.opacity='1'; el.style.transform='none'; });
+  // Больше пяти строк подряд — это уже стена, самые старые убираем сразу.
+  while(box.children.length > 5) box.removeChild(box.firstChild);
+  setTimeout(()=>{
+    el.style.opacity='0'; el.style.transform='translateX(-12px)';
+    setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 250);
+  }, 4000);
+}
+
+// ── Наблюдатель ──────────────────────────────────────────────────────────────
+// Выбывший на этом уровне не сидит перед затемнением: камера ведёт кого-то из
+// живых, стрелками (или кнопками на панели) его можно менять, а кнопка выхода
+// отпускает из комнаты, не дожидаясь конца уровня. Комнату выбывший уже
+// отпустил (см. netReportEliminated), поэтому остальные играют как играли.
+let _specIdx = 0;
+let _specBound = false;
+// Кого можно смотреть: живые игроки комнаты, кроме себя. Порядок берём из
+// списка комнаты, а не из Map — он одинаков между кадрами, и «следующий» не
+// прыгает случайно при каждом переключении.
+function _specList(){
+  const out = [];
+  if(!window.netPlayers) return out;
+  const order = players.length ? players.map(p=>p.id) : Array.from(window.netPlayers.keys());
+  for(const id of order){
+    if(id === myId) continue;
+    const e = window.netPlayers.get(id);
+    if(!e || !e.playerObj) continue;
+    // Смотреть можно только за теми, кто ЕЩЁ ИГРАЕТ. Выбывший замер на месте
+    // гибели, дошедший — стоит у флага; водить за ними камеру бессмысленно.
+    if(e.playerObj._netDone) continue;
+    const p = players.find(pl=>pl.id===id);
+    out.push({ id, name: (p && p.nickname) || e.playerObj.nickname || '?', obj: e.playerObj });
+  }
+  return out;
+}
+// Пересобрать панель под текущий состав комнаты. Зовётся и при выходе игрока:
+// смотреть за ушедшим нельзя, камера должна сама перейти к следующему.
+function _specRefresh(){
+  const bar = document.getElementById('netSpectate');
+  if(!bar) return;
+  // Наблюдаем, если ВЫШЛИ ИЗ УРОВНЯ — выбыли по жизням или дошли до флага.
+  // Проверка идёт и по _netDone у своего робота: без неё оставшийся включённым
+  // режим наблюдения уводил камеру к чужому игроку, пока ты сам ещё играешь.
+  const alive = (typeof player !== 'undefined' && player && !player._netDone);
+  const out = window.netActive && _iFinished && !alive;
+  if(!out){
+    bar.style.display='none';
+    window.netSpectateObj=null; window.netSpectating=false;
+    return;
+  }
+  window.netSpectating = true;
+  bar.style.display = 'flex';
+  // Заголовок честно говорит, почему ты смотришь: выбыл или уже прошёл.
+  const title = document.getElementById('netSpecTitle');
+  const note  = document.getElementById('netSpecNote');
+  if(title){
+    // Счёт «сколько уже вне уровня» дописан к заголовку, а не отдельной строкой:
+    // на телефоне каждая лишняя строка заметно поднимает плашку над экраном.
+    title.textContent = (_iEliminated ? T('netEliminatedTitle') : T('netWaitingTitle'))
+      + (_specTallyTxt ? '  ·  ' + _specTallyTxt : '');
+    title.style.color = _iEliminated ? '#f55' : '#0ff';
+    title.style.textShadow = '0 0 10px ' + (_iEliminated ? '#f00' : '#0ff');
+  }
+  if(note) note.textContent = _iEliminated ? T('netEliminatedSub') : T('netWaitingSub');
+  bar.style.borderColor = _iEliminated ? '#f4446d' : '#0ff6';
+  const list = _specList();
+  const nm   = document.getElementById('netSpecName');
+  const prev = document.getElementById('netSpecPrev');
+  const next = document.getElementById('netSpecNext');
+  if(!list.length){
+    // Смотреть не за кем: остальные тоже выбыли или вышли. Камера остаётся там,
+    // где была, — резкий скачок в угол уровня был бы хуже пустого кадра.
+    window.netSpectateObj = null;
+    if(nm) nm.textContent = T('netSpecNobody');
+    _specArrows(prev, next, false);
+  } else {
+    _specIdx = ((_specIdx % list.length) + list.length) % list.length;
+    const t = list[_specIdx];
+    window.netSpectateObj = t.obj;
+    if(nm) nm.textContent = '👁 ' + t.name;
+    _specArrows(prev, next, list.length > 1);
+  }
+}
+// Стрелки прячем через display, а не visibility: у .net-btn стоит
+// transition:all, а переход visibility доигрывает шаг только в конце — и при
+// частом обновлении панели «скрытая» стрелка так и оставалась кликабельной.
+function _specArrows(prev, next, show){
+  if(prev) prev.style.display = show ? '' : 'none';
+  if(next) next.style.display = show ? '' : 'none';
+}
+function _specStep(d){
+  _specIdx += d; _specRefresh();
+  if(typeof SFX !== 'undefined' && SFX.menu) SFX.menu();
+}
+function startSpectate(){
+  _specIdx = 0;
+  if(!_specBound){
+    _specBound = true;
+    const prev = document.getElementById('netSpecPrev');
+    const next = document.getElementById('netSpecNext');
+    const out  = document.getElementById('netSpecLeave');
+    if(prev) prev.onclick = () => _specStep(-1);
+    if(next) next.onclick = () => _specStep(1);
+    if(out)  out.onclick  = () => leaveRoom();
+    // Клавиши вешаем один раз на весь сеанс, а работают они только пока мы
+    // действительно выбыли — иначе стрелки отобрали бы управление у живого.
+    window.addEventListener('keydown', function(e){
+      if(!_iEliminated || !window.netActive) return;
+      const k = e.key;
+      if(k==='ArrowLeft'||k==='a'||k==='A'||k==='ф'||k==='Ф') _specStep(-1);
+      else if(k==='ArrowRight'||k==='d'||k==='D'||k==='в'||k==='В') _specStep(1);
+      else return;
+      e.preventDefault();
+    });
+  }
+  _specRefresh();
+}
+function stopSpectate(){
+  window.netSpectateObj = null;
+  window.netSpectating = false;
+  _specTallyTxt = '';
+  const bar = document.getElementById('netSpectate');
+  if(bar) bar.style.display = 'none';
+}
+// Счёт «сколько уже освободили комнату» — выбывшему он тоже нужен: по нему
+// видно, сколько ещё ждать до следующего уровня.
+/** Разметить чужих роботов: кто вне уровня и кто из них выбыл по жизням. */
+function _applyOutFlags(outIds, elimIds){
+  if(!window.netPlayers) return;
+  const out = new Set(outIds || []), el = new Set(elimIds || []);
+  let changed = false;
+  for(const [id, e] of window.netPlayers){
+    if(!e.playerObj) continue;
+    const d = out.has(id), m = el.has(id);
+    if(e.playerObj._netDone !== d || e.playerObj._netElim !== m) changed = true;
+    e.playerObj._netDone = d;
+    e.playerObj._netElim = m;
+  }
+  if(changed) _specRefresh();
+}
+
+let _specTallyTxt = '';
+function _specTally(count, total){
+  if(!_iFinished) return;
+  _specTallyTxt = count + '/' + total;
+  _specRefresh();
 }
 // Put the overlay's own wording back for the ordinary "waiting at the flag" case.
 function _restoreWaitingChrome(){
@@ -751,14 +1068,22 @@ function _restoreWaitingChrome(){
   if(sub) sub.textContent = T('netWaitingSub');
 }
 
-function _hostMarkFinished(id, eliminated){
+function _hostMarkFinished(id, eliminated, quiet){
   if(!isHost) return;
   if(!eliminated) _netCleared.add(id);
   if(!_netFinished.has(id)){
     _netFinished.add(id);
     // Выбывшему «добрался до флага» не пишем — про него уже сказано, что у него
     // закончились жизни, и два противоречивых сообщения подряд путают.
-    if(eliminated){ _hostBroadcastProgress(); return; }
+    if(eliminated && !quiet){
+      // Про выбывание сообщаем всей комнате отдельным событием — так же
+      // заметно, как про вход и выход. Чат во время игры не виден.
+      const pe = players.find(pl=>pl.id===id);
+      const nm = pe ? pe.nickname : (id===myId ? (myNick||'?') : '?');
+      netToast('☠', T('netPlayerEliminated', nm), '#f55');
+      if(ws && ws.readyState===1) wsSend({type:'game_event', event:'player_out', data:{name:nm}});
+    }
+    if(eliminated || quiet){ _hostBroadcastProgress(); return; }
     const p = players.find(pl=>pl.id===id);
     const name = p ? p.nickname : (id===myId ? (myNick||'?') : '?');
     addChat('★', T('netPlayerFinished', esc(name)));
@@ -770,13 +1095,25 @@ function _hostMarkFinished(id, eliminated){
 // Broadcast the current X/N progress to everyone and advance if all are done.
 function _hostBroadcastProgress(finisherName){
   if(!isHost) return;
-  const total = players.length || 1;
+  // Ждущих следующего уровня в знаменателе нет — см. _netPending.
+  const total = Math.max(1, (players.length || 1) - _netPending.size);
   const count = Math.min(_netFinished.size, total);
   if(count <= 0) return;
   // Only show the overlay to ourselves if WE'VE finished (the host may still be
-  // playing while other players reach the flag).
-  if(_iFinished) showNetWaiting(count, total);
-  if(ws && ws.readyState===1) wsSend({type:'game_event', event:'finish_progress', data:{count, total, name:finisherName||null}});
+  // playing while other players reach the flag). Выбывшему затемнение не
+  // показываем — он смотрит за живыми, счёт идёт строкой на панели наблюдателя.
+  // Затемнение «ждём игроков» больше не показываем никому: и выбывший, и
+  // дошедший до флага теперь наблюдают за живыми, а счёт идёт строкой на
+  // панели наблюдателя.
+  _specTally(count, total);
+  // Кто уже вне уровня и кто именно выбыл. Списки едут ЗДЕСЬ, а не в game_state:
+  // релей пересобирает game_state по фиксированному набору полей и всё лишнее
+  // выбрасывает — добавленные туда признаки до других игроков не доезжали.
+  const outIds  = Array.from(_netFinished);
+  const elimIds = outIds.filter(id => !_netCleared.has(id));
+  if(ws && ws.readyState===1) wsSend({type:'game_event', event:'finish_progress',
+    data:{count, total, name:finisherName||null, out:outIds, elim:elimIds}});
+  _applyOutFlags(outIds, elimIds);
   if(count < total) return;
   // Все освободили комнату. Если до флага не добрался никто — уровень провален,
   // и комната переигрывает его же, а не уезжает дальше.
@@ -852,6 +1189,8 @@ function startNetworkGame(allPlayers){
   if(typeof AchTrack!=='undefined')AchTrack.netPlay();
   window._netLevelAdvancing = false;
   window.netPlayers.clear();
+  window._netShots.clear();
+  _lastWorldJson = ''; _lastShotCount = 0;
   updateGamePing(); // reveal the in-game ping readout
 
   // Disable local 2P — network handles multiplayer
@@ -908,6 +1247,8 @@ let _netKeyframeDiv = 0; // counts sync ticks to schedule periodic full-state "k
 // Per-enemy id → last full state actually sent to guests. Used to compute
 // deltas (see _deltaOf) so unchanged fields aren't re-sent every tick.
 let _lastSentEnemy = new Map();
+let _lastShotCount = 0;         // сколько снарядов ушло в прошлый раз (см. 'shots')
+let _lastWorldJson = '';        // последний отправленный снимок общего мира
 let _lastSentBoss = null;       // last full boss state sent (null = none sent yet this "boss session")
 let _lastSentBossAlive = null;  // tri-state: null=unknown yet, true/false=last sent boss-alive flag
 let _lastSyncedEnemiesRef = null; // identity of the `enemies` array we last built caches for (see _stateTick)
@@ -970,6 +1311,11 @@ function _stateTick(){
       _lastSentEnemy.clear();
       _lastSentBoss = null;
       _lastSentBossAlive = null;
+      // Новый уровень — новый мир: старый снимок и чужие снаряды к нему не
+      // относятся, иначе на первых кадрах монеты «подобрались» бы сами.
+      _lastWorldJson = '';
+      _lastShotCount = 0;
+      window._netShots.clear();
     }
 
     // ── Player state (20 Hz) ─────────────────────────────────────────────────
@@ -1068,18 +1414,6 @@ function _stateTick(){
           if(toSend) wsSend({type: 'boss_sync', boss: toSend});
         }
       }
-      // Player bullets (host) — guests render these as ghost bullets
-      if(typeof pBullets!=='undefined'){
-        wsSend({
-          type:    'bullets_sync',
-          bullets: pBullets.map(b=>({
-            x:   Math.round(b.x),
-            y:   Math.round(b.y),
-            w:   b.w, h: b.h,
-            col: b.col || null,
-          })),
-        });
-      }
       // Enemy bullets (host authoritative) — guests must see them to dodge/render
       if(typeof eBullets!=='undefined'){
         wsSend({
@@ -1094,6 +1428,44 @@ function _stateTick(){
           })),
         });
       }
+    }
+
+    // ── Выстрелы: свои показываем всем ───────────────────────────────────────
+    // Раньше по комнате расходились только снаряды хоста (bullets_sync, который
+    // релей и пропускал лишь от него) — гости стреляли «в пустоту», их огня не
+    // видел никто. Теперь свой огонь шлёт каждый, включая огненные и ледяные
+    // шары, и в комнате видно всю стрельбу. Идёт через game_event, потому что
+    // его релей передаёт от любого игрока — сервер менять не нужно.
+    if(_netTickDiv % 3 === 0){
+      const shots = [];
+      const pack = (arr, kind) => {
+        if(!arr) return;
+        for(const b of arr) shots.push([Math.round(b.x), Math.round(b.y), kind, b.col || null]);
+      };
+      pack(typeof pBullets !=='undefined' ? pBullets  : null, 0);
+      pack(typeof fireBalls!=='undefined' ? fireBalls : null, 1);
+      pack(typeof iceBalls !=='undefined' ? iceBalls  : null, 2);
+      // Пустой список отправляем ОДИН раз после последнего выстрела — иначе на
+      // чужих экранах повисли бы застывшие снаряды.
+      if(shots.length || _lastShotCount){
+        _lastShotCount = shots.length;
+        wsSend({type:'game_event', event:'shots', data:{b: shots.slice(0, 80)}});
+      }
+    }
+
+    // ── Общий мир: монеты, блоки, бонусы, кристаллы, ключи ───────────────────
+    // Слияние «или» (см. netWorldSnap в game.js), поэтому шлёт КАЖДЫЙ и хост тут
+    // не нужен. Отправляем только при изменении: пока никто ничего не подобрал,
+    // трафика нет вовсе.
+    if(_netTickDiv % 3 === 0 && typeof netWorldSnap === 'function'){
+      try{
+        const snap = netWorldSnap();
+        const js = JSON.stringify(snap);
+        if(js !== _lastWorldJson){
+          _lastWorldJson = js;
+          wsSend({type:'game_event', event:'world', data: snap});
+        }
+      }catch(e){}
     }
 }
 // Let the background ticker pump state too (see _stateTick comment).
@@ -1125,6 +1497,13 @@ function updateRemotePlayer(msg){
   p.vx      = msg.vx || 0;
   p.vy      = msg.vy || 0;
   if(msg.facing) p.facing = msg.facing;
+  // На земле или в прыжке. Отправитель это уже считал и слал в поле action, но
+  // раньше его никто не читал: у чужого робота onGnd всегда оставался false,
+  // поэтому ноги у него не переставлялись и он ездил по уровню как камень.
+  p.onGnd = (msg.action !== 'jump');
+  // Признаки «вне уровня» и «выбыл» сюда НЕ кладём: релей пересобирает
+  // game_state по своему списку полей и всё лишнее отбрасывает. Их рассылает
+  // хозяин в finish_progress — см. _applyOutFlags.
   // Sync all powerup/damage states so rendering is identical
   p.blaster  = !!msg.blaster;
   p.broken   = !!msg.broken;
@@ -1154,6 +1533,110 @@ function interpolateGhosts(){
     if(!p.trail) p.trail = [];
     if(Math.abs(p.vx) > 0.5 || Math.abs(p.vy) > 0.5) p.trail.unshift({x:p.x+p.w/2, y:p.y+p.h/2});
     if(p.trail.length > 12) p.trail.length = 12;
+
+    // ── Оживление чужого робота ──────────────────────────────────────────────
+    // Позиция приходит с сети, а вот счётчики анимации у чужого робота не вёл
+    // никто: шаг ног, приседание при приземлении, дыхание в покое — всё это
+    // считает updatePlayer, который для чужих не выполняется. Отсюда и
+    // «ездят как камни». Считаем то же самое здесь, раз в кадр.
+    //
+    // Скорость для походки берём по фактическому смещению за кадр, а не из
+    // присланного vx: пакеты идут 20 раз в секунду, и между ними робот ещё
+    // доезжает до цели — по vx ноги замирали бы рывками.
+    const moved = Math.abs(p.x - (entry.px !== undefined ? entry.px : p.x)) * 60 / 16.7;
+    entry.px = p.x;
+    p.animTk = (p.animTk||0) + 1;
+    if(moved > 0.4 || Math.abs(p.vx) > 0.4){
+      if(p.animTk % 7 === 0) p.animFr = ((p.animFr||0) + 1) % 4;
+    } else p.animFr = 0;
+    // Приземление: короткое приседание, как у своего робота.
+    if(p.onGnd && entry.wasAir){ p.landT = Math.max(p.landT||0, 8); p.landPow = 0.5; }
+    entry.wasAir = !p.onGnd;
+    if(p.landT > 0) p.landT--;
+    // Покой: дыхание и редкий взгляд по сторонам включаются после 90 кадров.
+    if(p.onGnd && moved < 0.2 && Math.abs(p.vx) < 0.2) p.idleT = (p.idleT||0) + 1;
+    else p.idleT = 0;
+  }
+}
+
+// Стрелка к игроку, ушедшему за край экрана. Без неё в кооперативе непонятно,
+// кто убежал вперёд, а кто отстал, и половина разговоров сводится к «ты где?».
+// Рисуется внутри мировой системы координат (вызов стоит в обёртке drawPlayer),
+// поэтому край экрана — это camX и camX+W.
+// Значок робота 14×16 в цвете игрока — та же схема, что и у большого спрайта
+// (ноги, корпус, голова, визор), только сведённая к нескольким прямоугольникам.
+// По нему видно, КТО именно за краем, а не просто «там кто-то есть».
+function _miniRobot(x, y, pal, faceRight){
+  const b = pal ? pal.body   : '#2a4a6a';
+  const m = pal ? pal.mid    : '#3a6a9a';
+  const v = pal ? pal.visor  : '#0ff';
+  ctx.fillStyle = m;
+  ctx.fillRect(x+2,  y+11, 4, 5);   // ноги
+  ctx.fillRect(x+8,  y+11, 4, 5);
+  ctx.fillStyle = b;
+  ctx.fillRect(x+1,  y+15, 5, 2);   // ступни
+  ctx.fillRect(x+8,  y+15, 5, 2);
+  ctx.fillStyle = m;
+  ctx.fillRect(x+1,  y+6,  12, 6);  // корпус
+  ctx.fillStyle = b;
+  ctx.fillRect(x+2,  y+7,  10, 4);
+  ctx.fillStyle = m;
+  ctx.fillRect(x-1,  y+6,  3,  5);  // руки
+  ctx.fillRect(x+12, y+6,  3,  5);
+  ctx.fillRect(x+2,  y,    10, 7);  // голова
+  ctx.fillStyle = v;
+  ctx.fillRect(x+3,  y+2,  8,  3);  // визор
+  // Блик со стороны, куда игрок смотрит — робот читается как повёрнутый.
+  ctx.fillRect(faceRight ? x+9 : x+3, y+2, 2, 3);
+}
+
+function _drawOffscreenMarkers(){
+  if(typeof ctx === 'undefined' || typeof camX === 'undefined') return;
+  for(const [, e] of window.netPlayers){
+    const p = e.playerObj;
+    if(!p) continue;
+    const cx = p.x + p.w/2;
+    const left  = cx < camX + 40;
+    const right = cx > camX + W - 40;
+    if(!left && !right) continue;
+    // Дошедшего до флага не отмечаем вовсе: он стоит на финише, и «где он» —
+    // не вопрос. Выбывший отмечается ИНАЧЕ: это метка места гибели, а не живой
+    // игрок. Раньше по нему рисовалась обычная стрелка с расстоянием, и она
+    // звала туда, где давно никого нет.
+    const dead = !!(p._netDone && p._netElim);
+    if(p._netDone && !dead) continue;
+
+    const pal = (p.colorScheme && typeof p.colorScheme === 'object' && window.robotPalette)
+      ? window.robotPalette(p.colorScheme) : null;
+    const col = dead ? '#f55' : (pal ? pal.visor : '#0ff');
+    const ax = left ? camX + 12 : camX + W - 12;
+    const ay = Math.max(30, Math.min(H - 30, p.y + p.h/2));
+    ctx.save();
+    // Живая стрелка пульсирует и зовёт; метка гибели тусклая и неподвижная —
+    // она сообщает, а не торопит.
+    ctx.globalAlpha = dead ? 0.42 : (0.6 + 0.25*Math.sin(tick*0.12));
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    if(left){ ctx.moveTo(ax-8,ay); ctx.lineTo(ax+5,ay-8); ctx.lineTo(ax+5,ay+8); }
+    else    { ctx.moveTo(ax+8,ay); ctx.lineTo(ax-5,ay-8); ctx.lineTo(ax-5,ay+8); }
+    ctx.closePath(); ctx.fill();
+    const rx = left ? ax + 9 : ax - 23;
+    if(dead){
+      // Череп вместо робота и без расстояния: расстояние до мертвеца не нужно.
+      ctx.globalAlpha = 0.65;
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = col;
+      ctx.fillText('☠', rx + 7, ay + 6);
+    } else {
+      ctx.globalAlpha = 1;
+      _miniRobot(rx, ay - 8, pal, !left);
+      ctx.font = '6px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = col;
+      ctx.fillText(Math.round(Math.abs(cx - (camX + W/2)) / 10) + 'm', rx + 7, ay + 18);
+    }
+    ctx.restore();
   }
 }
 
@@ -1253,11 +1736,15 @@ function applyBossSync(b){
   }
 }
 
-// Non-host: receive host player's bullets and render them locally
-window._netHostBullets = [];
+// Чужие выстрелы: id игрока → {t, list}. Заполняется событием 'shots' (шлёт
+// каждый, см. _stateTick) и рисуется поверх своих снарядов.
+window._netShots = new Map();
+// Старый канал: снаряды хоста отдельным типом сообщения. Оставлен на случай
+// игрока со сборкой прошлой версии — он ещё шлёт bullets_sync, и его огонь
+// должен быть виден. Свои сборки этот тип больше не отправляют.
 function applyBulletsSync(list){
   if(isHost) return;
-  window._netHostBullets = list || [];
+  window._netShots.set('legacy-host', {t: Date.now(), list: (list||[]).map(b=>[b.x,b.y,0,b.col||null])});
 }
 
 // Non-host: receive enemy bullets from host. We replace the local eBullets
@@ -1299,19 +1786,56 @@ function handleRemoteEvent(msg){
   if(isHost && msg.event === 'finish'){
     // `eliminated` distinguishes "ran out of lives" from "reached the flag":
     // выбывший освобождает комнату, но уровень не прошёл.
-    const _elim = !!(msg.eliminated || (msg.data && msg.data.eliminated));
-    if(_elim){
+    const _elim  = !!(msg.eliminated || (msg.data && msg.data.eliminated));
+    // resync — это повтор по запросу нового хоста, а не новое событие: чат о нём
+    // молчит, иначе после смены хоста в него сыпались бы старые сообщения.
+    const _quiet = !!(msg.data && msg.data.resync);
+    if(_elim && !_quiet){
       const p = players.find(pl=>pl.id===msg.id);
       addChat('☠', T('netPlayerEliminated', esc(p ? p.nickname : '?')));
     }
-    _hostMarkFinished(msg.id, _elim);
+    _hostMarkFinished(msg.id, _elim, _quiet);
   }
   // Host broadcasts X/N progress to everyone, but only players who themselves
   // already reached the flag should see the dim "waiting" overlay — players still
   // in the level keep playing without it.
   if(msg.event === 'finish_progress' && msg.data){
-    if(_iFinished) showNetWaiting(msg.data.count|0, msg.data.total|0);
+    _specTally(msg.data.count|0, msg.data.total|0);
+    _applyOutFlags(msg.data.out, msg.data.elim);
     if(!isHost && msg.data.name) addChat('★', T('netPlayerFinished', esc(msg.data.name)));
+  }
+  // Новый хост пересобирает список финишировавших: свои Set'ы у него пустые, а
+  // те, кто уже дошёл до флага или выбыл, второй раз об этом не сообщат — без
+  // этого комната навсегда зависала у флага после смены хоста.
+  // Хост пустил нас в уже идущий уровень: собираем его как обычную сетевую игру
+  // (тем же зерном и номером), а не через startAdv — иначе не было бы ни чужих
+  // роботов, ни рассылки состояния.
+  if(msg.event === 'late_join' && msg.data && !window.netActive && roomCode){
+    _netMode  = msg.data.mode  || _netMode;
+    _netLevel = msg.data.level || _netLevel;
+    _netSeed  = msg.data.seed  || _netSeed;
+    showNetCountdown(_netMode, _netLevel, () => startNetworkGame(players));
+  }
+  // Хост не пускает в идущий уровень — ждём в комнате до следующего (см.
+  // level_complete: клиент вне игры входит там же, где остальные его начинают).
+  if(msg.event === 'join_denied' && !window.netActive && roomCode){
+    setRoomStatus(T('netJoinDenied'));
+    netToast('⏳', T('netJoinDenied'), '#fc4');
+  }
+  // Кто-то выбыл — уведомление в углу у всех, кроме хозяина: он показал его сам.
+  if(msg.event === 'player_out' && msg.data){
+    netToast('☠', T('netPlayerEliminated', msg.data.name || '?'), '#f55');
+  }
+  // Чужие выстрелы и общий мир — см. _stateTick.
+  if(msg.event === 'shots' && msg.data){
+    window._netShots.set(msg.id, {t: Date.now(), list: Array.isArray(msg.data.b) ? msg.data.b : []});
+  }
+  if(msg.event === 'world' && msg.data && typeof netWorldApply === 'function'){
+    try{ netWorldApply(msg.data); }catch(e){}
+  }
+  if(msg.event === 'need_finish' && _iFinished){
+    if(isHost) _hostMarkFinished(myId, _iEliminated, true);
+    else wsSend({type:'game_event', event:'finish', data:{eliminated:_iEliminated, resync:true}});
   }
   // Final level cleared by the whole room → win for everyone.
   if(msg.event === 'won'){
@@ -1331,6 +1855,14 @@ function handleRemoteEvent(msg){
       // Apply elemental status the same way local bullets do
       if(e.alive && d.elem==='fire'){ if(!e._burning){e._burning=true;e._burnT=0;e._burnTotal=300;} }
       if(e.alive && d.elem==='ice'){  if(!e._frozen){e._frozen=true;e._freezeT=90;e._origSpd=e.spd||1;} e.vx=0; }
+    }
+  }
+  // Толчок глыбы от гостя — двигает её хозяин, результат уезжает всем в enemies_sync.
+  if(isHost && msg.event === 'ice_push' && msg.data){
+    const e = (typeof enemies!=='undefined' && enemies) ? enemies.find(en=>en && en.id===msg.data.id) : null;
+    if(e && e.alive && e._frozen){
+      e._iceVX = msg.data.vx || 0;
+      if(!e._icePushSfx){ e._icePushSfx = 1; if(typeof SFX!=='undefined'&&SFX.hit) SFX.hit(); }
     }
   }
   if(isHost && msg.event === 'hit_boss' && msg.data){
@@ -1354,6 +1886,13 @@ function handleRemoteEvent(msg){
     }
   }
 }
+
+// Гость толкнул замороженного врага. Само скольжение считает хозяин (у гостя
+// ИИ врагов выключен), поэтому отправляем ему только направление толчка.
+window.netReportIcePush = function(id, vx){
+  if(!window.netActive || isHost) return;
+  wsSend({type:'game_event', event:'ice_push', data:{id:id, vx:+(+vx).toFixed(2)}});
+};
 
 // Guest helper: report a hit on enemy `id` (stable identity, not array index) to the host.
 window.netReportEnemyHit = function(id, dmg, stomp, elem, pierce){
@@ -1627,6 +2166,15 @@ document.getElementById('netLeaveBtn').onclick = () => {
   leaveRoom();
 };
 
+{
+  const _ljBox = document.getElementById('netAllowJoinBox');
+  if(_ljBox) _ljBox.onchange = () => {
+    _allowLateJoin = !!_ljBox.checked;
+    try{ localStorage.setItem('bb_net_latejoin', _allowLateJoin ? '1' : '0'); }catch(e){}
+  };
+  _syncLateJoinUI();
+}
+
 document.getElementById('netBackBtn').onclick = () => {
   $lobby.style.display = 'none';
   if(typeof showNetType==='function') showNetType();
@@ -1653,8 +2201,21 @@ function leaveRoom(){
   stopPing();
   hideConnLost();
   _resetFinishState();   // clear any "waiting for players" overlay/tally
+  // Выход из комнаты — это и выход С УРОВНЯ. Без сброса состояния игра
+  // оставалась в 'playing': на телефоне не пропадали сенсорные кнопки (они
+  // показываются ровно по этому признаку, см. touch.js), а игровой цикл
+  // продолжал считать уровень под меню.
+  try{
+    if(typeof gState !== 'undefined' && (gState==='playing' || gState==='paused' || gState==='levelclear')){
+      gState = 'menu';
+      if(typeof stopMusic === 'function') stopMusic();
+      if(typeof hideAll === 'function') hideAll();
+    }
+  }catch(e){}
   window.netActive = false;
   window.netPlayers.clear();
+  window._netShots.clear();
+  _lastWorldJson = ''; _lastShotCount = 0;
   updateGamePing(); // hide the in-game ping readout
   _netMode = 'infinite'; _netLevel = 1; _netSeed = 0;
   // Tell the relay to drop us NOW so the room is deleted immediately instead of
@@ -1663,7 +2224,7 @@ function leaveRoom(){
   roomCode = null; isHost = false; isReady = false; players = [];
   if(ws){ try{ ws.close(); }catch(e){} ws=null; }
   $room.style.display    = 'none';
-  $connect.style.display = 'flex';
+  $connect.style.display = '';
   $lobby.style.display   = 'none';
   if(typeof showNetType==='function') showNetType();
   else if(typeof showMain==='function') showMain();
@@ -1735,7 +2296,7 @@ window.NetPlay = {
 
     netApplyLang();
     if(typeof window.applyI18nDOM==='function') window.applyI18nDOM();
-    $connect.style.display = 'flex';
+    $connect.style.display = '';
     $room.style.display    = 'none';
     $lobby.style.display   = 'flex';
     if(window._netFitLobby){ window._netFitLobby(); [60,200,500].forEach(t=>setTimeout(window._netFitLobby,t)); }
@@ -1752,6 +2313,40 @@ window.NetPlay = {
   },
   close: leaveRoom,
   isActive(){ return window.netActive; },
+
+  /**
+   * Войти в комнату по коду. Нужен уведомлению о приглашении: нажатие должно
+   * заводить игрока прямо в комнату друга, а не открывать лобби «где-то рядом».
+   *
+   * `source` обязателен вместе с кодом: комната живёт либо на облачном relay,
+   * либо в локальной сети, и один и тот же код в другом источнике не значит
+   * ничего. Подключение может быть ещё не поднято (игрок в главном меню),
+   * поэтому отправку ставим в очередь до открытия сокета.
+   */
+  joinByCode(code, source){
+    const clean = String(code || '').toUpperCase().trim();
+    if(clean.length !== 6) return false;
+    this.open('find');
+    // В приглашении источник называется 'local' (так его понимает база),
+    // а внутри лобби тот же режим зовётся 'lan'.
+    if(source === 'local') setSource('lan');
+    else if(source === 'server') setSource('server');
+    const input = document.getElementById('netCodeInput');
+    if(input) input.value = clean;
+
+    const send = () => wsSend({type:'join_room', code:clean, nickname:myNick, color:myColor});
+    if(ws && ws.readyState === 1) send();
+    else {
+      // Сокет ещё открывается — ждём, но не вечно: если за десять секунд не
+      // поднялся, игрок остаётся в лобби с уже вписанным кодом и жмёт «войти».
+      let tries = 0;
+      const t = setInterval(() => {
+        if(ws && ws.readyState === 1){ clearInterval(t); send(); }
+        else if(++tries > 40) clearInterval(t);
+      }, 250);
+    }
+    return true;
+  },
 };
 
 // ── Util ─────────────────────────────────────────────────────────────────────
@@ -1776,6 +2371,7 @@ setTimeout(() => {
     for(const [, entry] of window.netPlayers){
       if(entry.playerObj) drawOnePlayer(entry.playerObj);
     }
+    _drawOffscreenMarkers();
   };
 
   // Wrap startAdv
@@ -1802,18 +2398,34 @@ setTimeout(() => {
     };
   }
 
-  // Also patch drawBullets to show host bullets on non-host screens
+  // Чужие выстрелы поверх своих. Раньше здесь рисовались только снаряды хоста и
+  // только у гостей — теперь видно огонь ЛЮБОГО игрока, включая огненные и
+  // ледяные шары (kind 1 и 2). Записи старше секунды выбрасываем: игрок мог
+  // выйти или зависнуть, и его снаряды не должны остаться висеть в воздухе.
   if(typeof drawBullets === 'function'){
     const _origDrawBullets = drawBullets;
     window.drawBullets = function(){
       _origDrawBullets();
-      if(!window.netActive || isHost) return;
-      const hb = window._netHostBullets || [];
-      for(const b of hb){
-        const cx=(b.x||0)+6, cy=(b.y||0)+4;
-        ctx.fillStyle = b.col || '#0cf';
-        ctx.beginPath();ctx.ellipse(cx,cy,8*.7,4*.5,0,0,Math.PI*2);ctx.fill();
-        ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,4*.3,0,Math.PI*2);ctx.fill();
+      if(!window.netActive) return;
+      const now = Date.now();
+      for(const [id, entry] of window._netShots){
+        if(now - entry.t > 1000){ window._netShots.delete(id); continue; }
+        for(const b of entry.list){
+          const kind = b[2]|0;
+          const cx = (b[0]||0) + (kind ? 8 : 6), cy = (b[1]||0) + (kind ? 8 : 4);
+          if(kind){
+            // Стихийный шар: светящийся сгусток, огонь оранжевый, лёд голубой.
+            const col = kind===1 ? '#ff6a1a' : '#7ce8ff';
+            ctx.fillStyle = col;
+            ctx.beginPath();ctx.arc(cx,cy,6,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();ctx.arc(cx,cy,2.4,0,Math.PI*2);ctx.fill();
+          } else {
+            ctx.fillStyle = b[3] || '#0cf';
+            ctx.beginPath();ctx.ellipse(cx,cy,8*.7,4*.5,0,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,4*.3,0,Math.PI*2);ctx.fill();
+          }
+        }
       }
     };
   }

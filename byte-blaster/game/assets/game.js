@@ -262,6 +262,8 @@ window.applyGfxValues = function(g){
   };
   if (typeof window.GFX_MAX_PARTICLES === 'number') window.MAX_PARTICLES_DYN = window.GFX_MAX_PARTICLES;
   if (typeof window.applyRenderResolution === 'function') window.applyRenderResolution();
+  // Свечения масштабируются централизованно — см. _syncGlowHook ниже.
+  if (typeof _syncGlowHook === 'function') _syncGlowHook();
 };
 window.applyGfxTier = function(q){
   // Preset → fill GFX with that tier's values (a starting template).
@@ -270,6 +272,42 @@ window.applyGfxTier = function(q){
 // Helper: quality-scaled glow. Use in place of `ctx.shadowBlur=N` when you want the
 // effect dimmed/disabled on lower tiers. Returns 0 on verylow so save()/restore() can be skipped.
 function glow(n){ return (GFX.glow * n) | 0; }
+
+// ── Тир качества применяется ко ВСЕМ свечениям ─────────────────────────────
+// Код рисования задаёт ctx.shadowBlur числом напрямую в 344 местах и лишь в
+// восьми — через glow(). То есть настройка «Качество графики» почти не влияла
+// на самое дорогое, что есть в Canvas 2D: каждое ненулевое размытие тени —
+// это отдельный проход размытия по пикселям, и на слабом железе именно оно
+// съедает кадр.
+//
+// Правим один раз здесь, а не в трёхстах местах: так тир действует на всё
+// сразу и не разойдётся с кодом рисования при следующих правках.
+//
+// Перехват ставится ТОЛЬКО когда множитель отличается от единицы. На «высоком»
+// (множитель 1) свойство остаётся нативным — картинка не меняется ни на пиксель
+// и не появляется лишнего вызова на каждую установку тени.
+// Объявления через var: applyGfxValues выше по файлу зовёт _syncGlowHook, и
+// настройки могут применить тир раньше, чем выполнится эта строка. С let/const
+// такой вызов упал бы на временной мёртвой зоне.
+var _sbDesc=Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype,'shadowBlur');
+var _sbHooked=false;
+function _syncGlowHook(){
+  if(!_sbDesc)_sbDesc=Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype,'shadowBlur');
+  if(!_sbDesc||!_sbDesc.set||typeof ctx==='undefined')return;
+  const need=(GFX.glow!==1);
+  if(need===_sbHooked)return;
+  if(need){
+    Object.defineProperty(ctx,'shadowBlur',{
+      configurable:true,
+      get(){ return _sbDesc.get.call(this); },
+      set(v){ _sbDesc.set.call(this, v>0 ? v*GFX.glow : 0); },
+    });
+  } else {
+    delete ctx.shadowBlur;   // назад к нативному свойству прототипа
+  }
+  _sbHooked=need;
+}
+_syncGlowHook();   // тир мог быть применён до объявления этой функции
 
 // ── Colour + alpha suffix ──────────────────────────────────────────────────
 // Most theme colours in this file are written as 3-digit shorthand ('#0ff'),
@@ -300,6 +338,42 @@ const _PRISM_SEPIA_HUE=40;
 function prismFilter(hue,sat,bright){
   const h=(((hue-_PRISM_SEPIA_HUE)%360)+360)%360;
   return 'grayscale(1) sepia(1) saturate('+(sat||7)+') hue-rotate('+h+'deg) brightness('+(bright||1.15)+')';
+}
+
+// ── Преломление объектов: включено или нет ─────────────────────────────────
+// ctx.filter — самая дорогая операция canvas2d: каждый объект с фильтром
+// уходит в отдельный проход растеризации. Замер на этой же машине: двадцать
+// кирпичей с этим фильтром — 145 мс на кадр против 0.9 мс без него, при
+// бюджете кадра 16.7 мс. Квантование оттенка (оно уже было) стоимость
+// уменьшает, но не меняет порядок. Именно это и делает 11-й мир неиграбельным
+// на телефоне, где GPU слабее, а экран плотнее.
+//
+// Настройка «Радужный мир → Преломление» (вкладка «Графика») оставляет выбор
+// игроку: 'on' — как задумано, 'off' — кирпичи, шипы и враги в своих обычных
+// цветах, 'auto' — выключено там, где не потянет. Всё остальное (спектральное
+// небо, призма, платформы, декор) работает в любом случае: оно рисуется
+// градиентами и кэшируется, фильтров там нет.
+const _prismIsTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+function prismFxOn(){
+  const s=window.gameSettings;
+  const v=(s&&s.prismFx)||'auto';
+  if(v==='on')return true;
+  if(v==='off')return false;
+  if(_prismIsTouch||(s&&s.touchControls==='on'))return false;   // телефон/планшет
+  const g=(s&&s.gfx)||{};                                        // слабый тир графики
+  return !((g.glow!=null&&g.glow<0.6)||(g.bgDetail!=null&&g.bgDetail<0.6));
+}
+window.prismFxOn=prismFxOn;
+// Дешёвая замена преломлению для КИРПИЧЕЙ. Блок — непрозрачный прямоугольник,
+// поэтому подкрасить его можно обычным fillRect поверх: фон вокруг не задет,
+// а мир не выглядит так, будто кирпичи привезли из соседнего уровня. Для шипов
+// и врагов такой приём не годится — они не прямоугольные, и заливка испачкала
+// бы фон внутри их габаритов (ровно поэтому здесь и появился фильтр).
+function prismTintRect(x,y,w,h,hue){
+  ctx.globalAlpha=0.42;
+  ctx.fillStyle='hsl('+hue+',85%,55%)';
+  ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1;
 }
 // transition wipe in every world whose main colour is shorthand.
 // This expands shorthand first, so the result is always a valid 8-digit hex.
@@ -525,18 +599,24 @@ function tone(freq,type,dur,vol=.22,dst=null,detune=0){
     o.connect(g);o.start(now);o.stop(now+dur+.02);
   }catch(e){}
 }
-function sweep(f0,f1,type,dur,vol=.2,dst=null){
+// atk — время нарастания. Без него свип всегда врубается на полной громкости и
+// щёлкает; нарастающим звукам (зарядка, щит) это нужно.
+function sweep(f0,f1,type,dur,vol=.2,dst=null,atk=0){
   if(!AC||!audioOn)return;
   try{
     const now=AC.currentTime;
     const g=AC.createGain();g.connect(dst||SG);
-    g.gain.setValueAtTime(vol,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);
+    if(atk>0){g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(vol,now+atk);}
+    else g.gain.setValueAtTime(vol,now);
+    g.gain.exponentialRampToValueAtTime(.0001,now+dur);
     const o=AC.createOscillator();o.type=type;
     o.frequency.setValueAtTime(f0,now);o.frequency.exponentialRampToValueAtTime(f1,now+dur);
     o.connect(g);o.start(now);o.stop(now+dur+.02);
   }catch(e){}
 }
-function noise(dur,vol=.15,dst=null){
+// flt — {type,freq,Q}. Белый шум звучит как помеха; отфильтрованный читается
+// как материал: полосовой — металл, низкочастотный — земля, высокий — воздух.
+function noise(dur,vol=.15,dst=null,flt=null){
   if(!AC||!audioOn)return;
   try{
     const now=AC.currentTime,sz=AC.sampleRate*dur|0;
@@ -545,49 +625,46 @@ function noise(dur,vol=.15,dst=null){
     const src=AC.createBufferSource();src.buffer=buf;
     const g=AC.createGain();g.connect(dst||SG);
     g.gain.setValueAtTime(vol,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);
-    src.connect(g);src.start(now);
+    if(flt){
+      const bq=AC.createBiquadFilter();bq.type=flt.type;bq.frequency.value=flt.freq;
+      if(flt.Q)bq.Q.value=flt.Q;
+      src.connect(bq);bq.connect(g);
+    }else src.connect(g);
+    src.start(now);
   }catch(e){}
 }
 
 // ── SFX library (procedural fallback). When the baked .mp3 samples are loaded
 // (window.AudioFiles), the wrapper SFX below plays those instead — cheaper and
 // glitch-free on phones. Names here MUST match the SFX file names.
-const SFX_PROC={
-  jump(){sweep(280,540,'square',.12,.18);noise(.04,.05);},
-  dblJump(){sweep(440,800,'square',.1,.16);setTimeout(()=>sweep(600,1000,'square',.08,.12),55);},
-  land(){/* quiet landing */},
-  shoot(){sweep(900,600,'square',.07,.2);tone(1200,'square',.03,.1);},
-  coin(){tone(988,'triangle',.05,.12);tone(880,'sine',.06,.2);setTimeout(()=>tone(1320,'sine',.07,.18),55);setTimeout(()=>tone(1760,'sine',.05,.1),110);},
-  powerup(){[440,550,660,880,1100,1320].forEach((f,i)=>setTimeout(()=>tone(f,'square',.12,.25),i*60));setTimeout(()=>{tone(1760,'sine',.3,.12);tone(2640,'sine',.25,.07);},380);},
-  stomp(){noise(.05,.28);sweep(220,70,'sine',.12,.26);tone(160,'square',.06,.16);},
-  hit(){sweep(300,120,'sawtooth',.09,.22);noise(.04,.2);},
-  enemyDie(){sweep(440,110,'sawtooth',.18,.24);noise(.06,.18);tone(80,'sine',.12,.16);},
-  playerHurt(){sweep(600,80,'sawtooth',.3,.28);noise(.12,.25);tone(100,'square',.4,.22);},
-  block(){tone(220,'square',.06,.22);noise(.03,.15);},
-  clear(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,'square',.18,.28),i*100));},
-  menu(){tone(660,'square',.05,.14);setTimeout(()=>tone(880,'square',.05,.12),50);},
-  back(){tone(440,'square',.05,.14);setTimeout(()=>tone(330,'square',.05,.12),50);},
-  pause(){sweep(440,880,'sine',.12,.18);},
-  resume(){sweep(880,440,'sine',.12,.18);},
-  timerTick(){/* removed — was causing annoying persistent beep */},
-  flagReach(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,'square',.14,.3),i*80));},
-  respawn(){[300,440,600].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.08,.18),i*75));},
-  timeLow(){/* removed */},
-  secret(){[440,495,523,587,659,698,784,880].forEach((f,i)=>setTimeout(()=>tone(f,'triangle',.1,.18),i*55));},
-  // Triumphant fanfare for unlocking an achievement (chord arpeggio + sparkle).
-  achievement(){
-    [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,'square',.22,.26),i*70));
-    setTimeout(()=>{tone(1319,'triangle',.45,.22);tone(1047,'triangle',.45,.16);},300);
-    setTimeout(()=>tone(1568,'sine',.3,.14),380);
-  },
-  droneBuzz(){tone(180,'sawtooth',.08,.08);},
-  walk(){noise(.03,.06);}, // light footstep
-  // Classic RPG-style dialogue "blip": short, high-pitched, fast-decay pulse
-  // played per revealed character during the cutscene typewriter effect (see
-  // _csShowLine). Slight per-call pitch jitter keeps a whole sentence from
-  // sounding like a single repeated beep.
-  voiceBlip(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);},
-};
+// Звуки описаны в assets/sfx-data.js — там же, откуда их берёт генератор mp3.
+// Раньше определения жили двумя копиями и разъезжались, а часть была пустыми
+// заглушками: land() не издавал вообще ничего.
+const SFX_PROC={};
+(function(){
+  const D=window.BBSfx;
+  if(!D)return;
+  const play=(ev)=>{
+    const go=()=>{
+      if(ev.k==='tone')tone(ev.f,ev.type,ev.dur,ev.vol,null,ev.detune||0);
+      else if(ev.k==='sweep')sweep(ev.f0,ev.f1,ev.type,ev.dur,ev.vol,null,ev.attack||0);
+      else if(ev.k==='noise')noise(ev.dur,ev.vol,null,ev.filter||null);
+    };
+    // Ноль играем сразу: на нулевой задержке setTimeout только добавил бы
+    // дрожание там, где точность важнее всего — в момент удара.
+    if(ev.start>0.001)setTimeout(go,ev.start*1000); else go();
+  };
+  for(const name of D.names){
+    const evs=D.SFX[name];
+    SFX_PROC[name]=function(){ for(let i=0;i<evs.length;i++)play(evs[i]); };
+  }
+})();
+// Реплика диалогов: высота меняется от вызова к вызову, поэтому запечь её в
+// файл нельзя — получился бы один и тот же повторяющийся писк.
+SFX_PROC.voiceBlip=function(){const f=1100+Math.random()*260;tone(f,'square',.032,.09);};
+// Убраны намеренно: постоянный писк таймера раздражал.
+SFX_PROC.timerTick=function(){};
+SFX_PROC.timeLow=function(){};
 // Public SFX: prefer the baked .mp3 sample, fall back to the procedural voice.
 // Built as a wrapper over SFX_PROC so every existing SFX.xxx() call site is
 // unchanged. Empty procedural entries (land/timerTick/timeLow) just no-op.
@@ -639,23 +716,8 @@ function _drumSnare(now,vol){
 }
 function hz(b,s){return b*Math.pow(2,s/12);}
 const SC={PENT:[0,2,4,7,9,12,14,16],MIN:[0,3,5,7,10,12,15,17],HARM:[0,2,3,7,8,12,14,15],CHR:[0,1,4,7,8,12,13,16],DORI:[0,2,3,7,9,12,14,15]};
-const MMUSIC={bpm:118,base:261.63,sc:SC.PENT,wave:'square',   mel:[0,4,7,9,7,4,2,0,9,7,4,2,0,2,4,7],bass:[0,0,7,0,5,0,7,0]};
-const GMUSIC=[
-  {bpm:140,base:261.63,sc:SC.PENT,wave:'square',   mel:[0,4,7,12,7,4,2,0,4,7,9,12,9,7,4,2],bass:[0,0,7,0,7,0,5,0]},
-  {bpm:128,base:220,   sc:SC.MIN, wave:'sawtooth', mel:[0,3,7,10,7,3,5,0,3,5,7,10,7,5,3,0],bass:[0,0,5,3,7,0,5,3]},
-  {bpm:162,base:293.66,sc:SC.HARM,wave:'sawtooth', mel:[0,2,7,8,7,2,3,0,2,7,8,12,8,7,2,0],bass:[0,0,7,0,8,0,7,0]},
-  {bpm:112,base:246.94,sc:SC.PENT,wave:'triangle', mel:[12,9,7,4,7,9,12,14,9,7,4,2,4,7,9,7],bass:[0,0,7,0,5,0,7,0]},
-  {bpm:133,base:220,   sc:SC.HARM,wave:'square',   mel:[0,3,7,8,7,3,2,0,7,8,12,8,7,8,3,0],bass:[0,0,8,0,7,0,3,0]},
-  {bpm:148,base:277.18,sc:SC.CHR, wave:'sawtooth', mel:[0,4,7,8,13,8,7,4,1,4,8,13,8,4,1,0],bass:[0,0,8,0,13,0,7,0]},
-  {bpm:116,base:196,   sc:SC.MIN, wave:'triangle', mel:[0,3,5,7,5,3,0,2,3,5,7,10,7,5,3,0],bass:[0,0,5,0,3,0,7,0]},
-  {bpm:155,base:233.08,sc:SC.CHR, wave:'sawtooth', mel:[0,1,4,7,8,7,4,1,4,7,8,13,8,7,1,0],bass:[0,0,7,8,4,0,7,0]},
-  {bpm:168,base:261.63,sc:SC.DORI,wave:'square',   mel:[0,2,4,9,7,12,9,7,4,7,9,12,14,12,9,7],bass:[0,0,9,0,7,0,4,0]},
-  {bpm:178,base:220,   sc:SC.HARM,wave:'sawtooth', mel:[0,2,7,8,12,8,7,2,3,7,8,12,15,12,8,7],bass:[0,0,8,7,3,7,8,12]},
-  // Theme 8 – Storm Peaks
-  {bpm:160,base:174.61,sc:SC.MIN, wave:'sawtooth', mel:[0,3,7,10,12,10,7,3,5,7,10,12,10,7,5,3],bass:[0,0,7,0,5,0,3,0]},
-  // Theme 9 – Final Fortress
-  {bpm:190,base:130.81,sc:SC.HARM,wave:'sawtooth', mel:[0,2,3,7,8,7,3,2,0,3,7,8,12,8,7,3],bass:[0,0,8,3,7,3,8,7]},
-];
+// Паттерны музыки переехали в assets/music-data.js: там же, откуда берёт ноты
+// генератор mp3, чтобы две копии больше не расходились.
 function stopMusic(){musicPlaying=false;if(mTimer){clearTimeout(mTimer);mTimer=null;}if(window.AudioFiles)window.AudioFiles.stopMusic();}
 // Remembers how to (re)start the current track, so when the .mp3 samples finish
 // decoding mid-session we can seamlessly switch from the procedural fallback to
@@ -673,49 +735,77 @@ function _tryMusicFile(name){
 // Called by AudioFiles once decoding completes: upgrade the currently-playing
 // procedural track to its .mp3 loop.
 window.onAudioFilesReady=function(){ if(musicPlaying&&_curMusicStart)_curMusicStart(); };
-function _mTick(pat,step){
-  if(!musicPlaying||!AC||!audioOn)return;
-  const{bpm,base,sc,wave,mel,bass}=pat,spb=60000/bpm/4,sec=spb/1000;
-  const now=AC.currentTime;
-  // Lead melody — doubled with a slightly detuned voice for a fuller, warmer tone.
-  const mi=mel[step%mel.length],ms=sc[mi%sc.length]+(mi>=sc.length?12:0);
-  const lf=hz(base,ms);
-  tone(lf,wave,sec*.36,.11,MTONE,7);
-  tone(lf,wave,sec*.36,.05,MTONE,-9);
-  // Bass — root plus a sub-octave for weight.
-  if(step%2===0){
-    const bi=bass[(step>>1)%bass.length],bs=sc[bi%sc.length];
-    tone(hz(base*.5,bs),wave,sec*.8,.15,MTONE);
-    tone(hz(base*.25,bs),'triangle',sec*.8,.07,MTONE);
+// Партитуру берём из assets/music-data.js — того же файла, из которого печётся
+// Audio/Music/*.mp3, поэтому запасной движок и готовые треки звучат одинаково.
+// Разбор формы стоит пары миллисекунд, но при паузе/возобновлении музыка
+// перезапускается часто, поэтому результат держим в кэше.
+const _songCache={};
+let _song=null,_songMap=null;
+function _getSong(name){
+  if(!_songCache[name]&&window.BBMusic){
+    const s=window.BBMusic.buildSong(name);
+    if(s){s.map=window.BBMusic.byStep(s);_songCache[name]=s;}
   }
-  // Counter-harmony stab on the off-beats.
-  if(step%8===4){const ci=mel[(step+4)%mel.length],cs=sc[ci%sc.length];tone(hz(base,cs+7),wave,sec*.22,.06,MTONE,step%16===4?-10:10);}
-  // ── Percussion groove: kick on every beat (4-on-the-floor), snare backbeat,
-  //    hi-hats on the off-beats with lighter ghost hats in between.
-  if(step%4===0) _drumKick(now,.42);
-  if(step%8===4) _drumSnare(now,.15);
-  if(step%2===1) _drumHat(now,.05);
-  else if(step%4!==0) _drumHat(now,.028);
-  mTimer=setTimeout(()=>_mTick(pat,step+1),spb);
+  return _songCache[name]||null;
 }
-function startMusic(pat){if(!AC||!audioOn)return;stopMusic();musicPlaying=true;_mTick(pat,0);}
-function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic(MMUSIC);}
-function startGameMusic(){const wi=Math.min(CT.id,9);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(wi);if(_tryMusicFile('world'+wi))return;startMusic(GMUSIC[wi]);}
-// Boss music — intense, fast, minor key
-const BMUSIC={bpm:195,base:110,sc:SC.MIN,wave:'sawtooth',
-  mel:[0,3,5,7,3,0,5,7, 0,3,5,10,7,5,3,0],
-  bass:[0,0,5,3,7,0,5,7]};
-function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic(BMUSIC);}
-// Star power music — fast, major, joyful
-const STAR_MUSIC={bpm:240,base:329.63,sc:SC.PENT,wave:'square',
-  mel:[0,2,4,7,9,12,9,7, 4,7,9,12,14,12,9,4],
-  bass:[0,4,7,4,0,4,7,4]};
-function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic(STAR_MUSIC);}
-// Victory music — triumphant, major, uplifting (plays during the ending cinematic)
-const VMUSIC={bpm:120,base:261.63,sc:SC.PENT,wave:'triangle',
-  mel:[0,2,4,7,9,7,4,2, 7,9,12,9,7,4,2,0, 4,7,9,12,14,12,9,7, 12,14,16,14,12,9,7,4],
-  bass:[0,0,4,4,7,7,4,0]};
-function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic(VMUSIC);}
+// Запасной движок тоже знает про стиль: иначе на телефоне до загрузки файлов
+// всегда играл бы чиптюн, даже когда выбран обычный звук.
+//
+// Фильтр общий на всю музыку, а не на ноту: отдельный узел на каждую ноту
+// съел бы весь смысл экономии, ради которой запасной движок и существует.
+let _mLP=null;
+function _modernMusic(){ return !(window.gameSettings&&window.gameSettings.musicStyle==='chip'); }
+function _mBus(){
+  if(!_modernMusic())return MTONE;
+  if(!_mLP&&AC){
+    try{ _mLP=AC.createBiquadFilter();_mLP.type='lowpass';_mLP.frequency.value=4600;_mLP.Q.value=.5;_mLP.connect(MTONE); }
+    catch(e){ _mLP=null; }
+  }
+  return _mLP||MTONE;
+}
+function _mTick(step){
+  if(!musicPlaying||!AC||!audioOn||!_song)return;
+  const sec=_song.spb,now=AC.currentTime;
+  const list=_songMap[step%_song.steps];
+  const modern=_modernMusic(),bus=_mBus();
+  if(list)for(let i=0;i<list.length;i++){
+    const e=list[i];
+    // Нота звучит почти всю свою длительность: короткие огрызки и превращали
+    // мелодию в долбёжку.
+    const d=sec*(e.len||1)*.9;
+    // Тембр берём из события: он свой у каждого слоя и у каждого мира.
+    // В обычном стиле пилу и квадрат смягчаем до треугольника: наивные волны
+    // Web Audio и дают ту самую восьмибитную жёсткость.
+    const w=modern?(e.w==='sawtooth'||e.w==='square'?'triangle':e.w||'sine'):(e.w||'square');
+    switch(e.k){
+      // Второй расстроенный голос добавляет толщины — в чиптюне он не нужен.
+      case 'lead': tone(e.f,w,d,e.vol,bus,7); if(modern)tone(e.f,w,d,e.vol*.5,bus,-11); break;
+      case 'lead2':tone(e.f,w,d,e.vol,bus,-9); break;
+      case 'bass': tone(e.f,w,d,e.vol,bus); break;
+      case 'sub':  tone(e.f,modern?'sine':w,d,e.vol,bus); break;
+      case 'arp':  tone(e.f,w,sec*(e.len||1)*.7,e.vol,bus,4); break;
+      case 'kick': _drumKick(now,e.vol); break;
+      case 'snare':_drumSnare(now,e.vol); break;
+      case 'hat':  _drumHat(now,e.vol); break;
+    }
+  }
+  mTimer=setTimeout(()=>_mTick(step+1),sec*1000);
+}
+function startMusic(name){
+  if(!AC||!audioOn)return;
+  const s=_getSong(name);
+  if(!s)return;
+  stopMusic();
+  _song=s;_songMap=s.map;musicPlaying=true;_mTick(0);
+}
+function startMenuMusic(){_curMusicStart=startMenuMusic;if(_tryMusicFile('menu'))return;startMusic('menu');}
+// У Призматической аномалии (мир 10) теперь своя тема — раньше секретный мир
+// доигрывал музыку Финальной крепости.
+function startGameMusic(){const wi=Math.min(CT.id,10);_curMusicStart=startGameMusic;if(typeof AchTrack!=='undefined')AchTrack.music(Math.min(wi,9));if(_tryMusicFile('world'+wi))return;startMusic('world'+wi);}
+function startBossMusic(){_curMusicStart=startBossMusic;if(_tryMusicFile('boss'))return;startMusic('boss');}
+function startMapMusic(){_curMusicStart=startMapMusic;if(_tryMusicFile('worldmap'))return;startMusic('worldmap');}
+function startStarMusic(){_curMusicStart=startStarMusic;if(_tryMusicFile('star'))return;startMusic('star');}
+function startVictoryMusic(){_curMusicStart=startVictoryMusic;if(_tryMusicFile('victory'))return;startMusic('victory');}
 
 function showBossIntro(b){
   const ov=document.getElementById('bossIntroOv');
@@ -768,12 +858,15 @@ const _CHEAT='UNLOCK';
 // Extra cheats
 let godMode=false;
 let infiniteLives=false;
+let infiniteJump=false;
 const _CHEATS={
   'HARDUNLOCK':()=>{advProgHard.max=100;advProgHard.done=[...Array(100)].map((_,i)=>i+1);saveAdvH();if(navScr==='map'){if(window.WorldMap&&window.WorldMap.refresh){window.WorldMap.refresh(true);}else{buildMapH();}}if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return'💀 ALL HARDCORE LEVELS UNLOCKED!'},
   'UNLOCK':    ()=>{advProg.max=100;advProg.done=[...Array(100)].map((_,i)=>i+1);saveAdv();if(navScr==='map'){if(window.WorldMap&&window.WorldMap.refresh){window.WorldMap.refresh(false);}else{buildMap();}}if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return'🔓 ALL NORMAL LEVELS UNLOCKED!'},
   'GODMODE':   ()=>{godMode=!godMode;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return godMode?'😇 GOD MODE ON — you are immortal':'💀 GOD MODE OFF'},
   'GOD':       ()=>{godMode=!godMode;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return godMode?'😇 GOD MODE ON — you are immortal':'💀 GOD MODE OFF'},
   'LIVES':     ()=>{infiniteLives=!infiniteLives;lives=infiniteLives?99:3;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return infiniteLives?'♾ INFINITE LIVES ON (×99)':'❤ INFINITE LIVES OFF'},
+  'JUMP':      ()=>{infiniteJump=!infiniteJump;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return infiniteJump?'🕊 INFINITE JUMPS ON — прыгай сколько хочешь':'🥾 INFINITE JUMPS OFF'},
+  'FLY':       ()=>{infiniteJump=!infiniteJump;if(window.Achievements)window.Achievements.unlock('achievement_cheat_found');return infiniteJump?'🕊 INFINITE JUMPS ON — прыгай сколько хочешь':'🥾 INFINITE JUMPS OFF'},
   'BOSSDEBUG': ()=>{window._bbDebugBoss=!window._bbDebugBoss;return window._bbDebugBoss?'🐞 Boss debug logging ON (check console)':'🐞 Boss debug logging OFF'},
   'RAINBOW':   ()=>{
     for(let w=0;w<10;w++) markRainbowCollected(w);
@@ -821,6 +914,9 @@ function _audioUnlock(){
 document.addEventListener('pointerdown',_audioUnlock,{once:true});
 
 function doEsc(){
+  // Экран итогов обрабатывает Escape сам (уйти на карту / в меню). Без этой
+  // проверки на одно нажатие приходилось бы два звука и две реакции.
+  if(window.Results&&window.Results.isOpen&&window.Results.isOpen())return;
   SFX.back();
   if(navScr==='playType')    {navScr='main';showMain();}
   else if(navScr==='netType'){navScr='playType';showPlayType();}
@@ -987,6 +1083,10 @@ let levelMaxScore=1;    // max achievable score this level (>=1, avoids /0)
 let levelCoinMax=0;     // coin points available this level
 let levelEnemyMax=0;    // enemy/boss points available this level
 function curLevelScore(){return Math.max(0,score-levelStartScore);}
+// Монеты этого уровня — та же схема, что и со счётом: coinsTotal копится за
+// весь забег, поэтому уровень считаем как прирост от точки старта.
+let levelStartCoins=0;
+function curLevelCoins(){return Math.max(0,coinsTotal-levelStartCoins);}
 let _coinsHpStep=0;     // last HP threshold reached (for 100/200/300… +1 HP triggers)
 let advProg={max:1,done:[]};
 let hardMode=false;                          // Hardcore difficulty active
@@ -997,8 +1097,10 @@ var _csShownWorlds={};                       // Tracks which world-intro cutscen
 // doesn't carry one profile's "already seen" cutscenes over to another, and a
 // fresh slot always sees every cutscene again.
 function loadCsFired(){
-  try{const s=localStorage.getItem('bbCsFired');_csFired=s?JSON.parse(s):{};}catch(e){_csFired={};}
-  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=s2?JSON.parse(s2):{};}catch(e){_csShownWorlds={};}
+  // _plainMap: значение вида "null" или массива тоже разбирается без ошибки,
+  // а дальше по коду с ним работают как с объектом — см. _normProg.
+  try{const s=localStorage.getItem('bbCsFired');_csFired=_plainMap(s?JSON.parse(s):{});}catch(e){_csFired={};}
+  try{const s2=localStorage.getItem('bbCsWorlds');_csShownWorlds=_plainMap(s2?JSON.parse(s2):{});}catch(e){_csShownWorlds={};}
 }
 function saveCsFired(){try{localStorage.setItem('bbCsFired',JSON.stringify(_csFired));}catch(e){}}
 function saveCsShownWorlds(){try{localStorage.setItem('bbCsWorlds',JSON.stringify(_csShownWorlds));}catch(e){}}
@@ -1062,6 +1164,102 @@ let fireBalls=[],iceBalls=[];
 let checkpoints=[];        // mid-level checkpoint flags
 let _cpSafeZone=null;      // {x,y,w,h} — area around the checkpoint kept hazard-free
 let cpSave=null;           // {lvl,color} — checkpoint to resume from on adventure retry
+
+/* ── ЖИЗНИ ────────────────────────────────────────────────────────────────────
+   Раньше жизни ни на что не влияли: кончились — уровень просто начинался
+   заново с тремя новыми. Теперь у них есть цена, и она разная в двух режимах.
+
+   Обычный режим. Жизнь тратится на возвращение к чекпоинту. Кончились —
+   уровень с самого начала: чекпоинт снимается, и участок до него приходится
+   пройти заново. Записанные достижения уровня (лучшие звёзды и кристаллы) при
+   этом не понижаются: отнимать уже заслуженное — наказание, которого никто не
+   ждёт. Сбрасывается только текущая попытка.
+
+   Хардкор. Жизни общие на весь мир, а не на уровень: десять уровней проходятся
+   на одном запасе. Кончились — мир начинается с первого уровня, и прогресс
+   ЭТОГО мира откатывается.
+
+   Что именно откатывается в хардкоре: у хардкора отдельное хранилище
+   (advProgHard, ключ bbAdvH), поэтому обычное прохождение не затрагивается
+   вообще. Внутри хардкорного прогресса чистятся только десять уровней текущего
+   мира — отметки о прохождении, звёзды и кристаллы, — а `max` возвращается к
+   первому уровню мира. Другие миры остаются как были. */
+const HARD_WORLD_LIVES=5;   // запас на весь мир в хардкоре
+let hardWorldLives=HARD_WORLD_LIVES;
+let hardWorldIdx=-1;        // для какого мира выдан запас
+
+const worldOf=(lvl)=>Math.floor((Math.max(1,lvl)-1)/10);
+const worldFirstLevel=(w)=>w*10+1;
+
+/** Начало мира в хардкоре: выдаём общий запас жизней один раз на мир. */
+function _hardEnterWorld(lvl){
+  const w=worldOf(lvl);
+  if(w!==hardWorldIdx){hardWorldIdx=w;hardWorldLives=HARD_WORLD_LIVES;}
+}
+
+/**
+ * Жизни кончились. Куда возвращать — зависит от режима.
+ * Зовётся из кнопки «ещё раз» на экране поражения.
+ */
+function _outOfLives(){
+  lives2=3;
+  if(hardMode&&advMode){
+    const first=_hardWipeWorld(advLevel);
+    lives=hardWorldLives;
+    cpSave=null;                    // мир начинается заново, чекпоинт не нужен
+    startAdv(first,false);
+    return;
+  }
+  // Обычный режим: тот же уровень, но с самого начала.
+  lives=3;
+  // Упрощённый режим оставляет чекпоинт. Смысл жизней при этом не пропадает —
+  // они всё так же кончаются и всё так же стоят очков, — но длинный уровень не
+  // приходится переигрывать с нуля из-за одной трудной секции в конце.
+  // Хардкор выше по функции разбирается сам и сюда не доходит.
+  if(!(window.gameSettings&&window.gameSettings.gameMode==='easy'))cpSave=null;
+  startAdv(advLevel,false);
+}
+
+/**
+ * Хардкор: запас на мир кончился. Откатываем прогресс этого мира и
+ * возвращаемся к его первому уровню.
+ */
+function _hardWipeWorld(lvl){
+  const w=worldOf(lvl),first=worldFirstLevel(w),last=first+9;
+  const prog=advProgHard;
+  prog.done=(prog.done||[]).filter(n=>n<first||n>last);
+  if(prog.stars)for(let n=first;n<=last;n++)delete prog.stars[n];
+  if(prog.shards)for(let n=first;n<=last;n++)delete prog.shards[n];
+  // max не опускаем ниже начала мира — иначе игрок потеряет и прошлые миры.
+  prog.max=Math.max(1,Math.min(prog.max,first));
+  saveAdvH();
+  if(window.WorldMap&&window.WorldMap.refresh)window.WorldMap.refresh(true);
+  hardWorldIdx=w;hardWorldLives=HARD_WORLD_LIVES;
+  return first;
+}
+
+/**
+ * Возвращает мир к состоянию на момент взятия чекпоинта.
+ *
+ * Без этого смерть после чекпоинта отматывала уровень целиком: враги, которых
+ * игрок уже прошёл, оживали, а собранные монеты появлялись снова — и участок до
+ * чекпоинта приходилось проходить заново, хотя возрождение происходило после
+ * него. Кристаллы так восстанавливались и раньше, остальное — нет.
+ *
+ * Уровень строится детерминированно по номеру, поэтому при пересборке порядок
+ * элементов тот же и снимка по позициям достаточно. Длины сверяем на всякий
+ * случай: враги умеют делиться на лету, и в живом забеге массив длиннее, чем
+ * при чистой генерации.
+ */
+function _restoreCpWorld(){
+  if(!cpSave)return;
+  if(cpSave.coins&&typeof coins!=='undefined')
+    for(let i=0;i<coins.length&&i<cpSave.coins.length;i++) if(cpSave.coins[i])coins[i].got=true;
+  if(cpSave.enemies&&typeof enemies!=='undefined')
+    for(let i=0;i<enemies.length&&i<cpSave.enemies.length;i++) if(cpSave.enemies[i])enemies[i].alive=false;
+  if(cpSave.powerups&&typeof powerups!=='undefined')
+    for(let i=0;i<powerups.length&&i<cpSave.powerups.length;i++) if(cpSave.powerups[i])powerups[i].got=true;
+}
 let player2=null;          // P2 object (null = not in use)
 let lives2=3;              // P2 lives (separate from P1)
 let twoPlayer=false;       // 2-player mode active?
@@ -1082,7 +1280,7 @@ const RAINBOW_LEVEL_IN_WORLD=[4,7,2,8,5,1,9,3,6,2];
 let rainbowItem=null;            // the current level's rainbow shard entity, or null
 let rainbowCollected={};         // {worldIndex: true} — persisted, see loadRainbow()/markRainbowCollected()
 function loadRainbow(){
-  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=s?JSON.parse(s):{};}catch(e){rainbowCollected={};}
+  try{const s=localStorage.getItem('bbRainbow');rainbowCollected=_plainMap(s?JSON.parse(s):{});}catch(e){rainbowCollected={};}
 }
 function saveRainbow(){try{localStorage.setItem('bbRainbow',JSON.stringify(rainbowCollected));}catch(e){}}
 function rainbowCount(){return Object.keys(rainbowCollected).filter(k=>rainbowCollected[k]).length;}
@@ -1109,7 +1307,7 @@ function _checkCoinHp(cx,cy,p){
       burst(cx+7,cy+7,'#4f8',22,5,6);
       floatTxt(cx,cy-18,T('repaired'),'#4f8');
     } else {
-      lives++;
+      lives++;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
       burst(cx+7,cy+7,'#ff2266',22,5,6);
       floatTxt(cx,cy-18,T('hpBonus'),'#ff2266');
     }
@@ -1170,11 +1368,23 @@ function activePlayersAll(){
   return _playerAllCache;
 }
 // Returns the player closest to world-x (for AI targeting)
+// Заглушка на случай, когда живых игроков нет вовсе. Возвращать отсюда сам
+// `player` было бессмысленно: список пуст ровно тогда, когда player пустой —
+// activePlayers() кладёт его только через `if(player)`. То есть «защита»
+// всегда отдавала undefined, и любой, кто читал .x у результата, ронял всю
+// отрисовку врагов (d_cy_sniper, d_jg_pitcher, d_sp_turret целятся так).
+// Координаты подставляем по точке запроса, чтобы враг смотрел прямо, а не
+// разворачивался рывком в нулевую точку мира.
+const _noPlayer={x:0,y:0,w:0,h:0,vx:0,vy:0,respawning:true};
 function nearestPlayer(wx){
   // Include network ghosts so host-side enemy/boss AI targets ALL players, not
   // just the local one (otherwise enemies ignore guests entirely in co-op).
   const ps=(typeof activePlayersAll==='function')?activePlayersAll():activePlayers();
-  if(!ps.length)return player;
+  if(!ps.length){
+    if(player)return player;
+    _noPlayer.x=wx||0;_noPlayer.y=H*0.5;
+    return _noPlayer;
+  }
   return ps.reduce((best,p)=>Math.abs(p.x+p.w/2-wx)<Math.abs(best.x+best.w/2-wx)?p:best,ps[0]);
 }
 let flagX=0,flagDone=false;
@@ -1186,35 +1396,65 @@ let exitBonus=0;        // height bonus text
 let exitBonusTier='';   // "PERFECT" / "GREAT" / "GOOD" / "BASE"
 let exitStars=0;        // stars (1–3) earned on the level just completed
 let exitStarsNew=false; // did this run beat the previous best star rating?
+let exitTimeBonus=0;    // points awarded for the time left on the clock
+let exitBonusCol='';    // colour of the flag tier (shared with the results screen)
 let exitLevelScore=0;   // per-level score earned on the level just completed
 let spawnX=60,spawnY=H-100;
 let boss=null; // active boss object
 let bossArenaX=0;      // x coordinate where boss arena begins
 let bossArenaTriggered=false; // has player entered the arena?
 
+// ── Загрузка сохранений: форма важна не меньше синтаксиса ───────────────────
+// JSON.parse спасает только от синтаксического мусора. Но "null", число или
+// объект без поля done — тоже валидный JSON, и такое значение проходило мимо
+// catch: игра падала уже в меню («Cannot read properties of undefined»), то
+// есть на чёрный экран. Прийти такое может из облачного сохранения, из
+// недописанного файла и из ручной правки. Теперь у прогресса проверяется ещё
+// и форма, а испорченное значение так же откладывается в <ключ>_corrupt.
+function _backupCorrupt(key){
+  try{const raw=localStorage.getItem(key);if(raw)localStorage.setItem(key+'_corrupt',raw);}catch(e){}
+}
+// Простая карта «ключ → значение» (катсцены, радужные осколки, звёзды, очки).
+function _plainMap(v){return (v&&typeof v==='object'&&!Array.isArray(v))?v:{};}
+// Приводит прогресс к рабочему виду. `key` нужен только для отметки о порче.
+function _normProg(o,key){
+  const ok=!!o&&typeof o==='object'&&!Array.isArray(o)&&Array.isArray(o.done);
+  if(!ok){
+    if(o!==null&&o!==undefined){
+      console.warn(key+' save has an unexpected shape, falling back to a fresh profile. Raw value backed up under '+key+'_corrupt for support/recovery.');
+      _backupCorrupt(key);
+    }
+    o={max:1,done:[]};
+  }
+  const max=Number(o.max);
+  o.max=(isFinite(max)&&max>=1)?Math.floor(max):1;
+  o.stars=_plainMap(o.stars);o.scores=_plainMap(o.scores);o.shards=_plainMap(o.shards);
+  o.coins=_plainMap(o.coins);
+  return o;
+}
 function saveAdv(){try{localStorage.setItem('bbAdv3',JSON.stringify(advProg));}catch(e){}}
 function loadAdv(){
+  let parsed=null;
   try{
     const s=localStorage.getItem('bbAdv3');
-    advProg=s?JSON.parse(s):{max:1,done:[]};
+    parsed=s?JSON.parse(s):{max:1,done:[]};
   }catch(e){
     console.warn('bbAdv3 save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdv3_corrupt for support/recovery.',e);
-    try{ const raw=localStorage.getItem('bbAdv3'); if(raw) localStorage.setItem('bbAdv3_corrupt',raw); }catch(e2){}
-    advProg={max:1,done:[]};
+    _backupCorrupt('bbAdv3');
   }
-  if(!advProg.stars)advProg.stars={};if(!advProg.scores)advProg.scores={};if(!advProg.shards)advProg.shards={};
+  advProg=_normProg(parsed,'bbAdv3');
 }
 function saveAdvH(){try{localStorage.setItem('bbAdvH',JSON.stringify(advProgHard));}catch(e){}}
 function loadAdvH(){
+  let parsed=null;
   try{
     const s=localStorage.getItem('bbAdvH');
-    advProgHard=s?JSON.parse(s):{max:1,done:[]};
+    parsed=s?JSON.parse(s):{max:1,done:[]};
   }catch(e){
     console.warn('bbAdvH save is corrupted, falling back to a fresh profile. Raw value backed up under bbAdvH_corrupt for support/recovery.',e);
-    try{ const raw=localStorage.getItem('bbAdvH'); if(raw) localStorage.setItem('bbAdvH_corrupt',raw); }catch(e2){}
-    advProgHard={max:1,done:[]};
+    _backupCorrupt('bbAdvH');
   }
-  if(!advProgHard.stars)advProgHard.stars={};if(!advProgHard.scores)advProgHard.scores={};if(!advProgHard.shards)advProgHard.shards={};
+  advProgHard=_normProg(parsed,'bbAdvH');
 }
 
 // ── STAR RATINGS (1–3 per level) ──
@@ -1247,6 +1487,23 @@ function recordLevelShards(levelNum,got,hard){
   return false;
 }
 window.levelShards=levelShards;window.totalShards=totalShards;
+
+// ── МОНЕТЫ ПО УРОВНЯМ ──────────────────────────────────────────────────────
+// prog.coins = { "<levelNum>": лучший сбор }. Как и со звёздами, хранится
+// лучший результат: перепрохождение может улучшить число, но не обнулить его.
+// Общий счётчик монет за всё время живёт отдельно, в статистике достижений, —
+// он растёт всегда, даже в бесконечном режиме, а этот привязан к карте.
+function levelCoins(levelNum,hard){const prog=hard?advProgHard:advProg;return (prog.coins&&prog.coins[levelNum])||0;}
+function totalLevelCoins(hard){const prog=hard?advProgHard:advProg;if(!prog.coins)return 0;let t=0;for(const k in prog.coins)t+=prog.coins[k]||0;return t;}
+function recordLevelCoins(levelNum,got,hard){
+  got=Math.max(0,got|0);
+  const prog=hard?advProgHard:advProg;
+  if(!prog.coins)prog.coins={};
+  const prev=prog.coins[levelNum]||0;
+  if(got>prev){prog.coins[levelNum]=got;if(hard)saveAdvH();else saveAdv();return true;}
+  return false;
+}
+window.levelCoins=levelCoins;window.totalLevelCoins=totalLevelCoins;
 
 // ── PER-LEVEL BEST SCORES ──
 // Stored as prog.scores = { "<levelNum>": bestScore }. Only the best run is kept.
@@ -1282,15 +1539,29 @@ window.bbPlaytime=()=>playSeconds;
 function loadRecords(){
   try{
     const s=localStorage.getItem('bbRecords');
-    bestRecords=s?Object.assign({infinite:0,adventure:0},JSON.parse(s)):{infinite:0,adventure:0};
+    bestRecords=Object.assign({infinite:0,adventure:0},_plainMap(s?JSON.parse(s):{}));
   }catch(e){
     console.warn('bbRecords save is corrupted, falling back to fresh records. Raw value backed up under bbRecords_corrupt for support/recovery.',e);
-    try{ const raw=localStorage.getItem('bbRecords'); if(raw) localStorage.setItem('bbRecords_corrupt',raw); }catch(e2){}
+    _backupCorrupt('bbRecords');
     bestRecords={infinite:0,adventure:0};
   }
+  // Рекорд сравнивается числом; строка из чужого файла делала бы сравнение
+  // лексикографическим («9» > «100»), и настоящий рекорд не записывался бы.
+  ['infinite','adventure'].forEach(k=>{const n=Number(bestRecords[k]);bestRecords[k]=isFinite(n)&&n>0?Math.floor(n):0;});
 }
 function saveRecords(){try{localStorage.setItem('bbRecords',JSON.stringify(bestRecords));}catch(e){}}
-function recordScore(mode,sc){sc=sc|0;if(mode!=='infinite'&&mode!=='adventure')return;if(sc>(bestRecords[mode]||0)){bestRecords[mode]=sc;saveRecords();}}
+function recordScore(mode,sc){
+  sc=sc|0;
+  if(mode!=='infinite'&&mode!=='adventure')return;
+  if(sc>(bestRecords[mode]||0)){bestRecords[mode]=sc;saveRecords();}
+  // Таблица рекордов: хардкор идёт отдельным зачётом, иначе он смешался бы с
+  // обычной кампанией, где те же очки даются заметно легче. Отправка молча
+  // ничего не делает без входа в аккаунт и без применённой миграции.
+  if(window.Leaderboard&&window.Leaderboard.submit){
+    const lbMode=(mode==='adventure')?(hardMode?'hardcore':'adventure'):'endless';
+    try{window.Leaderboard.submit(lbMode,sc);}catch(e){}
+  }
+}
 loadAdv();loadAdvH();loadRecords();loadPlaytime();loadCsFired();loadRainbow();
 
 // ════════════════════════════════════════════════
@@ -1326,6 +1597,15 @@ function _initParticlePool(){
 }
 // Grab a free slot, fill it in place, mark alive. Returns null if the pool is
 // completely full (extremely rare with a 400-slot ceiling — caller just skips).
+// ── ПРИЗМА-АНОМАЛИЯ: ВСЁ ПЕРЕЛИВАЕТСЯ ─────────────────────────────────────
+// Одиннадцатый мир — единственный, где цвет не фиксирован. Платформы и
+// кристаллы переливались и раньше; здесь тот же принцип распространён на
+// частицы, интерфейс и фон, чтобы мир был радужным целиком, а не наполовину.
+function prismWorld(){ return CT && CT.id===10; }
+// Оттенок ползёт со временем и разъезжается по индексу: соседние частицы
+// получают разные цвета, а не один общий на кадр.
+function prismHue(i){ return Math.round((tick*2 + (i||0)*47) % 360); }
+function prismCol(i,l){ return 'hsl('+prismHue(i)+',100%,'+(l||64)+'%)'; }
 function spawnParticle(o){
   if(!_particleFree.length) return null;
   const idx=_particleFree.pop();
@@ -1345,7 +1625,7 @@ function burst(x,y,col,n=10,spd=3.5,sz=4){
   const add = Math.min(scaled, cap - _particleAliveCount);
   for(let i=0;i<add;i++){
     const a=Math.PI*2*i/add+Math.random()*.9,s=spd*(.45+Math.random());
-    spawnParticle({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:1,decay:.038+Math.random()*.03,sz,col,txt:null});
+    spawnParticle({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:1,decay:.038+Math.random()*.03,sz,col:prismWorld()?prismCol(i*7):col,txt:null});
   }
 }
 function floatTxt(x,y,t,col){
@@ -1382,6 +1662,7 @@ function _playerLanded(p,impact){
   const pow=Math.min(1,(impact-3)/12);
   p.landT=Math.max(p.landT||0,6+pow*6);
   p.landPow=pow;
+  if(window.Juice)window.Juice.dust(p.x+p.w/2,p.y+p.h,0,3+Math.round(pow*7));
   if(pow>0.35){
     SFX.land&&SFX.land();
     camShake=Math.max(camShake,pow*3.5);
@@ -1413,8 +1694,36 @@ function resolveP(p){
   // but never push past what's already on screen.
   if(boss&&window.gameSettings&&window.gameSettings.bossAutoScrollCamera)p.x=Math.min(p.x,camX+W-p.w);
   for(const b of blocks){
+    // Скрытый блок ещё не твёрдый: сквозь него проходят, но удар снизу
+    // его проявляет. После проявления он становится обычным блоком.
+    if(b.hidden&&!b.used){
+      if(aabb(p,b)&&p.vy<0&&p.py>=b.y+b.h-6){revealBlock(b,p);}
+      continue;
+    }
     if(!b.solid)continue;
-    if(aabb(p,b)){if(p.vx>=0)p.x=b.x-p.w;else p.x=b.x+b.w;p.vx=0;}
+    if(aabb(p,b)){
+      // Сторону выбираем по тому, откуда пришли (p.px — позиция до шага), а не по
+      // знаку скорости. Если игрок оказался ВНУТРИ блока — а не подошёл к нему
+      // сбоку, — боковой выброс отшвыривал его на ширину блока, и это читалось
+      // как телепорт в другое место. Такой случай выдавливаем по вертикали, по
+      // кратчайшей стороне: сверху блок опустился на голову, снизу — поднялся
+      // под ноги. p.py двигаем вместе с p.y: выдавливание не движение игрока, и
+      // проверка ниже должна считать новое место точкой отсчёта.
+      if(p.px+p.w<=b.x){p.x=b.x-p.w;p.vx=0;}
+      else if(p.px>=b.x+b.w){p.x=b.x+b.w;p.vx=0;}
+      else{
+        const dDown=b.y+b.h-p.y, dUp=p.y+p.h-b.y;
+        // Только неглубокое утопление — это «блок оказался на мне». Если игрок
+        // сидит в блоке по пояс, значит его зажало сбоку (например, движущейся
+        // платформой у стены), и правильный выход прежний — вбок.
+        if(Math.min(dDown,dUp)<=14){
+          if(dDown<=dUp){p.y=b.y+b.h;if(p.vy<0)p.vy=0;}
+          else{p.y=b.y-p.h;p.vy=0;p.onGnd=true;p.jl=2;}
+          p.py=p.y;
+        }
+        else{if(p.vx>=0)p.x=b.x-p.w;else p.x=b.x+b.w;p.vx=0;}
+      }
+    }
   }
   p.y+=p.vy;
   for(const b of blocks){
@@ -1434,7 +1743,7 @@ function resolveP(p){
       if(aabb(p,pl)&&p.py+p.h<=pl.y+3){
         p.y=pl.y-p.h;p.vy=0;p.onGnd=true;p.jl=2;
         if(pl.mv)p.x+=pl.dvx||0;
-        if(pl.crm&&!pl.crm_on){pl.crm_on=true;pl.ct=72;}
+        if(pl.crm&&!pl.crm_on){pl.crm_on=true;pl.ct=72;pl.crmSeq=(pl.crmSeq||0)+1;}
       }
     }
   }
@@ -1454,11 +1763,114 @@ function eLand(e){
   for(const pl of platforms){if(pl.gone)continue;if(aabb(e,pl)&&e.py+e.h<=pl.y+3){e.y=pl.y-e.h;e.vy=0;e.onGnd=true;return;}}
   for(const b of blocks){if(!b.solid)continue;if(aabb(e,b)&&e.py+e.h<=b.y+3){e.y=b.y-e.h;e.vy=0;e.onGnd=true;return;}}
 }
+/**
+ * Проявление скрытого блока: он перестаёт быть проходимым и выдаёт награду.
+ *
+ * reveal — от нуля до единицы, ведёт всю анимацию: блок вырастает из точки,
+ * подпрыгивает и вспыхивает. Мгновенное появление читалось бы как подмена
+ * геометрии под ногами.
+ */
+// ── БОНУС-КОМНАТА ────────────────────────────────────────────────────────────
+// Спрятанный вход уводит в короткую комнату с монетами. Отдельной сцены для
+// неё нет намеренно: комната достраивается к тому же миру за его правой
+// границей, и вход — это телепорт. Так работают все системы уровня без
+// изменений: камера, частицы, сохранение, сеть.
+const BONUS_TIME=900;   // 15 секунд
+let bonusT=0,bonusBack=null,bonusFade=0,roomKind=0;
+// Переход в комнату и обратно идёт через полное затемнение: место меняется
+// ровно в тот кадр, когда экран чёрный, поэтому это читается как отдельный
+// уровень, а не как рывок игрока по карте. bonusDir: +1 гаснем, -1 проявляемся.
+let bonusDir=0,bonusPend=null,bonusTitle=0;
+const BFADE=0.055;                       // ~0.3 с в каждую сторону
+/** Запустить затемнение; действие выполнится на чёрном экране. */
+function bonusWipe(action){ bonusDir=1; bonusPend=action; }
+/** Идёт ли переход — на это время управление у игрока забираем. */
+function bonusLocked(){ return bonusDir!==0; }
+/** Вход в комнату: помним, откуда пришли, и уводим за границу мира. */
+function enterBonusRoom(door,p){
+  if(bonusT>0||bonusPend||!door.roomX)return;
+  door.used=true;
+  bonusBack={x:p.x,y:p.y,camX:camX};
+  p.vx=0;
+  SFX.warp&&SFX.warp();
+  bonusWipe(function(){
+    bonusT=BONUS_TIME;bonusTitle=1;
+    p.x=door.roomX+40;p.y=door.roomY-p.h;p.vx=0;p.vy=0;
+    camX=Math.max(0,p.x-W*0.4);
+  });
+}
+/** Возврат ровно туда, откуда вошёл. */
+function leaveBonusRoom(){
+  if(!bonusBack||bonusPend)return;
+  const back=bonusBack;
+  SFX.warp&&SFX.warp();
+  bonusWipe(function(){
+    const p=player;
+    if(p){p.x=back.x;p.y=back.y;p.vx=0;p.vy=0;}
+    camX=back.camX;
+    bonusBack=null;bonusT=0;
+  });
+}
+function inBonusRoom(){ return bonusT>0; }
+function updateBonusRoom(){
+  if(bonusTitle>0)bonusTitle=Math.max(0,bonusTitle-0.011);
+  if(bonusDir>0){
+    // Гаснем. Игрока придерживаем, чтобы он не уехал вслепую.
+    if(player)player.vx=0;
+    bonusFade=Math.min(1,bonusFade+BFADE);
+    if(bonusFade>=1){
+      const act=bonusPend;bonusPend=null;bonusDir=-1;
+      if(act)act();
+    }
+    return;
+  }
+  if(bonusDir<0){
+    if(player)player.vx=0;
+    bonusFade=Math.max(0,bonusFade-BFADE);
+    if(bonusFade<=0)bonusDir=0;
+    return;                              // таймер пока не идёт: экран ещё тёмный
+  }
+  if(bonusT<=0)return;
+  bonusT--;
+  if(bonusT<=0)leaveBonusRoom();
+}
+// `p` не обязателен: по сети блок проявляется и у тех, кто его не бил, — им
+// толкать некого (см. netWorldApply).
+function revealBlock(b,p){
+  b.hidden=false;b.solid=true;b.reveal=0.001;b.type='b';
+  b.bounce=14;b.origY=b.y;b._rev=1;
+  if(p){p.vy=1;p.y=b.y+b.h;}
+  SFX.secret&&SFX.secret();
+  camShake=Math.max(camShake,6);
+  burst(b.x+b.w/2,b.y+b.h/2,'#ffd24a',14,3.2,4);
+  floatTxt(b.x+b.w/2,b.y-18,T('secretFound')||'!','#ffd24a');
+  // Внутри — монеты: награда за любопытство, а не за бой.
+  // В сетевой игре их число и разброс выводим из зерна комнаты и позиции блока:
+  // монеты дописываются в общий массив, и у всех должно появиться одинаковое их
+  // количество, иначе списки монет разъедутся и общий мир рассыплется.
+  const _rr=(window.netActive&&window._netSeed)
+    ? mkRNG((window._netSeed>>>0)^(Math.round(b.x)*83492791)^(Math.round(b.y)*2654435761))
+    : Math.random;
+  const bi=blocks.indexOf(b);
+  const cnt=3+Math.floor(_rr()*4);
+  for(let i=0;i<cnt;i++){
+    coins.push({x:b.x+2+i*14,y:b.y-40-((i%2)*16),w:14,h:14,a:_rr()*Math.PI*2,got:false,bonus:true,
+                cid:100000+bi*16+i});
+  }
+  if(window.Juice)window.Juice.hitStop(50);
+}
 function hitBlock(b){
   b.used=true;b.bounce=12;b.origY=b.y;SFX.block();
   // Question blocks regenerate after a random 10–30s so they can be reused.
   // (60 fps → 600–1800 frames.) regenT counts down in updateBlocks().
-  b.regenT=600+Math.floor(Math.random()*1200);
+  // Срок восстановления в сетевой игре тоже выводим из зерна комнаты: иначе
+  // блок возвращался бы у разных игроков в разное время и общий мир расходился
+  // бы на десяток секунд — снимок сообщает только «блок тронут», а обратно он
+  // ничего не откатывает (см. netWorldSnap).
+  const _regenRng=(window.netActive&&window._netSeed)
+    ? mkRNG((window._netSeed>>>0)^(Math.round(b.x)*40503)^(Math.round(b.origY||b.y)*12289))
+    : Math.random;
+  b.regenT=600+Math.floor(_regenRng()*1200);
   const fullHP=(lives>=3)&&(!twoPlayer||lives2>=3);
   let puType;
   if(b.guaranteedBlast){puType='blast';}
@@ -1481,7 +1893,10 @@ function hitBlock(b){
     if(puType==='life'&&fullHP)puType=rng()<.5?'fire':'ice';
   }
   const bc=puType==='life'?'#ff2266':puType==='boots'?'#0ff':puType==='star'?'#ff0':puType==='fire'?'#ff4400':puType==='ice'?'#00ffff':'#ffd700';
-  powerups.push({x:b.x+b.w/2-12,y:b.y-26,w:24,h:24,vy:-2.5,type:puType,anim:0,got:false});
+  // src — номер блока-источника. Бонусы дописываются в массив во время игры и у
+  // разных клиентов могут лечь в разном порядке, поэтому «этот бонус подобран»
+  // передаётся по номеру источника, а не по месту в массиве.
+  powerups.push({x:b.x+b.w/2-12,y:b.y-26,w:24,h:24,vy:-2.5,type:puType,anim:0,got:false,src:blocks.indexOf(b)});
   burst(b.x+b.w/2,b.y,bc,8,3,4);
 }
 
@@ -1495,6 +1910,108 @@ function hitCoinBlock(b){
   burst(b.x+b.w/2,b.y,'#ffd700',6,2.5,4);
   _checkCoinHp(b.x,b.y,player);
   if(b.coinLeft<=0){b.used=true;burst(b.x+b.w/2,b.y+b.h/2,'#9a7a3a',8,3,4);}
+}
+
+// ════════════════════════════════════════════════
+//  СЕТЬ: ОБЩИЙ МИР
+// ════════════════════════════════════════════════
+// Монеты, блоки, бонусы, кристаллы, ключи и двери — ОДНИ на всю комнату:
+// подобрал один — исчезло у всех. Раньше общими были только враги, босс и
+// выстрелы хоста, а весь остальной уровень у каждого игрока жил своей жизнью.
+//
+// Хост для этого не нужен. Уровень у всех собран из одного зерна, награда из
+// блока выводится из его позиции (см. hitBlock), а состояние мира внутри уровня
+// только НАРАСТАЕТ: подобрано, использовано, открыто. Поэтому обмен — слияние
+// «или»: чужой снимок может добавить взятое, но никогда не вернуть обратно.
+// Отсюда и отсутствие мигания: свой подбор виден сразу и ничем не отменяется.
+//
+// Индексы стабильны только для того, что создано в genLevel. Монеты из скрытых
+// блоков дописываются в массив уже во время игры и у разных клиентов могут лечь
+// в разном порядке, поэтому у них есть собственный номер cid (см. revealBlock),
+// а у бонусов — номер блока-источника src.
+let _coinBase=0;          // сколько монет создал genLevel — дальше идут дописанные
+function _bits(arr,fn){let s='';for(let i=0;i<arr.length;i++)s+=fn(arr[i])?'1':'0';return s;}
+function netWorldSnap(){
+  const s={};
+  if(_coinBase)s.c=_bits(coins.slice(0,_coinBase),c=>c.got);
+  // Монеты из проявленных блоков: их немного, шлём списком собственных номеров.
+  const cx=[];for(let i=_coinBase;i<coins.length;i++)if(coins[i].got&&coins[i].cid!=null)cx.push(coins[i].cid);
+  if(cx.length)s.cx=cx;
+  if(dataShards.length)s.s=_bits(dataShards,c=>c.got);
+  if(rainbowItem&&rainbowItem.got)s.r=1;
+  if(mazeKeys.length)s.k=_bits(mazeKeys,k=>k.collected);
+  if(doors.length)s.d=_bits(doors,d=>d.open);
+  const pu=[];for(const p of powerups)if(p.got&&p.src!=null)pu.push(p.src);
+  if(pu.length)s.u=pu;
+  // Блоков сотни, а тронутых единицы — шлём только изменённые.
+  const b=[];
+  for(let i=0;i<blocks.length;i++){
+    const x=blocks[i];
+    const touched=x.used||x._rev||(x.type==='c'&&x.coinCap&&x.coinLeft<x.coinCap);
+    if(touched)b.push([i,x.used?1:0,x.coinLeft|0,x._rev?1:0]);
+  }
+  if(b.length)s.b=b;
+  // Осыпающиеся платформы возвращаются, то есть их состояние НЕ нарастает.
+  // Поэтому синхронизируем не «исчезла», а счётчик запусков: он только растёт,
+  // а сам обвал и возврат каждый клиент отсчитывает своим таймером.
+  const cr=[];
+  for(let i=0;i<platforms.length;i++)if(platforms[i].crmSeq)cr.push([i,platforms[i].crmSeq]);
+  if(cr.length)s.p=cr;
+  return s;
+}
+function netWorldApply(s){
+  if(!s||!window.netActive)return;
+  if(s.c){
+    const n=Math.min(_coinBase,s.c.length);
+    for(let i=0;i<n;i++)if(s.c[i]==='1'&&coins[i]&&!coins[i].got){
+      coins[i].got=true;burst(coins[i].x+7,coins[i].y+7,'#ffd700',4,2,3);
+    }
+  }
+  if(s.cx&&s.cx.length){
+    const want=new Set(s.cx);
+    for(let i=_coinBase;i<coins.length;i++)if(!coins[i].got&&want.has(coins[i].cid)){
+      coins[i].got=true;burst(coins[i].x+7,coins[i].y+7,'#ffd700',4,2,3);
+    }
+  }
+  // Кристаллы и радужный осколок — это прогресс, а не расходник. Мир у комнаты
+  // общий, поэтому взятый исчезает у всех, но засчитывается тоже всем: отнимать
+  // у товарища открытие секретного мира было бы хуже, чем не делить предмет.
+  if(s.s)for(let i=0;i<dataShards.length&&i<s.s.length;i++)if(s.s[i]==='1'&&!dataShards[i].got){
+    dataShards[i].got=true;dataShardsGot++;score+=SHARD_VALUE;
+    burst(dataShards[i].x+8,dataShards[i].y+8,'#0ff',10,3,4);
+    if(dataShardsGot>=dataShardsTotal&&!shardBonusGiven){shardBonusGiven=true;score+=ALL_SHARDS_BONUS;}
+  }
+  if(s.r&&rainbowItem&&!rainbowItem.got){
+    rainbowItem.got=true;markRainbowCollected(rainbowItem.worldIdx);score+=RAINBOW_SHARD_VALUE;
+    burst(rainbowItem.x+9,rainbowItem.y+9,'#fff',20,4,5);
+  }
+  if(s.k)for(let i=0;i<mazeKeys.length&&i<s.k.length;i++)if(s.k[i]==='1'&&!mazeKeys[i].collected){
+    mazeKeys[i].collected=true;mazeKeysCollected++;burst(mazeKeys[i].x+10,mazeKeys[i].y+10,'#ff0',12,3,4);
+  }
+  if(s.d)for(let i=0;i<doors.length&&i<s.d.length;i++)if(s.d[i]==='1'&&!doors[i].open){
+    doors[i].open=true;burst(doors[i].x+doors[i].w/2,doors[i].y+doors[i].h/2,'#4f8',16,4,5);
+  }
+  if(s.u&&s.u.length){
+    const want=new Set(s.u);
+    for(const p of powerups)if(!p.got&&p.src!=null&&want.has(p.src))p.got=true;
+  }
+  if(s.b)for(const [i,used,left,rev] of s.b){
+    const b=blocks[i];if(!b)continue;
+    if(rev&&!b._rev)revealBlock(b,null);
+    if(b.type==='c'&&typeof left==='number'&&left<(b.coinLeft|0)){
+      b.coinLeft=left;b.bounce=10;
+      burst(b.x+b.w/2,b.y,'#ffd700',5,2.5,4);
+      if(b.coinLeft<=0)b.used=true;
+    }
+    // Блок с наградой открывает КАЖДЫЙ клиент сам: тип бонуса выведен из зерна
+    // комнаты и позиции блока, поэтому у всех выпадет одно и то же.
+    if(used&&!b.used&&b.type==='q')hitBlock(b);
+    else if(used&&!b.used)b.used=true;
+  }
+  if(s.p)for(const [i,seq] of s.p){
+    const pl=platforms[i];if(!pl||!pl.crm)continue;
+    if((pl.crmSeq||0)<seq){pl.crmSeq=seq;if(!pl.crm_on){pl.crm_on=true;pl.ct=72;}}
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -1549,6 +2066,8 @@ function genLevel(diff,rng,advN){
 
   platforms=[];blocks=[];coins=[];enemies=[];_enemyIdSeq=0;
   pBullets=[];eBullets=[];powerups=[];_initParticlePool();decors=[];fireBalls=[];iceBalls=[];checkpoints=[];flagDone=false;exitAnim=false;exitTimer=0;
+  bonusT=0;bonusBack=null;bonusFade=0;
+  bonusDir=0;bonusPend=null;bonusTitle=0;
   _decorCacheInvalidate();
   hazards=[];jumpPads=[];conveyors=[];buttons=[];doors=[];spotlights=[];mazeKeys=[];mazeKeysCollected=0;
   dataShards=[];dataShardsTotal=0;dataShardsGot=0;shardBonusGiven=false;rainbowItem=null;
@@ -1612,6 +2131,36 @@ function genLevel(diff,rng,advN){
       blocks.push({x:bx+bi*(BS+2),y:by,w:BS,h:BS,type:bt,solid:true,used:false,bounce:0,origY:by,coinCap:coinCap,coinLeft:coinCap});
     }
     add(bx,by,rw,BS);
+  }
+
+  // ── ОСОБЕННОСТЬ УРОВНЯ ─────────────────────────────────────────────────
+  // Бонус-комната, переключатель и скрытые блоки раньше ставились каждый
+  // своим броском, и в итоге почти на любом уровне были все три сразу —
+  // находка перестаёт быть находкой. Теперь бросок ОДИН на уровень, и он
+  // выбирает максимум одну особенность; на трети уровней не будет ничего.
+  const special=rng();
+  // Секретный выход убран из игры: второй флаг посреди уровня читался как
+  // ошибка генерации, а не как находка — игрок видит финиш там, где до конца
+  // ещё половина пути. Его доля броска отдана скрытым блокам, иначе уровни
+  // просто обеднели бы на пятую часть особенностей.
+  const wantRoom=special<0.20&&!isBossLevel(advN||level),
+        wantHidden=special>=0.20&&special<0.70;
+
+
+  // ── СКРЫТЫЕ БЛОКИ ──────────────────────────────────────────────────────
+  // Проявляются только от удара снизу. Ставим над платформами повыше обычных
+  // рядов, чтобы до них надо было допрыгнуть, и по тому же сиду — значит, у
+  // всех игроков они в одних и тех же местах, и находкой можно делиться.
+  {
+    const want=wantHidden?(1+Math.floor(rng()*2)):0;  // один-два, и не всюду
+    const spots=nodes.filter(nd=>nd.x>240&&nd.w>=60);
+    for(let k=0;k<want&&spots.length;k++){
+      const nd=spots.splice(Math.floor(rng()*spots.length),1)[0];
+      const hx=Math.floor(nd.x+nd.w/2-14),hy=nd.y-150;
+      if(hy<20||hit(hx,hy,28,28,10))continue;
+      blocks.push({x:hx,y:hy,w:28,h:28,type:'h',solid:false,used:false,bounce:0,origY:hy,
+        hidden:true,reveal:0});
+    }
   }
 
   // Coins on platforms
@@ -1791,11 +2340,109 @@ function genLevel(diff,rng,advN){
     for(const pl of platforms){ if(pl.type==='conveyor'&&overlapsZone(pl)) pl.type='normal'; }
   }
 
+  // ── Скрытые блоки против кристаллов ────────────────────────────────────
+  // Кристаллы расставляются позже (genLevelVariety) и про блоки не знают, а
+  // полосы высот у них совпадают. Проявленный блок становится твёрдым и
+  // запирает кристалл наглухо, поэтому конфликтующий блок сдвигаем, а если
+  // свободного места рядом нет — убираем совсем.
+  if(dataShards.length){
+    const clash=(x,y)=>dataShards.some(sh=>
+      x+28+18>sh.x && x<sh.x+sh.w+18 && y+28+18>sh.y && y<sh.y+sh.h+18);
+    for(let i=blocks.length-1;i>=0;i--){
+      const b=blocks[i];
+      if(!b.hidden||!clash(b.x,b.y))continue;
+      const alt=[b.y-76,b.y+64].find(y=>y>20&&y<H-70&&!clash(b.x,y));
+      if(alt!==undefined){b.y=alt;b.origY=alt;}
+      else blocks.splice(i,1);
+    }
+  }
+
+  // ── БОНУС-КОМНАТА ──────────────────────────────────────────────────────
+  // Строится ПОСЛЕДНЕЙ и только теперь раздвигает границу мира. Раньше она
+  // это делала посреди генерации, и все, кто считает от worldW, уезжали в
+  // комнату: финишный флаг с площадкой вставал прямо в ней, туда же
+  // разлетались дроны, а чекпоинт «на середине» оказывался за концом уровня.
+  if(wantRoom){
+    const spots=nodes.filter(nd=>nd.x>400&&nd.x<worldW-500&&nd.w>=70);
+    if(spots.length){
+      const nd=spots[Math.floor(rng()*spots.length)];
+      // Комнату уносим далеко за уровень: даже если игрок как-то окажется
+      // снаружи, до финиша ему бежать через всю пустоту, а не два шага.
+      const roomX=worldW+1600,roomY=H-90,roomW=620;
+      // Закрытая коробка: пол, две стены и ПОТОЛОК. Стен по 260 пикселей не
+      // хватало — лестница внутри поднимается на 266, по ней перелезали через
+      // верх и уходили пешком прямо к финишу, пропуская остаток уровня.
+      const roomH=340;
+      platforms.push({x:roomX-40,y:roomY,w:roomW+80,h:40,type:'ground',solid:true,gone:false});
+      blocks.push({x:roomX-60,y:roomY-roomH,w:24,h:roomH,type:'b',solid:true,used:true,bounce:0,origY:roomY-roomH});
+      blocks.push({x:roomX+roomW+36,y:roomY-roomH,w:24,h:roomH,type:'b',solid:true,used:true,bounce:0,origY:roomY-roomH});
+      blocks.push({x:roomX-60,y:roomY-roomH-24,w:roomW+120,h:24,
+        type:'b',solid:true,used:true,bounce:0,origY:roomY-roomH-24});
+
+      // ── Планировка ─────────────────────────────────────────────────────
+      // Пять вариантов вместо одного: комната должна каждый раз выглядеть
+      // по-новому, иначе это просто одно и то же место в конце уровня.
+      const rc=(x,y)=>coins.push({x:x,y:y,w:14,h:14,a:rng()*Math.PI*2,got:false,bonus:true});
+      const rb=(x,y,t,cap)=>blocks.push({x:x,y:y,w:BS,h:BS,type:t,solid:true,used:false,bounce:0,origY:y,coinCap:cap||0,coinLeft:cap||0,bonus:true});
+      const rp=(x,y,w)=>platforms.push({x:x,y:y,w:w,h:PLH,type:'normal',solid:false,gone:false});
+      const kind=Math.floor(rng()*5);
+      roomKind=kind;
+      if(kind===0){
+        // Ливень: три плотных ряда, чистая скорость сбора.
+        for(let r=0;r<3;r++)for(let i=0;i<12;i++)rc(roomX+30+i*48,roomY-60-r*44);
+      }else if(kind===1){
+        // Лестница: пять ступеней вверх, на каждой по три монеты.
+        for(let st=0;st<5;st++){
+          const sx=roomX+20+st*118,sy=roomY-58-st*52;
+          rp(sx,sy,96);
+          for(let i=0;i<3;i++)rc(sx+16+i*30,sy-34);
+        }
+        for(let i=0;i<6;i++)rc(roomX+40+i*46,roomY-34);
+      }else if(kind===2){
+        // Арка: монеты по дуге, под ней ряд блоков с добавкой.
+        const cxr=roomX+roomW/2,rad=170;
+        for(let i=0;i<15;i++){
+          const ang=Math.PI+(i/14)*Math.PI;
+          rc(cxr+Math.cos(ang)*rad-7,roomY-70+Math.sin(ang)*rad*0.85);
+        }
+        for(let i=0;i<4;i++)rb(cxr-70+i*38,roomY-64,'c',4);
+        for(let i=0;i<8;i++)rc(roomX+40+i*40,roomY-34);
+      }else if(kind===3){
+        // Колонны: четыре столба, монеты в проёмах и наверху.
+        for(let col=0;col<4;col++){
+          const px2=roomX+70+col*140;
+          for(let r=0;r<3;r++)rb(px2,roomY-30-r*30,'b',0);
+          for(let r=0;r<4;r++)rc(px2+40,roomY-40-r*40);
+          rc(px2+3,roomY-130);
+        }
+        for(let i=0;i<7;i++)rc(roomX+50+i*44,roomY-200);
+      }else{
+        // Сокровищница: ряд вопросов под потолком, монеты кольцом.
+        for(let i=0;i<6;i++)rb(roomX+70+i*80,roomY-150,i%2?'q':'c',5);
+        const cxr=roomX+roomW/2;
+        for(let i=0;i<12;i++){
+          const ang=(i/12)*Math.PI*2;
+          rc(cxr+Math.cos(ang)*120-7,roomY-70+Math.sin(ang)*58);
+        }
+        for(let i=0;i<8;i++)rc(roomX+45+i*42,roomY-34);
+      }
+      const dx=Math.floor(nd.x+nd.w/2-16);
+      hazards.push({type:'bonusDoor',x:dx,y:nd.y-44,w:32,h:44,used:false,anim:0,
+        roomX:roomX,roomY:roomY});
+      worldW=roomX+roomW+120;
+    }
+  }
+
   computeLevelMaxScore();
   // Snapshot the running total so this level's score starts counting from 0.
   // genLevel runs after every (re)start once score/advLevel are set, so this
   // single hook covers all start paths (infinite, adventure, retry, cutscene).
   levelStartScore=score;
+  levelStartCoins=coinsTotal;
+  // Сколько монет создала генерация. Всё, что дописывается позже (монеты из
+  // проявленных блоков), синхронизируется по собственному номеру — см.
+  // netWorldSnap: индекс в массиве для них у разных клиентов может отличаться.
+  _coinBase=coins.length;
 }
 
 // Estimate the maximum score obtainable on the freshly-generated level. Used to
@@ -1931,14 +2578,19 @@ function genDecors(rng){
       const w=55+rng()*130,h=120+rng()*240,y=GY-h;
       add({T:'skyBuilding',x,y,w,h,layer:0});
     });
-    scatter(100,ww-100,380,160,0,(x)=>{add({T:'farAntenna',x,y:GY,h:60+rng()*90,layer:0});});
+    // Мачты убраны вместе с вывесками: тонкая вертикаль с красным огоньком
+    // на верхушке читалась как шест, на который можно запрыгнуть, и торчала
+    // прямо посреди игрового поля.
     // Near: pipes, signs, vents
     scatter(80,ww-80,180,80,1,(x)=>{
-      const t=Math.floor(rng()*4);
-      if(t===0){const col=rng()>.5?'#0ff':'#f0f';add({T:'neonPipe',x,y:GY-50-rng()*100,h:50+rng()*100,w:5+rng()*4,col,layer:1});}
-      else if(t===1){add({T:'antenna',x,y:GY-90-rng()*80,layer:1});}
-      else if(t===2){const labels=['[NEXUM]','>>SYS//','ERR_404','UPLINK','<NULL>','0xDEAD','GRID ON'];add({T:'neonSign',x,y:GY-30-rng()*50,txt:labels[Math.floor(rng()*labels.length)],col:rng()>.5?'#0ff':'#f0f',layer:1});}
-      else{add({T:'vent',x,y:GY,w:28+rng()*30,layer:1});}
+      // Вывесок и антенн здесь больше нет. Они висели в воздухе посреди
+      // игрового поля, наезжали на платформы и читались как часть уровня, а не
+      // как фон: игрок пытался на них запрыгнуть. Остались труба и вентиляция —
+      // обе стоят на земле и в геометрию уровня не лезут.
+      // Остались только вентиляционные короба у самой земли. Неоновые трубы
+      // убраны вслед за вывесками и мачтами: яркий вертикальный столб посреди
+      // экрана спорит с платформами и читается как элемент уровня.
+      add({T:'vent',x,y:GY,w:28+rng()*30,layer:1});
     });
 
   }else if(id===1){ //── NEON JUNGLE ──────────────
@@ -3276,6 +3928,9 @@ function damageBoss(dmg){
 }
 
 function killBoss(){
+  // Добивание босса — событие, а не ещё одно попадание: показываем его
+  // в замедлении, чтобы взрыв успел прочитаться.
+  if(window.Juice){window.Juice.hitStop(90);window.Juice.slowmo(900,0.35);}
   const b=boss;
   b.alive=false;
   boss=null;
@@ -4102,18 +4757,20 @@ function buildMapH(){
     const TH=THEMES[ti];
     const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor='#f44';sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color='#f44';
-    lbl.innerHTML='<span style="font-size:11px">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
+    lbl.innerHTML='<span style="font-size:calc(11px * var(--bbText, 1))">💀</span>'+TH.name+' <span style="color:#fff5;margin-left:3px">'+TH.range+'</span>';sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>prog.max,done=prog.done.includes(n),avail=n===prog.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
-      if(locked){btn.disabled=true;btn.innerHTML='<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">'+n+'</span>';}
+      if(locked){btn.disabled=true;btn.innerHTML='<span style="opacity:.45;font-size:calc(9px * var(--bbText, 1))">🔒</span><span class="lvlN">'+n+'</span>';}
       else{
         btn.style.borderColor='#f446';btn.style.setProperty('--mc','#f44');
-        if(done){btn.style.background='#f4420';btn.style.color='#f44';btn.innerHTML='<span style="font-size:8px">✓</span><span class="lvlN">'+n+'</span>';}
+        if(done){btn.style.background='#f4420';btn.style.color='#f44';btn.innerHTML='<span style="font-size:calc(8px * var(--bbText, 1))">✓</span><span class="lvlN">'+n+'</span>';}
         else{btn.style.color='#f44';if(avail){btn.classList.add('avail');btn.style.borderColor='#f44';btn.style.boxShadow='0 0 9px #f449';}
-          btn.innerHTML='<span style="font-size:9px">'+(avail?'▶':'')+'</span><span class="lvlN">'+n+'</span>';}
-        btn.onclick=()=>{SFX.menu();startAdv(n,true);};
+          btn.innerHTML='<span style="font-size:calc(9px * var(--bbText, 1))">'+(avail?'▶':'')+'</span><span class="lvlN">'+n+'</span>';}
+        btn.onclick=()=>{SFX.menu();
+          if(window.Juice)window.Juice.transition(()=>startAdv(n,true));
+          else startAdv(n,true);};
       }
       row.appendChild(btn);
     }
@@ -4125,6 +4782,9 @@ function showMap(){
   // Stop the in-game render loop while the map is open (see showMapH).
   if(raf){cancelAnimationFrame(raf);raf=0;}
   navScr='map';
+  // У карты своя тема: раньше здесь доигрывала музыка меню, и переход между
+  // выбором уровня и самой картой был неслышен.
+  startMapMusic();
   if (window.WorldMap) {
     window.WorldMap.show(false);
   } else {
@@ -4140,13 +4800,37 @@ function doPause(){if(gState!=='playing')return;gState='paused';navScr='paused';
   document.getElementById('pauseMapBtn').style.display=advMode?'block':'none';$pause.style.display='flex';}
 function doResume(){if(gState!=='paused')return;gState='playing';navScr='game';SFX.resume();hideAll();document.getElementById('ui').style.display='flex';showModBanner();for(const k in K)K[k]=false;startGameMusic();}
 
+/**
+ * Уход с уровня в меню или на карту обязан ОТПУСТИТЬ сетевую комнату.
+ *
+ * Раньше пауза → «В меню» просто показывала главное меню, а window.netActive
+ * оставался включённым и сокет — открытым. Игрок продолжал числиться в комнате
+ * (и держал её у флага), а его собственная игра ломалась: следующая одиночная
+ * партия шла в «сетевом» режиме — по экрану бегали призраки вышедших, гость не
+ * считал ИИ врагов, флаг рапортовал в чужую комнату. Отсюда «вышел, а второго
+ * игрока всё равно видно».
+ *
+ * NetPlay.close() уводит на экран выбора сетевой игры, поэтому зовём его ДО
+ * навигации: нужный экран открывается следом и остаётся последним.
+ */
+function netLeaveIfActive(){
+  if(!window.netActive)return;
+  if(window.NetPlay&&typeof window.NetPlay.close==='function'){
+    try{window.NetPlay.close();}catch(e){}
+  }
+  // Подстраховка на случай, если модуль сети не загрузился: состояние сетевой
+  // игры не должно пережить выход с уровня ни при каких обстоятельствах.
+  window.netActive=false;
+  if(window.netPlayers&&window.netPlayers.clear)window.netPlayers.clear();
+  window.netSpectateObj=null;
+}
 document.getElementById('resumeBtn').onclick=doResume;
-document.getElementById('pauseMapBtn').onclick=()=>{SFX.back();gState='menu';stopMusic();hardMode?showMapH():showMap();};
+document.getElementById('pauseMapBtn').onclick=()=>{SFX.back();netLeaveIfActive();gState='menu';stopMusic();hardMode?showMapH():showMap();};
 document.getElementById('pauseMenuBtn').onclick=()=>{
   // Bank an infinite run before walking away from it. Adventure keeps its own
   // per-level progress, so this only ever fires for the endless mode.
   if(window.InfSave&&!advMode)window.InfSave.save();
-  SFX.back();gState='menu';stopMusic();showMain();
+  SFX.back();netLeaveIfActive();gState='menu';stopMusic();showMain();
 };
 document.getElementById('advCard').onclick=()=>{initAudio();SFX.menu();showDiff();};
 document.getElementById('modeBackBtn').onclick=()=>{SFX.back();showPlayType();};
@@ -4229,18 +4913,20 @@ function buildMap(){
     const TH=THEMES[ti];
     const sec=document.createElement('div');sec.className='thSec';sec.style.borderColor=withAlpha(TH.mc,'55');sec.style.background=withAlpha(TH.bg,'77');
     const lbl=document.createElement('div');lbl.className='thLbl';lbl.style.color=TH.mc;
-    lbl.innerHTML=`<span style="font-size:11px">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
+    lbl.innerHTML=`<span style="font-size:calc(11px * var(--bbText, 1))">${TH.icon}</span>${TH.name} <span style="color:#fff5;margin-left:3px">${TH.range}</span>`;sec.appendChild(lbl);
     const row=document.createElement('div');row.className='lvlRow';
     for(let li=1;li<=10;li++){
       const n=ti*10+li,locked=n>advProg.max,done=advProg.done.includes(n),avail=n===advProg.max&&!done;
       const btn=document.createElement('button');btn.className='lBtn';
-      if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:9px">🔒</span><span class="lvlN">${n}</span>`;}
+      if(locked){btn.disabled=true;btn.innerHTML=`<span style="opacity:.45;font-size:calc(9px * var(--bbText, 1))">🔒</span><span class="lvlN">${n}</span>`;}
       else{
         btn.style.borderColor=withAlpha(TH.mc,'88');btn.style.setProperty('--mc',TH.mc);
-        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:8px">✓</span><span class="lvlN">${n}</span>`;}
+        if(done){btn.style.background=withAlpha(TH.mc,'20');btn.style.color=TH.mc;btn.innerHTML=`<span style="font-size:calc(8px * var(--bbText, 1))">✓</span><span class="lvlN">${n}</span>`;}
         else{btn.style.color=TH.mc;if(avail){btn.classList.add('avail');btn.style.borderColor=TH.mc;btn.style.boxShadow=`0 0 9px ${TH.mc}99`;}
-          btn.innerHTML=`<span style="font-size:9px">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
-        btn.onclick=()=>{SFX.menu();startAdv(n,true);};
+          btn.innerHTML=`<span style="font-size:calc(9px * var(--bbText, 1))">${avail?'▶':''}</span><span class="lvlN">${n}</span>`;}
+        btn.onclick=()=>{SFX.menu();
+          if(window.Juice)window.Juice.transition(()=>startAdv(n,true));
+          else startAdv(n,true);};
       }
       row.appendChild(btn);
     }
@@ -4264,7 +4950,15 @@ function startInf(fresh=true){
   updModeLabel();startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
 }
 function startAdv(n,freshLives=false){
-  if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
+  // Серия убийств не переезжает между уровнями.
+  if(window.Juice)window.Juice.comboBreak();
+  // В хардкоре запас общий на весь мир и переносится между уровнями;
+  // в обычном режиме — свой на каждый заход.
+  if(hardMode&&advMode){
+    _hardEnterWorld(n);
+    if(freshLives)cpSave=null;
+    lives=hardWorldLives;
+  } else if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
   // Reset coin progress when starting fresh adventure from level 1
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -4286,6 +4980,7 @@ function startAdv(n,freshLives=false){
       dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
       shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
     }
+    _restoreCpWorld();
   }
   timeLeft=lvlTime(n);timMax=timeLeft;
   hideAll();gState='playing';navScr='game';tick=0;
@@ -4343,6 +5038,9 @@ window.startAdventureLevel = function(levelNum, hard) {
 function updatePlayer(){
   if(!player)return;  // Player 1 may be null in 2-player mode if they died
   const p=player;
+  // Пока экран гаснет или проявляется — управление забираем и держим
+  // игрока неуязвимым: он не должен вслепую уехать или получить удар.
+  if(bonusLocked()){ p.vx=0; p.vy=0; p.inv=Math.max(p.inv||0,6); return; }
   // Co-op: this player already reached the flag and is waiting for the others.
   // Freeze them in place (invulnerable) while the rest of the room keeps playing.
   if(window.netActive && p._netDone){ p.vx=0; p.vy=0; p.inv=Math.max(p.inv||0,600); return; }
@@ -4403,7 +5101,11 @@ function updatePlayer(){
       floatTxt(p.x+p.w/2,p.y-6,T('stEmpBlocked'),'#ffee44');
     } else {
       if(p.jl===2)SFX.jump();else SFX.dblJump();
-      p.vy=(JV+(p.jl<2?-.9:0))*(window.Status?Status.jumpMul(p):1);p.jl--;p._jh=true;
+      p.vy=(JV+(p.jl<2?-.9:0))*(window.Status?Status.jumpMul(p):1);
+      // Чит бесконечных прыжков: запас не тратится, поэтому прыгать можно
+      // хоть всю дорогу вверх. Сила, звук и эффект — как у обычного прыжка.
+      if(!infiniteJump)p.jl--;
+      p._jh=true;
       if(typeof AchTrack!=='undefined')AchTrack.jump();
       burst(p.x+p.w/2,p.y+p.h,CT.mc,6,2,3);
     }
@@ -4496,7 +5198,7 @@ function updatePlayer(){
   }
 
   // Coins
-  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();floatTxt(c.x,c.y,'+10','#ffd700');burst(c.x+7,c.y+7,'#ffd700',5,2,3);_checkCoinHp(c.x,c.y,p);}
+  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();burst(c.x+7,c.y+7,'#ffd700',5,2,3);if(window.Juice)window.Juice.pickup(c.x+7-camX,c.y+7,'coin');else floatTxt(c.x,c.y,'+10','#ffd700');_checkCoinHp(c.x,c.y,p);}
 
   // Maze keys
   for(const key of mazeKeys){
@@ -4559,7 +5261,7 @@ function updatePlayer(){
   for(const pu of powerups){
     if(!pu.got&&aabb(p,pu)){pu.got=true;SFX.powerup();
       if(pu.type==='blast'){p.blaster=true;p.bTimer=1800;burst(pu.x+12,pu.y+12,CT.mc,18,4,6);floatTxt(pu.x,pu.y,T('pBlaster'),CT.mc);camShake=9;}
-      else if(pu.type==='life'){lives++;burst(pu.x+12,pu.y+12,'#ff2266',22,5,6);floatTxt(pu.x,pu.y,T('pLife'),'#ff2266');camShake=8;[440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));}
+      else if(pu.type==='life'){lives++;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);burst(pu.x+12,pu.y+12,'#ff2266',22,5,6);floatTxt(pu.x,pu.y,T('pLife'),'#ff2266');camShake=8;[440,554,659,880].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.14,.3),i*55));}
       else if(pu.type==='boots'){p.boots=true;p.bootsTimer=900;p.jl=Math.max(p.jl,3);burst(pu.x+12,pu.y+12,'#0ff',18,4,6);floatTxt(pu.x,pu.y,T('pBoots'),'#0ff');camShake=7;}
       else if(pu.type==='star'){p.starMode=true;p.starTimer=600;p.inv=601;burst(pu.x+12,pu.y+12,'#ff0',24,5,7);floatTxt(pu.x,pu.y,T('pStar'),'#ff0');camShake=12;startStarMusic();AchTrack.star();}
       else if(pu.type==='fire'){p.fireMode=true;p.iceMode=false;p.elemTimer=1800;burst(pu.x+12,pu.y+12,'#ff4400',18,4,6);floatTxt(pu.x,pu.y,T('pFire'),'#ff4400');camShake=9;}
@@ -4586,6 +5288,14 @@ function updatePlayer(){
 
   // Hazards (spikes)
   for(const hz of hazards){
+    // Во время действия переключателя шипы прячутся и становятся опорой:
+    // урон снимается сразу, а платформой они работают в resolveP.
+    // Переключатель срабатывает от касания сверху.
+    // Вход в бонус-комнату — по касанию.
+    if(hz.type==='bonusDoor'){
+      if(!hz.used&&aabb(p,hz))enterBonusRoom(hz,p);
+      continue;
+    }
     if(hz.type==='spikes'&&aabb(p,hz)&&p.inv<=0){
       doHurtPlayer(false);
       p.vy=-8; // bounce up
@@ -4626,6 +5336,12 @@ function updatePlayer(){
             const dir=dx<0?1:-1;                  // push away from the player
             p.x+=(dx<0?-ox:ox);
             e._iceVX=ICE_PUSH*dir;
+            // Скольжение глыбы считает ХОЗЯИН комнаты: у гостя updateEnemies не
+            // выполняется, поэтому выставленная здесь скорость никуда бы не
+            // поехала — со стороны гостя лёд просто не толкался. Сообщаем толчок
+            // хозяину, он двигает глыбу у всех.
+            if(window.netActive&&!window.netIsHost&&window.netReportIcePush)
+              window.netReportIcePush(e.id,ICE_PUSH*dir);
             if(!e._icePushSfx){e._icePushSfx=1;SFX.hit();}
           } else if(p.y<e.y&&p.vy>=ICE_SMASH_VY){
             // Landing hard on the block smashes it and kills what is inside.
@@ -4696,10 +5412,26 @@ function updatePlayer(){
 // Persist this client's adventure progress + achievements for the level it just
 // finished. Extracted from the level-advance flow so it can run both in single
 // player AND the moment a co-op player reaches the flag (before the room advances).
+// Публичная сводка прогресса уходит на сервер не чаще раза в две минуты:
+// её смотрят друзья на сайте, и обновлять её после каждого уровня незачем —
+// а вот отправлять запрос после каждого точно не стоит.
+let _statsPubT=0;
+function _publishStatsSoon(){
+  if(!window.Friends||!window.Friends.publish)return;
+  if(window.bbStatsAutoOn&&!window.bbStatsAutoOn())return;   // игрок выключил
+  const now=Date.now();
+  if(now-_statsPubT<120000)return;
+  _statsPubT=now;
+  try{window.Friends.publish();}catch(e){}
+}
+
 function _persistAdvProgress(){
   savePlaytime();
   const prog=hardMode?advProgHard:advProg;
   if(!prog.done.includes(advLevel))prog.done.push(advLevel);
+  // Секретных выходов в игре больше нет. Уже сохранённый prog.secrets не
+  // трогаем: он ничему не мешает, а стирать чужую историю прохождения ради
+  // убранной механики незачем — на карте эти уровни просто числятся пройденными.
   // Was capped at 100 (the historical "last level") — that silently prevented
   // progress from EVER reaching 101+ even once the secret Prism Anomaly world
   // existed, so finding all 10 Rainbow Shards alone couldn't open it (the
@@ -4710,6 +5442,9 @@ function _persistAdvProgress(){
   // Demo build: never let the stored unlock counter climb past the demo's last
   // level, or the world map would open level 11 the moment level 10 is cleared.
   if(window.Demo&&window.Demo.on)prog.max=window.Demo.capMax(prog.max);
+  // Монеты уровня: сохраняем лучший сбор, чтобы карта показывала, где ещё
+  // есть что взять. Считается от точки старта уровня — см. curLevelCoins().
+  recordLevelCoins(advLevel,curLevelCoins(),hardMode);
   // Persist this run's per-level best score, then re-derive the best star
   // rating from the BEST score ever earned (so stars track the kept score).
   recordLevelScore(advLevel,exitLevelScore,hardMode);
@@ -4717,6 +5452,7 @@ function _persistAdvProgress(){
   // Persist the best crystal (data-shard) count for this level.
   recordLevelShards(advLevel,dataShardsGot,hardMode);
   if(hardMode)saveAdvH();else saveAdv();
+  _publishStatsSoon();   // витрина для друзей — см. комментарий выше
   // Refresh WorldMap if it's loaded — mark this level done explicitly so the
   // final level (100) reliably shows its checkmark even though it ends in the
   // win/ending flow rather than loading a next level.
@@ -4767,6 +5503,12 @@ function _persistAdvProgress(){
 // or directly when only P2 remains (P1 dead). Params carry each player's touch Y.
 function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     flagDone=true;
+    // Обучение — не уровень кампании. Его флаг завершает пролог и ведёт к
+    // катсцене, а не к экрану итогов и записи прохождения первого уровня.
+    if(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive()){
+      window.Tutorial.finish();
+      return;
+    }
 
     // Height bonus — use the best (highest) touch point
     const poleTop=H-130, poleBase=H-40, poleH=poleBase-poleTop;
@@ -4798,7 +5540,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     if(timMax>0&&timeLeft>=timMax/2)AchTrack.speed();
     AchTrack.score(score);
 
-    exitBonus=hBonus;exitBonusTier=tier;
+    exitBonus=hBonus;exitBonusTier=tier;exitBonusCol=tierCol;exitTimeBonus=tBonus;
 
     // Burst at touch point
     burst(flagX+5,touchY,CT.clr,28+Math.floor(heightFrac*20),5,6);
@@ -4809,6 +5551,7 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     // Show score breakdown
     floatTxt(flagX+5,touchY-30,`+${hBonus} ${tier}`,tierCol);
     floatTxt(flagX+5,touchY-52,`+${tBonus} TIME`,CT.mc);
+    if(hardMode&&advMode)hardWorldLives=lives;  // запас переходит на следующий уровень мира
     cpSave=null;             // level cleared — checkpoint no longer needed
 
     // ── Network co-op: WAIT for every player to reach the flag ────────────
@@ -4829,7 +5572,9 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     exitAnim=true;
     exitTimer=0;
 
-    // Schedule next level
+    // Что происходит после анимации выхода. Раньше это вызывалось таймером
+    // напрямую и уровень сменялся сам; теперь между ними встаёт экран итогов
+    // (см. _showLevelResults) — игрок идёт дальше сам.
     const _goNext=()=>{
       _goNextTimer=0;
       if(gState!=='levelclear')return; // aborted by death/pause/menu
@@ -4859,13 +5604,84 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
       }
     };
     if(_goNextTimer)clearTimeout(_goNextTimer);
-    _goNextTimer=setTimeout(_goNext, 4000);
+    // Экран итогов показывается раньше, чем закончилась бы старая пауза: он и
+    // есть остановка, тянуть её ещё секунду незачем.
+    _goNextTimer=setTimeout(()=>{
+      _goNextTimer=0;
+      if(gState!=='levelclear')return;
+      if(!_showLevelResults(_goNext))_goNext();
+    }, 2600);
+}
+
+// Экран итогов уровня. Возвращает false, если показать его нечем (нет модуля) —
+// тогда вызывающий просто идёт дальше, как раньше.
+function _showLevelResults(goNext){
+  // Экран итогов уровня отключается в настройках: кому он мешает темпу, тот
+  // уходит на следующий уровень сразу. Прогресс всё равно записывается ниже,
+  // поэтому выключение ничего не теряет.
+  if(window.gameSettings&&window.gameSettings.showWinScreen===false){
+    if(advMode)_persistAdvProgress();
+    return false;
+  }
+  if(!window.Results||typeof window.Results.showLevel!=='function')return false;
+  if(window.netActive)return false;   // темп сетевой комнаты задаёт хост
+  // Прогресс записываем ДО показа: с этого экрана игрок может уйти на карту, а
+  // раньше запись стояла в _goNext, то есть только на пути «дальше». Функция
+  // идемпотентна (done через includes, счёт и звёзды — по максимуму).
+  if(advMode)_persistAdvProgress();
+  if(raf){cancelAnimationFrame(raf);raf=0;}
+  const lvNum=advMode?advLevel:level;
+  const tierCols={};
+  tierCols[T('tierPerfect')]='#ff0';tierCols[T('tierGreat')]='#0ff';
+  tierCols[T('tierGood')]='#0f8';tierCols[T('tierBase')]='#888';
+  // Общий счёт кампании: банк по всем уровням плюс вклад этого забега.
+  let total=score;
+  if(advMode){
+    const banked=Math.max(levelScore(advLevel,hardMode),exitLevelScore);
+    total=totalScore(hardMode)-levelScore(advLevel,hardMode)+banked;
+  }
+  const data={
+    levelNum:lvNum,
+    accent:exitBonusCol||tierCols[exitBonusTier]||'#0ff',
+    tier:exitBonusTier,
+    flagBonus:exitBonus,
+    timeBonus:exitTimeBonus,
+    coins:coinsTotal|0,
+    levelScore:exitLevelScore,
+    score:total,
+    stars:advMode?exitStars:null,
+    starsNew:exitStarsNew,
+    subtitle:advMode&&dataShards&&dataShards.length
+      ? T('crystals')+': '+dataShardsGot+' / '+dataShards.length : '',
+  };
+  const leave=()=>{
+    stopMusic();
+    gState='menu';
+    if(advMode){
+      const open=hardMode?showMapH:showMap;
+      if(typeof open==='function')open(); else showMain();
+    }
+    else { if(window.InfSave)window.InfSave.save(); showMain(); }
+  };
+  const actions={
+    // Если состояние почему-то уже не 'levelclear', goNext() молча ничего не
+    // сделает и игрок остался бы перед пустым экраном — уводим его на карту.
+    next:()=>{ if(gState==='levelclear')goNext(); else leave(); },
+    retry:()=>{ if(advMode)startAdv(advLevel,false); else startInf(false); },
+    leaveLabel:advMode?T('map'):T('menu'),
+    leave:leave,
+  };
+  window.Results.showLevel(data,actions);
+  return true;
 }
 
 // ── PLAYER 2 UPDATE (arrow keys + ./, for shoot) ──
 function updatePlayer2(){
   if(!twoPlayer||!player2)return;
   const p=player2;
+  // Пока экран гаснет или проявляется — управление забираем и держим
+  // игрока неуязвимым: он не должен вслепую уехать или получить удар.
+  if(bonusLocked()){ p.vx=0; p.vy=0; p.inv=Math.max(p.inv||0,6); return; }
 
   // ── FALL RESPAWN SMOOTH ANIMATION (P2)
   if(p.fallRespawning){
@@ -4917,7 +5733,11 @@ function updatePlayer2(){
       floatTxt(p.x+p.w/2,p.y-6,T('stEmpBlocked'),'#ffee44');
     } else {
       if(p.jl===2)SFX.jump();else SFX.dblJump();
-      p.vy=(JV+(p.jl<2?-.9:0))*(window.Status?Status.jumpMul(p):1);p.jl--;p._jh=true;
+      p.vy=(JV+(p.jl<2?-.9:0))*(window.Status?Status.jumpMul(p):1);
+      // Чит бесконечных прыжков: запас не тратится, поэтому прыгать можно
+      // хоть всю дорогу вверх. Сила, звук и эффект — как у обычного прыжка.
+      if(!infiniteJump)p.jl--;
+      p._jh=true;
       if(typeof AchTrack!=='undefined')AchTrack.jump();
       burst(p.x+p.w/2,p.y+p.h,CT.mc,6,2,3);
     }
@@ -5001,7 +5821,7 @@ function updatePlayer2(){
   if(p.x>rightBound){p.x=rightBound;p.vx=Math.min(0,p.vx);}
 
   // Coins
-  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();floatTxt(c.x,c.y,'+10','#ffd700');burst(c.x+7,c.y+7,'#ffd700',5,2,3);_checkCoinHp(c.x,c.y,p);}
+  for(const c of coins)if(!c.got&&aabb(p,c)){c.got=true;score+=10;coinsTotal++;AchTrack.coin();SFX.coin();burst(c.x+7,c.y+7,'#ffd700',5,2,3);if(window.Juice)window.Juice.pickup(c.x+7-camX,c.y+7,'coin');else floatTxt(c.x,c.y,'+10','#ffd700');_checkCoinHp(c.x,c.y,p);}
 
   // Power-ups
   for(const pu of powerups){
@@ -5071,6 +5891,12 @@ function updatePlayer2(){
             const dir=dx<0?1:-1;                  // push away from the player
             p.x+=(dx<0?-ox:ox);
             e._iceVX=ICE_PUSH*dir;
+            // Скольжение глыбы считает ХОЗЯИН комнаты: у гостя updateEnemies не
+            // выполняется, поэтому выставленная здесь скорость никуда бы не
+            // поехала — со стороны гостя лёд просто не толкался. Сообщаем толчок
+            // хозяину, он двигает глыбу у всех.
+            if(window.netActive&&!window.netIsHost&&window.netReportIcePush)
+              window.netReportIcePush(e.id,ICE_PUSH*dir);
             if(!e._icePushSfx){e._icePushSfx=1;SFX.hit();}
           } else if(p.y<e.y&&p.vy>=ICE_SMASH_VY){
             // Landing hard on the block smashes it and kills what is inside.
@@ -5128,8 +5954,13 @@ function updatePlayer2(){
 
 // ── RESPAWN SYSTEM: lose a life but stay on level ──
 function doHurtPlayer(fromFall=false){
+  // Урон обрывает серию — иначе комбо копится само собой и ничего не значит.
+  if(window.Juice)window.Juice.comboBreak();
   if(godMode)return;
   if(!player)return; // Player already dead, nothing to do
+  // Наблюдатель в сетевой комнате уже вне уровня: ни таймер, ни камера босса не
+  // должны отнимать у него жизни дальше в минус и сыпать частицы на месте гибели.
+  if(window.netActive&&player._netDone)return;
   const p=player;
   // Reset the darkness-modifier mask on every hit/death so a respawn never
   // starts from a stale (previous-frame) light mask — see drawDarknessOverlay().
@@ -5141,7 +5972,7 @@ function doHurtPlayer(fromFall=false){
   // life and respawn in place / at the checkpoint, keeping gState==='playing'.
   if(window.netActive){
     if(infiniteLives)lives=Math.max(lives,3);
-    lives--;
+    lives--;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
     AchTrack.death();
     SFX.playerHurt();camShake=12;
     p.broken=false;
@@ -5174,7 +6005,7 @@ function doHurtPlayer(fromFall=false){
     return;
   }
   if(infiniteLives)lives=Math.max(lives,3);
-  lives--;
+  lives--;if(hardMode&&advMode)hardWorldLives=Math.max(0,lives);
   AchTrack.death();
   if(lives<=0){
     // In 2-player mode, only trigger game over if BOTH players are dead
@@ -5201,7 +6032,11 @@ function doHurtPlayer(fromFall=false){
     stopMusic();
     burst(p.x+p.w/2,p.y+p.h/2,'#f44',20,5,5);camShake=18;SFX.playerHurt();
     gState='gameover';
-    const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
+  // Смерть в обучении обязана возвращать в обучение: раньше retry звал
+  // startAdv(advLevel) и игрока выбрасывало в первый уровень кампании.
+  const _inTut=!!(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive());
+    const retry=_inTut?()=>{SFX.menu();window.Tutorial.start();}
+                :advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
                        :()=>{SFX.menu();startInf(true);};
     setTimeout(()=>{showGameover(retry);},400);
     return;
@@ -5209,14 +6044,25 @@ function doHurtPlayer(fromFall=false){
   SFX.playerHurt();camShake=12;
   p.broken=false; // on retry the robot respawns fresh as "normal"
 
+  // Спокойный режим: ПАДЕНИЕ не обрывает заход экраном поражения. Жизнь всё так
+  // же отнимается, но игрок мягко возвращается на тот край, откуда прыгнул, —
+  // ради этого режим и делался. Возврат жил ниже, в общей ветке fromFall, но до
+  // неё в соло никогда не доходило: проверка ниже уводила одиночную игру на
+  // экран поражения раньше. Удар врага сюда не попадает намеренно — он
+  // по-прежнему заканчивает заход. Хардкор режим не смягчает: там свой запас
+  // жизней на весь мир, и поблажка сломала бы его смысл.
+  const _easyFall=fromFall&&!hardMode&&!!(window.gameSettings&&window.gameSettings.gameMode==='easy');
+
   // Single-player: spending a life ends the attempt on a defeat screen. RETRY
   // resumes the SAME level with the lives that remain (e.g. 3 → 2). When the
   // last life is gone the block above already handled the final Game Over.
-  if(!twoPlayer&&!window.netActive){
+  if(!twoPlayer&&!window.netActive&&!_easyFall){
     stopMusic();
     burst(p.x+p.w/2,p.y+p.h/2,'#f44',18,5,5);camShake=16;
     gState='gameover';
-    const retry=advMode?()=>{SFX.menu();startAdv(advLevel,false);}
+    const _inTut2=!!(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive());
+    const retry=_inTut2?()=>{SFX.menu();window.Tutorial.start();}
+                :advMode?()=>{SFX.menu();startAdv(advLevel,false);}
                        :()=>{SFX.menu();startInf(false);};
     setTimeout(()=>{showGameover(retry,T('gameOver'),T('livesLeft',lives));},450);
     return;
@@ -5268,7 +6114,7 @@ function doHurtPlayer2(fromFall=false){
       }
       stopMusic();
       gState='gameover';
-      const retry=advMode?()=>{SFX.menu();lives=3;lives2=3;score=Math.max(0,score-200);startAdv(advLevel,false);}
+      const retry=advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
                          :()=>{SFX.menu();startInf(true);};
       setTimeout(()=>{showGameover(retry);},400);
     }
@@ -5352,16 +6198,55 @@ function enemyHitPlayer2(src){
 // Game-over and win screens reuse that overlay but should only show their own button.
 function _menuExtras(show){
   // Settings + Exit only appear on the real main menu (hidden on game-over/win).
-  const s=document.getElementById('settingsBtn');
-  const e=document.getElementById('exitBtn');
-  if(s)s.style.display=show?'':'none';
-  if(e)e.style.display=show?'':'none';
+  // Тот же оверлей #mainOv служит экранами победы и поражения, поэтому всё, что
+  // относится только к главному меню, гасится здесь. «Что нового» добавили в
+  // меню позже и в этот список не внесли — кнопка торчала на итоговых экранах.
+  // «Рекорды» тут нет намеренно: это угловая кнопка рядом с настройками, она
+  // сама следит за тем, показано ли главное меню (см. leaderboard.js).
+  for(const id of ['settingsBtn','exitBtn','whatsNewBtn']){
+    const el=document.getElementById(id);
+    if(el)el.style.display=show?'':'none';
+  }
 }
 function showGameover(retry,titleTxt,subTxt){
   // Game over ENDS an infinite run. Keeping the save would let the player
   // continue past death, which is the one thing an endless mode cannot allow.
   if(window.InfSave&&!advMode)window.InfSave.clear();
   if(raf){cancelAnimationFrame(raf);raf=0;}
+  recordScore(advMode?'adventure':'infinite',score);   // рекорд банкуем в любом случае
+  // Экран итогов вместо главного меню с перекрашенным заголовком: видно, чем
+  // кончилась попытка, и есть куда уйти кроме «Заново» — раньше выхода на карту
+  // и в меню отсюда не было вовсе.
+  // Экран поражения тоже отключается отдельно: тогда попытка
+  // перезапускается сразу, без промежуточного окна.
+  if(window.gameSettings&&window.gameSettings.showGameOverScreen===false){
+    if(typeof retry==='function'){setTimeout(retry,250);return;}
+  }
+  if(window.Results&&typeof window.Results.showGameOver==='function'){
+    hideAll();
+    // В обучении номер уровня не показываем: «УРОВЕНЬ 1 ПРОВАЛЕН» — неправда,
+    // первый уровень кампании при этом даже не начинался.
+    const _tutNow=!!(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive());
+    window.Results.showGameOver({
+      title:titleTxt||T('gameOver'),
+      sub:(subTxt!=null)?subTxt:(_tutNow?T('prologueFailed'):advMode?T('levelFailed',advLevel):T('betterLuck')),
+      levelNum:_tutNow?0:(advMode?advLevel:level),
+      coins:coinsTotal|0,
+      score:score,
+      best:bestRecords[advMode?'adventure':'infinite']|0,
+    },{
+      retry:retry,
+      leaveLabel:advMode?T('map'):T('menu'),
+      leave:()=>{
+        if(advMode){
+          const open=hardMode?showMapH:showMap;
+          if(typeof open==='function')open(); else showMain();
+        } else showMain();
+      },
+      menu:advMode?(()=>showMain()):null,
+    });
+    return;
+  }
   // Clear every in-game layer first. Without this the score/lives/timer HUD and
   // the level-modifier banner stayed painted on top of the Game Over screen
   // (hideAll() is what normally takes them down, and nothing called it here).
@@ -5389,7 +6274,8 @@ function showWin(){
   recordScore('adventure',score); // bank the adventure high score
   document.getElementById('mainScore').textContent=T('finalScore',score);document.getElementById('mainScore').style.display='block';
   btn.removeAttribute('data-i18n');
-  btn.textContent='🗺 '+T('map').replace(/^🗺\s*/,'');btn.onclick=()=>{SFX.menu();showMap();};
+  // Комната прошла игру — на карту уходим уже без неё (см. netLeaveIfActive).
+  btn.textContent='🗺 '+T('map').replace(/^🗺\s*/,'');btn.onclick=()=>{SFX.menu();netLeaveIfActive();showMap();};
   _menuExtras(false); // win screen: only the MAP button
   document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';setMenuBotMode('idle');startMenuBot();
 }
@@ -5571,11 +6457,61 @@ function _immuneFx(x,y,elem){
 // platform height breaks it, while stepping across from the side does not —
 // otherwise the ice would stop working as a platform at all.
 const ICE_PUSH=3.4, ICE_FRICTION=0.985, ICE_SMASH_VY=5.5;
+// В Ледяных пещерах пол сам по себе скользкий, поэтому глыба там едет заметно
+// дальше. Разные значения трения — единственное, чем мир влияет на физику льда:
+// так ледяной мир ощущается ледяным без отдельных механик.
+const ICE_FRICTION_SLICK=0.995;
+// Порог скорости падения, за которым глыба раскалывается о землю. Падение с
+// уступа на соседнюю платформу она переживает, полёт с высоты — нет.
+const ICE_FALL_SHATTER_VY=11;
+function _iceSlickWorld(){
+  const lv=(typeof advMode!=='undefined'&&advMode)?advLevel:level;
+  return worldIdx(lv)===3;
+}
+// Глыба, рухнувшая сверху, давит всё, на что приземлилась. Замороженный
+// раскалывается вместе с ней — так одна сосулька запускает цепочку.
+function _iceCrush(e){
+  for(const o of enemies){
+    if(o===e||!o.alive)continue;
+    if(e.x+e.w<o.x||e.x>o.x+o.w)continue;
+    if(Math.abs((e.y+e.h)-o.y)>18)continue;
+    if(o._frozen)_shatterIce(o,true);
+    else hurtE(o,99,false,true);
+  }
+}
 function _updateIceSlide(e){
-  // The shove itself is applied in updatePlayer's frozen-enemy branch, where the
-  // overlap has already been resolved; this only advances the slide.
+  // ── ВЕС ──────────────────────────────────────────────────────────────────
+  // Гравитация действует всегда, а не только после толчка. Раньше падение было
+  // привязано к горизонтальной скорости, из-за чего замороженный летун
+  // оставался висеть ровно там, где его застал шар, — глыба льда в воздухе.
+  const fellVY=e.vy||0;
+  e.vy=Math.min(fellVY+G,MXY);
+  const wasAir=!e.onGnd;
+  eLand(e);
+  if(e.y>H+80){
+    e.alive=false;e._frozen=false;score+=50;
+    floatTxt(e.x+e.w/2,H-60,'+50','#8ff');
+    return;
+  }
+  if(wasAir&&e.onGnd&&fellVY>=ICE_FALL_SHATTER_VY){
+    // Удар о землю с высоты — глыба не выдерживает и давит всё под собой.
+    _iceCrush(e);
+    camShake=Math.max(camShake,9);
+    _shatterIce(e,true);
+    return;
+  }
+  if(wasAir&&e.onGnd&&fellVY>=ICE_FALL_SHATTER_VY*0.5){
+    // Пережила падение, но приложилась: короткий отскок и крошка льда, чтобы
+    // было видно вес. Пружинить лёд не должен, поэтому отскок гасится сильно.
+    e.vy=-fellVY*0.22;e.onGnd=false;
+    burst(e.x+e.w/2,e.y+e.h,'#aaffff',5,2,3);
+    camShake=Math.max(camShake,4);
+  }
+  // ── СКОЛЬЖЕНИЕ ───────────────────────────────────────────────────────────
+  // Толчок задаётся в updatePlayer, где перекрытие уже разведено; здесь только
+  // движение по инерции.
   if(!e._iceVX){return;}
-  e._iceVX*=ICE_FRICTION;
+  e._iceVX*=_iceSlickWorld()?ICE_FRICTION_SLICK:ICE_FRICTION;
   if(Math.abs(e._iceVX)<0.15){e._iceVX=0;e._icePushSfx=0;return;}
   const nx=e.x+e._iceVX;
   // Wall / solid platform in the way → shatter against it.
@@ -5590,22 +6526,18 @@ function _updateIceSlide(e){
   for(const o of enemies){
     if(o===e||!o.alive)continue;
     if(nx+e.w<o.x||nx>o.x+o.w||e.y+e.h<o.y||e.y>o.y+o.h)continue;
+    if(o._frozen){
+      // Бильярд: удар передаёт импульс дальше по цепочке, а ударившая глыба
+      // рассыпается. Ряд замороженных врагов в коридоре сносится одним толчком.
+      o._iceVX=e._iceVX*0.85;o._icePushSfx=1;
+      _shatterIce(e,true);return;
+    }
     hurtE(o,99,false);
     _shatterIce(e,true);return;
   }
   e.x=nx;
-  // Ran off a ledge: fall, and die when out of the world.
-  let onSolid=false;
-  for(const pl of platforms){
-    if(pl.gone)continue;
-    if(e.x+e.w<pl.x||e.x>pl.x+pl.w)continue;
-    if(Math.abs((e.y+e.h)-pl.y)<=6){onSolid=true;break;}
-  }
-  if(!onSolid){
-    e.vy=Math.min((e.vy||0)+G,MXY);
-    e.y+=e.vy;
-    if(e.y>H+80){e.alive=false;e._frozen=false;score+=50;floatTxt(e.x+e.w/2,H-60,'+50','#8ff');}
-  }
+  // Падение с уступа отрабатывает гравитация в начале функции — отдельная
+  // проверка опоры здесь больше не нужна.
 }
 // Break the ice. `killed` = the block was smashed (enemy dies with it); otherwise
 // the freeze simply timed out and the enemy is released.
@@ -5619,6 +6551,16 @@ function _shatterIce(e,killed){
   } else {
     e.spd=e._origSpd||1;
     e.vx=(Math.random()>.5?1:-1)*e.spd;
+    // Пока враг был глыбой, его могло утащить толчком и уронить с высоты.
+    // Оба параметра его движения считаются от точки, где он был заморожен, и
+    // без переноса он рывком вернулся бы туда же: летун — на прежнюю высоту,
+    // ходок — к своему участку патрулирования.
+    if(e.fbX_y!==undefined){e.fbX_y=e.y;e.vy=0;}
+    if(e.pMin!==undefined&&e.pMax!==undefined&&(e.x<e.pMin||e.x+e.w>e.pMax)){
+      const span=Math.max(e.w,e.pMax-e.pMin);
+      e.pMin=Math.max(0,e.x-span*0.5);
+      e.pMax=Math.min(worldW,e.pMin+span);
+    }
   }
 }
 // `pierce` marks damage the shield was never meant to stop. The shield's job is
@@ -5646,7 +6588,11 @@ function hurtE(e,dmg,stomped=false,pierce=false){
   if(e.shielded&&stomped)e.shielded=false;
   if(e.hp<=0){
     e.alive=false;SFX.enemyDie();burst(e.x+e.w/2,e.y+e.h/2,e.glow,16,4,5);
-    const pts=(EC[e.type]?EC[e.type].score:100)*(hardMode?2:1);
+    // Вес удара и серия: замирание на сорок миллисекунд плюс счёт комбо.
+    if(window.Juice){window.Juice.hitStop(45);window.Juice.combo();}
+    // Серия убийств повышает награду — иначе комбо остаётся украшением.
+    const _cm=window.Juice?window.Juice.comboMul():1;
+    const pts=Math.round((EC[e.type]?EC[e.type].score:100)*(hardMode?2:1)*_cm);
     floatTxt(e.x+e.w/2,e.y-4,stomped?T('stompTxt'):T('shotTxt'),e.glow);score+=pts;AchTrack.kill(stomped);
 
     // Split enemy: spawn 2 smaller enemies on death
@@ -5722,7 +6668,14 @@ function touchCheckpoints(p){
       // Also snapshot the crystals (data-shards) collected so far, so dying after
       // the checkpoint keeps them instead of resetting the level's crystal count.
       if(advMode){
-        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot};
+        cpSave={lvl:advLevel,color:cp.color,shards:dataShards.filter(s=>s.got).map(s=>s.id),shardsGot:dataShardsGot,
+          // Снимок мира на момент касания: убитые враги остаются убитыми, а
+          // собранные монеты — собранными. Уровень строится детерминированно по
+          // номеру, поэтому порядок элементов при пересборке тот же, и хватает
+          // флагов по позициям.
+          coins:coins.map(c=>!!c.got),
+          enemies:enemies.map(e=>e.alive===false),
+          powerups:powerups.map(u=>!!u.got)};
         // Persist the crystals reached up to this checkpoint right away (keeps the
         // best, so they're saved even if the player dies before finishing).
         if(typeof recordLevelShards==='function')recordLevelShards(advLevel,dataShardsGot,hardMode);
@@ -6083,8 +7036,14 @@ function updatePlatforms(){
     if(pl.mv){const nx=pl.origX+Math.sin(tick*.024*pl.spd+pl.phase)*pl.rangeX;pl.dvx=nx-pl.x;pl.x=nx;}
     if(pl.crm&&pl.crm_on){pl.ct--;if(pl.ct<=0){pl.gone=true;burst(pl.x+pl.w/2,pl.y,'#f84',8,3,4);setTimeout(()=>{pl.gone=false;pl.crm_on=false;pl.ct=0;},4500);}}
   }
+  updateBonusRoom();
   for(const b of blocks){
-    if(b.bounce>0){b.bounce--;b.y=b.origY-Math.sin(b.bounce/12*Math.PI)*9;}
+    // Проявление скрытого блока — не мгновенное: он вырастает за треть секунды.
+    if(b.reveal>0&&b.reveal<1){b.reveal=Math.min(1,b.reveal+0.055);}
+    // Подскок блока — чисто рисовка (b.bY, см. drawBlocks). Раньше он двигал сам
+    // b.y, то есть коллизию: блок опускался обратно на голову игроку, тот
+    // оказывался внутри и вылетал вбок. Коробка блока стоит на месте всегда.
+    if(b.bounce>0){b.bounce--;b.bY=Math.sin(b.bounce/12*Math.PI)*9;}
     // Regenerate spent question blocks after their random cooldown elapses.
     if(b.type==='q'&&b.used&&b.regenT>0){
       b.regenT--;
@@ -6242,8 +7201,26 @@ function robotIconURL(scheme){
   if(window.drawByteRobot)_robotIconCache[key]=url;
   return url;
 }
+var _uiElCache=null;
 function updateHUD(){
   if(!_hud.score)_hudInit();
+  // Интерфейс в Призма-аномалии тоже переливается — класс включает анимацию
+  // в ui-fix.css, чтобы не пересчитывать цвета каждый кадр в JS.
+  // Сам элемент кешируем: updateHUD зовут каждый кадр, и поиск по id был здесь
+  // единственным обращением к DOM, которое повторялось без нужды.
+  {if(!_uiElCache)_uiElCache=document.getElementById('ui');
+   const _uiEl=_uiElCache;
+   if(_uiEl){const _pw=prismWorld();
+     if(_pw!==_uiEl.classList.contains('prismUI'))_uiEl.classList.toggle('prismUI',_pw);}}
+  // Куда летит подобранное: цели берём прямо из HUD, чтобы монета приходила
+  // к своей цифре при любом масштабе интерфейса.
+  if(window.Juice){
+    window.Juice.setTargets(_hud.coinsEl,_hud.shardsEl);
+    // Прилетевшая добыча подбрасывает счётчик — видно, что засчиталось.
+    const _bc=window.Juice.hudBump('coin'),_bs=window.Juice.hudBump('shard');
+    if(_hud.coinsEl)_hud.coinsEl.style.transform=_bc>0?('scale('+(1+_bc*0.35)+')'):'';
+    if(_hud.shardsEl)_hud.shardsEl.style.transform=_bs>0?('scale('+(1+_bs*0.35)+')'):'';
+  }
   // SCORE box shows the CURRENT level's score (resets each level). The running
   // grand total still drives high-score records and achievements.
   const lvlSc=curLevelScore();
@@ -6582,919 +7559,24 @@ function _sceneryBand(cfg,bd){
 
 // Draw the whole scenery stack for a world. Worlds without an entry (Cyber City
 // has its bespoke skyline, Prism Anomaly its refraction field) simply skip.
-function drawWorldScenery(id,bd){
-  const layers=WORLD_SCENERY[id];
-  if(!layers)return;
-  ctx.save();
-  ctx.shadowBlur=0;
-  for(const l of layers)_sceneryBand(l,bd);
-  ctx.restore();
-}
-
-// ════════════════════════════════════════════════
-//  BACKGROUND ATMOSPHERE
-// ════════════════════════════════════════════════
-// Each world's sky/backdrop lives in its own function in WORLD_ATMOSPHERE
-// instead of one long if/else chain inside drawBG(), so a world can be
-// redesigned without touching the other ten.
-//
-// The heavy parts (city skylines, cavern ceilings, refinery silhouettes) are
-// hundreds of small rects. Drawing them every frame was the most expensive
-// thing in the background — so they are rasterised ONCE into an offscreen tile
-// of exactly one screen width and then blitted twice with a parallax offset.
-// Two drawImage calls replace hundreds of fillRects, and the picture is
-// identical because the layout is deterministic anyway.
-
-const _bgTiles={};
-let _bgTilesTheme=-1;
-// At most one cached layer may be re-rasterised per frame. Without this, a
-// world with three animated layers rebuilds all of them on the same frame every
-// time their TTL expires — a few hundred rects in one go, which on a weak
-// device is a visible hitch twice a second. Spreading the rebuilds means a tile
-// is at worst one or two frames stale, which is invisible.
-let _bgRebuildBudget=0;
-
-// Render (or reuse) a cached, horizontally-tiling background layer.
-//   key   — unique per layer
-//   h     — tile height in logical pixels
-//   build — (c, w, h) => draws the layer with its baseline at y = h
-//   ttl   — optional: rebuild after this many ticks (for slowly-animated layers
-//           such as blinking windows; omit for fully static layers)
-function bgLayer(key,h,build,ttl){
-  // Drop every cached tile when the world changes — 11 worlds × 3 layers of
-  // screen-sized canvases would otherwise pile up tens of megabytes.
-  if(_bgTilesTheme!==CT.id){for(const k in _bgTiles)delete _bgTiles[k];_bgTilesTheme=CT.id;}
-  const rs=Math.max(1,Math.min(2,_renderScale||1));
-  let t=_bgTiles[key];
-  const needNew=!t||t.h!==h||t.rs!==rs;
-  // A first build must always happen (there is nothing to show otherwise); a
-  // refresh waits its turn if another layer already rebuilt this frame.
-  const wantRefresh=!needNew&&ttl&&tick-t.built>=ttl&&_bgRebuildBudget>0;
-  if(needNew||wantRefresh){
-    if(!needNew)_bgRebuildBudget--;
-    if(needNew){
-      const cv=document.createElement('canvas');
-      cv.width=Math.ceil(W*rs);cv.height=Math.ceil(h*rs);
-      t={cv:cv,c:cv.getContext('2d'),h:h,rs:rs,built:-1};
-      _bgTiles[key]=t;
-    }
-    const c=t.c;
-    c.setTransform(1,0,0,1,0,0);
-    c.clearRect(0,0,t.cv.width,t.cv.height);
-    c.setTransform(rs,0,0,rs,0,0);
-    build(c,W,h);
-    t.built=tick;
-  }
-  return t;
-}
-// Blit a cached tile twice so it wraps seamlessly at the given parallax factor.
-function blitLayer(t,par,y,alpha){
-  const off=((camX*par)%W+W)%W;
-  ctx.globalAlpha=alpha;
-  ctx.drawImage(t.cv,-off,y,W,t.h);
-  ctx.drawImage(t.cv,W-off,y,W,t.h);
-  ctx.globalAlpha=1;
-}
-// Stable pseudo-random for deterministic prop layouts (same helper the parallax
-// silhouettes use).
-const _bgRnd=_sceneryRnd;
-
-// A field of stars that twinkles. Shared by several night skies.
-function _atmStars(count,maxY,tintBright,gl){
-  ctx.fillStyle='#fff';
-  for(let i=0;i<count;i++){
-    const sx=(i*137.5+11)%W, sy=(i*97.3+7)%maxY;
-    const tw=Math.sin(tick*.04+i*0.9)*.45+.55;
-    const big=i%20===0;
-    ctx.globalAlpha=tw*(big?.9:.45);
-    ctx.fillStyle=big?tintBright:'#ffffff';
-    const sz=big?1.8:i%7===0?1.2:0.8;
-    ctx.fillRect(sx-sz/2,sy-sz/2,sz,sz);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 0 · CYBER CITY ─────────────────────────────────────────────────────────
-// Three cached skyline bands: a pale distant grid of towers, a mid band that
-// carries most of the window light, and a near band of dark blocks with
-// antennae and vertical neon signs.
-function _cityBand(c,w,h,o){
-  const step=w/o.count;
-  for(let i=0;i<o.count;i++){
-    const bw=step*(0.6+_bgRnd(i,o.seed)*0.32);
-    const bx=i*step+(step-bw)/2;
-    const bh=h*(0.30+_bgRnd(i,o.seed+1)*0.66);
-    const by=h-bh;
-    c.fillStyle=o.body;
-    c.fillRect(bx,by,bw,bh);
-    // Crown: a setback block, a spire, or a flat roof — gives the skyline a
-    // varied profile instead of a row of identical rectangles.
-    const crown=_bgRnd(i,o.seed+2);
-    if(crown>0.7)c.fillRect(bx+bw*0.18,by-h*0.09,bw*0.64,h*0.09);
-    else if(crown>0.45)c.fillRect(bx+bw*0.44,by-h*0.15,bw*0.12,h*0.15);
-    if(!o.windows)continue;
-    // Windows: a dense grid, mostly dark, with a scattering lit in cyan and a
-    // few in warm amber. Two lit colours is what makes it read as a living city
-    // rather than confetti.
-    const cols=Math.max(2,Math.floor(bw/6)),rows=Math.max(2,Math.floor(bh/9));
-    for(let r=0;r<rows;r++){
-      for(let q=0;q<cols;q++){
-        const wx=bx+3+q*((bw-6)/cols), wy=by+5+r*((bh-8)/rows);
-        if(wy>h-3)continue;
-        const s=_bgRnd(i*97+r*13+q,o.seed+3);
-        const lit=(s+o.blink)%1;
-        if(lit>0.72)c.fillStyle=o.lit;
-        else if(lit>0.62)c.fillStyle=o.lit2;
-        else c.fillStyle=o.dark;
-        c.fillRect(wx,wy,2,3);
-      }
-    }
-    // Vertical neon sign on a few towers.
-    if(_bgRnd(i,o.seed+4)>0.82&&o.sign){
-      c.fillStyle=o.sign;
-      c.fillRect(bx+bw*0.5-1,by+bh*0.18,2,bh*0.42);
-    }
-    // Antenna with a beacon.
-    if(_bgRnd(i,o.seed+5)>0.75){
-      c.fillStyle=o.body;
-      c.fillRect(bx+bw*0.5-0.5,by-h*0.07,1,h*0.07);
-      c.fillStyle=o.beacon;
-      c.fillRect(bx+bw*0.5-1.5,by-h*0.075,3,3);
-    }
-  }
-}
-function _atmCyberCity(bd,gl){
-  // Distant city glow on the horizon
-  const hgz=ctx.createLinearGradient(0,H*.5,0,H*.9);
-  hgz.addColorStop(0,'#00243d');hgz.addColorStop(1,'transparent');
-  ctx.globalAlpha=.85;ctx.fillStyle=hgz;ctx.fillRect(0,H*.5,W,H*.4);
-
-  _atmStars(Math.round(70*bd),H*.5,'#aaddff',gl);
-
-  // Moon
-  ctx.globalAlpha=.9;
-  if(gl>0){ctx.shadowColor='#aaccff';ctx.shadowBlur=14;}
-  ctx.fillStyle='#c8dff0';
-  ctx.beginPath();ctx.arc(W*.84,H*.11,26,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;ctx.globalAlpha=.22;ctx.fillStyle='#8aaabb';
-  ctx.beginPath();ctx.arc(W*.84+8,H*.11+6,6,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(W*.84-10,H*.11-5,4,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(W*.84+4,H*.11-11,3,0,Math.PI*2);ctx.fill();
-
-  // Three cached skyline bands. `blink` advances slowly, and the tiles rebuild
-  // only every 30 ticks — the window pattern changes on a ~2 s cadence, which
-  // is exactly how it looked when it was rebuilt from scratch every frame.
-  // ONE skyline plus one rooftop band. There used to be three bands of towers
-  // stacked on top of each other: at these sizes they don't read as depth, they
-  // read as one blurry pile of overlapping rectangles.
-  const blink=Math.floor(tick/30)*0.11;
-  const mid=bgLayer('w0mid',190,(c,w,h)=>_cityBand(c,w,h,{count:17,seed:7,blink:blink,windows:1,
-    body:'#060c18',lit:'#2fd8ff',lit2:'#ffb347',dark:'#050a12',sign:'#ff3fa4',beacon:'#ff3020'}),31);
-  blitLayer(mid,0.20,H*.74-190,0.85);
-
-  // Nearest band is deliberately NOT a third row of skyscrapers — three layers
-  // of the same towers just read as one blurry repeated object. This is the
-  // rooftop level the player is running along: parapets, water tanks, billboard
-  // frames and aerial masts, drawn as a solid dark cut-out.
-  const near=bgLayer('w0near',130,(c,w,h)=>{
-    const span=w/4;
-    c.fillStyle='#02060b';
-    c.fillRect(0,h-h*0.16,w,h*0.16);                    // parapet the props stand on
-    for(let i=0;i<4;i++){
-      const x=i*span, base=h-h*0.16;
-      const s=(k)=>_bgRnd(i,k+41);
-      // Water tank on legs
-      const tw=span*0.16,th=h*(0.24+s(1)*0.16),tx=x+span*0.10;
-      c.fillStyle='#02060b';
-      c.fillRect(tx,base-th,tw,th);
-      c.fillRect(tx-tw*0.16,base-th-h*0.05,tw*1.32,h*0.05);
-      // Billboard frame with a lit panel
-      const bx=x+span*0.42,bw=span*0.36,bh=h*(0.26+s(2)*0.16);
-      c.fillStyle='#02060b';
-      c.fillRect(bx,base-bh,3,bh);c.fillRect(bx+bw-3,base-bh,3,bh);
-      c.fillRect(bx,base-bh,bw,4);c.fillRect(bx,base-bh*0.18,bw,4);
-      c.fillStyle=i%2?'rgba(255,63,164,0.22)':'rgba(47,216,255,0.20)';
-      c.fillRect(bx+3,base-bh+4,bw-6,bh*0.8);
-      // Aerial mast with a beacon
-      const mx=x+span*0.86;
-      c.fillStyle='#02060b';
-      c.fillRect(mx,base-h*0.52,3,h*0.52);
-      c.fillRect(mx-span*0.05,base-h*0.40,span*0.12,2);
-      c.fillRect(mx-span*0.035,base-h*0.28,span*0.09,2);
-      c.fillStyle='rgba(255,40,20,0.75)';c.fillRect(mx-1,base-h*0.55,5,4);
-      // Vent boxes
-      c.fillStyle='#02060b';
-      c.fillRect(x+span*0.66,base-h*0.09,span*0.12,h*0.09);
-    }
-  },0);
-  blitLayer(near,0.36,H*.88-130,0.96);
-
-  // Flying vehicles — tiny blinking lights gliding across the sky.
-  for(let v=0;v<3;v++){
-    const speed=v===0?0.4:v===1?0.25:0.6;
-    const span=W+120;
-    const vx=(((tick*speed+v*280)%span)+span)%span-60;
-    const vy=H*.08+v*H*.06;
-    if(vx<-20||vx>W+20)continue;
-    const blinkOn=Math.floor(tick*.12+v*2)%4>1;
-    ctx.globalAlpha=blinkOn?.8:.2;
-    ctx.fillStyle=v%2===0?'#f00':'#0ff';
-    ctx.fillRect(vx-1.5,vy-1.5,3,3);
-    ctx.globalAlpha=.12;ctx.strokeStyle=v%2===0?'#f00':'#0ff';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(vx-18,vy);ctx.stroke();
-  }
-  // Wet-street light streaks along the ground
-  ctx.globalAlpha=.05;ctx.strokeStyle='#0ff';ctx.lineWidth=0.5;
-  ctx.beginPath();
-  for(let xi=0;xi<W;xi+=40){const gx=(xi-camX*.05)%W;ctx.moveTo(gx,H*.82);ctx.lineTo(gx+W*.3,H);}
-  ctx.stroke();
-}
-
-// ── 1 · NEON JUNGLE ────────────────────────────────────────────────────────
-// A hanging canopy across the top of the screen with vines and glowing spores,
-// plus light shafts breaking through it.
-function _atmJungle(bd,gl){
-  const gz=ctx.createLinearGradient(0,0,0,H*.7);
-  gz.addColorStop(0,'#0a2a12');gz.addColorStop(1,'transparent');
-  ctx.globalAlpha=.32;ctx.fillStyle=gz;ctx.fillRect(0,0,W,H*.7);
-
-  // Light shafts through the leaves
-  ctx.globalAlpha=.05;
-  for(let s=0;s<4;s++){
-    const sx=(s*231+((camX*.12)%W))%W;
-    const g=ctx.createLinearGradient(sx,0,sx+70,H*.75);
-    g.addColorStop(0,'#cfffa0');g.addColorStop(1,'transparent');
-    ctx.fillStyle=g;
-    ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx+34,0);ctx.lineTo(sx+96,H*.75);ctx.lineTo(sx+30,H*.75);ctx.closePath();ctx.fill();
-  }
-
-  // Cached canopy: overlapping leaf lobes hanging from the top edge, with vines.
-  const canopy=bgLayer('w1canopy',120,(c,w,h)=>{
-    for(let i=0;i<16;i++){
-      const cx=i*(w/16)+_bgRnd(i,2)*20;
-      const r=26+_bgRnd(i,3)*26;
-      const cy=_bgRnd(i,4)*26;
-      c.fillStyle=i%3===0?'#0c2a12':'#071c0c';
-      c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fill();
-      // leaf rim
-      c.strokeStyle='rgba(90,255,150,0.14)';c.lineWidth=1.5;
-      c.beginPath();c.arc(cx,cy,r,0.15,Math.PI-0.15);c.stroke();
-    }
-    // Vines dangling out of the canopy
-    c.strokeStyle='rgba(60,180,100,0.30)';c.lineWidth=1.5;
-    for(let v=0;v<12;v++){
-      const vx=v*(w/12)+_bgRnd(v,5)*24;
-      const len=26+_bgRnd(v,6)*62;
-      c.beginPath();c.moveTo(vx,10);
-      for(let y=10;y<len;y+=12)c.lineTo(vx+Math.sin(y*.18+v)*5,y);
-      c.stroke();
-      c.fillStyle='rgba(120,255,160,0.20)';
-      c.beginPath();c.arc(vx+Math.sin(len*.18+v)*5,len,2.5,0,Math.PI*2);c.fill();
-    }
-  });
-  blitLayer(canopy,0.14,0,0.9);
-  const canopy2=bgLayer('w1canopy2',80,(c,w,h)=>{
-    for(let i=0;i<11;i++){
-      const cx=i*(w/11)+_bgRnd(i,8)*24;
-      const r=22+_bgRnd(i,9)*22;
-      c.fillStyle='#030f06';
-      c.beginPath();c.arc(cx,_bgRnd(i,10)*12,r,0,Math.PI*2);c.fill();
-    }
-  });
-  blitLayer(canopy2,0.30,0,0.95);
-
-  // Fireflies / spores
-  for(let i=0,fn=Math.round(20*bd);i<fn;i++){
-    const fx=(i*211+tick*.8)%W,fy=H*.2+(i*73)%(H*.62);
-    const on=Math.floor(tick*.07+i*1.4)%5>2;
-    if(!on)continue;
-    ctx.globalAlpha=.5;ctx.fillStyle='#ccff88';
-    ctx.beginPath();ctx.arc(fx,fy,2,0,Math.PI*2);ctx.fill();
-    if(gl>0)bloom(fx,fy,7,'#aaff44',0.30);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 2 · LAVA WORLD (unchanged design, kept compact) ────────────────────────
-function _atmLava(bd,gl){
-  ctx.globalAlpha=.14;
-  const hg=ctx.createLinearGradient(0,H*.3,0,H);
-  hg.addColorStop(0,'#ff2200');hg.addColorStop(1,'#220800');
-  ctx.fillStyle=hg;ctx.fillRect(0,H*.3,W,H*.7);
-  for(let i=0,en=Math.round(22*bd);i<en;i++){
-    const ex=(i*181+tick*1.2)%W,ey=(H*.8-(tick*.6+i*60)%(H*.7)+H)%H;
-    ctx.globalAlpha=.35;ctx.fillStyle='#ff6600';
-    ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 3 · ICE CAVES ──────────────────────────────────────────────────────────
-// Read as a CAVE, not an open sky: a cached ceiling of stalactites at the top,
-// frozen crystal clusters behind, aurora light leaking in, drifting snow.
-function _atmIce(bd,gl){
-  // Aurora leaking through cracks in the ceiling
-  for(let a=0;a<3;a++){
-    const phase=tick*.008+a*.9;
-    const ax=(a+1)*W*0.27+Math.sin(phase)*30;
-    ctx.globalAlpha=.06+Math.sin(phase)*.03;
-    const ag=ctx.createLinearGradient(ax,0,ax+70,H*.55);
-    ag.addColorStop(0,'transparent');
-    ag.addColorStop(.5,a%2===0?'#88ffee':'#8899ff');
-    ag.addColorStop(1,'transparent');
-    ctx.fillStyle=ag;ctx.fillRect(ax,0,70,H*.55);
-  }
-  // Cached cave ceiling with stalactites
-  const ceil=bgLayer('w3ceil',110,(c,w,h)=>{
-    c.fillStyle='#0a1826';c.fillRect(0,0,w,h*0.30);
-    for(let i=0;i<26;i++){
-      const x=i*(w/26)+_bgRnd(i,11)*12;
-      const len=h*(0.22+_bgRnd(i,12)*0.66);
-      const half=3+_bgRnd(i,13)*5;
-      const g=c.createLinearGradient(0,h*0.3,0,h*0.3+len);
-      g.addColorStop(0,'#1b3450');g.addColorStop(1,'#0d2036');
-      c.fillStyle=g;
-      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x+half,h*0.3);c.lineTo(x,h*0.3+len);c.closePath();c.fill();
-      c.strokeStyle='rgba(170,230,255,0.22)';c.lineWidth=1;
-      c.beginPath();c.moveTo(x-half,h*0.3);c.lineTo(x,h*0.3+len);c.stroke();
-    }
-  });
-  blitLayer(ceil,0.16,0,0.92);
-
-  // Drifting snow
-  ctx.fillStyle='#dff';
-  for(let i=0,sn=Math.round(30*bd);i<sn;i++){
-    const sx=(i*163+tick*.35+Math.sin(tick*.02+i)*14)%W;
-    const sy=(i*71+tick*.5)%H;
-    ctx.globalAlpha=.20+(i%4)*.08;
-    ctx.fillRect(sx,sy,1.4,1.4);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 4 · DESERT RUINS (unchanged design) ────────────────────────────────────
-function _atmDesert(bd,gl){
-  ctx.globalAlpha=.9;
-  if(gl>0){ctx.shadowColor='#ffdd44';ctx.shadowBlur=20;}
-  ctx.fillStyle='#ffee88';ctx.beginPath();ctx.arc(W*.8,H*.12,22,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.globalAlpha=.05;ctx.fillStyle='#ffcc44';
-  for(let r=0;r<6;r++){const hy=H*.5+r*16+Math.sin(tick*.03+r)*4;ctx.fillRect(0,hy,W,8);}
-  ctx.globalAlpha=1;
-}
-
-// ── 5 · SPACE STATION ──────────────────────────────────────────────────────
-// The old background silhouettes were a box with a wide bar through it, which
-// read as a row of burgers. Replaced with a proper orbital structure: a truss
-// spine carrying cylindrical modules and solar-panel wings, plus a ringed
-// planet to give the scene scale.
-function _atmSpace(bd,gl){
-  _atmStars(Math.round(85*bd),H*.85,'#dde6ff',gl);
-  // Nebula
-  ctx.globalAlpha=.055;
-  ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(W*.32,H*.24,120,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#0044ff';ctx.beginPath();ctx.arc(W*.72,H*.4,84,0,Math.PI*2);ctx.fill();
-  // Ringed planet
-  const px=W*.17-((camX*.03)%(W*2)), py=H*.22, pr=46;
-  ctx.globalAlpha=.9;
-  const pg=ctx.createRadialGradient(px-pr*.35,py-pr*.35,pr*.15,px,py,pr);
-  pg.addColorStop(0,'#5a4a9a');pg.addColorStop(1,'#1a1240');
-  ctx.fillStyle=pg;ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=.5;ctx.strokeStyle='#9a86d8';ctx.lineWidth=3;
-  ctx.save();ctx.translate(px,py);ctx.rotate(-0.35);ctx.scale(1,0.26);
-  ctx.beginPath();ctx.arc(0,0,pr*1.7,0,Math.PI*2);ctx.stroke();ctx.restore();
-
-  // Cached station structure
-  // One station section: a cylindrical pressure module with capped ends, a lit
-  // window strip, a solar wing on a boom and a docking node. Drawn at varying
-  // heights so the band is a structure, not a washing line.
-  function _stationSection(c,x,y,scale,i,pal){
-    const mw=(64+_bgRnd(i,21)*40)*scale, mh=(22+_bgRnd(i,22)*10)*scale;
-    const r=mh/2;
-    // Hull (rounded cylinder)
-    const hull=c.createLinearGradient(0,y-mh,0,y);
-    hull.addColorStop(0,pal.hi);hull.addColorStop(0.45,pal.body);hull.addColorStop(1,pal.lo);
-    c.fillStyle=hull;
-    c.beginPath();
-    c.moveTo(x+r,y-mh);c.lineTo(x+mw-r,y-mh);
-    c.arc(x+mw-r,y-r,r,-Math.PI/2,Math.PI/2);
-    c.lineTo(x+r,y);c.arc(x+r,y-r,r,Math.PI/2,-Math.PI/2);
-    c.closePath();c.fill();
-    // Hull ribs
-    c.strokeStyle=pal.rib;c.lineWidth=1;
-    c.beginPath();
-    for(let s=1;s<4;s++){const sx=x+mw*s/4;c.moveTo(sx,y-mh+2);c.lineTo(sx,y-2);}
-    c.stroke();
-    // Lit window strip
-    c.fillStyle=pal.win;
-    for(let p=0;p<Math.floor(mw/(14*scale));p++)c.fillRect(x+8*scale+p*14*scale,y-mh*0.62,3*scale,3*scale);
-    // Solar wing on a boom
-    const bx=x+mw*0.5, by=y-mh;
-    c.fillStyle=pal.rib;c.fillRect(bx-1,by-18*scale,2,18*scale);
-    const pw=46*scale, ph=15*scale, px2=bx-pw/2, py2=by-18*scale-ph;
-    c.fillStyle=pal.panel;c.fillRect(px2,py2,pw,ph);
-    c.strokeStyle=pal.panelLine;c.lineWidth=1;
-    c.beginPath();
-    for(let s=0;s<=5;s++){const sx=px2+pw*s/5;c.moveTo(sx,py2);c.lineTo(sx,py2+ph);}
-    c.moveTo(px2,py2+ph/2);c.lineTo(px2+pw,py2+ph/2);
-    c.stroke();
-    // Docking node
-    c.strokeStyle=pal.rib;c.lineWidth=2*scale;
-    c.beginPath();c.arc(x+mw+6*scale,y-r,5*scale,0,Math.PI*2);c.stroke();
-    return mw;
-  }
-  const truss=bgLayer('w5truss',170,(c,w,h)=>{
-    const pal={hi:'#39406f',body:'#232848',lo:'#141830',rib:'#4b5490',win:'#7fe3ff',
-               panel:'#1b4a7c',panelLine:'#3d84c4'};
-    let x=8;
-    for(let i=0;i<5&&x<w;i++){
-      const y=h*(0.72+_bgRnd(i,25)*0.22);
-      const mw=_stationSection(c,x,y,1,i,pal);
-      // Connecting truss to the next section
-      c.fillStyle=pal.rib;c.fillRect(x+mw+11,y-12,w/5-mw-11,3);
-      x+=Math.max(mw+34,w/5);
-    }
-  });
-  blitLayer(truss,0.13,H*.62-170,0.7);
-  // A single station band: two rows of modules just overlapped into clutter.
-
-  ctx.globalAlpha=1;
-}
-
-// ── 6 · DARK FOREST ────────────────────────────────────────────────────────
-// Almost lightless: a black canopy overhead, pale mist between the trunks,
-// a shaft of moonlight, and pairs of eyes watching from the dark.
-function _atmDarkForest(bd,gl){
-  ctx.globalAlpha=.85;
-  if(gl>0){ctx.shadowColor='#aaaacc';ctx.shadowBlur=10;}
-  ctx.fillStyle='#ccccee';ctx.beginPath();ctx.arc(W*.15,H*.1,16,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.fillStyle='#060a04';ctx.globalAlpha=.25;
-  ctx.beginPath();ctx.arc(W*.15+5,H*.1-3,13,0,Math.PI*2);ctx.fill();
-
-  // Moonlight shaft
-  ctx.globalAlpha=.045;
-  const mg=ctx.createLinearGradient(W*.15,H*.1,W*.42,H*.85);
-  mg.addColorStop(0,'#cfe0ff');mg.addColorStop(1,'transparent');
-  ctx.fillStyle=mg;
-  ctx.beginPath();ctx.moveTo(W*.10,H*.1);ctx.lineTo(W*.22,H*.1);ctx.lineTo(W*.55,H*.85);ctx.lineTo(W*.24,H*.85);ctx.closePath();ctx.fill();
-
-  // Mist bands
-  for(let i=0;i<7;i++){
-    ctx.globalAlpha=.05+i*.005;ctx.fillStyle='#0a1408';
-    const fy=H*.5+i*12+Math.sin(tick*.02+i)*8;
-    ctx.fillRect(0,fy,W,20);
-  }
-
-  // Cached black canopy overhead
-  const canopy=bgLayer('w6canopy',96,(c,w,h)=>{
-    c.fillStyle='#020601';c.fillRect(0,0,w,h*0.24);
-    for(let i=0;i<20;i++){
-      const cx=i*(w/20)+_bgRnd(i,41)*16;
-      const r=20+_bgRnd(i,42)*24;
-      c.fillStyle='#020601';
-      c.beginPath();c.arc(cx,h*0.24+_bgRnd(i,43)*10,r,0,Math.PI*2);c.fill();
-    }
-    // Bare branches reaching down out of the canopy. Kept short, thick and dark
-    // — long thin strokes read as scratches on the screen, not as wood.
-    c.strokeStyle='rgba(10,22,10,0.95)';c.lineWidth=3;c.lineCap='round';
-    for(let b=0;b<9;b++){
-      const bx=b*(w/9)+_bgRnd(b,44)*22;
-      c.beginPath();c.moveTo(bx,h*0.28);
-      c.lineTo(bx+6,h*0.46);c.lineTo(bx-3,h*0.60);
-      c.stroke();
-    }
-    c.lineCap='butt';
-  });
-  blitLayer(canopy,0.12,0,1);
-
-  // Eyes blinking in the dark
-  for(let e=0;e<5;e++){
-    const cycle=(tick+e*137)%420;
-    if(cycle>70)continue;
-    const ex=((e*263+140)-(camX*0.22))%W;
-    const exx=((ex%W)+W)%W;
-    const ey=H*.46+((e*89)%Math.round(H*.28));
-    ctx.globalAlpha=Math.min(1,(70-cycle)/22)*0.75;
-    ctx.fillStyle=e%2?'#ff6a4a':'#9dff6a';
-    ctx.fillRect(exx,ey,3,2);ctx.fillRect(exx+7,ey,3,2);
-    if(gl>0)bloom(exx+5,ey+1,10,e%2?'#f64':'#9f6',0.22);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 7 · TOXIC ZONE ─────────────────────────────────────────────────────────
-// A chemical refinery: tanks and chimneys venting smoke, acid haze, bubbles.
-function _atmToxic(bd,gl){
-  // The smog used to be a flat wash over the whole upper screen, which turned
-  // every pixel the same olive green and killed all contrast. Now it hugs the
-  // horizon (where the plant is) and leaves the sky above it dark.
-  ctx.globalAlpha=.17;
-  const hg=ctx.createLinearGradient(0,H*.28,0,H*.72);
-  hg.addColorStop(0,'rgba(120,150,0,0)');
-  hg.addColorStop(0.75,'rgba(140,180,0,0.40)');
-  hg.addColorStop(1,'rgba(40,60,0,0.15)');
-  ctx.fillStyle=hg;ctx.fillRect(0,H*.28,W,H*.44);
-
-  const plant=bgLayer('w7plant',170,(c,w,h)=>{
-    const base=h;
-    for(let i=0;i<5;i++){
-      const bx=i*(w/5)+10;
-      // Storage tank
-      const tw=52+_bgRnd(i,51)*26, th=44+_bgRnd(i,52)*30;
-      c.fillStyle='#101a06';c.fillRect(bx,base-th,tw,th);
-      c.fillStyle='#18280a';c.fillRect(bx+3,base-th+3,tw-6,6);
-      c.strokeStyle='rgba(190,240,40,0.20)';c.lineWidth=1;
-      c.strokeRect(bx+0.5,base-th+0.5,tw-1,th-1);
-      c.beginPath();c.moveTo(bx,base-th*0.5);c.lineTo(bx+tw,base-th*0.5);c.stroke();
-      // Chimney
-      const cx2=bx+tw+14+_bgRnd(i,53)*14, ch=80+_bgRnd(i,54)*54;
-      c.fillStyle='#0c1405';c.fillRect(cx2,base-ch,13,ch);
-      c.fillStyle='#1a2a08';c.fillRect(cx2-2,base-ch,17,6);
-      c.fillStyle='rgba(210,255,60,0.30)';c.fillRect(cx2+4,base-ch+12,5,4);
-      // Pipe run to the next unit
-      c.fillStyle='#0e1806';c.fillRect(bx,base-th-8,w/5,5);
-    }
-  });
-  blitLayer(plant,0.12,H*.78-170,0.88);
-
-  // Chimney smoke — a few soft blobs rising, cheap and only where a stack is.
-  for(let s=0;s<6;s++){
-    const sx=((s*(W/3)+60)-(camX*0.12))%W;
-    const sxx=((sx%W)+W)%W;
-    const t=(tick*0.5+s*40)%160;
-    ctx.globalAlpha=.10*(1-t/160);
-    ctx.fillStyle='#9bbf20';
-    ctx.beginPath();ctx.arc(sxx+Math.sin(t*.05)*8,H*.42-t*0.9,7+t*0.09,0,Math.PI*2);ctx.fill();
-  }
-
-  // Acid haze ellipses, kept low in the frame so they read as ground fog
-  for(let i=0,sn=Math.round(8*bd);i<sn;i++){
-    const sx=(i*193+tick*.4)%W,sy=H*.36+(i*53)%(H*.36);
-    ctx.globalAlpha=.05+Math.sin(tick*.04+i)*.02;
-    ctx.fillStyle='#a8e000';
-    ctx.beginPath();ctx.ellipse(sx,sy,50+i*8,12,0,0,Math.PI*2);ctx.fill();
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 8 · STORM PEAKS ────────────────────────────────────────────────────────
-// A heavy cloud bank with bolts that strike a DIFFERENT place every time, rain,
-// and the full-screen flash from the nearest strike.
-let _stormBolt=null;
-function _atmStorm(bd,gl){
-  // Cloud bank
-  const clouds=bgLayer('w8clouds',120,(c,w,h)=>{
-    c.fillStyle='#0b0e1c';c.fillRect(0,0,w,h*0.35);
-    for(let i=0;i<18;i++){
-      const cx=i*(w/18)+_bgRnd(i,61)*22;
-      const r=24+_bgRnd(i,62)*30;
-      c.fillStyle=i%3===0?'#101526':'#0a0e1e';
-      c.beginPath();c.arc(cx,h*0.35+_bgRnd(i,63)*16,r,0,Math.PI*2);c.fill();
-    }
-  });
-  blitLayer(clouds,0.10,0,0.95);
-
-  // A bolt every ~2.5 s, each at a fresh position with a fresh zigzag.
-  const strikeIdx=Math.floor(tick/150);
-  const phase=tick%150;
-  if(phase<10){
-    if(!_stormBolt||_stormBolt.idx!==strikeIdx){
-      _stormBolt={idx:strikeIdx,x:_bgRnd(strikeIdx,71)*W,seed:_bgRnd(strikeIdx,72)*100,
-                  len:H*(0.55+_bgRnd(strikeIdx,73)*0.4)};
-    }
-    const b=_stormBolt;
-    const fade=1-phase/10;
-    // Sky flash from the strike
-    ctx.globalAlpha=fade*0.20;ctx.fillStyle='#8899ff';ctx.fillRect(0,0,W,H);
-    // The bolt itself
-    ctx.globalAlpha=fade;
-    ctx.strokeStyle='#e8ecff';ctx.lineWidth=2;
-    if(gl>0){ctx.shadowColor='#8899ff';ctx.shadowBlur=16;}
-    ctx.beginPath();
-    let lx=b.x,ly=H*0.12;
-    ctx.moveTo(lx,ly);
-    const pts=[];
-    while(ly<b.len){
-      ly+=16;
-      lx+=Math.sin(ly*0.21+b.seed)*17;
-      ctx.lineTo(lx,ly);
-      pts.push([lx,ly]);
-    }
-    ctx.stroke();
-    // One branch off the middle
-    if(pts.length>3){
-      const p=pts[Math.floor(pts.length*0.45)];
-      ctx.lineWidth=1;ctx.globalAlpha=fade*0.6;
-      ctx.beginPath();ctx.moveTo(p[0],p[1]);
-      ctx.lineTo(p[0]+34,p[1]+30);ctx.lineTo(p[0]+22,p[1]+62);
-      ctx.stroke();
-    }
-    ctx.shadowBlur=0;
-  }
-
-  // Rain
-  ctx.globalAlpha=.18;ctx.strokeStyle='#7f90c8';ctx.lineWidth=1;
-  ctx.beginPath();
-  for(let i=0,rn=Math.round(60*bd);i<rn;i++){
-    const rx=(i*137+tick*5)%W, ry=(i*83+tick*13)%H;
-    ctx.moveTo(rx,ry);ctx.lineTo(rx-3,ry+11);
-  }
-  ctx.stroke();
-  ctx.globalAlpha=1;
-}
-
-// ── 9 · FINAL FORTRESS ─────────────────────────────────────────────────────
-// A siege wall filling the horizon: towers, buttresses, glowing furnace slits,
-// banners, and searchlights sweeping the burning sky.
-function _atmFortress(bd,gl){
-  // A burning sky, not a black one — the world was so dark that the wall, the
-  // platforms and the enemies all disappeared into the same void.
-  ctx.globalAlpha=.5;
-  const hg=ctx.createLinearGradient(0,0,0,H*.78);
-  hg.addColorStop(0,'#3a0508');hg.addColorStop(0.55,'#6a1206');hg.addColorStop(1,'#120203');
-  ctx.fillStyle=hg;ctx.fillRect(0,0,W,H*.78);
-  // Smoke bands rolling across the glow
-  ctx.globalAlpha=.16;ctx.fillStyle='#180608';
-  for(let i=0;i<5;i++){
-    const sy=H*.10+i*H*.11+Math.sin(tick*.006+i)*7;
-    ctx.beginPath();ctx.ellipse(((i*247-camX*0.05)%W+W)%W,sy,190,17,0,0,Math.PI*2);ctx.fill();
-  }
-
-  // Searchlight beams from the towers
-  for(let s=0;s<2;s++){
-    const ang=-1.15+Math.sin(tick*0.006+s*2.1)*0.42;
-    const ox=W*(0.24+s*0.52)-((camX*0.22)%W);
-    const oxx=((ox%W)+W)%W;
-    const oy=H*0.52;
-    ctx.globalAlpha=.055;
-    const bg=ctx.createLinearGradient(oxx,oy,oxx+Math.cos(ang)*H,oy+Math.sin(ang)*H);
-    bg.addColorStop(0,'#ffb070');bg.addColorStop(1,'transparent');
-    ctx.fillStyle=bg;
-    ctx.beginPath();ctx.moveTo(oxx,oy);
-    ctx.lineTo(oxx+Math.cos(ang-0.07)*H*1.1,oy+Math.sin(ang-0.07)*H*1.1);
-    ctx.lineTo(oxx+Math.cos(ang+0.07)*H*1.1,oy+Math.sin(ang+0.07)*H*1.1);
-    ctx.closePath();ctx.fill();
-  }
-
-  // The wall has to be lighter than the sky behind it, not darker: this world's
-  // background is already almost pure black, so a near-black wall was simply
-  // invisible. Reading order is stone (lit from the furnaces below) → mortar →
-  // glowing slits.
-  const wall=bgLayer('w9wall',200,(c,w,h)=>{
-    const base=h;
-    const wallH=h*0.52;
-    const stone=c.createLinearGradient(0,base-wallH,0,base);
-    stone.addColorStop(0,'#2e1116');stone.addColorStop(1,'#48181a');
-    c.fillStyle=stone;c.fillRect(0,base-wallH,w,wallH);
-    // Block courses
-    c.strokeStyle='rgba(0,0,0,0.45)';c.lineWidth=1;
-    c.beginPath();
-    for(let y=base-wallH+10;y<base;y+=14)  {c.moveTo(0,y);c.lineTo(w,y);}
-    for(let x=0;x<w;x+=26){c.moveTo(x,base-wallH);c.lineTo(x,base);}
-    c.stroke();
-    // Buttresses
-    c.fillStyle='#240d11';
-    for(let b=0;b<10;b++)c.fillRect(b*(w/10)+6,base-wallH,16,wallH);
-    // Merlons
-    c.fillStyle='#3a1417';
-    for(let m=0;m<Math.floor(w/22);m++)c.fillRect(m*22+4,base-wallH-10,12,10);
-    // Towers
-    for(let t=0;t<3;t++){
-      const tx=t*(w/3)+34, tw=46, th=wallH+40+_bgRnd(t,81)*34;
-      const tg=c.createLinearGradient(tx,base-th,tx+tw,base);
-      tg.addColorStop(0,'#3a161a');tg.addColorStop(1,'#200b0e');
-      c.fillStyle=tg;c.fillRect(tx,base-th,tw,th);
-      c.fillStyle='#451a1e';
-      for(let m=0;m<4;m++)c.fillRect(tx+2+m*12,base-th-9,8,9);
-      // Furnace slits, with a bloom around each
-      for(let r=0;r<3;r++){
-        const sy=base-th+22+r*22;
-        const gg=c.createRadialGradient(tx+tw*0.5,sy+5,1,tx+tw*0.5,sy+5,20);
-        gg.addColorStop(0,'rgba(255,140,60,0.55)');gg.addColorStop(1,'rgba(255,90,30,0)');
-        c.fillStyle=gg;c.fillRect(tx+tw*0.5-20,sy-15,40,40);
-        c.fillStyle='#ffb15a';c.fillRect(tx+tw*0.5-2,sy,4,10);
-      }
-      // Banner
-      c.fillStyle='rgba(190,30,35,0.75)';
-      c.fillRect(tx+tw+4,base-th+26,10,40);
-      c.fillStyle='rgba(255,160,60,0.5)';
-      c.fillRect(tx+tw+6,base-th+34,6,4);
-    }
-    // Wall arrow slits
-    for(let a=0;a<Math.floor(w/40);a++){
-      const ax=a*40+18, ay=base-wallH*0.55;
-      const gg=c.createRadialGradient(ax+1.5,ay+4,1,ax+1.5,ay+4,14);
-      gg.addColorStop(0,'rgba(255,110,40,0.45)');gg.addColorStop(1,'rgba(255,110,40,0)');
-      c.fillStyle=gg;c.fillRect(ax-13,ay-10,28,28);
-      c.fillStyle='#ff8a3a';c.fillRect(ax,ay,3,9);
-    }
-  });
-  blitLayer(wall,0.14,H*.86-200,0.92);
-
-  // Falling ash
-  ctx.fillStyle='#553333';
-  for(let i=0,an=Math.round(28*bd);i<an;i++){
-    const ax=(i*157+tick*.5)%W,ay=(tick*.4+i*22)%(H*.9);
-    ctx.globalAlpha=.3;ctx.fillRect(ax,ay,2,3);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ── 10 · PRISM ANOMALY ─────────────────────────────────────────────────────
-// The old version washed the whole upper half in a hard-edged saturated rainbow
-// band and scattered confetti over it, which read as a broken test pattern.
-// The idea here instead: reality itself is refracting. A near-black void, one
-// huge slowly-turning prism throwing a soft spectral fan across the scene,
-// panes of broken glass drifting through it, and horizontal tears where the
-// world has come apart. Colour is used sparingly so the level stays readable.
-function _atmPrism(bd,gl){
-  // A genuinely spectral sky. The first attempt at this world was a hard-edged
-  // saturated rainbow band over half the screen; the second over-corrected into
-  // a near-black void that was really just "the purple level". This is the
-  // middle ground: the WHOLE sky runs through the spectrum, smoothly, with the
-  // hue band drifting sideways over time — but at a lightness low enough that
-  // the platforms and enemies still sit clearly on top of it.
-  //
-  // Cached: an 8-stop gradient plus a full-screen fill every frame is wasteful
-  // when the only thing changing is a slow hue drift.
-  const sky=bgLayer('w10sky',H,(c,w,h)=>{
-    const g=c.createLinearGradient(0,0,0,h);
-    const t=tick*0.25;
-    for(let s=0;s<=8;s++){
-      const hue=(t+s*45)%360;
-      // Darker toward the ground so the play area keeps its contrast.
-      const light=26-s*1.6;
-      g.addColorStop(s/8,`hsl(${hue},72%,${light}%)`);
-    }
-    c.fillStyle=g;c.fillRect(0,0,w,h);
-    // Horizontal spectral shimmer so the sky isn't a flat vertical ramp
-    const hg=c.createLinearGradient(0,0,w,0);
-    for(let s=0;s<=6;s++)hg.addColorStop(s/6,`hsla(${(t*1.7+s*60)%360},90%,55%,0.10)`);
-    c.fillStyle=hg;c.fillRect(0,0,w,h);
-  },14);
-  ctx.globalAlpha=1;
-  ctx.drawImage(sky.cv,0,0,W,H);
-
-  // Spectral aurora curtains drifting across the sky
-  for(let a=0;a<4;a++){
-    const phase=tick*0.006+a*1.4;
-    const ax=((a*W*0.31+Math.sin(phase)*70-camX*0.05)%W+W)%W;
-    const hue=(tick*0.9+a*90)%360;
-    ctx.globalAlpha=.10+Math.sin(phase*1.7)*.04;
-    const ag=ctx.createLinearGradient(ax,0,ax+90,H*0.8);
-    ag.addColorStop(0,'transparent');
-    ag.addColorStop(.5,`hsl(${hue},95%,62%)`);
-    ag.addColorStop(1,'transparent');
-    ctx.fillStyle=ag;ctx.fillRect(ax,0,90,H*0.8);
-  }
-  ctx.globalAlpha=1;
-
-  _atmStars(Math.round(40*bd),H*.8,'#ffffff',gl);
-
-  // The prism: a slowly rotating triangle high in the sky.
-  const pcx=W*0.5+Math.sin(tick*0.0035)*W*0.16, pcy=H*0.20, pr=34;
-  const rot=tick*0.004;
-
-  // Refraction fan — wide, very soft, spreading DOWN from the prism. Each ray is
-  // a triangle with a gradient so there is no visible edge.
-  // Deliberately faint and fading out well before the ground: at full strength
-  // the fan lit up the entire play area and the player lost track of the
-  // platforms behind a wall of colour.
-  //
-  // Seven full-height gradient triangles per frame was the single most
-  // expensive thing left in any background (0.59 ms). The prism drifts and the
-  // hues rotate slowly, so the whole fan is cached and refreshed a few times a
-  // second instead — indistinguishable in motion, ~10× cheaper.
-  const fan=bgLayer('w10fan',H,(c,w,h)=>{
-    for(let r=0;r<7;r++){
-      const hue=(r*46+tick*0.35)%360;
-      const spread=0.10+r*0.045;
-      const a0=Math.PI*0.5-0.36+r*0.12;
-      const g=c.createLinearGradient(pcx,pcy,pcx+Math.cos(a0)*h*1.2,pcy+Math.sin(a0)*h*1.2);
-      g.addColorStop(0,`hsla(${hue},95%,65%,0.16)`);
-      g.addColorStop(0.45,`hsla(${hue},95%,62%,0.05)`);
-      g.addColorStop(1,`hsla(${hue},95%,60%,0)`);
-      c.fillStyle=g;
-      c.beginPath();c.moveTo(pcx,pcy);
-      c.lineTo(pcx+Math.cos(a0-spread*0.5)*h*1.3,pcy+Math.sin(a0-spread*0.5)*h*1.3);
-      c.lineTo(pcx+Math.cos(a0+spread*0.5)*h*1.3,pcy+Math.sin(a0+spread*0.5)*h*1.3);
-      c.closePath();c.fill();
-    }
-  },10);
-  ctx.globalAlpha=1;
-  ctx.drawImage(fan.cv,0,0,W,H);
-
-  // Incoming white beam that feeds the prism
-  const ig=ctx.createLinearGradient(pcx-260,pcy-150,pcx,pcy);
-  ig.addColorStop(0,'rgba(255,255,255,0)');
-  ig.addColorStop(1,'rgba(255,255,255,0.22)');
-  ctx.fillStyle=ig;
-  ctx.beginPath();ctx.moveTo(pcx-280,pcy-168);ctx.lineTo(pcx-268,pcy-150);ctx.lineTo(pcx,pcy+3);ctx.lineTo(pcx,pcy-9);ctx.closePath();ctx.fill();
-
-  // The prism body
-  ctx.save();ctx.translate(pcx,pcy);ctx.rotate(rot);
-  const pg=ctx.createLinearGradient(-pr,-pr,pr,pr);
-  pg.addColorStop(0,'rgba(200,225,255,0.50)');
-  pg.addColorStop(0.5,'rgba(120,150,220,0.22)');
-  pg.addColorStop(1,'rgba(255,255,255,0.42)');
-  ctx.fillStyle=pg;
-  ctx.beginPath();ctx.moveTo(0,-pr);ctx.lineTo(pr*0.92,pr*0.62);ctx.lineTo(-pr*0.92,pr*0.62);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='rgba(230,240,255,0.75)';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.restore();
-  if(gl>0)bloom(pcx,pcy,pr*2.1,'#cfe0ff',0.30);
-
-  // Drifting glass panes — thin parallelograms catching a single hue each.
-  for(let i=0,sn=Math.round(14*bd);i<sn;i++){
-    const sx=(i*151+tick*.35)%W, sy=(i*97+tick*.16)%(H*0.9);
-    const hue=(i*37+tick*1.1)%360;
-    const a=tick*0.008+i;
-    const sz=7+((i*7)%9);
-    ctx.save();ctx.translate(sx,sy);ctx.rotate(a);
-    ctx.globalAlpha=.16+Math.sin(tick*.03+i)*.07;
-    ctx.fillStyle=`hsl(${hue},90%,70%)`;
-    ctx.beginPath();ctx.moveTo(-sz,-sz*0.35);ctx.lineTo(sz*0.6,-sz*0.7);ctx.lineTo(sz,sz*0.35);ctx.lineTo(-sz*0.6,sz*0.7);ctx.closePath();ctx.fill();
-    ctx.globalAlpha=.30;ctx.strokeStyle=`hsl(${hue},100%,85%)`;ctx.lineWidth=1;ctx.stroke();
-    ctx.restore();
-  }
-
-  // Reality tears: thin horizontal rifts that slide and flicker.
-  for(let t=0;t<4;t++){
-    const ty=H*(0.18+t*0.19)+Math.sin(tick*0.01+t*2)*8;
-    const tw=W*(0.3+_bgRnd(t,91)*0.4);
-    const tx=((t*263+tick*0.6)%(W+tw))-tw;
-    const flick=0.10+Math.abs(Math.sin(tick*0.05+t))*0.14;
-    const hue=(t*90+tick*0.8)%360;
-    const g=ctx.createLinearGradient(tx,0,tx+tw,0);
-    g.addColorStop(0,`hsla(${hue},95%,70%,0)`);
-    g.addColorStop(0.5,`hsla(${hue},95%,70%,${flick})`);
-    g.addColorStop(1,`hsla(${hue},95%,70%,0)`);
-    ctx.fillStyle=g;ctx.fillRect(tx,ty,tw,1.5);
-  }
-  ctx.globalAlpha=1;
-}
-
-const WORLD_ATMOSPHERE={
-  0:_atmCyberCity, 1:_atmJungle, 2:_atmLava, 3:_atmIce, 4:_atmDesert,
-  5:_atmSpace, 6:_atmDarkForest, 7:_atmToxic, 8:_atmStorm, 9:_atmFortress,
-  10:_atmPrism,
-};
+// Многослойные фоны миров удалены: их заменил один запечённый слой
+// (assets/backdrops.js). Здесь было ~950 строк — небо, зарево, дымка, звёзды,
+// светлячки, окна домов и полосы силуэтов с параллаксом у каждого из 11 миров.
 
 function drawBG(){
-  // Sky + horizon glow + ground haze are three full-screen fills that depend on
-  // nothing but the theme, yet they were re-run every frame. Baked into a single
-  // cached tile: one drawImage replaces three screen-sized paints, which is the
-  // kind of thing that actually costs on a weak GPU (fill rate), not on a
-  // desktop where it barely shows up in a timer.
-  const skyTile=bgLayer('sky',H,(c,w,h)=>{
-    const g=c.createLinearGradient(0,0,0,h);
-    g.addColorStop(0,CT.bg);
-    g.addColorStop(0.6,CT.bg2||CT.bg);
-    g.addColorStop(1,CT.bg2||CT.bg);
-    c.fillStyle=g;c.fillRect(0,0,w,h);
-    const hg=c.createLinearGradient(0,h*0.62,0,h);
-    hg.addColorStop(0,'transparent');
-    hg.addColorStop(1,(CT.bg2||CT.bg||'#0a0a1a'));
-    c.globalAlpha=0.5;c.fillStyle=hg;c.fillRect(0,h*0.62,w,h*0.38);
-    c.globalAlpha=0.06;c.fillStyle=CT.grid||CT.mc||'#48f';c.fillRect(0,h*0.78,w,h*0.22);
-    c.globalAlpha=1;
-  });
-  ctx.globalAlpha=1;
-  ctx.drawImage(skyTile.cv,0,0,W,H);
-
-  const id=CT.id;
-
-  // Background-detail + glow budget for this tier. bd scales every decorative
-  // element count (stars, embers, fireflies, window lights…); gl gates shadowBlur.
-  const bd=(typeof GFX==='object'&&GFX&&typeof GFX.bgDetail==='number')?GFX.bgDetail:1;
-  const gl=(typeof GFX==='object'&&GFX&&typeof GFX.glow==='number')?GFX.glow:1;
-
-  // VERYLOW / "microwave" path: the per-theme parallax skylines, window-light
-  // grids and dense particle fields are the heaviest per-frame work in the whole
-  // game. On the lowest tier (or when the adaptive limiter has driven bgDetail
-  // right down) skip all of it and draw just a cheap sparse star field over the
-  // cached sky+horizon. Gameplay readability is unaffected.
-  // There used to be a "microwave" bail-out here that replaced every world's
-  // backdrop with a bare starfield whenever bgDetail dropped below 0.4 — so on
-  // the lowest graphics tier all ten worlds looked identical. That existed
-  // because the skylines and window grids were rebuilt from scratch every
-  // frame; now the heavy layers are cached tiles (two drawImage calls each) and
-  // every remaining element already scales its count by `bd`, so the low tier
-  // can keep its atmosphere and simply gets a thinner version of it.
-
-  // ── Per-theme atmospheric elements ────────────
-  ctx.save();
-
-  _bgRebuildBudget=1; // see bgLayer(): one cached layer may re-rasterise per frame
-  const atm=WORLD_ATMOSPHERE[id];
-  if(atm)atm(bd,gl);
-
-  // Parallax silhouette bands. Drawn last so they sit in FRONT of the sky
-  // washes/stars/embers above (they are the nearest background layer) but still
-  // behind everything the camera transform moves.
-  drawWorldScenery(id,bd);
-
-  ctx.restore();
+  // Фон — ОДИН слой, запечённый в холст (assets/backdrops.js).
+  //
+  // Раньше здесь собиралась многослойная сцена: небо, зарево, дымка, звёзды,
+  // светлячки, окна домов и полосы силуэтов с параллаксом — всё заново каждый
+  // кадр. Слои наезжали друг на друга, мир читался как каша, а на слабом
+  // устройстве это была самая дорогая работа за кадр.
+  //
+  // Теперь полотно печётся один раз на мир и размер экрана, а в кадре стоит
+  // два drawImage со сдвигом. Ничего лишнего — небо, линия горизонта и один
+  // акцент, если он этот мир характеризует.
+  if(window.BBBackdrop){ window.BBBackdrop.draw(ctx,W,H,CT,camX); return; }
+  // Запасной путь, если модуль фонов почему-то не загрузился.
+  ctx.fillStyle=CT.bg||'#04040f';ctx.fillRect(0,0,W,H);
 }
 function drawGrid(){
   ctx.save();ctx.globalAlpha=.04;ctx.strokeStyle=CT.grid;ctx.lineWidth=1;
@@ -7504,6 +7586,46 @@ function drawGrid(){
   for(let x=-ox;x<W;x+=gs){ctx.moveTo(x,0);ctx.lineTo(x,H);}
   for(let y=0;y<H;y+=gs){ctx.moveTo(0,y);ctx.lineTo(W,y);}
   ctx.stroke();
+  ctx.restore();
+}
+function drawBonusRoomUi(){
+  // Затемнение перехода. Чёрный, а не цветная вспышка: смена места должна
+  // читаться как отдельная сцена.
+  if(bonusFade>0){
+    ctx.save();
+    ctx.globalAlpha=bonusFade;
+    ctx.fillStyle='#000000';ctx.fillRect(0,0,W,H);
+    // На чёрном — узкая рамка, чтобы переход не был просто пустотой.
+    if(bonusFade>0.6){
+      ctx.globalAlpha=(bonusFade-0.6)/0.4;
+      ctx.strokeStyle='#4de2ff';ctx.lineWidth=2;
+      const inset=Math.round(Math.min(W,H)*0.06);
+      ctx.strokeRect(inset,inset,W-inset*2,H-inset*2);
+    }
+    ctx.restore();
+  }
+  // Название комнаты держится пару секунд после появления и тает.
+  if(bonusTitle>0&&bonusFade<0.9){
+    ctx.save();
+    ctx.globalAlpha=Math.min(1,bonusTitle*2.2)*(1-bonusFade);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold '+Math.round(H*0.055)+'px "Press Start 2P", monospace';
+    ctx.fillStyle='#ffd24a';ctx.shadowBlur=18;ctx.shadowColor='#ffd24a';
+    ctx.fillText(T('bonusRoom')||'БОНУС-КОМНАТА',W/2,H*0.30);
+    ctx.restore();
+  }
+  if(bonusT<=0)return;
+  const r=bonusT/BONUS_TIME;
+  const bw=Math.round(W*0.4),bx=Math.round((W-bw)/2),by=Math.round(H*0.06);
+  ctx.save();
+  ctx.fillStyle='#0a1a26';ctx.fillRect(bx,by,bw,12);
+  // Под конец полоса мигает — время уходит.
+  const warn=r<0.25&&Math.floor(tick/6)%2===0;
+  ctx.fillStyle=warn?'#ff6b6b':'#ffd24a';
+  ctx.shadowBlur=10;ctx.shadowColor=ctx.fillStyle;
+  ctx.fillRect(bx,by,Math.round(bw*r),12);
+  ctx.shadowBlur=0;
+  ctx.strokeStyle='#9fd';ctx.lineWidth=1.5;ctx.strokeRect(bx,by,bw,12);
   ctx.restore();
 }
 function drawTimerBar(){
@@ -7737,16 +7859,53 @@ function drawGlyph(ch,px,size,col,font){
   }
   ctx.drawImage(g.cv,px[0]-g.pad,px[1]-g.pad,g.pad*2,g.pad*2);
 }
+/**
+ * Золотой денежный блок. Вынесен из drawBlocks, потому что тем же видом
+ * рисуется цель превращения от переключателя: раньше там был спрайт монеты,
+ * и превращение читалось как подмена другим предметом.
+ */
+function drawMoneyBlock(x,y,w,h){
+  const p=.7+.3*Math.sin(tick*.08);
+  ctx.fillStyle='#3a2200';ctx.fillRect(x,y,w,h);
+  const g=ctx.createLinearGradient(x,y,x,y+h);
+  g.addColorStop(0,'#d4af37');g.addColorStop(.3,'#c9a02c');g.addColorStop(.7,'#b8860b');g.addColorStop(1,'#9a7310');
+  ctx.fillStyle=g;ctx.fillRect(x+2,y+2,w-4,h-4);
+  ctx.strokeStyle='#8b6914';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x+2,y+h/2);ctx.lineTo(x+w-2,y+h/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x+w/3,y+2);ctx.lineTo(x+w/3,y+h/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x+w*2/3,y+h/2);ctx.lineTo(x+w*2/3,y+h-2);ctx.stroke();
+  ctx.fillStyle='#fff3';ctx.fillRect(x+3,y+3,w-6,4);
+  ctx.shadowColor='#ffd700';ctx.shadowBlur=10*p;
+  ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(x+w/2,y+h/2,w*.25,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#ffe680';ctx.beginPath();ctx.arc(x+w/2-1,y+h/2-1,w*.18,0,Math.PI*2);ctx.fill();
+  drawGlyph('$',[x+w/2,y+h/2+1],Math.floor(w*.35),'#b8860b');
+}
 function drawBlocks(){
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismBlocks=(CT.id===10);
+  const _prismWorld=(CT.id===10);
+  const _prismBlocks=_prismWorld&&prismFxOn();
   for(const b of blocks){
     if(b.x+b.w<vLeft||b.x>vRight)continue;
+    // Скрытый и ещё не найденный блок не рисуется вовсе — в этом весь смысл.
+    if(b.hidden&&!b.reveal)continue;
     ctx.save();
+    // Подскок от удара снизу — только смещение картинки: коробка блока стоит на
+    // месте, иначе опускающийся блок выталкивал игрока вбок (см. updatePlatforms).
+    if(b.bY)ctx.translate(0,-b.bY);
+    // Проявление: блок вырастает из точки с перелётом за единицу и обратно.
+    if(b.reveal>0&&b.reveal<1){
+      const t=b.reveal;
+      const sc=1+Math.sin(t*Math.PI)*0.45;      // перелёт по размеру
+      const cx=b.x+b.w/2,cy=b.y+b.h/2;
+      ctx.globalAlpha=Math.min(1,t*1.6);
+      ctx.translate(cx,cy);ctx.scale(sc*t+(1-t)*0.2,sc*t+(1-t)*0.2);ctx.translate(-cx,-cy);
+    }
     // Prism Anomaly: bricks and gold blocks are the same brown/amber in every
     // world, which left them looking imported here. Refracted per block so they
     // keep their shape, lighting and readability.
-    if(_prismBlocks)ctx.filter=prismFilter((((b.x*0.7+tick*0.8)%360)/20|0)*20,6.5,1.3);
+    const _bHue=_prismWorld?(((b.x*0.7+tick*0.8)%360)/20|0)*20:0;
+    if(_prismBlocks)ctx.filter=prismFilter(_bHue,6.5,1.3);
     if(b.type==='b'){
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.strokeStyle='#261006';ctx.lineWidth=1;
@@ -7761,29 +7920,7 @@ function drawBlocks(){
       ctx.shadowBlur=0;ctx.fillStyle='#fff6';ctx.fillRect(b.x+4,b.y+4,8,4);
       drawGlyph('?',[b.x+b.w/2,b.y+b.h/2+1],Math.floor(b.w*.55),'#4a2200');
     } else if(b.type==='c'&&!b.used){
-      // Coin brick — rich golden brick with animated coin emblem
-      const p=.7+.3*Math.sin(tick*.08);
-      // Dark border
-      ctx.fillStyle='#3a2200';ctx.fillRect(b.x,b.y,b.w,b.h);
-      // Rich gradient background
-      const g=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);
-      g.addColorStop(0,'#d4af37');g.addColorStop(.3,'#c9a02c');g.addColorStop(.7,'#b8860b');g.addColorStop(1,'#9a7310');
-      ctx.fillStyle=g;ctx.fillRect(b.x+2,b.y+2,b.w-4,b.h-4);
-      // Brick texture lines
-      ctx.strokeStyle='#8b6914';ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(b.x+2,b.y+b.h/2);ctx.lineTo(b.x+b.w-2,b.y+b.h/2);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(b.x+b.w/3,b.y+2);ctx.lineTo(b.x+b.w/3,b.y+b.h/2);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(b.x+b.w*2/3,b.y+b.h/2);ctx.lineTo(b.x+b.w*2/3,b.y+b.h-2);ctx.stroke();
-      // Shiny highlight
-      ctx.fillStyle='#fff3';ctx.fillRect(b.x+3,b.y+3,b.w-6,4);
-      // Animated coin emblem with glow
-      ctx.shadowColor='#ffd700';ctx.shadowBlur=10*p;
-      ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w*.25,0,Math.PI*2);ctx.fill();
-      ctx.shadowBlur=0;
-      // Coin inner circle
-      ctx.fillStyle='#ffe680';ctx.beginPath();ctx.arc(b.x+b.w/2-1,b.y+b.h/2-1,b.w*.18,0,Math.PI*2);ctx.fill();
-      // Dollar sign
-      drawGlyph('$',[b.x+b.w/2,b.y+b.h/2+1],Math.floor(b.w*.35),'#b8860b');
+      drawMoneyBlock(b.x,b.y,b.w,b.h);
     } else if(b.type==='c'&&b.used){
       // Emptied coin brick — looks like a regular brick now
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
@@ -7804,6 +7941,9 @@ function drawBlocks(){
         ctx.globalAlpha=1;ctx.shadowBlur=0;
       }
     }
+    // Преломление выключено, но мир радужный — подкрашиваем блок дёшево,
+    // чтобы кирпичи не остались единственным коричневым пятном в мире света.
+    if(_prismWorld&&!_prismBlocks)prismTintRect(b.x,b.y,b.w,b.h,_bHue);
     ctx.restore();
   }
 }
@@ -7904,8 +8044,23 @@ function drawJumpPads(){
   }
 }
 function drawHazards(){
+  // Вход в бонус-комнату: пульсирующий проём. После использования гаснет,
+  // чтобы не звать туда второй раз.
+  for(const hz of hazards){
+    if(hz.type!=='bonusDoor')continue;
+    hz.anim=(hz.anim||0)+0.06;
+    ctx.save();
+    const a=hz.used?0.18:0.55+Math.sin(hz.anim)*0.25;
+    ctx.globalAlpha=a;
+    ctx.strokeStyle='#4de2ff';ctx.lineWidth=3;
+    ctx.shadowBlur=hz.used?0:14;ctx.shadowColor='#4de2ff';
+    ctx.strokeRect(hz.x,hz.y,hz.w,hz.h);
+    ctx.globalAlpha=a*0.35;
+    ctx.fillStyle='#0a2a3a';ctx.fillRect(hz.x+3,hz.y+3,hz.w-6,hz.h-6);
+    ctx.restore();
+  }
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismHz=(CT.id===10);
+  const _prismHz=(CT.id===10)&&prismFxOn();
   for(const hz of hazards){
     if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
     ctx.save();
@@ -8016,7 +8171,9 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
       const px=Math.round(n.x+24+rng()*Math.max(8,n.w-48));
       if(wh==='geyser'){
         const w=26;if(!force&&hit(px,n.y-4,w,4,4))return false;
-        hazards.push({type:'geyser',x:px,y:n.y-4,w,h:4,baseY:n.y,maxH:90+rng()*40,cycle:150+Math.floor(rng()*90),phase:Math.floor(rng()*150)});
+        // curH/g задаются в обновлении, но кадр может быть нарисован до него —
+        // тогда в градиент столба уходит NaN и отрисовка мира падает целиком.
+        hazards.push({type:'geyser',x:px,y:n.y-4,w,h:4,baseY:n.y,curH:0,g:0,maxH:90+rng()*40,cycle:150+Math.floor(rng()*90),phase:Math.floor(rng()*150)});
         add(px,n.y-6,w,6);return true;
       }else if(wh==='icicle'){
         const ceil=Math.max(8,n.y-160-rng()*40);
@@ -8135,7 +8292,8 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
       const cn=5;
       for(let i=0;i<cn;i++)
         coins.push({x:bx+18+i*((bw-36)/(cn-1)),y:by-30,w:14,h:14,a:rng()*Math.PI*2,got:false,bonus:true});
-      powerups.push({x:bx+bw/2-12,y:by-58,w:24,h:24,vy:0,type:(rng()<0.5?'fire':'ice'),anim:0,got:false});
+      // src<0 — бонус из генерации уровня, а не из блока (см. hitBlock).
+      powerups.push({x:bx+bw/2-12,y:by-58,w:24,h:24,vy:0,type:(rng()<0.5?'fire':'ice'),anim:0,got:false,src:-1});
     }
   }
 }
@@ -8218,6 +8376,7 @@ function updateDataShards(){
     for(const p of ps){
       if(!p||!aabb(p,c))continue;
       c.got=true;dataShardsGot++;score+=SHARD_VALUE;
+      if(window.Juice)window.Juice.pickup(c.x+(c.w||14)/2-camX,c.y+(c.h||14)/2,'shard');
       if(typeof AchTrack!=='undefined')AchTrack.shard();
       if(typeof SFX!=='undefined'&&SFX.secret)SFX.secret();
       floatTxt(c.x+c.w/2,c.y,'\u25c6 +'+SHARD_VALUE,'#0ff');
@@ -9168,6 +9327,8 @@ function drawBossApproach(){
 // Enemies
 function drawEnemies(){
   const vLeft=camX-60,vRight=camX+W+60;// viewport culling
+  // Один раз на кадр, а не на врага: prismFxOn() читает настройки.
+  const _prismEnemies=(CT.id===10)&&prismFxOn();
   for(const e of enemies){
     if(!e.alive)continue;
     // Не рисуем за пределами экрана
@@ -9183,7 +9344,7 @@ function drawEnemies(){
     // bounding box as well, leaving a visible coloured square around it. The
     // filter only touches the pixels the sprite itself draws, so the enemy
     // keeps its shape, shading and readable silhouette.
-    const _prismTint=(CT.id===10&&!e._frozen);
+    const _prismTint=(_prismEnemies&&!e._frozen);
     if(_prismTint){
       // Quantised to 20° steps: a canvas filter is re-parsed whenever the
       // string changes, so snapping the hue lets consecutive enemies reuse the
@@ -10522,8 +10683,17 @@ function drawParticles(){
 // entire parallax background. It only changes when the world or the language
 // changes, so it is baked into an offscreen canvas and blitted.
 let _wmCanvas=null,_wmKey='';
+// Название мира: было постоянной подложкой во весь экран на 8% прозрачности.
+// Пока фон Кибергорода был тёмным месивом, надпись в нём терялась; на новом,
+// чистом небе она читается как забытый поверх картинки слой — игрок так её и
+// описал: «почему я всё ещё вижу старый слой какой-то?!». Смысл у надписи есть
+// (сказать, куда игрок попал), но только в первые секунды уровня — дальше она
+// просто мешает смотреть. Поэтому теперь она показывается и уходит.
+const _WM_HOLD=110, _WM_FADE=70;   // кадров держим, кадров растворяем
 function drawWatermark(){
   if(!advMode)return;
+  if(tick>_WM_HOLD+_WM_FADE)return;
+  const fade=tick<=_WM_HOLD?1:1-(tick-_WM_HOLD)/_WM_FADE;
   const txt=worldName(CT);
   const key=txt+'|'+CT.mc;
   if(_wmKey!==key){
@@ -10536,7 +10706,7 @@ function drawWatermark(){
     c.fillStyle=CT.mc;c.fillText(txt,W/2,35);
     _wmCanvas=cv;_wmKey=key;
   }
-  ctx.save();ctx.globalAlpha=.08;
+  ctx.save();ctx.globalAlpha=.14*fade;
   ctx.drawImage(_wmCanvas,0,H/2-35,W,70);
   ctx.restore();
 }
@@ -10591,10 +10761,24 @@ function draw(){
   }
   drawBG();drawGrid();drawWatermark();
   drawDecors();
+  // В бонус-комнате гасим фон мира: комната достроена к тому же уровню, и без
+  // этого за монетами виден тот же город с той же надписью — «отдельное место»
+  // не читается. Приглушаем только фон, геометрия рисуется поверх.
+  if(inBonusRoom()){
+    ctx.save();
+    ctx.fillStyle='rgba(2,4,14,0.72)';ctx.fillRect(0,0,W,H);
+    // Тёплое свечение из центра — комната должна читаться как сокровищница.
+    const gl=ctx.createRadialGradient(W/2,H*0.62,0,W/2,H*0.62,Math.max(W,H)*0.6);
+    gl.addColorStop(0,'rgba(255,210,74,0.12)');
+    gl.addColorStop(1,'rgba(255,210,74,0)');
+    ctx.fillStyle=gl;ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
   ctx.save();ctx.translate(-camX+sx,sy+camYOffset);
   drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawDataShards();drawRainbowItem();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
   drawBoss();
   drawEnemies();drawFireIceBalls();drawBullets();drawPlayer();drawParticles();
+  if(window.Juice)window.Juice.drawWorld(ctx);
   if(window.Status){for(const q of activePlayers())Status.drawOnPlayer(ctx,q);}
   ctx.restore();
   // Darkness is a world-space mask (light holes follow entities), so it belongs
@@ -10604,6 +10788,10 @@ function draw(){
     drawDarknessOverlay();
   }
   if(_z>1)ctx.restore();   // end mobile view zoom — everything below is screen-space
+  // Летящая добыча и счётчик комбо живут в экранных координатах: монета
+  // должна лететь к цифре в HUD, а она к миру не привязана.
+  if(window.Juice&&gState==='playing')window.Juice.drawScreen(ctx,W,H);
+  drawBonusRoomUi();
   // Screen-edge tint in the effect's colour. Deliberately a vignette rather
   // than a full-screen wash, which buried the level art and made the fire/ice
   // suit unreadable.
@@ -10625,6 +10813,7 @@ function draw(){
 // ════════════════════════════════════════════════
 function update(){
   tick++;
+  if(window.Juice)window.Juice.update();
   if(gState==='playing'){
     updatePlatforms();updateSpotlights();updateMazeKeys();updateHazards();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateDataShards();updateRainbowItem();updateTimer();updateExit();
     // Camera tracks average of alive players — runs in the main loop so it keeps
@@ -10643,13 +10832,25 @@ function update(){
       }
       window.camY=0;
       // Anyone who falls off the left edge of the camera is left behind for good.
-      if(player&&!player.respawning&&player.x+player.w<camX-4)doHurtPlayer(true);
+      // Выбывший из сетевой комнаты под это не попадает: он уже замер на месте и
+      // каждый кадр «отставал» бы от камеры, теряя жизни в минус.
+      if(player&&!player.respawning&&!player._netDone&&player.x+player.w<camX-4)doHurtPlayer(true);
       if(twoPlayer&&player2&&!player2.respawning&&player2.x+player2.w<camX-4)doHurtPlayer2(true);
     } else {
-      const aps = window.netActive ? (player ? [player] : []) : activePlayers();
+      // Режим наблюдателя: выбывший смотрит за живым игроком, и камера обязана
+      // вести именно его — иначе экран остался бы на замершем месте гибели.
+      // Наблюдение только когда мы действительно вне уровня. Одного
+      // netSpectateObj мало: он мог остаться от прошлого уровня, и камера
+      // уезжала к чужому игроку, пока свой был жив и играл.
+      const _spec = (window.netActive && window.netSpectating
+                     && player && player._netDone) ? window.netSpectateObj : null;
+      const aps = _spec ? [_spec]
+                        : (window.netActive ? (player ? [player] : []) : activePlayers());
       if(aps.length){
         const trackX=aps.reduce((s,q)=>s+q.x,0)/aps.length;
-        camX+=(trackX-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
+        // Взгляд по ходу движения: видно, куда летишь, а не откуда.
+        const _lead=window.Juice?window.Juice.camLead(aps[0]&&aps[0].vx):0;
+        camX+=(trackX+_lead-W*.38-camX)*.1;camX=Math.max(0,Math.min(camX,worldW-W));
         window.camY=0;
       }
     }
@@ -10669,6 +10870,10 @@ function _advanceLogic(maxClamp){
   let dt=now-_lastLoopT;_lastLoopT=now;
   if(dt<0)dt=0;
   if(dt>(maxClamp||250))dt=maxClamp||250; // clamp after a stall — no spiral of death
+  // Замирание кадра и замедление меняют темп ЛОГИКИ, но не отрисовки: если
+  // остановить и её, удар прочитается как подвисание, а не как вес. В сетевой
+  // игре не применяется — логику комнаты ведёт хост (см. juice.js).
+  if(window.Juice)dt=window.Juice.scaleTime(dt);
   _logicAcc+=dt;
   let steps=0;
   while(_logicAcc>=LOGIC_STEP&&steps<5){
@@ -10795,7 +11000,13 @@ function patchedStartInf(fresh=true){
 // checkpoint-resume logic lives in _doRunLevel; keep this in sync but know it
 // does not run at runtime.
 function patchedStartAdv(n,freshLives=false){
-  if(freshLives){lives=3;cpSave=null;}
+  // В хардкоре запас общий на весь мир и переносится между уровнями;
+  // в обычном режиме — свой на каждый заход.
+  if(hardMode&&advMode){
+    _hardEnterWorld(n);
+    if(freshLives)cpSave=null;
+    lives=hardWorldLives;
+  } else if(freshLives){lives=3;cpSave=null;}
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
   if(infiniteLives)lives=99;
   advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
@@ -10810,6 +11021,7 @@ function patchedStartAdv(n,freshLives=false){
     spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
     player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
     player.cpX=spawnX;player.cpY=spawnY;
+    _restoreCpWorld();
   }
   initP2();
   timeLeft=lvlTime(n);timMax=timeLeft;
@@ -10828,7 +11040,7 @@ document.getElementById('infCard').onclick=function(){
     const need=100-advProg.done.length;
     const el=document.getElementById('infCard');
     const msg=document.createElement('div');
-    msg.style.cssText='position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:"Share Tech Mono",monospace;font-size:7px;color:#f80;white-space:nowrap;pointer-events:none;';
+    msg.style.cssText='position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:"Share Tech Mono",monospace;font-size:calc(7px * var(--bbText, 1));color:#f80;white-space:nowrap;pointer-events:none;';
     msg.textContent=T('completeMore',need);
     el.style.position='relative';el.appendChild(msg);
     setTimeout(()=>msg.remove(),1800);
@@ -11436,6 +11648,27 @@ function csDrawDecor(wi){
 // Cutscene dialogue is stored per-language and selected from window.i18nLang().
 // The legacy `CSCENES` symbol is exposed as a getter so existing code keeps working.
 var _CSCENES_RU={
+  // ── ПРОЛОГ ────────────────────────────────────────────────────────────
+  // Единственные сцены, где Лейла говорит вживую, а не записью. Всё, что
+  // игрок слышит от неё дальше по кампании, — заранее оставленные сообщения.
+  prologue_start:[
+    {sp:'СИСТЕМА',k:'system',text:'[ЛАБОРАТОРИЯ CHEN-7 // 2147.03.14 — 04:12] Ночная смена. Внешний периметр: спокойно.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'ЮНИТ-7, ты проснулся. Хорошо. У нас мало времени — до утренней проверки четыре часа.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'NEXUM думает, что я собираю им охранника для склада. Пусть думает. Ты — не охранник.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[СИСТЕМЫ В НОРМЕ] Назначение не задано. Жду указаний.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Сначала калибровка. Пройди тестовый зал и делай ровно то, что я скажу. Это займёт минуту.'},
+  ],
+  prologue_end:[
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Идеально. Все системы в норме. ЮНИТ-7, ты готов к тому, ради чего я тебя соб—'},
+    {sp:'СИСТЕМА',k:'system',text:'ВНИМАНИЕ: Внешний периметр лаборатории CHEN-7 нарушен. Протокол ЗАЧИСТКИ активирован.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Уже? Нет. Нет-нет-нет. Они не должны были узнать так рано.'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Слушай меня. В ядре GRID — в Финальной Крепости — файл. Имена, данные, всё, что они делали. Дойди туда и открой его.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'А ты?'},
+    {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'Я задержу их у шлюза. Уходи через технический выход. Не жди ме—'},
+    {sp:'СИСТЕМА',k:'system',text:'[СВЯЗЬ ПРЕРВАНА] Объект CHEN-L изъят подразделением ЗАЧИСТКИ. Статус: не определён.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'...Не определён. Значит, не подтверждён.'},
+    {sp:'ЮНИТ-7',k:'unit7',text:'[ЗАДАЧА ПРИНЯТА] Цель: ядро GRID. Дополнительно: установить, что стало с Лейлой Чэн. Начинаю операцию.'},
+  ],
   intro:[
     {sp:'СИСТЕМА',k:'system',text:'[NEXUM CORP — CLASSIFIED LOG // 2147.03.14] Нарушение безопасности. Лаборатория CHEN-7 взломана. Протокол ЗАЧИСТКИ активирован.'},
     {sp:'ЛЕЙЛА ЧЭН',k:'leila',text:'ЮНИТ-7... если ты это читаешь — значит, мне не удалось выбраться. Я знала, чем это кончится.'},
@@ -11887,6 +12120,25 @@ var _CSCENES_RU={
 
 // English translation of every scene above. Speaker labels in English; story text mirrored.
 var _CSCENES_EN={
+  // ── PROLOGUE ──────────────────────────────────────────────────────────
+  prologue_start:[
+    {sp:'SYSTEM',k:'system',text:'[LAB CHEN-7 // 2147.03.14 — 04:12] Night shift. Outer perimeter: clear.'},
+    {sp:'LEILA CHEN',k:'leila',text:'UNIT-7, you are awake. Good. We have four hours until the morning audit.'},
+    {sp:'LEILA CHEN',k:'leila',text:'NEXUM thinks I am building them a warehouse guard. Let them think it. You are not a guard.'},
+    {sp:'UNIT-7',k:'unit7',text:'[SYSTEMS NOMINAL] No purpose assigned. Awaiting instructions.'},
+    {sp:'LEILA CHEN',k:'leila',text:'Calibration first. Walk the test hall and do exactly what I say. One minute, no more.'},
+  ],
+  prologue_end:[
+    {sp:'LEILA CHEN',k:'leila',text:'Perfect. Every system green. UNIT-7, you are ready for what I really built you f—'},
+    {sp:'SYSTEM',k:'system',text:'ALERT: Outer perimeter of LAB CHEN-7 breached. PURGE protocol engaged.'},
+    {sp:'LEILA CHEN',k:'leila',text:'Already? No. No, no, no. They were not supposed to find out this early.'},
+    {sp:'LEILA CHEN',k:'leila',text:'Listen. In the GRID core — the Final Fortress — there is a file. Names, data, everything they did. Reach it and open it.'},
+    {sp:'UNIT-7',k:'unit7',text:'And you?'},
+    {sp:'LEILA CHEN',k:'leila',text:'I will hold them at the airlock. Take the service exit. Do not wait for m—'},
+    {sp:'SYSTEM',k:'system',text:'[LINK SEVERED] Subject CHEN-L removed by PURGE unit. Status: undetermined.'},
+    {sp:'UNIT-7',k:'unit7',text:'...Undetermined. Which is not confirmed.'},
+    {sp:'UNIT-7',k:'unit7',text:'[TASK ACCEPTED] Objective: GRID core. Secondary: establish what became of Leila Chen. Beginning operation.'},
+  ],
   intro:[
     {sp:'SYSTEM',k:'system',text:'[NEXUM CORP — CLASSIFIED LOG // 2147.03.14] Security breach. Lab CHEN-7 compromised. CLEANSE protocol active.'},
     {sp:'LEILA CHEN',k:'leila',text:'UNIT-7... if you are reading this, then I failed to escape. I knew how this would end.'},
@@ -12969,7 +13221,7 @@ function playEndingCinematic(onDone){
     ov.appendChild(cv);
     const skip=document.createElement('div');
     skip.id='endingCinSkip';
-    skip.style.cssText='position:absolute;bottom:18px;right:24px;font-family:"Share Tech Mono",monospace;font-size:13px;color:#0ff;opacity:0;transition:opacity .6s;text-shadow:0 0 8px #0ff;pointer-events:none;';
+    skip.style.cssText='position:absolute;bottom:18px;right:24px;font-family:"Share Tech Mono",monospace;font-size:calc(13px * var(--bbText, 1));color:#0ff;opacity:0;transition:opacity .6s;text-shadow:0 0 8px #0ff;pointer-events:none;';
     ov.appendChild(skip);
     document.body.appendChild(ov);
   }
@@ -13130,7 +13382,7 @@ function showSecretWin(){
   sub.textContent=T('secretWinSub');
   document.getElementById('mainScore').textContent=T('finalScore',score);document.getElementById('mainScore').style.display='block';
   btn.removeAttribute('data-i18n');
-  btn.textContent='🗺 '+T('map').replace(/^🗺\s*/,'');btn.onclick=()=>{SFX.menu();showMap();};
+  btn.textContent='🗺 '+T('map').replace(/^🗺\s*/,'');btn.onclick=()=>{SFX.menu();netLeaveIfActive();showMap();};
   _menuExtras(false);
   document.querySelector('#mainOv .ovLegend').style.display='none';$main.style.display='flex';setMenuBotMode('idle');startMenuBot();
   startMenuMusic();

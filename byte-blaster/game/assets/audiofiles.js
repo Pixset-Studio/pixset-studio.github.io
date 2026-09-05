@@ -14,16 +14,50 @@
 (function () {
   'use strict';
 
-  // Names must match tools/gen-audio.js output exactly.
-  const MUSIC = ['menu', 'boss', 'star', 'victory',
-    'world0', 'world1', 'world2', 'world3', 'world4', 'world5', 'world6', 'world7', 'world8', 'world9'];
-  const SFX = ['jump', 'dblJump', 'shoot', 'coin', 'powerup', 'stomp', 'hit', 'enemyDie',
-    'playerHurt', 'block', 'clear', 'menu', 'back', 'pause', 'resume', 'flagReach',
-    'respawn', 'secret', 'achievement', 'droneBuzz', 'walk'];
+  // Список берём из assets/music-data.js — того же файла, из которого генератор
+  // печёт mp3. Раньше он был вписан руками и при добавлении трека его забывали.
+  const MUSIC = (window.BBMusic && Object.keys(window.BBMusic.TRACKS)) || [];
+  // Список берём из assets/sfx-data.js, чтобы добавленный звук не приходилось
+  // дописывать ещё и сюда — раньше рассинхрон приводил к молчащим эффектам.
+  const SFX = (window.BBSfx && window.BBSfx.names) || [];
 
   let AC = null, sfxBus = null, musicBus = null;
   const sfxBuf = {}, musicBuf = {}, loopPt = {};
   let curSrc = null, curName = null, initStarted = false;
+
+  /* ── Сколько уже скачано ───────────────────────────────────────────────
+     Через fetch читаем потоком и считаем байты: это единственное место, где
+     игра реально что-то качает (музыка в вебе и восьмибитный набор с сайта).
+     Под Electron байты приходят одним куском по IPC — там прогресс сводится к
+     «идёт/готово», и врать про мегабайты мы не будем. */
+  const progressSubs = [];
+  function onProgress(fn) { progressSubs.push(fn); return () => {
+    const i = progressSubs.indexOf(fn); if (i >= 0) progressSubs.splice(i, 1); }; }
+  function emitProgress(info) { for (const f of progressSubs) { try { f(info); } catch (e) {} } }
+
+  /** fetch с подсчётом байтов. total = 0, если сервер не прислал длину. */
+  async function fetchCounted(url, label, opts) {
+    const res = await fetch(url, opts);
+    if (!res.ok) throw new Error(String(res.status) + " " + url);
+    const total = +(res.headers.get("content-length") || 0);
+    if (!res.body || !res.body.getReader) {
+      const ab = await res.arrayBuffer();
+      emitProgress({ label, loaded: ab.byteLength, total: ab.byteLength, done: true });
+      return ab;
+    }
+    const reader = res.body.getReader();
+    const chunks = []; let loaded = 0;
+    for (;;) {
+      const r = await reader.read();
+      if (r.done) break;
+      chunks.push(r.value); loaded += r.value.length;
+      emitProgress({ label, loaded, total, done: false });
+    }
+    const out = new Uint8Array(loaded); let off = 0;
+    for (const ch of chunks) { out.set(ch, off); off += ch.length; }
+    emitProgress({ label, loaded, total: total || loaded, done: true });
+    return out.buffer;
+  }
 
   // Read a file's bytes: IPC base64 under file://, else fetch (web / Capacitor).
   async function readBytes(rel) {
@@ -34,9 +68,7 @@
       for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
       return bytes.buffer;
     }
-    const res = await fetch(rel);
-    if (!res.ok) throw new Error('fetch failed ' + rel);
-    return await res.arrayBuffer();
+    return await fetchCounted(rel, rel.split('/').pop().replace(/\.mp3$/, ''));
   }
 
   // decodeAudioData returns a promise in modern engines; wrap the callback form too.
@@ -58,32 +90,156 @@
     return [s / buf.sampleRate, (e + 1) / buf.sampleRate];
   }
 
-  async function loadOne(kind, name) {
-    const rel = 'assets/audio/' + (kind === 'music' ? 'Music' : 'SFX') + '/' + name + '.mp3';
-    const ab = await readBytes(rel);
-    const buf = await decode(ab);
-    if (kind === 'music') { musicBuf[name] = buf; loopPt[name] = findLoop(buf); }
-    else sfxBuf[name] = buf;
+  /* ── Где лежит музыка ──────────────────────────────────────────────────
+     Обычный стиль лежит в самой сборке. Восьмибитный — нет: он весит столько
+     же, а нужен не каждому, и класть его в каждый .apk значит удваивать музыку ради
+     тех, кто её не включит. Он скачивается с сайта при выборе стиля и остаётся
+     в кэше устройства.
+
+     Пока пачка не скачалась (нет сети, первый запуск), игра играет чиптюн
+     живым синтезом. Это не заглушка: чиптюн — родной звук этого движка, так
+     что «8 бит» работает сразу и без интернета, просто чуть тяжелее для
+     телефона, пока файлы не приедут. */
+  // Адрес набора можно переопределить через window.BB_CHIP_BASE — пригодится,
+  // если музыка переедет на другой хост.
+  const CHIP_DEFAULT = 'https://pixset-studio.github.io/byte-blaster/audio/chip/';
+  const chipBase = () => window.BB_CHIP_BASE || CHIP_DEFAULT;
+
+  function musicStyle() {
+    const s = window.gameSettings && window.gameSettings.musicStyle;
+    return s === 'chip' ? 'chip' : 'modern';
+  }
+  const musicPath = (name) => 'assets/audio/Music/modern/' + name + '.mp3';
+
+  /* Кэш скачанного. В Electron страница живёт на file://, где Cache Storage
+     недоступен, поэтому там файлы кладёт на диск главный процесс. */
+  const chipStore = {
+    async get(name) {
+      if (window.audioAPI && window.audioAPI.cacheGet) {
+        const b64 = await window.audioAPI.cacheGet('chip/' + name + '.mp3');
+        if (!b64) return null;
+        const bin = atob(b64), a = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+        return a.buffer;
+      }
+      if (!self.caches) return null;
+      const c = await caches.open('bb-chip-v1');
+      const r = await c.match(chipBase() + name + '.mp3');
+      return r ? await r.arrayBuffer() : null;
+    },
+    async put(name, ab) {
+      try {
+        if (window.audioAPI && window.audioAPI.cachePut) {
+          let s = '';
+          const a = new Uint8Array(ab);
+          for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192));
+          await window.audioAPI.cachePut('chip/' + name + '.mp3', btoa(s));
+          return;
+        }
+        if (!self.caches) return;
+        const c = await caches.open('bb-chip-v1');
+        await c.put(chipBase() + name + '.mp3', new Response(ab));
+      } catch (e) { /* нет места или запрещено — переживём, скачаем снова */ }
+    },
+  };
+
+  // Что показывать в настройках: 'ready' | 'loading' | 'offline'
+  let chipState = 'ready';
+  const notifyStyleState = () => {
+    if (typeof window._syncStyleState === 'function') { try { window._syncStyleState(); } catch (e) {} }
+  };
+
+  /** Байты восьмибитного трека: из кэша, иначе с сайта. */
+  async function chipBytes(name) {
+    const cached = await chipStore.get(name).catch(() => null);
+    if (cached && cached.byteLength) { chipState = 'ready'; notifyStyleState(); return cached; }
+    chipState = 'loading'; notifyStyleState();
+    try {
+      const ab = await fetchCounted(chipBase() + name + '.mp3', name, { cache: 'no-cache' });
+      chipStore.put(name, ab.slice(0));
+      chipState = 'ready'; notifyStyleState();
+      return ab;
+    } catch (e) {
+      // Нет сети или набор ещё не опубликован — не беда: чиптюн отыграет живой
+      // синтез, он для этого движка родной.
+      chipState = 'offline'; notifyStyleState();
+      throw e;
+    }
   }
 
-  // Decode everything once, after the AudioContext exists. Music first (it's what
-  // the player hears immediately), then SFX. Resolves the `ready` flag per-bucket
-  // so SFX can start working even if one music file failed.
+  async function loadSfx(name) {
+    const ab = await readBytes('assets/audio/SFX/' + name + '.mp3');
+    sfxBuf[name] = await decode(ab);
+  }
+
+  /* Музыку декодируем по одному треку и держим в памяти только нужное.
+     Секунда музыки после декода — это ~190 КБ (48 кГц, Float32), а треков
+     четверть часа: разом это под три сотни мегабайт, чего телефон не переживёт.
+     Поэтому кэш на два трека: играющий и предыдущий, чтобы возврат в меню не
+     упирался в повторный декод. */
+  const CACHE_LIMIT = 2;
+  const order = [];
+  const decoding = {};
+
+  function remember(name) {
+    const i = order.indexOf(name);
+    if (i >= 0) order.splice(i, 1);
+    order.push(name);
+    while (order.length > CACHE_LIMIT) {
+      // Играющий трек выбрасывать нельзя, но и терять из учёта тоже: раньше он
+      // просто уходил из очереди и оставался в памяти навсегда. Ищем самый
+      // старый из тех, что можно освободить.
+      const idx = order.findIndex((n) => n !== curName);
+      if (idx < 0) break;
+      const drop = order.splice(idx, 1)[0];
+      delete musicBuf[drop]; delete loopPt[drop];
+    }
+  }
+
+  async function loadMusic(name) {
+    if (musicBuf[name]) { remember(name); return musicBuf[name]; }
+    if (decoding[name]) return decoding[name];
+    const key = musicStyle() + '/' + name;
+    decoding[name] = (async () => {
+      const bytes = key.startsWith('chip/') ? await chipBytes(name) : await readBytes(musicPath(name));
+      const buf = await decode(bytes);
+      // Стиль могли переключить, пока файл декодировался — тогда результат
+      // уже не тот, что нужен.
+      if (key !== musicStyle() + '/' + name) return null;
+      musicBuf[name] = buf; loopPt[name] = findLoop(buf);
+      remember(name);
+      return buf;
+    })();
+    try { return await decoding[name]; } finally { delete decoding[name]; }
+  }
+
+  /** Сменили стиль в настройках — весь кэш музыки протух. */
+  function reloadStyle() {
+    for (const k of Object.keys(musicBuf)) delete musicBuf[k];
+    for (const k of Object.keys(loopPt)) delete loopPt[k];
+    order.length = 0;
+    const again = curName;
+    stopMusic();
+    if (again && typeof window.onAudioFilesReady === 'function') {
+      try { window.onAudioFilesReady(); } catch (e) {}
+    }
+  }
+
+  // Звуки декодируем сразу: их сорок с лишним, но все короткие — вместе это
+  // единицы мегабайт, и задержка на первом ударе была бы слышна.
   async function init(ac, sBus, mBus) {
     if (initStarted) return;
     initStarted = true;
     AC = ac; sfxBus = sBus; musicBus = mBus;
-    const results = await Promise.allSettled([
-      ...MUSIC.map(n => loadOne('music', n)),
-      ...SFX.map(n => loadOne('sfx', n)),
-    ]);
+    const results = await Promise.allSettled(SFX.map(loadSfx));
     const failed = results.filter(r => r.status === 'rejected').length;
-    API.musicReady = MUSIC.every(n => musicBuf[n]);
     API.sfxReady = SFX.every(n => sfxBuf[n]);
+    // Музыка теперь грузится по требованию, поэтому «готовность» значит не
+    // «всё декодировано», а «файлы вообще есть».
+    API.musicReady = MUSIC.length > 0;
     API.ready = API.musicReady || API.sfxReady;
-    if (failed) console.warn('🔊 AudioFiles: ' + failed + ' file(s) failed to load — falling back to synth for those.');
-    else console.log('✅ AudioFiles: all samples decoded.');
-    // Tell the game to upgrade any currently-playing procedural track to its loop.
+    if (failed) console.warn('🔊 AudioFiles: ' + failed + ' звук(ов) не загрузились — для них останется синтез.');
+    else console.log('✅ AudioFiles: звуки декодированы, музыка грузится по требованию.');
     if (API.musicReady && typeof window.onAudioFilesReady === 'function') {
       try { window.onAudioFilesReady(); } catch (e) {}
     }
@@ -100,7 +256,17 @@
   function playMusic(name) {
     if (!AC) return false;
     const buf = musicBuf[name];
-    if (!buf) return false;
+    if (!buf) {
+      // Ещё не декодирован: запускаем декод и отвечаем «не могу». Игра включит
+      // живой синтез, а когда файл будет готов — onAudioFilesReady пересадит её
+      // на него, тем же путём, что и раньше при старте.
+      loadMusic(name).then((b) => {
+        if (b && typeof window.onAudioFilesReady === 'function') {
+          try { window.onAudioFilesReady(); } catch (e) {}
+        }
+      }).catch(() => {});
+      return false;
+    }
     if (curName === name && curSrc) return true; // already playing this track
     stopMusic();
     const src = AC.createBufferSource();
@@ -125,9 +291,16 @@
 
   const API = {
     ready: false, musicReady: false, sfxReady: false,
-    init, playMusic, playSfx, stopMusic,
+    init, playMusic, playSfx, stopMusic, reloadStyle,
     hasMusic: (n) => !!musicBuf[n],
     hasSfx: (n) => !!sfxBuf[n],
+    style: musicStyle,
+    chipState: () => chipState,
+    // Подписка на закачку: {label, loaded, total, done}. Срабатывает только там,
+    // где данные реально идут по сети (веб-сборка и восьмибитный набор).
+    onProgress,
+    // Для проверок: сколько треков реально держим в памяти.
+    cached: () => Object.keys(musicBuf).length,
   };
   window.AudioFiles = API;
 })();

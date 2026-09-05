@@ -66,6 +66,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <a href="#scoring"><span data-l="ru">Очки и оценка</span><span data-l="en">Score and grades</span></a>
       <a href="#collect"><span data-l="ru">Что собирать</span><span data-l="en">Collectibles</span></a>
       <a href="#map"><span data-l="ru">Карта мира</span><span data-l="en">World map</span></a>
+      <a href="#prologue"><span data-l="ru">Пролог</span><span data-l="en">Prologue</span></a>
+      <a href="#leaderboard"><span data-l="ru">Таблица рекордов</span><span data-l="en">Leaderboards</span></a>
       <a href="#worlds"><span data-l="ru">Миры</span><span data-l="en">Worlds</span></a>
       <a href="#bosses"><span data-l="ru">Боссы и тактика</span><span data-l="en">Bosses and tactics</span></a>
       <a href="#modifiers"><span data-l="ru">Модификаторы уровней</span><span data-l="en">Level modifiers</span></a>
@@ -331,6 +333,12 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="en"><b>The flag</b> at the end: the higher you touch it, the bigger the bonus.</li>
         <li data-l="ru"><b>Каждый десятый</b> уровень мира — арена босса, обычных врагов там нет.</li>
         <li data-l="en"><b>Every tenth</b> level of a world is a boss arena with no regular enemies.</li>
+        <li data-l="ru"><b>Особенность уровня</b> — не больше одной, и примерно на трети уровней её нет вовсе. Это либо бонус-комната, либо скрытые блоки.</li>
+        <li data-l="en"><b>A level feature</b> — at most one, and roughly a third of levels have none at all. Either a bonus room or hidden blocks.</li>
+        <li data-l="ru"><b>Бонус-комната</b>: спрятанный вход уводит в закрытую комнату с монетами. Планировок пять — ливень монет, лестница, арка, колонны и сокровищница. Комната закрыта со всех сторон, выйти из неё можно только назад, и время в ней ограничено.</li>
+        <li data-l="en"><b>Bonus room</b>: a hidden entrance leads into a sealed room full of coins. There are five layouts — coin shower, stairway, arch, columns and treasury. The room is closed on all sides, the only way out is back, and your time inside is limited.</li>
+        <li data-l="ru"><b>Скрытые блоки</b> невидимы, пока не ударишь снизу. Ставятся выше обычных рядов — до них надо допрыгнуть, — и всегда в одних и тех же местах, так что находкой можно поделиться.</li>
+        <li data-l="en"><b>Hidden blocks</b> stay invisible until you hit them from below. They sit above the usual rows, so you have to jump for them, and they are always in the same places — a find worth sharing.</li>
       </ul>
       <div class="note cy">
         <span data-l="ru">Стартовых жизней — 3. Они переносятся между уровнями внутри забега, а бонус «+1 ЖИЗНЬ» и каждые 100 собранных монет добавляют ещё.</span>
@@ -390,7 +398,47 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="ru">Под названием мира стоит значок радужного осколка: <b>🌈 ✓</b> — в этом мире осколок уже найден, <b>🌈 ✗</b> — ещё нет.</li>
         <li data-l="en">Side arrows switch worlds; the corner button opens your profile.</li>
         <li data-l="en">Under the world name sits the rainbow-shard marker: <b>🌈 ✓</b> means this world's shard is found, <b>🌈 ✗</b> means it is not.</li>
+        <li data-l="ru">В шапке карты — сколько всего собрано <b>монет</b>, а у выбранного узла видно, сколько взято именно на этом уровне: удобно, когда возвращаешься добирать.</li>
+        <li data-l="en">The map header shows your total <b>coins</b>, and the selected node shows how many you took on that particular level — handy when you come back to collect.</li>
+        <li data-l="ru">Перед первым миром стоит отдельный узел — <b>Пролог</b>. Он не входит в счёт прохождения и открыт с самого начала.</li>
+        <li data-l="en">A separate node sits before world one — the <b>Prologue</b>. It does not count toward completion and is unlocked from the start.</li>
       </ul>
+    </section>
+
+    <section id="prologue">
+      <h2><span data-l="ru">ПРОЛОГ</span><span data-l="en">PROLOGUE</span></h2>
+      <p data-l="ru">Отдельный короткий уровень до начала кампании, в лаборатории CHEN-7. Его ведёт <b>Лейла Чэн</b> — она объясняет управление прямо по ходу дела, а не показывает список клавиш.</p>
+      <p data-l="en">A short standalone level before the campaign, set in Lab CHEN-7. It is guided by <b>Leila Chen</b>, who explains the controls as you go instead of listing keys.</p>
+      <ul class="clean">
+        <li data-l="ru">Уровень обычный, без поблажек: время идёт, жизни тратятся, в конце — настоящий флаг.</li>
+        <li data-l="en">It is a normal level with no concessions: the timer runs, lives are spent, and a real flag waits at the end.</li>
+        <li data-l="ru">Гибель перезапускает пролог, а не бросает в первый уровень кампании.</li>
+        <li data-l="en">Dying restarts the prologue instead of dropping you into campaign level one.</li>
+        <li data-l="ru">В конце калибровки за Лейлой приходит подразделение ЗАЧИСТКИ — отсюда и начинается всё остальное. После пролога игра предложит включить подсказки на первый уровень; они одноразовые.</li>
+        <li data-l="en">At the end of the calibration a PURGE unit comes for Leila — and everything else follows from that. After the prologue the game offers hints for level one; they show up once.</li>
+      </ul>
+    </section>
+
+    <section id="leaderboard">
+      <h2><span data-l="ru">ТАБЛИЦА РЕКОРДОВ</span><span data-l="en">LEADERBOARDS</span></h2>
+      <p data-l="ru">Кнопка «Рекорды» в правом верхнем углу главного меню. Восемь досок в двух группах; чтобы попасть в них, нужен вход в аккаунт Pixset Studio.</p>
+      <p data-l="en">The “Records” button sits in the top-right corner of the main menu. Eight boards in two groups; you need a Pixset Studio account to appear on them.</p>
+      <div class="tw"><table>
+        <thead><tr>
+          <th><span data-l="ru">Группа</span><span data-l="en">Group</span></th>
+          <th><span data-l="ru">Доски</span><span data-l="en">Boards</span></th>
+          <th><span data-l="ru">Что считает</span><span data-l="en">What it counts</span></th></tr></thead>
+        <tbody>
+          <tr><td><span data-l="ru">Режимы</span><span data-l="en">Modes</span></td>
+              <td><span data-l="ru">Кампания, Бесконечный, Хардкор</span><span data-l="en">Campaign, Endless, Hardcore</span></td>
+              <td><span data-l="ru">Очки за забег. Три отдельных зачёта: в хардкоре те же очки даются заметно тяжелее.</span><span data-l="en">Score per run. Three separate rankings: the same points are far harder to earn in hardcore.</span></td></tr>
+          <tr><td><span data-l="ru">Собрано</span><span data-l="en">Collected</span></td>
+              <td><span data-l="ru">Уровни, Звёзды, Кристаллы, Монеты, Достижения</span><span data-l="en">Levels, Stars, Crystals, Coins, Achievements</span></td>
+              <td><span data-l="ru">Состояние аккаунта, а не отдельный забег. Обновляется при сохранении прогресса в аккаунт.</span><span data-l="en">Account state rather than a single run. Updates when your progress is saved to the account.</span></td></tr>
+        </tbody>
+      </table></div>
+      <p class="dim" data-l="ru">Под ником в каждой строке стоят ещё три числа — по ним видно, с чем игрок пришёл на это место. Внизу экрана — ваше место, даже если вы далеко за пределами топ-50.</p>
+      <p class="dim" data-l="en">Each row carries three more numbers under the nickname, showing what the player brought with them. Your own rank is at the bottom, even if you are far outside the top 50.</p>
     </section>
 
     <section id="worlds">
@@ -411,7 +459,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <tr><td>8</td><td><b><span data-l="ru">ТОКСИЧНАЯ ЗОНА</span><span data-l="en">TOXIC ZONE</span></b></td><td>71–80</td><td><span data-l="ru">Свалка отходов, кислота и ядовитые лужи</span><span data-l="en">A waste dump of acid and poison pools</span></td></tr>
           <tr><td>9</td><td><b><span data-l="ru">ГРОЗОВЫЕ ПИКИ</span><span data-l="en">STORM PEAKS</span></b></td><td>81–90</td><td><span data-l="ru">Атмосферные электростанции, молнии и сильный ветер</span><span data-l="en">Atmospheric power plants, lightning and heavy wind</span></td></tr>
           <tr><td>10</td><td><b><span data-l="ru">ПОСЛЕДНЯЯ КРЕПОСТЬ</span><span data-l="en">FINAL FORTRESS</span></b></td><td>91–100</td><td><span data-l="ru">Ядро GRID. Всё, что осталось у системы</span><span data-l="en">The GRID core. Everything the system has left</span></td></tr>
-          <tr><td>🌈</td><td><b>PRISM ANOMALY</b></td><td>101–110</td><td><span data-l="ru">Секретный мир: спектральное небо, преломлённые враги</span><span data-l="en">The secret world: a spectral sky and refracted enemies</span></td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">ПРИЗМА-АНОМАЛИЯ</span><span data-l="en">PRISM ANOMALY</span></b></td><td>101–110</td><td><span data-l="ru">Секретный мир: спектральное небо, преломлённые враги</span><span data-l="en">The secret world: a spectral sky and refracted enemies</span></td></tr>
         </tbody>
       </table></div>
       <h3><span data-l="ru">Как открыть секретный мир</span><span data-l="en">Unlocking the secret world</span></h3>
@@ -439,7 +487,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <tr><td>8</td><td><b><span data-l="ru">КОРОЛЬ СЛИЗИ</span><span data-l="en">SLUDGE KING</span></b></td><td><span data-l="ru">Три прыжка ломают панцирь, потом стреляйте в ядро</span><span data-l="en">Three stomps crack the shell, then shoot the core</span></td></tr>
           <tr><td>9</td><td><b><span data-l="ru">ШТОРМОВОЙ ТИТАН</span><span data-l="en">STORM TITAN</span></b></td><td><span data-l="ru">Сбейте три молниевых узла, чтобы оглушить, затем атакуйте</span><span data-l="en">Take out three lightning nodes to stun it, then attack</span></td></tr>
           <tr><td>10</td><td><b><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></b></td><td><span data-l="ru">Фаза 1 — стрелять, фаза 2 — прыгать, когда глаз низко, фаза 3 — и то и другое</span><span data-l="en">Phase 1 shoot, phase 2 stomp when the eye is low, phase 3 both</span></td></tr>
-          <tr><td>🌈</td><td><b>PRISM WRAITH</b></td><td><span data-l="ru">Бейте ядро — прикрываться ему больше нечем</span><span data-l="en">Hit the core — it has nothing left to hide behind</span></td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">ПРИЗМА-ПРИЗРАК</span><span data-l="en">PRISM WRAITH</span></b></td><td><span data-l="ru">Бейте ядро — прикрываться ему больше нечем</span><span data-l="en">Hit the core — it has nothing left to hide behind</span></td></tr>
         </tbody>
       </table></div>
       <div class="note cy">
@@ -466,7 +514,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <tr><td><span data-l="ru">КОРОЛЬ СЛИЗИ</span><span data-l="en">SLUDGE KING</span></td><td>10</td><td><span data-l="ru">Панцирь: 3 прыжка, потом ядро под огонь</span><span data-l="en">Shell: 3 stomps, then the core takes fire</span></td></tr>
           <tr><td><span data-l="ru">ШТОРМОВОЙ ТИТАН</span><span data-l="en">STORM TITAN</span></td><td>9</td><td><span data-l="ru">Три молниевых узла оглушают его</span><span data-l="en">Three lightning nodes stun it</span></td></tr>
           <tr><td><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></td><td>12</td><td><span data-l="ru">Три фазы: выстрел → прыжок → оба</span><span data-l="en">Three phases: shoot → stomp → both</span></td></tr>
-          <tr><td>PRISM WRAITH</td><td>9+</td><td><span data-l="ru">Финал секретного мира, укрытий нет</span><span data-l="en">The secret world's finale, no cover left</span></td></tr>
+          <tr><td><span data-l="ru">ПРИЗМА-ПРИЗРАК</span><span data-l="en">PRISM WRAITH</span></td><td>9+</td><td><span data-l="ru">Финал секретного мира, укрытий нет</span><span data-l="en">The secret world's finale, no cover left</span></td></tr>
         </tbody>
       </table></div>
       <div class="note">
@@ -534,7 +582,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <tr><td><span data-l="ru">Хардкор</span><span data-l="en">Hardcore</span></td><td><span data-l="ru">Открыть режим, 50 уровней, все 100</span><span data-l="en">Unlock it, 50 levels, all 100</span></td></tr>
           <tr><td><span data-l="ru">Бесконечный</span><span data-l="en">Infinite</span></td><td><span data-l="ru">Уровень 10 / 50 / 100</span><span data-l="en">Level 10 / 50 / 100</span></td></tr>
           <tr><td><span data-l="ru">Очки</span><span data-l="en">Score</span></td><td>100 000 / 500 000 / 1 000 000</td></tr>
-          <tr><td><span data-l="ru">Секретный мир</span><span data-l="en">Secret world</span></td><td><span data-l="ru">Первый осколок, все 10, прохождение Призма-Аномалии, победа над PRISM WRAITH</span><span data-l="en">First shard, all 10, clearing Prism Anomaly, beating PRISM WRAITH</span></td></tr>
+          <tr><td><span data-l="ru">Секретный мир</span><span data-l="en">Secret world</span></td><td><span data-l="ru">Первый осколок, все 10, прохождение Призма-Аномалии, победа над ПРИЗМА-ПРИЗРАК</span><span data-l="en">First shard, all 10, clearing Prism Anomaly, beating PRISM WRAITH</span></td></tr>
           <tr><td><span data-l="ru">Кристаллы</span><span data-l="en">Crystals</span></td><td><span data-l="ru">100 и все 300 кристаллов данных</span><span data-l="en">100 and all 300 data crystals</span></td></tr>
           <tr><td><span data-l="ru">Стихии</span><span data-l="en">Elements</span></td><td><span data-l="ru">25 замороженных и 25 подожжённых врагов</span><span data-l="en">25 enemies frozen and 25 set ablaze</span></td></tr>
           <tr><td><span data-l="ru">Прочее</span><span data-l="en">Misc</span></td><td><span data-l="ru">Игра вдвоём, вся музыка, все сцены, сила звезды, полное прохождение</span><span data-l="en">Two-player play, all music, all scenes, star power, full completion</span></td></tr>
@@ -598,6 +646,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <p data-l="ru">Глыбу можно разбить и напрямую: <b>приземлиться на неё сверху</b> с высоты или <b>подпрыгнуть в неё снизу</b>, как в блок. В обоих случаях лёд лопается, а враг внутри погибает сразу. Осторожное касание сверху по-прежнему безопасно — глыба остаётся платформой, на которой можно стоять.</p>
       <p data-l="en">A frozen enemy can be pushed sideways — the block slides and shatters on the first obstacle, killing whatever it hits. On narrow platforms this clears several at once, and over a pit you can simply shove it off.</p>
       <p data-l="en">You can also break it directly: <b>land on it hard from above</b> or <b>jump into it from below</b>, the way you would a block. Either shatters the ice and kills the enemy inside instantly. A gentle step onto it is still safe — the block stays a platform you can stand on.</p>
+      <p data-l="ru">У глыбы есть вес. Она <b>падает</b>, а не висит там, где её застал шар: заморозив летуна, вы роняете его вниз. Упав с высоты, глыба раскалывается о землю и давит всё, на что приземлилась. Удар в другую замороженную передаёт толчок дальше — ряд врагов в коридоре сносится одним пинком. В <b>Ледяных пещерах</b> пол скользкий, и глыба проезжает втрое дальше, чем в остальных мирах.</p>
+      <p data-l="en">The block has weight. It <b>falls</b> instead of hanging where the shot caught it: freeze a flier and you drop it. Falling from a height it shatters on the ground and crushes whatever it lands on. Hitting another frozen enemy passes the shove along, so one kick clears a corridor. In the <b>Ice Caves</b> the floor is slippery and a block slides three times further than elsewhere.</p>
     </section>
 
     <section id="multiplayer">
@@ -663,7 +713,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       </details>
 
       <details>
-        <summary>⚠⚠⚠ <span data-l="ru">СПОЙЛЕР: что такое PRISM ANOMALY</span><span data-l="en">SPOILER: what PRISM ANOMALY is</span></summary>
+        <summary>⚠⚠⚠ <span data-l="ru">СПОЙЛЕР: что такое ПРИЗМА-АНОМАЛИЯ</span><span data-l="en">SPOILER: what PRISM ANOMALY is</span></summary>
         <p data-l="ru">Секретный мир отвечает на вопрос, который основная линия не задаёт: <b>что стало с UNIT-1 … UNIT-6</b>.</p>
         <p data-l="en">The secret world answers a question the main story never asks: <b>what happened to UNIT-1 … UNIT-6</b>.</p>
         <p data-l="ru">Это фрагмент GRID, которого нет в реестре: нет записи о создании, нет записи об удалении. АРХОНТ не смог его стереть и замуровал. Удалённые данные здесь не умирают, а рассеиваются.</p>
@@ -693,6 +743,16 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="ru">Сенсорные кнопки: стиль, размер и раскладка настраиваются отдельно.</li>
         <li data-l="en">Touch buttons: style, size and layout are configured separately.</li>
       </ul>
+      <h3><span data-l="ru">Режим прохождения</span><span data-l="en">Game mode</span></h3>
+      <ul class="clean">
+        <li data-l="ru"><b>Обычный</b> — как было всегда: кончились жизни, и уровень начинается заново, чекпоинт снимается.</li>
+        <li data-l="en"><b>Normal</b> — as it always was: run out of lives and the level restarts from the beginning, checkpoint cleared.</li>
+        <li data-l="ru"><b>Спокойный</b> — чекпоинт сохраняется даже после потери всех жизней, поэтому длинный уровень не приходится переигрывать с нуля из-за одной трудной секции в конце. Вдобавок падение в пропасть не обрывает заход: жизнь отнимается, но робот мягко возвращается на тот край, откуда прыгнул. Врагов и урон это не меняет — удар врага заканчивает попытку как обычно.</li>
+        <li data-l="en"><b>Relaxed</b> — the checkpoint survives even when you lose all lives, so a long level never has to be replayed from scratch because of one hard stretch at the end. A fall into the void no longer ends the run either: it still costs a life, but the robot drifts back down onto the ledge it jumped from. Enemies and damage are unchanged — an enemy hit ends the attempt as usual.</li>
+        <li data-l="ru">На хардкор режим не влияет: там свои правила и общий запас жизней на мир.</li>
+        <li data-l="en">It does not affect hardcore, which keeps its own rules and a shared pool of lives per world.</li>
+      </ul>
+
       <h3><span data-l="ru">Прочее</span><span data-l="en">Other</span></h3>
       <ul class="clean">
         <li data-l="ru">Громкость отдельно для музыки и эффектов; тряска экрана, частицы и подсказки отключаемы.</li>
@@ -788,7 +848,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 
 <footer class="site">
   <div class="wrap">
-    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.2</div>
+    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
     <div>
       <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
       <a href="/byte-blaster/download/"><span data-l="ru">Скачать</span><span data-l="en">Download</span></a> ·

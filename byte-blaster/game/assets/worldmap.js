@@ -27,12 +27,33 @@
     // Secret 11th world — see drawWorldLockOverlay()'s cousin, the rainbow gate
     // in loadProgress(). Only reachable after finding all 10 Rainbow Shards.
     {id:10, name:'PRISM ANOMALY', icon:'🌈', accent:'#f0f', dark:'#1a0030', mid:'#300050', range:[101,110], secret:true},
+    // Пролог — один уровень до начала кампании. Стоит последним в списке,
+    // чтобы не сдвигать номера миров 0–10 (их держат сохранения), но в
+    // стрелках показывается ПЕРВЫМ — см. cycleOrder().
+    {id:11, name:'PROLOGUE', icon:'🧪', accent:'#4affa0', dark:'#02140d', mid:'#042a1a', range:[0,0], prologue:true, count:1},
   ];
   const LEVELS_PER_WORLD = 10;
+  /** Узлы одного мира. Заменяет адресацию LEVELS[w*10+i]: у пролога узел один. */
+  const worldLevels = (w) => LEVELS.filter((l) => l.worldId === w);
+  /** Порядок миров в стрелках: пролог первым, секретный — только когда открыт. */
+  function cycleOrder() {
+    const rainbowDone = (typeof rainbowCount === "function") && rainbowCount() >= 10;
+    const main = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const order = [11].concat(main);
+    if (rainbowDone) order.push(10);
+    return order;
+  }
 
   // Localized world name (falls back to the English constant). Uses the shared
   // helper from index.html so the map matches the in-game watermark.
   function wName(world) {
+    // У пролога своя строка перевода: таблица worldName рассчитана на десять
+    // миров кампании и про одиннадцатый ничего не знает.
+    if (world.prologue) {
+      const t = window.t;
+      return (typeof t === 'function' && t('prologueLab') !== 'prologueLab')
+        ? t('prologueLab') : 'LAB CHEN-7';
+    }
     if (typeof window.worldName === 'function') return window.worldName(world.id);
     return world.name;
   }
@@ -54,6 +75,7 @@
     {cx: 420, cy: 240, spread: 140},  // World 8
     {cx: 280, cy: 380, spread: 150},  // World 9: final
     {cx: 700, cy: 450, spread: 140},  // World 10 (secret) — placeholder, actual on-screen layout comes from layoutLevels()
+    {cx: 700, cy: 450, spread: 140},  // World 11 (пролог) — один узел, всегда в центре
   ];
 
   // Each world lays its 10 levels out in a DIFFERENT shape so no two worlds
@@ -155,6 +177,14 @@
     }
   }
 
+  // Узел пролога: номер 0, чтобы он не пересекался с кампанией (1–110) и не
+  // попадал ни в один подсчёт пройденного.
+  LEVELS.push({
+    id: 'L0', num: 0, worldId: 11, name: '0',
+    bx: 700, by: 450, x: 700, y: 450,
+    type: 'prologue', unlocked: true, completed: false,
+  });
+
   // Immutable base reference for the world-zone gradients/labels (1400×900 space).
   // `worldRender` holds the on-screen copy that layoutLevels() rewrites each time
   // the field is sized.
@@ -171,6 +201,9 @@
   // Generate paths between consecutive levels
   const PATHS = [];
   for (let i = 0; i < LEVELS.length - 1; i++) {
+    // Пролог стоит особняком: дорога от него к первому уровню кампании не
+    // рисуется, иначе она тянулась бы через полкарты между разными мирами.
+    if (LEVELS[i].worldId !== LEVELS[i + 1].worldId) continue;
     PATHS.push([LEVELS[i].id, LEVELS[i + 1].id]);
   }
 
@@ -212,6 +245,7 @@
   // ═══════════════════════════════════════════════
 
   let mapCanvas, mapCtx;
+
   let mapOverlay;
   // Live canvas dimensions (follow the window/resolution) and node-size factor.
   // mapW/mapH are LOGICAL (CSS) pixels — all drawing uses them. mapDpr is the
@@ -243,6 +277,8 @@
     // proportional squeeze can otherwise slide the bottom node under the level
     // panel on a very short screen.
     let centreTop = 0, centreBot = Infinity;
+    // Фактические границы панелей — по ним доводим кольцо к центру экрана.
+    let chromeTop = 0, chromeBot = mapH;
     let mapRects = null;
     if (mapOverlay) {
       const rectOf = sel => {
@@ -254,11 +290,12 @@
       mapRects = rectOf;
       let topB = 0;
       [rectOf('#mapHudTL'), rectOf('#mapAchBtn'), rectOf('#mapWorldTitle')].forEach(r => { if (r) topB = Math.max(topB, r.bottom); });
-      if (topB > 0) PAD_T = clampN(topB + 16, 90, mapH * 0.42);
+      if (topB > 0) { PAD_T = clampN(topB + 16, 90, mapH * 0.42); chromeTop = topB; }
       let botTop = mapH;
       ['#mapZoneTag', '#mapBackTouch', '#mapKbdHint', '#mapLevelPanel'].forEach(sel => {
         const r = rectOf(sel); if (r) botTop = Math.min(botTop, r.top);
       });
+      if (botTop < mapH) chromeBot = botTop;
       const measuredB = botTop < mapH ? (mapH - botTop) : 0;
       PAD_B = clampN(Math.max(measuredB + 16, 150), 110, mapH * 0.46);
       // Keep clear of the left/right arrow buttons too. Their edges double as
@@ -290,10 +327,26 @@
     [PAD_T, PAD_B] = squeeze(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5), 0, 0);
     [PAD_L, PAD_R] = squeeze(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6), ARROW_L, ARROW_R);
 
+    // Кольцо ставим ровно в центр ЭКРАНА, а не в центр свободной полосы.
+    // Отступы сверху и снизу (заголовок против панели уровня) и слева-справа
+    // (стрелки миров) почти никогда не равны, и центр полосы оказывается
+    // смещённым — на телефоне это сразу заметно как перекос. Берём больший из
+    // двух отступов на обе стороны: так кольцо и стоит по центру, и по-прежнему
+    // не залезает ни под одну панель. Если после выравнивания места остаётся
+    // слишком мало, возвращаемся к прежнему несимметричному варианту — лучше
+    // небольшой перекос, чем узлы под панелью.
+    const centreBand = (padA, padB, total, minBand) => {
+      const p = Math.max(padA, padB);
+      return (total - 2 * p >= minBand) ? [p, p] : [padA, padB];
+    };
+    [PAD_T, PAD_B] = centreBand(PAD_T, PAD_B, mapH, Math.min(170, mapH * 0.5));
+    [PAD_L, PAD_R] = centreBand(PAD_L, PAD_R, mapW, Math.min(240, mapW * 0.6));
+
     const safeX = PAD_L, safeY = PAD_T;
     const safeW = Math.max(120, mapW - PAD_L - PAD_R);
     const safeH = Math.max(90, mapH - PAD_T - PAD_B);
-    const cx = safeX + safeW / 2, cy = safeY + safeH / 2;
+    // Не const: ниже кольцо ещё придвигается к центру экрана.
+    let cx = safeX + safeW / 2, cy = safeY + safeH / 2;
 
     // Game Scale widens/narrows the ring radius.
     const gs = (window.gameSettings && window.gameSettings.gameScale) || 0;
@@ -395,11 +448,36 @@
     }
     nodeScale = rTarget / 16; // 16 = base normal-node radius
 
+    // ── Доводка до центра экрана ────────────────────────────────────────
+    // Выше кольцо ставилось в середину СВОБОДНОЙ ПОЛОСЫ между панелями. Но
+    // сверху и снизу их высота разная (заголовок мира выше, чем нижняя
+    // панель), и центр полосы не совпадает с центром экрана: на портретном
+    // телефоне кольцо уезжало вниз почти на сотню пикселей.
+    //
+    // Само кольцо при этом обычно заметно меньше доступного места — его
+    // ограничивают стрелки миров по бокам. Значит, его можно просто придвинуть
+    // к центру экрана: настолько, насколько позволяют панели, и ни пикселем
+    // больше. Если места нет вовсе, останется как было.
+    const pull = (c, r, total, padA, padB) => {
+      const half = r + rTarget + 4;          // радиус кольца плюс сам узел
+      const lo = padA + half, hi = total - padB - half;
+      if (hi < lo) return c;                 // места нет — не трогаем
+      return clampN(total / 2, lo, hi);
+    };
+    cx = pull(cx, rx, mapW, PAD_L, PAD_R);
+    cy = pull(cy, ry, mapH, Math.max(PAD_T, chromeTop + 6), Math.max(PAD_B, mapH - chromeBot + 6));
+
     const w = MAP_STATE.activeWorld;
-    const startIdx = w * LEVELS_PER_WORLD;
-    const angles = arcAngles(rx, ry, LEVELS_PER_WORLD);
-    for (let i = 0; i < LEVELS_PER_WORLD; i++) {
-      const level = LEVELS[startIdx + i];
+    const ring = worldLevels(w);
+    // Мир из одного узла (пролог) кольцом не раскладывается — ставим в центр.
+    if (ring.length === 1) {
+      ring[0].x = Math.round(cx); ring[0].y = Math.round(cy);
+      ring[0].r = Math.round(nodeR * 1.35);
+      return;
+    }
+    const angles = arcAngles(rx, ry, ring.length);
+    for (let i = 0; i < ring.length; i++) {
+      const level = ring[i];
       // Start at the top and go clockwise, evenly spaced along the ring.
       const a = angles[i];
       level.x = Math.round(cx + Math.cos(a) * rx);
@@ -458,35 +536,36 @@
     hud.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
     hud.innerHTML = `
       <div id="mapHudTL" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: top left; pointer-events: none; z-index: 10; background: rgba(0,0,0,0.8); border: 1px solid #0ff; padding: 8px 14px; backdrop-filter: blur(4px);">
-        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
-        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
-        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
+        <div id="worldMapTitle" style="font-family: 'Press Start 2P', monospace; font-size: calc(12px * var(--bbText, 1)); color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 2px;">⚡ BYTE BLASTER</div>
+        <div id="worldMapSub" style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #0f0; letter-spacing: 2px; margin-top: 3px;">▸ <span data-i18n="mapWorldMap">WORLD MAP</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #0ff; letter-spacing: 1px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #0ff3;"><span data-i18n="mapCleared">CLEARED</span>: <span id="mapClearedCount">0</span> / <span id="mapClearedMax">100</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #ffd23f; letter-spacing: 1px; margin-top: 4px;">★ <span data-i18n="mapStars">STARS</span>: <span id="mapStarsCount">0</span> / <span id="mapStarsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #0ff; letter-spacing: 1px; margin-top: 4px;">◆ <span data-i18n="mapCrystals">CRYSTALS</span>: <span id="mapShardsCount">0</span> / <span id="mapShardsMax">300</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #ffcc33; letter-spacing: 1px; margin-top: 4px;">◉ <span data-i18n="mapCoins">COINS</span>: <span id="mapCoinsCount">0</span></div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #f0f; letter-spacing: 1px; margin-top: 4px;">🌈 <span data-i18n="mapRainbow">RAINBOW</span>: <span id="mapRainbowCount">0</span> / 10</div>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #8cf; letter-spacing: 1px; margin-top: 4px;">∑ <span data-i18n="score">SCORE</span>: <span id="mapTotalScore">0</span></div>
+        <div id="mapCurrentZone" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); color: #666; letter-spacing: 2px; margin-top: 2px;">CYBER CITY</div>
       </div>
       <div id="mapWorldTitle" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); transform-origin: top center; z-index: 10; pointer-events: none; text-align: center;">
-        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: 20px; letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
-        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
-        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
+        <div id="mapWorldTitleNum" style="font-family: 'Press Start 2P', monospace; font-size: calc(20px * var(--bbText, 1)); letter-spacing: 3px; color: #0ff; text-shadow: 0 0 14px #0ff;">WORLD 1</div>
+        <div id="mapWorldTitleName" style="font-family: 'Share Tech Mono', monospace; font-size: calc(12px * var(--bbText, 1)); letter-spacing: 4px; color: #8cf; margin-top: 4px;">CYBER CITY</div>
+        <div id="mapWorldShard" style="font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 2px; margin-top: 7px; color: #666;">🌈 ✗</div>
       </div>
-      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
-      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: 26px; cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
-      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
-      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 1px; cursor: pointer;">← BACK</button>
-      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
-      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
+      <button id="mapArrowLeft" aria-label="Previous world" style="position: fixed; top: 50%; left: calc(10px + env(safe-area-inset-left, 0px)); transform: translateY(-50%); transform-origin: center left; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: calc(26px * var(--bbText, 1)); cursor: pointer; text-shadow: 0 0 8px #0ff;">◀</button>
+      <button id="mapArrowRight" aria-label="Next world" style="position: fixed; top: 50%; right: calc(10px + env(safe-area-inset-right, 0px)); transform: translateY(-50%); transform-origin: center right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.72); border: 2px solid #0ff; color: #0ff; width: 54px; height: 64px; font-size: calc(26px * var(--bbText, 1)); cursor: pointer; text-shadow: 0 0 8px #0ff;">▶</button>
+      <button id="mapAchBtn" data-i18n="profileBtn" style="position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: top right; z-index: 10; pointer-events: auto; background: rgba(0,0,0,0.8); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px; cursor: pointer; text-shadow: 0 0 8px #0ff;">👤 PROFILE</button>
+      <button id="mapBackTouch" data-i18n="back" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); transform-origin: bottom right; z-index: 12; display: none; pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #f44; color: #f88; padding: 12px 16px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px; cursor: pointer;">← BACK</button>
+      <div id="mapZoneTag" style="position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); transform-origin: bottom left; z-index: 10; pointer-events: none; font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 3px; padding: 7px 12px; background: rgba(0,0,0,0.6); border-left: 3px solid #0ff; color: #0ff;">CYBER CITY</div>
+      <div id="mapKbdHint" style="position: fixed; bottom: 10px; right: 10px; transform-origin: bottom right; z-index: 10; background: rgba(0,0,0,0.55); border: 1px solid #1a1a1a; padding: 7px 12px; font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #383838; line-height: 1.8; text-align: right; pointer-events: none;">
         ↑↓←→ / WASD — MOVE<br>
         ENTER / SPACE — START<br>
         ESC — BACK TO MENU
       </div>
       <div id="mapLevelPanel" style="position: fixed; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); transform-origin: bottom center; background: rgba(0,0,0,0.92); border: 2px solid #0ff; padding: 11px 28px; text-align: center; min-width: 310px; display: none; z-index: 11;">
-        <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: 12px; font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
-        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
-        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
-        <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px;"></div>
+        <div id="mapLevelName" style="font-family: 'Press Start 2P', monospace; font-size: calc(12px * var(--bbText, 1)); font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; color: #0ff;">LEVEL 1</div>
+        <div id="mapLevelSub" style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #555; letter-spacing: 2px; margin-bottom: 6px;">CYBER CITY</div>
+        <div id="mapLevelScore" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); color: #ffd23f; letter-spacing: 1px; margin-bottom: 7px; display: none;"></div>
+        <div id="mapLevelAction" style="font-family: 'Share Tech Mono', monospace; font-size: calc(9px * var(--bbText, 1)); letter-spacing: 1px;"></div>
       </div>
     `;
 
@@ -588,9 +667,13 @@
     // info panels down to ~3px (invisible/untappable). Give them a bigger base
     // size on touch so that — even after scaling — they stay readable and meet
     // a comfortable touch-target size. Reset to the desktop size otherwise.
+    // Размер пишем через тот же множитель --bbText, что и вся остальная
+    // разметка: голое «13px» перебивало настройку размера текста, и эти две
+    // кнопки оставались мелкими, когда всё вокруг увеличилось.
+    const touchFS = 'calc(13px * var(--bbText, 1))';
     const achEl0 = mapOverlay.querySelector('#mapAchBtn');
-    if (achEl0)    { achEl0.style.fontSize  = isTouch ? '13px' : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
-    if (backTouch) { backTouch.style.fontSize = isTouch ? '13px' : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
+    if (achEl0)    { achEl0.style.fontSize  = isTouch ? touchFS : ''; achEl0.style.padding = isTouch ? '12px 16px' : ''; }
+    if (backTouch) { backTouch.style.fontSize = isTouch ? touchFS : ''; backTouch.style.padding = isTouch ? '14px 20px' : ''; }
 
     // One master scale `k` (≤1) shared by every panel so the chrome stays
     // proportional AND leaves the node field enough room. Constraints folded in:
@@ -694,6 +777,7 @@
     { sky:['#050510','#0a0a1a','#15152a'], ground:'clouds',  weather:'bolt',   weatherCol:'#88f' }, // Storm Peaks
     { sky:['#140000','#2a0000','#440000'], ground:'walls',   weather:'rune',   weatherCol:'#f44' }, // Final Fortress
     { sky:['#1a0030','#300050','#500070'], ground:'rift',    weather:'prism',  weatherCol:'#f0f' }, // Prism Anomaly (secret)
+    { sky:['#02100a','#052a1a','#0a4a30'], ground:'pipes',   weather:'spark',  weatherCol:'#4affa0' }, // Пролог — лаборатория CHEN-7
   ];
 
   function _mapEnvMode(){
@@ -1311,7 +1395,9 @@
   }
 
   function worldUnlocked(w) {
-    const first = LEVELS[w * LEVELS_PER_WORLD];
+    // Пролог — вступление, его нельзя «заслужить»: он открыт с самого начала.
+    if (WORLDS[w] && WORLDS[w].prologue) return true;
+    const first = worldLevels(w)[0];
     return !!(first && first.unlocked);
   }
 
@@ -1324,10 +1410,8 @@
 
     drawPaths();
 
-    const startIdx = w * LEVELS_PER_WORLD;
     // Draw all nodes of the active world except current
-    for (let i = 0; i < LEVELS_PER_WORLD; i++) {
-      const level = LEVELS[startIdx + i];
+    for (const level of worldLevels(w)) {
       if (level.id !== MAP_STATE.currentLevelId) drawLevelNode(level);
     }
 
@@ -1461,18 +1545,23 @@
     // 10 Rainbow Shards are found — it should be invisible, not just locked,
     // per the design: worlds 0-9 can be browsed ahead with a lock overlay,
     // but Prism Anomaly doesn't exist on the map at all until then.
-    const rainbowDone = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
-    let cycleLen = rainbowDone ? WORLDS.length : WORLDS.length - 1;
-    // Demo build: only the worlds the demo actually contains are in the cycle,
-    // so the arrows can't browse ahead into content that isn't shipped.
-    if (window.Demo && window.Demo.on) cycleLen = window.Demo.worldCount(cycleLen);
-    w = ((w % cycleLen) + cycleLen) % cycleLen;
+    // Стрелки ходят по явному порядку, а не по номерам миров: пролог стоит
+    // в списке последним (чтобы не сдвигать сохранения), а показывается первым.
+    let order = cycleOrder();
+    if (window.Demo && window.Demo.on) {
+      const lim = window.Demo.worldCount(order.length);
+      order = order.filter((id) => id === 11 || id < lim);
+    }
+    const here = order.indexOf(MAP_STATE.activeWorld);
+    // w приходит как «текущий ± 1» — переводим сдвиг в шаг по порядку.
+    const delta = w - MAP_STATE.activeWorld;
+    const idx = ((here + delta) % order.length + order.length) % order.length;
+    w = order[idx];
     if (w === MAP_STATE.activeWorld) return;
     MAP_STATE.activeWorld = w;
     MAP_STATE.walk = null;
-    const startIdx = w * LEVELS_PER_WORLD;
     const stillInWorld = LEVELS.find(l => l.id === MAP_STATE.currentLevelId && l.worldId === w);
-    const target = stillInWorld || LEVELS[startIdx];
+    const target = stillInWorld || worldLevels(w)[0];
     MAP_STATE.currentLevelId = target.id;
     layoutLevels(); // recompute the ring for the new world before we snap the robot to it
     MAP_STATE.playerX = target.x;
@@ -1496,7 +1585,10 @@
     const nameEl = document.getElementById('mapWorldTitleName');
     if (numEl) {
       const tt0 = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
-      numEl.textContent = `${tt0('mapWorldLabel','WORLD')} ${activeW.id + 1}`;
+      // У пролога номера нет — он не входит в счёт миров кампании.
+      numEl.textContent = activeW.prologue
+        ? tt0('prologue', 'ПРОЛОГ')
+        : `${tt0('mapWorldLabel','WORLD')} ${activeW.id + 1}`;
       numEl.style.color = worldAccent(activeW);
       numEl.style.textShadow = `0 0 14px ${worldAccent(activeW)}`;
     }
@@ -1542,6 +1634,15 @@
       shardsEl.textContent = shardsCount;
     }
 
+    // Монеты: сумма лучших сборов по всем уровням этого слота прогресса.
+    // Общий счётчик за всё время (включая бесконечный режим) живёт в профиле —
+    // на карте показываем именно то, что относится к её уровням.
+    const coinsEl = document.getElementById('mapCoinsCount');
+    if (coinsEl) {
+      const coinsCount = window.totalLevelCoins ? window.totalLevelCoins(MAP_STATE.hard) : 0;
+      coinsEl.textContent = coinsCount.toLocaleString();
+    }
+
     // The secret 11th world (10 extra levels, 30 extra possible stars/crystals)
     // only counts toward the displayed totals once it's actually unlocked —
     // otherwise the HUD would advertise a max the player can't yet see.
@@ -1585,18 +1686,30 @@
     panel.style.borderColor = worldAccent(world);
 
     const tt = (k, d) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : d;
-    document.getElementById('mapLevelName').textContent = `${tt('level','LEVEL')} ${current.num}${current.type === 'boss' ? ' — ' + tt('mapBoss','BOSS') : ''}`;
+    document.getElementById('mapLevelName').textContent = current.type === 'prologue'
+      ? tt('prologueLab', 'ЛАБОРАТОРИЯ CHEN-7')
+      : `${tt('level','LEVEL')} ${current.num}${current.type === 'boss' ? ' — ' + tt('mapBoss','BOSS') : ''}`;
     document.getElementById('mapLevelName').style.color = worldAccent(world);
-    document.getElementById('mapLevelSub').textContent = wName(world);
+    // У пролога заголовок карточки и есть название мира — повторять его
+    // второй строкой незачем; вместо этого поясняем, что это вступление.
+    document.getElementById('mapLevelSub').textContent = current.type === 'prologue'
+      ? tt('prologueSub', 'вступление — не влияет на прогресс')
+      : wName(world);
 
     // Per-level best score (when the player has completed it at least once).
     const scoreEl = document.getElementById('mapLevelScore');
     if (scoreEl) {
       const best = window.levelScore ? window.levelScore(current.num, MAP_STATE.hard) : 0;
       const shards = window.levelShards ? window.levelShards(current.num, MAP_STATE.hard) : 0;
+      const coins = window.levelCoins ? window.levelCoins(current.num, MAP_STATE.hard) : 0;
       const parts = [];
       if (current.completed && best > 0) parts.push(`★ ${tt('mapBest','BEST')}: ${best.toLocaleString()}`);
-      if (current.unlocked) parts.push(`<span style="color:#0ff">◆ ${shards}/3</span>`);
+      if (current.unlocked && current.type !== 'prologue')
+        parts.push(`<span style="color:#0ff">◆ ${shards}/3</span>`);
+      // Лучший сбор монет на этом уровне: видно, куда есть смысл вернуться.
+      // Максимума у монет нет — он зависит от того, как сгенерировался уровень.
+      if (current.completed && coins > 0)
+        parts.push(`<span style="color:#ffcc33">◉ ${coins}</span>`);
       if (parts.length) {
         scoreEl.innerHTML = parts.join('  ');
         scoreEl.style.display = 'block';
@@ -1700,6 +1813,13 @@
     // Close map and start the level
     hideWorldMap();
 
+    // Пролог идёт своим путём: катсцена, обучающий уровень, катсцена. В
+    // кампанию он не входит, поэтому startAdventureLevel сюда не годится.
+    if (current.type === 'prologue') {
+      if (window.Tutorial && window.Tutorial.startPrologue) window.Tutorial.startPrologue();
+      return;
+    }
+
     // Trigger level start in main game (pass mode so Hardcore launches correctly)
     if (window.startAdventureLevel) {
       window.startAdventureLevel(current.num, MAP_STATE.hard);
@@ -1772,7 +1892,12 @@
     // the other mode's completion/unlock state into this view.
     for (const level of LEVELS) {
       level.completed = false;
-      level.unlocked = (level.num === 1);
+      // Узел пролога (номер 0) открыт всегда — он вне кампании, и его
+      // прохождение хранится отдельным ключом, а не в списке done.
+      level.unlocked = (level.num === 1 || level.worldId === 11);
+      if (level.worldId === 11) {
+        try { level.completed = localStorage.getItem('bbTutorialDone') === '1'; } catch (e) {}
+      }
     }
     MAP_STATE.currentLevelId = 'L1';
     MAP_STATE.activeWorld = 0;
@@ -1960,12 +2085,12 @@
     // the DOM (they live on the canvas), and getting them wrong is invisible
     // until someone opens the map on a phone — so they are worth exposing.
     debugNodes() {
-      const w = MAP_STATE.activeWorld, start = w * LEVELS_PER_WORLD;
+      const w = MAP_STATE.activeWorld;
       const pos = worldRender[w] || {};
       return {
         world: w, cx: pos.cx, cy: pos.cy, rx: pos.spread, ry: pos.spreadY,
         nodeScale,
-        nodes: LEVELS.slice(start, start + LEVELS_PER_WORLD).map(l => ({
+        nodes: worldLevels(w).map(l => ({
           num: l.num, x: l.x, y: l.y, r: nodeR(l), type: l.type,
           unlocked: l.unlocked, completed: l.completed,
         })),

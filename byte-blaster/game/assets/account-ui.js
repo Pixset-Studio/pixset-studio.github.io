@@ -23,13 +23,13 @@
         align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;
         background:radial-gradient(ellipse at 50% 40%,#001a2a 0%,#04040f 70%);
         font-family:'Press Start 2P',monospace;overflow-y:auto}
-      #bbAcc .acTitle{font-size:16px;color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:4px}
-      #bbAcc .acSub{font-family:'Share Tech Mono',monospace;font-size:12px;color:#9fd;
+      #bbAcc .acTitle{font-size:calc(16px * var(--bbFix, 1));color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:4px}
+      #bbAcc .acSub{font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbFix, 1));color:#9fd;
         letter-spacing:1px;max-width:460px;line-height:1.9}
-      #bbAcc input{font-family:'Share Tech Mono',monospace;font-size:13px;width:280px;max-width:80vw;
+      #bbAcc input{font-family:'Share Tech Mono',monospace;font-size:calc(13px * var(--bbFix, 1));width:280px;max-width:80vw;
         padding:10px 12px;background:#020a12;border:2px solid #0ff6;color:#cfe;letter-spacing:1px}
       #bbAcc input:focus{outline:none;border-color:#0ff;box-shadow:0 0 14px #0ff4}
-      #bbAcc .acBtn{font-family:'Press Start 2P',monospace;font-size:9px;padding:12px 20px;
+      #bbAcc .acBtn{font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbFix, 1));padding:12px 20px;
         background:#0ff1;color:#0ff;border:2px solid #0ff;cursor:pointer;letter-spacing:2px;
         text-shadow:0 0 8px #0ff;transition:background .15s,box-shadow .15s}
       #bbAcc .acBtn:hover:not(:disabled){background:#0ff3;box-shadow:0 0 18px #0ff8}
@@ -37,11 +37,11 @@
       #bbAcc .acBtn.acBuy{color:#f0f;border-color:#f0f;background:#f0f1;text-shadow:0 0 8px #f0f}
       #bbAcc .acBtn.acBuy:hover{background:#f0f3;box-shadow:0 0 18px #f0f8}
       #bbAcc .acRow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:4px}
-      #bbAcc .acMsg{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;
+      #bbAcc .acMsg{font-family:'Share Tech Mono',monospace;font-size:calc(11px * var(--bbFix, 1));letter-spacing:1px;
         min-height:16px;max-width:460px;line-height:1.8}
       #bbAcc .acMsg.err{color:#f6a}
       #bbAcc .acMsg.ok{color:#6f9}
-      #bbAcc .acCard{font-family:'Share Tech Mono',monospace;font-size:12px;color:#9fd;
+      #bbAcc .acCard{font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbFix, 1));color:#9fd;
         border:1px solid #0ff4;background:#0ff08;padding:12px 16px;text-align:left;
         min-width:280px;max-width:460px;line-height:1.9}
       #bbAcc .acCard b{color:#0ff}
@@ -54,23 +54,23 @@
       #bbAcc .acCard .acLine.warn>b{color:#fc6}
       #bbAcc .acCard .acLine.good>b{color:#6f9}
       #bbAcc .acEdit{margin-left:8px;border:1px solid #0ff6;background:transparent;color:#0ff;
-        font-family:'Share Tech Mono',monospace;font-size:10px;padding:1px 6px;cursor:pointer}
+        font-family:'Share Tech Mono',monospace;font-size:calc(10px * var(--bbFix, 1));padding:1px 6px;cursor:pointer}
       #bbAcc .acEdit:hover{background:#0ff2}
       #bbAcc .acNick{margin-top:10px;padding-top:10px;border-top:1px solid #0ff3;
         display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-      #bbAcc .acNick input{width:180px;font-size:12px;padding:6px 8px}
-      #bbAcc .acBtn.acMini{font-size:7px;padding:8px 10px}
-      #bbAcc .acHint{flex-basis:100%;font-size:10px;color:#7a94a8;line-height:1.6}
+      #bbAcc .acNick input{width:180px;font-size:calc(12px * var(--bbFix, 1));padding:6px 8px}
+      #bbAcc .acBtn.acMini{font-size:calc(7px * var(--bbFix, 1));padding:8px 10px}
+      #bbAcc .acHint{flex-basis:100%;font-size:calc(10px * var(--bbFix, 1));color:#7a94a8;line-height:1.6}
       #bbAcc .acHint.err{color:#f6a}
       #bbAcc .acHint.ok{color:#6f9}
       #bbAcc .acCloud{margin-top:2px}
-      #bbAcc .acCloudTitle{font-family:'Press Start 2P',monospace;font-size:8px;color:#0ff;
+      #bbAcc .acCloudTitle{font-family:'Press Start 2P',monospace;font-size:calc(8px * var(--bbFix, 1));color:#0ff;
         letter-spacing:1px;margin-bottom:8px;text-shadow:0 0 8px #0ff}
       #bbAcc .acCloud .acRow{justify-content:flex-start;margin-top:0}
       #bbAcc .acToggle{display:flex;align-items:center;gap:8px;margin-top:10px;
-        font-size:12px;color:#9fd;cursor:pointer;user-select:none}
+        font-size:calc(12px * var(--bbFix, 1));color:#9fd;cursor:pointer;user-select:none}
       #bbAcc .acToggle input{width:16px;height:16px;accent-color:#0ff;cursor:pointer}
-      @media (max-width:640px){#bbAcc .acTitle{font-size:12px}#bbAcc .acSub{font-size:10px}}
+      @media (max-width:640px){#bbAcc .acTitle{font-size:calc(12px * var(--bbFix, 1))}#bbAcc .acSub{font-size:calc(10px * var(--bbFix, 1))}}
 
       /* Кнопка в углу экрана. Прямой ребёнок body с position:fixed — иначе
          масштабирование игрового поля утащит её в леттербокс на телефоне. */
@@ -79,16 +79,18 @@
         background:#0ff1;border:2px solid #0ff8;cursor:pointer;
         transition:background .15s,box-shadow .15s,border-color .15s}
       #bbAccBtn:hover{background:#0ff3;border-color:#0ff;box-shadow:0 0 16px #0ff8}
-      #bbAccBtn .abIcon{font-size:28px;line-height:1}
-      #bbAccBtn .abText{font-family:'Press Start 2P',monospace;font-size:9px;
+      #bbAccBtn .abIcon{font-size:calc(28px * var(--bbFix, 1));line-height:1}
+      #bbAccBtn .abAva{display:none;width:calc(30px * var(--bbFix, 1));
+        height:calc(30px * var(--bbFix, 1));image-rendering:pixelated}
+      #bbAccBtn .abText{font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbFix, 1));
         letter-spacing:1px;color:#0ff;text-shadow:0 0 8px #0ff;max-width:118px;
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       #bbAccBtn.owned{border-color:#0f8a;background:#0f81}
       #bbAccBtn.owned .abText{color:#0f8;text-shadow:0 0 8px #0f8}
       @media (max-width:640px){
         #bbAccBtn{top:10px;left:10px;padding:9px 12px;gap:5px}
-        #bbAccBtn .abIcon{font-size:21px}
-        #bbAccBtn .abText{font-size:7px;max-width:88px}
+        #bbAccBtn .abIcon{font-size:calc(21px * var(--bbFix, 1))}
+        #bbAccBtn .abText{font-size:calc(7px * var(--bbFix, 1));max-width:88px}
       }`;
     document.head.appendChild(css);
   }
@@ -132,6 +134,20 @@
           '<span id="acCloudAutoText"></span></label>' +
         '<div class="acHint" id="acCloudMsg"></div>' +
       '</div>' +
+      // Витрина прогресса — отдельная от сохранения вещь, и кнопка тоже
+      // отдельная. Сохранение приватно, а это то, что видят друзья на сайте;
+      // раньше оно уезжало только заодно с сохранением, поэтому у игрока,
+      // не пользующегося облаком, профиль на сайте оставался пустым.
+      '<div class="acCard acCloud" id="acStats" style="display:none">' +
+        '<div class="acCloudTitle" id="acStatsTitle"></div>' +
+        '<div class="acLine acDim" id="acStatsWhat"></div>' +
+        '<div class="acRow" style="margin-top:8px">' +
+          '<button class="acBtn acMini" id="acStatsPublish"></button>' +
+        '</div>' +
+        '<label class="acToggle"><input type="checkbox" id="acStatsAuto">' +
+          '<span id="acStatsAutoText"></span></label>' +
+        '<div class="acHint" id="acStatsMsg"></div>' +
+      '</div>' +
       '<div class="acRow">' +
         '<button class="acBtn" id="acStatsBtn" style="display:none"></button>' +
         '<button class="acBtn" id="acSiteBtn" style="display:none"></button>' +
@@ -159,6 +175,12 @@
     ov.querySelector('#acCloudAuto').onchange = (e) => {
       window.CloudSave.setAuto(e.target.checked);
       cloudMsg(e.target.checked ? T('cloudAutoOn') : T('cloudAutoOff'), 'ok');
+    };
+
+    ov.querySelector('#acStatsPublish').onclick = publishStats;
+    ov.querySelector('#acStatsAuto').onchange = (e) => {
+      try { localStorage.setItem(STATS_AUTO_KEY, e.target.checked ? '1' : '0'); } catch (err) {}
+      statsMsg(e.target.checked ? T('statsAutoOn') : T('statsAutoOff'), 'ok');
     };
 
     // Подробная статистика уже есть на экране профиля игрока — незачем
@@ -308,6 +330,7 @@
 
     renderCard(inAcc, owns);
     renderCloud(inAcc);
+    renderStats(inAcc);
   }
 
   /** Дата в языке игры. Пустая строка, если сервер её не прислал. */
@@ -426,6 +449,53 @@
     el.textContent = text || '';
     el.className = 'acHint' + (kind ? ' ' + kind : '');
   }
+
+  /* ── Витрина прогресса ───────────────────────────────────────────────────
+     Публикуется отдельно от сохранения и намеренно: сохранение приватно,
+     а это короткая сводка, которую видят друзья на сайте. Раньше она уезжала
+     только заодно с облачным сохранением, поэтому у игрока, который им не
+     пользуется, профиль на сайте оставался пустым — что и выглядело как
+     «публиковать прогресс нельзя». */
+  const STATS_AUTO_KEY = 'bbStatsAuto';
+
+  function statsAutoOn() {
+    try { return localStorage.getItem(STATS_AUTO_KEY) !== '0'; } catch (e) { return true; }
+  }
+
+  function statsMsg(text, kind) {
+    const el = ov && ov.querySelector('#acStatsMsg');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'acHint' + (kind ? ' ' + kind : '');
+  }
+
+  async function publishStats() {
+    const btn = ov.querySelector('#acStatsPublish');
+    btn.disabled = true;
+    statsMsg(T('statsPublishing'));
+    try {
+      const ok = await window.Friends.publish();
+      statsMsg(ok ? T('statsPublished') : T('statsFailed'), ok ? 'ok' : 'err');
+    } catch (e) {
+      statsMsg(T('statsFailed'), 'err');
+    } finally { btn.disabled = false; }
+  }
+
+  function renderStats(inAcc) {
+    const box = ov.querySelector('#acStats');
+    const has = inAcc && !!window.Friends;
+    box.style.display = has ? 'block' : 'none';
+    if (!has) return;
+    ov.querySelector('#acStatsTitle').textContent = T('statsTitle');
+    ov.querySelector('#acStatsWhat').textContent = T('statsWhat');
+    ov.querySelector('#acStatsPublish').textContent = T('statsPublish');
+    ov.querySelector('#acStatsAutoText').textContent = T('statsAuto');
+    ov.querySelector('#acStatsAuto').checked = statsAutoOn();
+    statsMsg('');
+  }
+
+  // Наружу — чтобы игра могла публиковать сводку сама после уровня.
+  window.bbStatsAutoOn = statsAutoOn;
 
   /** Показывает, когда и с какого устройства сохраняли в последний раз. */
   function renderCloud(inAcc) {
@@ -571,7 +641,10 @@
     ensureStyles();
     cornerBtn = document.createElement('div');
     cornerBtn.id = 'bbAccBtn';
-    cornerBtn.innerHTML = '<span class="abIcon">👤</span><span class="abText"></span>';
+    // Аватарка вместо эмодзи, когда игрок вошёл и профиль доступен. Эмодзи
+    // остаётся запасным вариантом: без входа рисовать нечего.
+    cornerBtn.innerHTML = '<canvas class="abAva" width="64" height="64"></canvas>'
+      + '<span class="abIcon">👤</span><span class="abText"></span>';
     cornerBtn.onclick = open;
     document.body.appendChild(cornerBtn);
     updateCornerButton();
@@ -602,6 +675,22 @@
     return false;
   }
 
+  // Состояние аккаунтной аватарки. Держим картинку загруженной один раз:
+  // updateCornerButton зовут четыре раза в секунду, и создавать Image на
+  // каждый опрос значило бы дёргать декодер вхолостую.
+  let _accImg = null, _accSrc = null, _accFetched = false, _lastNick = null;
+
+  /** Вписывает картинку в квадрат канваса по короткой стороне, без сплющивания. */
+  function drawCover(cv, img) {
+    const c = cv.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, cv.width, cv.height);
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    if (!side) throw new Error('empty_image');
+    c.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2,
+                side, side, 0, 0, cv.width, cv.height);
+  }
+
   function updateCornerButton() {
     if (!cornerBtn) return;
     const main = document.getElementById('mainOv');
@@ -614,6 +703,56 @@
     const owns = window.License && window.License.hasGame('byte-blaster');
     cornerBtn.classList.toggle('owned', !!owns);
     cornerBtn.querySelector('.abText').textContent = nick || T('accMenuBtnShort');
+
+    // Аватарка: нужен вход, доступный профиль и выбранная аватарка. Любое
+    // условие не выполнено — остаётся эмодзи, а не пустой квадрат.
+    const ava = cornerBtn.querySelector('.abAva');
+    const emo = cornerBtn.querySelector('.abIcon');
+    const P = window.Profile;
+    let painted = false;
+
+    // Смена аккаунта — повод сходить за картинкой заново.
+    if (nick !== _lastNick) { _lastNick = nick; _accFetched = false; }
+    if (nick && !_accFetched && window.License
+        && typeof window.License.fetchAccountAvatar === 'function') {
+      _accFetched = true;
+      window.License.fetchAccountAvatar().catch(() => {});
+    }
+
+    // Кнопка представляет аккаунт Pixset Studio, поэтому его аватарка идёт
+    // первой. Игровая — запасной вариант: картинки в аккаунте может не быть,
+    // она может не успеть доехать или оказаться битой.
+    const accUrl = (window.License && typeof window.License.accountAvatar === 'function')
+      ? window.License.accountAvatar() : null;
+    if (ava && nick && accUrl) {
+      if (ava.dataset.drawn === accUrl) {
+        painted = true;
+      } else if (_accImg && _accSrc === accUrl && _accImg.complete && _accImg.naturalWidth) {
+        try { drawCover(ava, _accImg); ava.dataset.drawn = accUrl; painted = true; }
+        catch (e) { painted = false; }
+      } else if (_accSrc !== accUrl) {
+        // Грузим один раз на смену картинки; отрисуется на следующем опросе.
+        _accSrc = accUrl;
+        _accImg = new Image();
+        _accImg.onerror = () => { _accSrc = null; _accImg = null; };
+        _accImg.src = accUrl;
+      }
+    }
+
+    if (!painted && ava && nick && P
+        && typeof P.paintAvatar === 'function' && typeof P.avatar === 'function') {
+      const id = P.avatar();
+      if (id) {
+        // Перерисовываем только при смене аватарки: опрос идёт четыре раза в
+        // секунду, а рисование ручное.
+        if (ava.dataset.drawn !== id) {
+          try { P.paintAvatar(ava, id); ava.dataset.drawn = id; painted = true; }
+          catch (e) { painted = false; }
+        } else painted = true;
+      }
+    }
+    if (ava) ava.style.display = painted ? 'block' : 'none';
+    if (emo) emo.style.display = painted ? 'none' : 'block';
   }
 
   if (document.readyState === 'loading') {

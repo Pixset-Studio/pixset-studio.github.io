@@ -165,11 +165,11 @@
       #bbUpd{position:fixed;left:14px;bottom:14px;z-index:65;max-width:330px;
         background:#0a0a16;border:2px solid #0ff;padding:14px 16px;display:none;
         font-family:'Share Tech Mono',monospace;color:#cfe;box-shadow:0 12px 30px #000a}
-      #bbUpd .uTitle{font-family:'Press Start 2P',monospace;font-size:9px;color:#0ff;
+      #bbUpd .uTitle{font-family:'Press Start 2P',monospace;font-size:calc(9px * var(--bbText, 1));color:#0ff;
         letter-spacing:1px;margin-bottom:8px;text-shadow:0 0 8px #0ff}
-      #bbUpd .uText{font-size:12px;line-height:1.7;margin-bottom:10px}
+      #bbUpd .uText{font-size:calc(12px * var(--bbText, 1));line-height:1.7;margin-bottom:10px}
       #bbUpd .uRow{display:flex;gap:8px;flex-wrap:wrap}
-      #bbUpd button{font-family:'Press Start 2P',monospace;font-size:8px;padding:9px 12px;
+      #bbUpd button{font-family:'Press Start 2P',monospace;font-size:calc(8px * var(--bbText, 1));padding:9px 12px;
         background:#0ff1;color:#0ff;border:2px solid #0ff;cursor:pointer;letter-spacing:1px}
       #bbUpd button:hover{background:#0ff3}
       #bbUpd button.skip{color:#89a;border-color:#3a4a5a;background:transparent}
@@ -299,12 +299,12 @@
       'background:radial-gradient(ellipse at 50% 40%,#12002a 0%,#04040f 70%);' +
       "font-family:'Press Start 2P',monospace";
     box.innerHTML =
-      '<div style="font-size:15px;color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:3px;' +
+      '<div style="font-size:calc(15px * var(--bbText, 1));color:#0ff;text-shadow:0 0 18px #0ff;letter-spacing:3px;' +
       'line-height:1.8">' + T('webClosedTitle') + '</div>' +
-      '<div style="font-family:\'Share Tech Mono\',monospace;font-size:13px;color:#9fd;' +
+      '<div style="font-family:\'Share Tech Mono\',monospace;font-size:calc(13px * var(--bbText, 1));color:#9fd;' +
       'max-width:460px;line-height:1.9">' + T('webClosedText') + '</div>' +
       '<button id="bbWebClosedBtn" style="font-family:\'Press Start 2P\',monospace;' +
-      'font-size:9px;padding:12px 20px;background:#0ff1;color:#0ff;border:2px solid #0ff;' +
+      'font-size:calc(9px * var(--bbText, 1));padding:12px 20px;background:#0ff1;color:#0ff;border:2px solid #0ff;' +
       'cursor:pointer;letter-spacing:2px">' + T('webClosedGet') + '</button>';
     document.body.appendChild(box);
 

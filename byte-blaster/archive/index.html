@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Архив версий — BYTE BLASTER</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/byte-blaster/game/icons/favicon.ico" sizes="any">
+<style>
+  :root{--acc:#0ff;--bg:#04040f}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(120% 120% at 50% 0%,#0b1030,#04040f 70%);
+    color:#c8dcf0;font-family:'Share Tech Mono',ui-monospace,monospace;padding:24px 16px 60px}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-family:'Press Start 2P',monospace;font-size:clamp(15px,4vw,24px);color:var(--acc);
+    letter-spacing:3px;text-shadow:0 0 18px #0ff8;margin:12px 0 6px}
+  .sub{color:#5a7a9a;font-size:14px;margin-bottom:26px;line-height:1.6}
+  .back{display:inline-block;margin-bottom:18px;color:#4af;text-decoration:none;font-size:14px}
+  .back:hover{color:#fff}
+  .msg{border:1px solid #0ff4;background:#06061acc;padding:18px 20px;border-radius:6px;line-height:1.7}
+  .msg.err{border-color:#f556;color:#fbb}
+  .msg a{color:var(--acc)}
+  .row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    border:1px solid #0ff3;background:#06061acc;border-radius:6px;padding:14px 16px;margin-bottom:10px}
+  .ver{font-family:'Press Start 2P',monospace;font-size:13px;color:var(--acc);letter-spacing:2px}
+  .lbl{flex:1 1 200px;min-width:0;color:#8fb4d4;font-size:14px}
+  .date{color:#4a6a8a;font-size:13px}
+  button{font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:1px;padding:12px 16px;
+    background:#0a0a20;color:var(--acc);border:2px solid var(--acc);border-radius:4px;cursor:pointer}
+  button:hover{background:#0ff2;color:#fff}
+  button:disabled{opacity:.4;cursor:default}
+  .note{margin-top:26px;color:#4a6a8a;font-size:13px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/byte-blaster/">← на главную</a>
+  <h1>АРХИВ ВЕРСИЙ</h1>
+  <p class="sub">Прошлые сборки Byte Blaster прямо в браузере. Доступны владельцам игры.</p>
+  <div id="out" class="msg">Проверяем доступ…</div>
+  <p class="note">
+    Архивные сборки не лежат в открытом доступе — они хранятся в закрытом хранилище,
+    и ссылка на запуск выдаётся лично вам на ограниченное время. Делиться ей бесполезно:
+    она перестанет работать.
+  </p>
+</div>
+
+<script type="module">
+import * as sdk from '/byte-blaster/assets/pixset-auth.js';
+import { listBuilds, buildUrl } from '/byte-blaster/assets/web-gate.js';
+
+const out = document.getElementById('out');
+const say = (html, err) => { out.className = 'msg' + (err ? ' err' : ''); out.innerHTML = html; };
+
+function fmt(d) {
+  try { return new Date(d).toLocaleDateString('ru-RU', { year:'numeric', month:'long' }); }
+  catch (e) { return ''; }
+}
+
+(async function () {
+  let session = null;
+  try { session = await sdk.getSession(); } catch (e) {}
+  if (!session) {
+    say('Чтобы открыть архив, <a href="/byte-blaster/account/">войдите в аккаунт</a> Pixset Studio.');
+    return;
+  }
+
+  let ents = [];
+  try { ents = await sdk.getEntitlements(); } catch (e) {}
+  if (!ents.some(e => e && e.game_slug === 'byte-blaster')) {
+    say('Архив открыт владельцам игры. <a href="/byte-blaster/buy/">Купить Byte Blaster</a>.', true);
+    return;
+  }
+
+  const builds = await listBuilds();
+  if (!builds.length) { say('Архивных версий пока нет.'); return; }
+
+  out.className = '';
+  out.innerHTML = '';
+  for (const b of builds) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const ver = document.createElement('span'); ver.className = 'ver'; ver.textContent = b.version;
+    const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = b.label || '';
+    const dt  = document.createElement('span'); dt.className = 'date'; dt.textContent = fmt(b.published_at);
+    const btn = document.createElement('button'); btn.textContent = '▶ ИГРАТЬ';
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        // Ссылку просим В МОМЕНТ нажатия, а не заранее: она живёт полчаса, и
+        // держать её открытой на странице незачем.
+        const url = await buildUrl(sdk, b.id);
+        location.href = url;
+      } catch (e) {
+        btn.disabled = false; btn.textContent = '▶ ИГРАТЬ';
+        const m = String(e.message || e);
+        say(m === 'no_license'
+          ? 'Лицензия не найдена. <a href="/byte-blaster/buy/">Купить Byte Blaster</a>.'
+          : 'Не удалось открыть сборку: ' + m, true);
+      }
+    };
+    row.append(ver, lbl, dt, btn);
+    out.parentNode.insertBefore(row, out.nextSibling);
+  }
+  out.remove();
+})();
+</script>
+</body>
+</html>

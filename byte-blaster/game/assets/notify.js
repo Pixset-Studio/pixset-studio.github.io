@@ -37,32 +37,36 @@
     const st = document.createElement('style');
     st.id = 'bbNotifyCSS';
     st.textContent = `
+/* Плашка живёт СНАРУЖИ #stage, поэтому меряется через --bbFix, а не --bbText.
+   --bbText компенсирует ужатие сцены трансформом; здесь ужимать нечего, и на
+   телефоне эта компенсация (около ×2.4) раздувала плашку почти во весь экран.
+   zoom:var(--bbUI) убран по той же причине — он множился со всем остальным. */
 #bbNotify{position:fixed;left:0;right:0;bottom:0;z-index:10000;display:flex;
-  flex-direction:column;align-items:center;gap:8px;padding:12px;pointer-events:none;
-  font-family:'Press Start 2P',monospace;zoom:var(--bbUI, 1)}
+  flex-direction:column;align-items:center;gap:calc(7px * var(--bbFix, 1));
+  padding:calc(10px * var(--bbFix, 1));pointer-events:none;
+  font-family:'Press Start 2P',monospace}
 #bbNotify .nt{pointer-events:auto;max-width:min(520px,92vw);background:#06061a;
-  border:2px solid #0ff;box-shadow:0 0 24px #0ff5;border-radius:8px;padding:14px 16px;
-  display:flex;align-items:center;gap:12px;animation:ntIn .28s cubic-bezier(.2,1.3,.4,1) both}
+  border:1px solid #0ff8;box-shadow:0 0 18px #0ff4;border-radius:calc(6px * var(--bbFix, 1));
+  padding:calc(10px * var(--bbFix, 1)) calc(12px * var(--bbFix, 1));
+  display:flex;align-items:center;gap:calc(10px * var(--bbFix, 1));
+  animation:ntIn .28s cubic-bezier(.2,1.3,.4,1) both}
 @keyframes ntIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){#bbNotify .nt{animation:none}}
 #bbNotify .ntTxt{flex:1 1 auto;min-width:0}
-#bbNotify .ntTitle{font-size:calc(8px * var(--bbText, 1));color:#0ff;letter-spacing:1px;
+#bbNotify .ntTitle{font-size:calc(9px * var(--bbFix, 1));color:#0ff;letter-spacing:1px;
   text-shadow:0 0 10px #0ff8;overflow-wrap:anywhere}
 #bbNotify .ntBody{font-family:'Share Tech Mono',monospace;
-  font-size:calc(11px * var(--bbText, 1));color:#9fd;margin-top:6px;line-height:1.5;
-  overflow-wrap:anywhere}
-#bbNotify .ntBtn{flex:0 0 auto;font-family:inherit;font-size:calc(8px * var(--bbText, 1));
-  padding:10px 14px;cursor:pointer;background:#0a0a20;color:#0ff;border:2px solid #0ff;
+  font-size:calc(12px * var(--bbFix, 1));color:#9fd;margin-top:calc(5px * var(--bbFix, 1));
+  line-height:1.45;overflow-wrap:anywhere}
+/* Кнопка мельче не делается: в неё надо попадать пальцем. */
+#bbNotify .ntBtn{flex:0 0 auto;font-family:inherit;font-size:calc(9px * var(--bbFix, 1));
+  padding:calc(9px * var(--bbFix, 1)) calc(13px * var(--bbFix, 1));min-height:calc(38px * var(--bbFix, 1));
+  cursor:pointer;background:#0a0a20;color:#0ff;border:2px solid #0ff;
   border-radius:4px;letter-spacing:1px}
 #bbNotify .ntBtn:hover{background:#0ff2;color:#fff}
 #bbNotify .ntX{flex:0 0 auto;background:none;border:none;color:#5a7a9a;cursor:pointer;
-  font-family:inherit;font-size:calc(9px * var(--bbText, 1));padding:6px}
-#bbNotify .ntX:hover{color:#fff}
-@media (max-width:900px){
-  #bbNotify .ntTitle{font-size:calc(12px * var(--bbText, 1))}
-  #bbNotify .ntBody{font-size:calc(14px * var(--bbText, 1))}
-  #bbNotify .ntBtn{font-size:calc(12px * var(--bbText, 1));padding:14px 16px}
-}`;
+  font-family:inherit;font-size:calc(10px * var(--bbFix, 1));padding:calc(6px * var(--bbFix, 1))}
+#bbNotify .ntX:hover{color:#fff}`;
     document.head.appendChild(st);
   }
 

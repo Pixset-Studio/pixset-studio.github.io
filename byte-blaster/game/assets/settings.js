@@ -32,14 +32,14 @@
       'box-shadow:0 0 24px rgba(45,212,191,.35);color:#e6edf3;text-align:center;';
     const p = document.createElement('p');
     p.textContent = message;
-    p.style.cssText = 'margin:0 0 20px;font-size:16px;line-height:1.5;';
+    p.style.cssText = 'margin:0 0 20px;font-size:calc(16px * var(--bbText, 1));line-height:1.5;';
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:12px;justify-content:center;';
     const mkBtn = (label, primary) => {
       const b = document.createElement('button');
       b.textContent = label;
       b.style.cssText = 'flex:1;max-width:160px;padding:10px 14px;border-radius:8px;'+
-        'font-size:15px;cursor:pointer;border:2px solid '+(primary?'#2dd4bf':'#444c56')+';'+
+        'font-size:calc(15px * var(--bbText, 1));cursor:pointer;border:2px solid '+(primary?'#2dd4bf':'#444c56')+';'+
         'background:'+(primary?'#0f766e':'transparent')+';color:#e6edf3;transition:all .12s;';
       b.onmouseenter = () => { b.style.transform='scale(1.05)'; b.style.boxShadow='0 0 12px currentColor'; };
       b.onmouseleave = () => { b.style.transform='scale(1)';   b.style.boxShadow='none'; };
@@ -64,11 +64,17 @@
     customResolution: '1600x900',
     gameScale: 0,            // 0 = auto-fit to window (preserve aspect ratio)
     mobileZoom: 0,           // phone/tablet world magnification: 0 = auto by screen width, else 1.0–2.5
+    textScale: 1,            // interface text size multiplier (0.8–2.5) — see applyTextScale()
+    textScaleAuto: true,     // pick textScale from the screen instead of the slider
+    uiScale: 1,              // interface (windows/buttons/padding) multiplier (0.8–2.0)
+    uiScaleAuto: true,       // pick uiScale from the screen instead of the slider
     showFPS: false,
     fpsLimit: 'auto',        // 'auto' = detect the screen's refresh rate on first run (60Hz→60fps, 90Hz→90fps…), or a number, or 0 = unlimited
     adaptiveQuality: 'auto', // auto-lower gfx under sustained low FPS: 'auto' | 'on' | 'off'
     vsync: true,             // V-Sync (applied at startup; off = uncapped FPS)
     graphicsQuality: 'auto', // preset name, 'auto' (detect on first run) or 'custom'
+    prismFx: 'auto',         // world 11 per-object refraction: 'auto' | 'on' | 'off' — see prismFxOn() in game.js
+    notifications: true,     // show friend invites / studio news (needs OS permission too)
     // Individually tunable graphics parameters (multipliers). A preset just
     // pre-fills these; the player can then change any of them (→ 'custom').
     gfx: { glow:1.0, particleMul:1.0, bgDetail:1.0, trails:1.0, bossFx:1.0, decorMul:1.0, renderScale:2.0 },
@@ -82,8 +88,22 @@
     masterVolume: 100,
     musicVolume: 100,
     sfxVolume: 100,
+    // Стиль звучания музыки: 'modern' — обычный состав, 'chip' — чиптюн.
+    // Композиции одни и те же, отличается только запись.
+    musicStyle: 'modern',
     // Gameplay settings
     screenShake: true,
+    // Замирание кадра на удар. Своя настройка, а не общая с тряской: одним
+    // оно даёт вес, другим читается как подтормаживание.
+    hitStop: true,
+    // Экраны итогов. Каждый отключается отдельно: одни хотят видеть счёт и
+    // звёзды, другим важнее темп и мгновенный перезапуск.
+    showWinScreen: true,
+    showGameOverScreen: true,
+    // Режим прохождения. 'normal' — как было; 'easy' сохраняет чекпоинт даже
+    // после потери всех жизней, поэтому длинный уровень не приходится
+    // переигрывать с начала. На сложность врагов не влияет.
+    gameMode: 'normal',      // 'normal' | 'easy'
     shakeIntensity: 100,     // 0-150% multiplier on screen shake strength
     particles: true,
     combatText: true,        // floating damage/pickup text
@@ -279,6 +299,164 @@
     }
   }
 
+  // ── Размер текста интерфейса ──────────────────────────────────────────
+  // Все размеры шрифтов в стилях и в инлайновых стилях записаны как
+  // calc(Npx * var(--bbText, 1)), поэтому одна переменная меняет текст сразу
+  // везде: HUD, меню, карта мира, лобби, профиль, настройки.
+  //
+  // Зачем: на телефоне вся сцена (#stage) верстается в «настольном» размере
+  // 1280×720 и одним transform:scale вписывается в экран. Множитель экрана
+  // бывает 0.3–0.5, поэтому 8-пиксельная подпись превращается в 3 физических
+  // пикселя. Настройка возвращает читаемость, не ломая раскладку.
+  function clampTextScale(v) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return 1;
+    return Math.max(0.8, Math.min(n, 2.5));
+  }
+  function clampUiScale(v) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return 1;
+    return Math.max(0.8, Math.min(n, 2));
+  }
+
+  /* ── Подгонка под экран ────────────────────────────────────────────────
+     Игра сверстана под «настольный» эталон 1280×720. На 1920×1080 всё
+     оказывалось мелким островком посреди большого канваса, на 4K — вдвое
+     мельче, а на телефоне вся сцена ужимается одним transform-ом, и подпись
+     HUD доезжает до игрока четырьмя физическими пикселями.
+
+     Отсюда две разные формулы. Интерфейс растёт вместе с экраном, но вдвое
+     осторожнее самого экрана: буквальный ×3 на 4K превратил бы меню в
+     плакат. Текст на телефоне считается иначе — от того, во сколько раз
+     ужата сцена, потому что именно это и делает его нечитаемым. */
+  function viewport() {
+    const vv = window.visualViewport;
+    let w = (vv && vv.width) ? vv.width : window.innerWidth;
+    let h = (vv && vv.height) ? vv.height : window.innerHeight;
+    if (!w || w < 100) w = document.documentElement.clientWidth || 1280;
+    if (!h || h < 100) h = document.documentElement.clientHeight || 720;
+    return { w, h };
+  }
+
+  /** Во сколько раз сцена ужата под экран. 1 — не ужата (обычный ПК). */
+  function stageScale() {
+    const st = document.getElementById('stage');
+    if (!st) return 1;
+    try {
+      const m = new DOMMatrixReadOnly(getComputedStyle(st).transform);
+      return (m.a > 0.05 && m.a <= 1) ? m.a : 1;
+    } catch (e) { return 1; }
+  }
+
+  function autoUiScale() {
+    const { w, h } = viewport();
+    const s = Math.min(w / 1280, h / 720);      // во сколько раз экран больше эталона
+    if (s <= 1) return 1;                        // меньше эталона — не мельчим
+    return clampUiScale(1 + (s - 1) * 0.5);
+  }
+
+  function autoTextScale() {
+    const k = stageScale();
+    // Телефон: сцену ужали, буквы надо вернуть к читаемому физическому размеру.
+    if (k < 0.95) return clampTextScale(0.72 / k);
+    return clampTextScale(autoUiScale());        // ПК: растём вместе с интерфейсом
+  }
+
+  /* ── Масштаб для того, что живёт ВНЕ сцены ─────────────────────────────
+     Кнопки в углах (аккаунт, рекорды, настройки) и полноэкранные окна —
+     прямые дети body с position:fixed. Их не ужимает transform сцены, а
+     значит компенсация этого ужатия им не нужна: --bbText на телефоне
+     доходит до 2.4, и кнопки вырастали втрое, перекрывая меню.
+
+     Здесь считаем от РЕАЛЬНОГО экрана: на большом растём заодно с
+     интерфейсом, на маленьком слегка ужимаемся, чтобы три кнопки в ряд и
+     любое окно помещались целиком без прокрутки. */
+  function autoFixedScale() {
+    const { w, h } = viewport();
+    const k = Math.min(w / 1280, h / 720);
+    if (k >= 1) return clampUiScale(1 + (k - 1) * 0.5);
+    // 460 — ширина, на которой три подписанные кнопки ещё стоят свободно;
+    // ниже неё ужимаем пропорционально, но не мельче 0.62, иначе не нажать.
+    return Math.max(0.62, Math.min(1, w / 460));
+  }
+
+  /** Значения, которые реально применяются сейчас (с учётом авторежимов). */
+  function effectiveTextScale() {
+    const s = window.gameSettings || {};
+    return s.textScaleAuto !== false ? autoTextScale() : clampTextScale(s.textScale);
+  }
+  function effectiveUiScale() {
+    const s = window.gameSettings || {};
+    return s.uiScaleAuto !== false ? autoUiScale() : clampUiScale(s.uiScale);
+  }
+
+  // Запись переменных отделена от пересчёта раскладки: обработчик resize
+  // сначала подгоняет сцену, потом считает от неё авторазмеры, и только потом
+  // подгоняет ещё раз. Если бы запись сама дёргала пересчёт, получилась бы
+  // рекурсия «подогнали → пересчитали размер → снова подгоняем».
+  function setTextVar(v) {
+    const n = clampTextScale(v);
+    document.documentElement.style.setProperty('--bbText', String(n));
+    return n;
+  }
+  function setUiVar(v) {
+    const n = clampUiScale(v);
+    document.documentElement.style.setProperty('--bbUI', String(n));
+    return n;
+  }
+  /** --bbFix: размер того, что вне сцены. Всегда считается от экрана — ползунок
+      размера текста управляет содержимым игры, а не физическими кнопками. */
+  function setFixVar() {
+    const n = autoFixedScale();
+    document.documentElement.style.setProperty('--bbFix', String(n));
+    return n;
+  }
+  function refit() { if (typeof window.refitGame === 'function') window.refitGame(); }
+
+  // Крупный текст меняет высоту HUD, а от неё считается размер канваса; HUD
+  // растёт тем же zoom-ом, а его ширину в пикселях ставит applyGameScale —
+  // поэтому после любого изменения размеров раскладку надо пересчитать.
+  function applyTextScale(v) { const n = setTextVar(v); refit(); return n; }
+  function applyUiScale(v) { const n = setUiVar(v); refit(); return n; }
+
+  /** Применяет оба размера разом — с учётом того, включён ли авторежим. */
+  function applyScales() {
+    setTextVar(effectiveTextScale());
+    setUiVar(effectiveUiScale());
+    setFixVar();
+    refit();
+  }
+
+  /** Пересчёт авторазмеров после смены размера окна. Без пересчёта раскладки. */
+  function syncAutoScales() {
+    const s = window.gameSettings || {};
+    let changed = false;
+    if (s.textScaleAuto !== false) {
+      const want = String(autoTextScale());
+      const have = document.documentElement.style.getPropertyValue('--bbText');
+      if (have !== want) { setTextVar(want); changed = true; }
+    }
+    if (s.uiScaleAuto !== false) {
+      const want = String(autoUiScale());
+      const have = document.documentElement.style.getPropertyValue('--bbUI');
+      if (have !== want) { setUiVar(want); changed = true; }
+    }
+    // --bbFix зависит только от размера окна, поэтому пересчитывается всегда,
+    // независимо от того, включены авторежимы текста и интерфейса или нет.
+    {
+      const want = String(autoFixedScale());
+      const have = document.documentElement.style.getPropertyValue('--bbFix');
+      if (have !== want) { setFixVar(); changed = true; }
+    }
+    return changed;
+  }
+
+  window.applyTextScale = applyTextScale;
+  window.applyUiScale = applyUiScale;
+  window.applyScales = applyScales;
+  window.bbSyncAutoScales = syncAutoScales;
+  window.bbAutoScales = () => ({ text: autoTextScale(), ui: autoUiScale() });
+
   // Apply game scale — auto-fit canvas to viewport while preserving 800:420 aspect ratio.
   // The `scale` argument is now a "max scale ceiling" (1.0 = native pixel size, 0 = unlimited).
   // The actual rendered size is computed from window.innerWidth/innerHeight every resize.
@@ -294,6 +472,15 @@
     // would feed the scaled-up backing size back in and compound on each resize.
     const baseW = 800;
     const baseH = 420;
+
+    // Высота HUD именно в тех пикселях, в которых считается всё остальное.
+    // offsetHeight здесь не годится: панель увеличена zoom-ом, и он на это
+    // свойство не влияет — канвасу доставалось бы больше места, чем есть.
+    function _uiHeight(ui) {
+      if (!ui) return 0;
+      const h = ui.getBoundingClientRect().height;
+      return h ? h + 12 : 0;
+    }
 
     // Lay out the canvas + HUD for a given available area (the usual desktop fit
     // math). Returns the displayed canvas width so the caller can size the HUD.
@@ -316,7 +503,15 @@
       canvas.style.maxHeight = '';
       canvas.style.objectFit = '';
       canvas.style.imageRendering = 'auto';
-      if (ui) { ui.style.width = dispW + 'px'; ui.style.boxSizing = 'border-box'; }
+      // HUD растёт вместе с интерфейсом (zoom), поэтому его ширину задаём
+      // «до увеличения» — иначе панель стала бы шире канваса ровно во столько
+      // раз, во сколько увеличен интерфейс.
+      if (ui) {
+        const uz = effectiveUiScale();
+        ui.style.zoom = String(uz);
+        ui.style.width = (dispW / uz) + 'px';
+        ui.style.boxSizing = 'border-box';
+      }
       window._gameScale = s;
       if (typeof window.applyRenderResolution === 'function') window.applyRenderResolution();
       return dispW;
@@ -343,7 +538,7 @@
         // exact, proportional copy of the PC layout — nothing tiny, nothing
         // overflowing.
         const DESIGN_W = 1280, DESIGN_H = 720;
-        const uiH = (ui && ui.offsetHeight) ? ui.offsetHeight + 12 : 0;
+        const uiH = _uiHeight(ui);
         layoutCanvas(DESIGN_W - 16, DESIGN_H - uiH - 16, false);
         // Measure the stage at its natural (unscaled) size, then scale to fit.
         stage.style.position = 'fixed';
@@ -379,19 +574,35 @@
         stage.style.top = '';
         stage.style.width = '';
       }
-      const uiH = (ui && ui.offsetHeight) ? ui.offsetHeight + 12 : 0;
+      // Высота HUD и ширина канваса связаны: панель шире — строки не переносятся
+      // и она ниже, панель уже — переносятся и она выше. При крупном интерфейсе
+      // HUD уходит в несколько рядов, и одного прохода не хватало: канвас
+      // оставался прежним, а вместе они не влезали в окно. Второй проход
+      // сходится — и делается только если высота панели реально изменилась.
       const availW = Math.max(200, vpW - 16);
-      const availH = Math.max(140, vpH - uiH - 16);
-      layoutCanvas(availW, availH, true);
+      let uiH = _uiHeight(ui);
+      layoutCanvas(availW, Math.max(140, vpH - uiH - 16), true);
+      const uiH2 = _uiHeight(ui);
+      if (Math.abs(uiH2 - uiH) > 4) layoutCanvas(availW, Math.max(140, vpH - uiH2 - 16), true);
     }
 
-    fit();
+    // Авторазмер текста считается от того, во сколько раз ужата сцена, а это
+    // известно только ПОСЛЕ подгонки. Поэтому везде, где раньше был один
+    // fit(), теперь два прохода: подогнали → пересчитали авторазмеры → если
+    // они изменились, подогнали ещё раз. Второй проход почти всегда лишний и
+    // потому обусловлен.
+    function fitAuto() {
+      fit();
+      if (typeof window.bbSyncAutoScales === 'function' && window.bbSyncAutoScales()) fit();
+    }
+
+    fitAuto();
     if (!window._fitBound) {
       window._fitBound = true;
       let raf = 0;
       const onResize = () => {
         cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(fit);
+        raf = requestAnimationFrame(fitAuto);
       };
       window.addEventListener('resize', onResize);
       // Orientation flips on mobile resize the visible area only after a beat,
@@ -408,7 +619,7 @@
         window.visualViewport.addEventListener('scroll', onResize);
       }
       // Mobile WebViews report their final size late; settle with a few re-fits.
-      [150, 450, 900, 1600].forEach(t => setTimeout(fit, t));
+      [150, 450, 900, 1600].forEach(t => setTimeout(fitAuto, t));
     }
   }
   // Allow other modules (e.g. the touch gamepad / game start) to force a re-fit.
@@ -436,7 +647,7 @@
       color: #0f0;
       padding: 8px 12px;
       font-family: 'Courier New', monospace;
-      font-size: 16px;
+      font-size: calc(16px * var(--bbText, 1));
       font-weight: bold;
       border: 2px solid #0f0;
       border-radius: 4px;
@@ -667,6 +878,7 @@
       });
     }
     if (typeof window.setLanguage === 'function') window.setLanguage(settings.language);
+    applyScales();
     applyGfxSettings();
     applyWindowMode(settings.windowMode || 'windowed');
     applyResolution(settings.resolution);
@@ -695,16 +907,23 @@
     `;
 
     overlay.innerHTML = `
-      <div style="max-width: 1200px; width: 92%; max-height: 88vh; background: rgba(10, 10, 32, 0.95); padding: 20px 30px; border: 2px solid #4af; border-radius: 8px; display: flex; flex-direction: column;">
-        <h2 data-i18n="settingsTitle" style="color: #0ff; text-align: center; font-size: 22px; margin-bottom: 18px; text-shadow: 0 0 10px #0ff;">SETTINGS</h2>
+      <!-- max-height делится на масштаб интерфейса: окно увеличивается zoom-ом,
+           и без деления «88% высоты экрана» превратились бы в 176%. Ширина в
+           процентах считается от уже уменьшенного контейнера — её делить не
+           надо, а max-width в пикселях как раз и должен расти. -->
+      <div style="max-width: 1200px; width: 92%; max-height: calc(88vh / var(--bbUI, 1)); background: rgba(10, 10, 32, 0.95); padding: 20px 30px; border: 2px solid #4af; border-radius: 8px; display: flex; flex-direction: column;">
+        <!-- Заголовок — единственное слово, которое не переносится: на телефоне
+             при крупном тексте оно вылезало за панель. Ограничиваем его долей
+             ширины экрана — на ПК ограничение никогда не срабатывает. -->
+        <h2 data-i18n="settingsTitle" style="color: #0ff; text-align: center; font-size: min(calc(22px * var(--bbText, 1)), 8vw); margin-bottom: 18px; text-shadow: 0 0 10px #0ff;">SETTINGS</h2>
 
         <!-- Tab navigation -->
         <div id="settingsTabs" style="display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; flex-wrap: wrap;">
-          <button class="setTab active" data-tab="display" data-i18n="tabDisplay" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">DISPLAY</button>
-          <button class="setTab" data-tab="graphics" data-i18n="tabGraphics" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GRAPHICS</button>
-          <button class="setTab" data-tab="audio" data-i18n="tabAudio" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">AUDIO</button>
-          <button class="setTab" data-tab="controls" data-i18n="tabControls" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">CONTROLS</button>
-          <button class="setTab" data-tab="general" data-i18n="tabGeneral" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GENERAL</button>
+          <button class="setTab active" data-tab="display" data-i18n="tabDisplay" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">DISPLAY</button>
+          <button class="setTab" data-tab="graphics" data-i18n="tabGraphics" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GRAPHICS</button>
+          <button class="setTab" data-tab="audio" data-i18n="tabAudio" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">AUDIO</button>
+          <button class="setTab" data-tab="controls" data-i18n="tabControls" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">CONTROLS</button>
+          <button class="setTab" data-tab="general" data-i18n="tabGeneral" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">GENERAL</button>
         </div>
 
         <div style="flex: 1; overflow-y: auto; padding-right: 10px;">
@@ -716,8 +935,8 @@
                not physically tiny on a small screen; resolution itself is picked
                automatically from the device. Shown/hidden by _syncDisplayRows(). -->
           <div id="mobileZoomRow" style="display: none; margin-bottom: 20px;">
-            <label data-i18n="mobileZoom" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Game Magnification:</label>
-            <select id="mobileZoomSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="mobileZoom" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Game Magnification:</label>
+            <select id="mobileZoomSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="0" data-i18n="zoomAuto">Auto (by screen size)</option>
               <option value="1">1.0x</option>
               <option value="1.25">1.25x</option>
@@ -727,14 +946,42 @@
               <option value="custom" data-i18n="zoomCustom">Custom...</option>
             </select>
             <div id="zoomCustomDiv" style="display: none; margin-top: 10px;">
-              <input type="number" id="zoomCustomInput" step="0.05" min="1" max="2.5" placeholder="1.0 – 2.5" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
+              <input type="number" id="zoomCustomInput" step="0.05" min="1" max="2.5" placeholder="1.0 – 2.5" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
             </div>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="zoomNote">* Bigger picture, less of the level visible at once. Resolution is set automatically.</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="zoomNote">* Bigger picture, less of the level visible at once. Resolution is set automatically.</div>
+          </div>
+
+          <!-- Размер текста интерфейса. Стоит первым в «Экране» и показывается
+               на всех устройствах: на телефоне это главная жалоба («мелко»), а
+               на большом мониторе кому-то нужен шрифт крупнее. -->
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="textSize" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Text Size:</label>
+            <label style="color: #4af; font-size: calc(10px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" id="textAutoCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="scaleAutoFit">Fit to screen automatically</span>
+            </label>
+            <input type="range" id="textSizeSlider" min="80" max="250" step="5" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="textSizeVal">100</span>%</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="textSizeNote">* Size of all interface text: HUD, menus, map and lobby.</div>
+          </div>
+
+          <!-- Размер самих окон: отступы, ширины карточек и кнопок. Текст без
+               этого растёт в неизменной коробке — на большом экране меню всё
+               равно оставалось маленьким островком. -->
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="uiSize" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Interface Size:</label>
+            <label style="color: #4af; font-size: calc(10px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" id="uiAutoCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="scaleAutoFit">Fit to screen automatically</span>
+            </label>
+            <input type="range" id="uiSizeSlider" min="80" max="200" step="5" value="100" style="width: 100%; cursor: pointer;">
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="uiSizeVal">100</span>%</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="uiSizeNote">* Size of menus, panels and buttons — not the game world.</div>
           </div>
 
           <div id="windowResRow" style="margin-bottom: 20px;">
-            <label data-i18n="windowRes" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Window Resolution:</label>
-            <select id="resolutionSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="windowRes" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Window Resolution:</label>
+            <select id="resolutionSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="1280x720">1280 x 720</option>
               <option value="1600x900" data-i18n="resDefault">1600 x 900 (Default)</option>
               <option value="1920x1080" data-i18n="resFullHD">1920 x 1080 (Full HD)</option>
@@ -742,16 +989,16 @@
               <option value="custom" data-i18n="resCustom">Custom</option>
             </select>
             <div id="customResDiv" style="display: none; margin-top: 10px; gap: 10px;">
-              <input type="number" id="customWidth" placeholder="Width" min="800" max="3840" style="width: 48%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
+              <input type="number" id="customWidth" placeholder="Width" min="800" max="3840" style="width: 48%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
               <span style="color: #4af;">x</span>
-              <input type="number" id="customHeight" placeholder="Height" min="600" max="2160" style="width: 48%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
+              <input type="number" id="customHeight" placeholder="Height" min="600" max="2160" style="width: 48%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
             </div>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="resNote">* Changes window size</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="resNote">* Changes window size</div>
           </div>
 
           <div id="gameScaleRow" style="margin-bottom: 20px;">
-            <label data-i18n="gameScale" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Game Scale:</label>
-            <select id="scaleSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="gameScale" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Game Scale:</label>
+            <select id="scaleSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="0" data-i18n="scaleAuto">Auto-Fit (Recommended)</option>
               <option value="1.0">1.0x (Native 800x420)</option>
               <option value="1.5">1.5x (1200x630)</option>
@@ -759,12 +1006,12 @@
               <option value="2.5">2.5x (2000x1050)</option>
               <option value="3.0">3.0x (2400x1260)</option>
             </select>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="scaleNote">* Auto-Fit fills the window while keeping aspect ratio</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="scaleNote">* Auto-Fit fills the window while keeping aspect ratio</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label data-i18n="windowMode" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Window Mode:</label>
-            <select id="windowModeSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="windowMode" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Window Mode:</label>
+            <select id="windowModeSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="windowed" data-i18n="windowed">🪟 Windowed</option>
               <option value="fullscreen" data-i18n="fullscreen">⛶ Fullscreen</option>
               <option value="frameless" data-i18n="borderless">▣ Borderless</option>
@@ -772,32 +1019,32 @@
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label data-i18n="mapEnvironment" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">World Map Environment:</label>
-            <select id="mapEnvSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="mapEnvironment" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">World Map Environment:</label>
+            <select id="mapEnvSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="themed" data-i18n="mapEnvThemed">🌍 Normal (per-world)</option>
               <option value="space" data-i18n="mapEnvSpace">🛸 Space (classic)</option>
             </select>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="mapEnvNote">* Normal gives each world its own map backdrop (jungle, lava, ice…). Space keeps the original orbit-in-space look for every world.</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="mapEnvNote">* Normal gives each world its own map backdrop (jungle, lava, ice…). Space keeps the original orbit-in-space look for every world.</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
               <input type="checkbox" id="bossCamCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="bossAutoCam">Boss Fight Auto-Scroll Camera</span>
             </label>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="bossAutoCamNote">* On = camera advances on its own during boss fights (falling behind is fatal). Off = camera follows you as normal.</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="bossAutoCamNote">* On = camera advances on its own during boss fights (falling behind is fatal). Off = camera follows you as normal.</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
               <input type="checkbox" id="enemyFxCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="enemyEffects">Enemy Status Effects</span>
             </label>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="enemyEffectsNote">* On = a hit also leaves you burning, chilled, EMP-fried or corroded for a few seconds. Effects never deal extra damage, and the matching power-up makes you immune.</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="enemyEffectsNote">* On = a hit also leaves you burning, chilled, EMP-fried or corroded for a few seconds. Effects never deal extra damage, and the matching power-up makes you immune.</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
               <input type="checkbox" id="showHintsCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="showHints">Show Hint Bar</span>
             </label>
@@ -808,8 +1055,8 @@
         <!-- GRAPHICS TAB -->
         <div class="setPanel" data-panel="graphics" style="display:none;">
           <div style="margin-bottom: 14px;">
-            <label data-i18n="gfxQuality" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Graphics Quality:</label>
-            <select id="graphicsSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="gfxQuality" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Graphics Quality:</label>
+            <select id="graphicsSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="verylow" data-i18n="gfxVeryLow">🔴 Very Low</option>
               <option value="low" data-i18n="gfxLow">🟠 Low</option>
               <option value="medium" data-i18n="gfxMedium">🟡 Medium</option>
@@ -818,73 +1065,100 @@
               <option value="ultra" data-i18n="gfxUltra">⚡ Ultra</option>
               <option value="custom" data-i18n="gfxCustom">⚙ Custom</option>
             </select>
-            <div style="margin-top:5px;color:#888;font-size:8px;" data-i18n="gfxPresetNote">* A preset only fills the sliders below — tune any of them yourself.</div>
+            <div style="margin-top:5px;color:#888;font-size:calc(8px * var(--bbText, 1));" data-i18n="gfxPresetNote">* A preset only fills the sliders below — tune any of them yourself.</div>
+          </div>
+
+          <!-- Отдельная настройка для 11-го мира: там каждый кирпич, шип и враг
+               проходит через canvas-фильтр, а это самая дорогая операция 2D —
+               на телефоне мир становится неиграбельным. См. prismFxOn(). -->
+          <div style="margin-bottom: 14px;">
+            <label data-i18n="prismFx" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Prism World Refraction:</label>
+            <select id="prismFxSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="auto" data-i18n="prismFxAuto">🤖 Auto (off on phones)</option>
+              <option value="on" data-i18n="prismFxFull">🌈 Full</option>
+              <option value="off" data-i18n="prismFxNone">⚡ Off (fastest)</option>
+            </select>
+            <div style="margin-top:5px;color:#888;font-size: calc(8px * var(--bbText, 1));" data-i18n="prismFxNote">* Secret 11th world only. Off gives a big FPS boost; the sky, prism and platforms stay rainbow either way.</div>
           </div>
 
           <!-- Individually tunable graphics parameters -->
           <div style="margin-bottom: 12px;">
-            <label data-i18n="gfxRenderScale" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Render Resolution:</label>
+            <label data-i18n="gfxRenderScale" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Render Resolution:</label>
             <input type="range" id="gfxRenderScaleSlider" min="100" max="300" value="200" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxRenderScaleVal">200</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxRenderScaleVal">200</span>%</div>
           </div>
           <div style="margin-bottom: 12px;">
-            <label data-i18n="gfxGlow" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Glow / Bloom:</label>
+            <label data-i18n="gfxGlow" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Glow / Bloom:</label>
             <input type="range" id="gfxGlowSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxGlowVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxGlowVal">100</span>%</div>
           </div>
           <div style="margin-bottom: 12px;">
-            <label data-i18n="gfxParticleAmt" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Particle Amount:</label>
+            <label data-i18n="gfxParticleAmt" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Particle Amount:</label>
             <input type="range" id="gfxParticleMulSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxParticleMulVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxParticleMulVal">100</span>%</div>
           </div>
           <div style="margin-bottom: 12px;">
-            <label data-i18n="gfxBgDetail" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Background Detail:</label>
+            <label data-i18n="gfxBgDetail" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Background Detail:</label>
             <input type="range" id="gfxBgDetailSlider" min="20" max="200" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxBgDetailVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxBgDetailVal">100</span>%</div>
           </div>
           <div style="margin-bottom: 12px;">
-            <label data-i18n="gfxTrails" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Trails:</label>
+            <label data-i18n="gfxTrails" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Trails:</label>
             <input type="range" id="gfxTrailsSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxTrailsVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxTrailsVal">100</span>%</div>
           </div>
           <div style="margin-bottom: 12px;">
-            <label data-i18n="gfxBoss" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Boss Effects:</label>
+            <label data-i18n="gfxBoss" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Boss Effects:</label>
             <input type="range" id="gfxBossFxSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxBossFxVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxBossFxVal">100</span>%</div>
           </div>
           <div style="margin-bottom: 16px;">
-            <label data-i18n="gfxDecor" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Decorations:</label>
+            <label data-i18n="gfxDecor" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Decorations:</label>
             <input type="range" id="gfxDecorMulSlider" min="20" max="200" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="gfxDecorMulVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxDecorMulVal">100</span>%</div>
           </div>
 
           <!-- Effect toggles (moved here from the old Gameplay tab) -->
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
             <input type="checkbox" id="particlesCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
             <span data-i18n="particles">Particles</span>
           </label>
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
             <input type="checkbox" id="combatTextCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
             <span data-i18n="combatText">Floating Combat Text</span>
           </label>
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 14px;">
             <input type="checkbox" id="screenShakeCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
             <span data-i18n="screenShake">Screen Shake</span>
           </label>
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 6px;">
+            <input type="checkbox" id="hitStopCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="hitStop">Impact Freeze</span>
+          </label>
+          <div style="margin-bottom: 12px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="hitStopNote">* Brief pause on a hit — makes blows feel heavier</div>
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 6px;">
+            <input type="checkbox" id="winScreenCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="showWinScreen">Level Results Screen</span>
+          </label>
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 6px;">
+            <input type="checkbox" id="gameOverScreenCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+            <span data-i18n="showGameOverScreen">Defeat Screen</span>
+          </label>
+          <div style="margin-bottom: 12px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="resultScreensNote">* Turn off to go straight on without the summary</div>
           <div style="margin-bottom: 18px;">
-            <label data-i18n="shakeIntensity" style="color: #4af; font-size: 11px; display: block; margin-bottom: 6px;">Shake Intensity:</label>
+            <label data-i18n="shakeIntensity" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Shake Intensity:</label>
             <input type="range" id="shakeIntensitySlider" min="0" max="150" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="shakeIntensityVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="shakeIntensityVal">100</span>%</div>
           </div>
 
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
             <input type="checkbox" id="adaptiveQualityCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
             <span data-i18n="adaptiveQuality">Adaptive Quality (auto-lower on FPS drops)</span>
           </label>
 
           <div style="margin-bottom: 20px;">
-            <label data-i18n="fpsLimit" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">FPS Limit:</label>
-            <select id="fpsLimitSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="fpsLimit" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">FPS Limit:</label>
+            <select id="fpsLimitSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <option value="auto" data-i18n="fpsAuto">🖥 Auto (match screen Hz)</option>
               <option value="0" data-i18n="fpsNoLimit">No Limit (Unlimited)</option>
               <option value="30">30 FPS</option>
@@ -895,46 +1169,58 @@
               <option value="custom" data-i18n="fpsCustom">Custom...</option>
             </select>
             <div id="fpsCustomDiv" style="display:none; margin-top:10px; align-items:center; gap:8px;">
-              <input type="number" id="fpsCustomInput" min="10" max="1000" placeholder="60" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
-              <span style="color:#4af; font-size:9px;">FPS</span>
+              <input type="number" id="fpsCustomInput" min="10" max="1000" placeholder="60" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px;">
+              <span style="color:#4af; font-size:calc(9px * var(--bbText, 1));">FPS</span>
             </div>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="fpsNote">* Limits maximum frame rate</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="fpsNote">* Limits maximum frame rate</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
               <input type="checkbox" id="fpsCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="showFps">Show FPS Counter</span>
             </label>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
               <input type="checkbox" id="vsyncCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="vsync">V-Sync</span>
             </label>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="vsyncNote">* On = smooth, capped at refresh. Off = uncapped FPS (may tear). Restart required.</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="vsyncNote">* On = smooth, capped at refresh. Off = uncapped FPS (may tear). Restart required.</div>
           </div>
         </div>
 
         <!-- AUDIO TAB -->
         <div class="setPanel" data-panel="audio" style="display:none;">
           <div style="margin-bottom: 20px;">
-            <label data-i18n="masterVolume" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Master Volume:</label>
+            <label data-i18n="masterVolume" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Master Volume:</label>
             <input type="range" id="masterVolumeSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="masterVolumeVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 5px;"><span id="masterVolumeVal">100</span>%</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label data-i18n="musicVolume" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Music Volume:</label>
+            <label data-i18n="musicVolume" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Music Volume:</label>
             <input type="range" id="musicVolumeSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="musicVolumeVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 5px;"><span id="musicVolumeVal">100</span>%</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label data-i18n="sfxVolume" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">SFX Volume:</label>
+            <label data-i18n="sfxVolume" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">SFX Volume:</label>
             <input type="range" id="sfxVolumeSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
-            <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 5px;"><span id="sfxVolumeVal">100</span>%</div>
+            <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 5px;"><span id="sfxVolumeVal">100</span>%</div>
+          </div>
+
+          <!-- Стиль музыки. Те же композиции, но записанные двумя разными
+               составами: обычный звук и чиптюн. -->
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="musicStyle" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Music Style:</label>
+            <select id="musicStyleSelect" style="width: 100%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">
+              <option value="modern" data-i18n="musicStyleModern">Modern</option>
+              <option value="chip" data-i18n="musicStyleChip">8-bit</option>
+            </select>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="musicStyleNote">* Same tunes, different instruments</div>
+            <div id="musicStyleState" style="margin-top: 6px; color: #8cf; font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1));"></div>
           </div>
         </div>
 
@@ -942,104 +1228,104 @@
         <div class="setPanel" data-panel="controls" style="display:none;">
           <!-- Sub-tabs: PC keyboard vs Phone/Tablet touch -->
           <div id="ctrlSubTabs" style="display: flex; gap: 8px; justify-content: center; margin-bottom: 18px;">
-            <button class="ctrlSubTab active" data-ctrlsub="pc" data-i18n="ctrlTabPC" style="padding: 7px 16px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">⌨ PC</button>
-            <button class="ctrlSubTab" data-ctrlsub="touch" data-i18n="ctrlTabTouch" style="padding: 7px 16px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">📱 PHONE / TABLET</button>
+            <button class="ctrlSubTab active" data-ctrlsub="pc" data-i18n="ctrlTabPC" style="padding: 7px 16px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">⌨ PC</button>
+            <button class="ctrlSubTab" data-ctrlsub="touch" data-i18n="ctrlTabTouch" style="padding: 7px 16px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #4af; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">📱 PHONE / TABLET</button>
           </div>
 
           <!-- ===== PC (keyboard) ===== -->
           <div id="ctrlPcPanel">
           <div style="margin-bottom: 24px;">
-            <h3 data-i18n="controlsP1" style="color: #0ff; font-size: 12px; margin-bottom: 12px; text-shadow: 0 0 8px #0ff;">🎮 PLAYER 1 / SINGLE PLAYER</h3>
-            <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #aaa; line-height: 2.2;">
+            <h3 data-i18n="controlsP1" style="color: #0ff; font-size: calc(12px * var(--bbText, 1)); margin-bottom: 12px; text-shadow: 0 0 8px #0ff;">🎮 PLAYER 1 / SINGLE PLAYER</h3>
+            <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #aaa; line-height: 2.2;">
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlMoveLeft" style="color: #4af;">Move Left:</span>
-                <button class="keyBtn" data-key="p1Left" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">A</button>
+                <button class="keyBtn" data-key="p1Left" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">A</button>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlMoveRight" style="color: #4af;">Move Right:</span>
-                <button class="keyBtn" data-key="p1Right" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">D</button>
+                <button class="keyBtn" data-key="p1Right" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">D</button>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlJump" style="color: #4af;">Jump:</span>
-                <button class="keyBtn" data-key="p1Jump" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">SPACE</button>
+                <button class="keyBtn" data-key="p1Jump" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">SPACE</button>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlShoot" style="color: #4af;">Shoot:</span>
-                <button class="keyBtn" data-key="p1Shoot" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">Z</button>
+                <button class="keyBtn" data-key="p1Shoot" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 1px solid #0ff; border-radius: 3px; cursor: pointer;">Z</button>
               </div>
             </div>
           </div>
 
           <div style="margin-bottom: 24px;">
-            <h3 data-i18n="controlsP2" style="color: #f55; font-size: 12px; margin-bottom: 12px; text-shadow: 0 0 8px #f55;">🎮 PLAYER 2 (2-Player Mode)</h3>
-            <div style="font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #aaa; line-height: 2.2;">
+            <h3 data-i18n="controlsP2" style="color: #f55; font-size: calc(12px * var(--bbText, 1)); margin-bottom: 12px; text-shadow: 0 0 8px #f55;">🎮 PLAYER 2 (2-Player Mode)</h3>
+            <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #aaa; line-height: 2.2;">
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlMoveLeft" style="color: #4af;">Move Left:</span>
-                <button class="keyBtn" data-key="p2Left" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">←</button>
+                <button class="keyBtn" data-key="p2Left" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">←</button>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlMoveRight" style="color: #4af;">Move Right:</span>
-                <button class="keyBtn" data-key="p2Right" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">→</button>
+                <button class="keyBtn" data-key="p2Right" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">→</button>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlJump" style="color: #4af;">Jump:</span>
-                <button class="keyBtn" data-key="p2Jump" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">↑</button>
+                <button class="keyBtn" data-key="p2Jump" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">↑</button>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
                 <span data-i18n="ctrlShoot" style="color: #4af;">Shoot:</span>
-                <button class="keyBtn" data-key="p2Shoot" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">.</button>
+                <button class="keyBtn" data-key="p2Shoot" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #f55; border: 1px solid #f55; border-radius: 3px; cursor: pointer;">.</button>
               </div>
             </div>
           </div>
 
           <div style="padding: 12px; background: rgba(0, 255, 255, 0.05); border: 1px solid #0ff4; border-radius: 4px; margin-bottom: 12px;">
-            <div style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0ff; line-height: 1.8;">
+            <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #0ff; line-height: 1.8;">
               <div data-i18n="ctrlRebindHint">💡 Click a key, then press the new key to bind it (ESC cancels)</div>
               <div data-i18n="ctrlNote1">💡 In 1-player mode, use either WASD or Arrow Keys</div>
               <div data-i18n="ctrlNote2">💡 Stomp enemies by jumping on them from above</div>
             </div>
           </div>
 
-          <button id="resetControlsBtn" data-i18n="ctrlReset" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">RESET TO DEFAULT</button>
+          <button id="resetControlsBtn" data-i18n="ctrlReset" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">RESET TO DEFAULT</button>
           </div><!-- /#ctrlPcPanel -->
 
           <!-- ===== PHONE / TABLET (touch) ===== -->
           <div id="ctrlTouchPanel" style="display:none;">
             <div style="margin-bottom: 20px;">
-              <h3 data-i18n="ctrlTouchTitle" style="color: #0ff; font-size: 12px; margin-bottom: 12px; text-shadow: 0 0 8px #0ff;">📱 TOUCH CONTROLS</h3>
-              <label data-i18n="touchControls" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">📱 Touch Controls:</label>
-              <select id="touchControlsSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <h3 data-i18n="ctrlTouchTitle" style="color: #0ff; font-size: calc(12px * var(--bbText, 1)); margin-bottom: 12px; text-shadow: 0 0 8px #0ff;">📱 TOUCH CONTROLS</h3>
+              <label data-i18n="touchControls" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">📱 Touch Controls:</label>
+              <select id="touchControlsSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
                 <option value="auto" data-i18n="touchAuto">🤖 Auto (touch devices)</option>
                 <option value="on" data-i18n="touchOn">✔ Always On</option>
                 <option value="off" data-i18n="touchOff">✕ Off</option>
               </select>
             </div>
             <div style="margin-bottom: 20px;">
-              <label data-i18n="touchStyleLabel" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">🎮 Movement Style:</label>
-              <select id="touchStyleSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <label data-i18n="touchStyleLabel" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">🎮 Movement Style:</label>
+              <select id="touchStyleSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
                 <option value="arrows" data-i18n="touchStyleArrows">◀ ▶ Arrow Buttons</option>
                 <option value="joystick" data-i18n="touchStyleJoystick">🕹 Joystick (full + jump)</option>
                 <option value="joystickLR" data-i18n="touchStyleJoystickLR">🕹 Joystick (left/right only)</option>
               </select>
             </div>
             <div id="touchJoyModeRow" style="margin-bottom: 20px; display:none;">
-              <label data-i18n="touchJoyModeLabel" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">🕹 Joystick Position:</label>
-              <select id="touchJoyModeSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <label data-i18n="touchJoyModeLabel" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">🕹 Joystick Position:</label>
+              <select id="touchJoyModeSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
                 <option value="static" data-i18n="touchJoyStatic">📌 Static (fixed)</option>
                 <option value="floating" data-i18n="touchJoyFloating">🪶 Floating (follows finger)</option>
               </select>
             </div>
             <div style="margin-bottom: 20px;">
-              <label data-i18n="touchSizeLabel" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">📏 Button Size:</label>
+              <label data-i18n="touchSizeLabel" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">📏 Button Size:</label>
               <input type="range" id="touchSizeSlider" min="60" max="200" step="5" value="100" style="width: 100%; cursor: pointer;">
-              <div style="text-align: center; color: #fff; font-size: 10px; margin-top: 3px;"><span id="touchSizeVal">100</span>%</div>
+              <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="touchSizeVal">100</span>%</div>
             </div>
             <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-              <button id="customizeLayoutBtn" data-i18n="ctrlCustomizeLayout" style="flex: 1; min-width: 150px; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">✥ ARRANGE BUTTONS</button>
-              <button id="resetLayoutBtn" data-i18n="ctrlResetLayout" style="flex: 1; min-width: 150px; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">↺ RESET LAYOUT</button>
+              <button id="customizeLayoutBtn" data-i18n="ctrlCustomizeLayout" style="flex: 1; min-width: 150px; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;">✥ ARRANGE BUTTONS</button>
+              <button id="resetLayoutBtn" data-i18n="ctrlResetLayout" style="flex: 1; min-width: 150px; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #f80; border: 2px solid #f80; border-radius: 4px; cursor: pointer;">↺ RESET LAYOUT</button>
             </div>
             <div style="padding: 12px; background: rgba(0, 255, 255, 0.05); border: 1px solid #0ff4; border-radius: 4px;">
-              <div style="font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #0ff; line-height: 1.8;">
+              <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #0ff; line-height: 1.8;">
                 <div data-i18n="touchNote1">💡 On-screen gamepad: ◀ ▶ move, JUMP &amp; FIRE on the right.</div>
                 <div data-i18n="touchNote2">💡 "Auto" shows it only on touch devices; the game stays hidden on desktop.</div>
                 <div data-i18n="touchNote3">💡 Joystick: drag the stick left/right to move, push up to jump.</div>
@@ -1050,20 +1336,47 @@
 
         <!-- GENERAL TAB -->
         <div class="setPanel" data-panel="general" style="display:none;">
+          <!-- Режим прохождения стоит здесь, а не в «эффектах»: это правило игры,
+               а не настройка картинки. -->
           <div style="margin-bottom: 20px;">
-            <label data-i18n="lang" style="color: #4af; font-size: 11px; display: block; margin-bottom: 8px;">Language:</label>
-            <select id="languageSelect" style="width: 100%; padding: 10px; font-family: 'Twemoji Country Flags', 'Press Start 2P', monospace; font-size: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+            <label data-i18n="gameMode" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Game Mode:</label>
+            <select id="gameModeSelect" style="width: 100%; padding: 10px; background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); cursor: pointer;">
+              <option value="normal" data-i18n="gameModeNormal">Normal</option>
+              <option value="easy" data-i18n="gameModeEasy">Relaxed</option>
+            </select>
+            <div style="margin-top: 6px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="gameModeNote">* Relaxed keeps your checkpoint even after losing all lives</div>
+          </div>
+          <div style="margin-bottom: 20px;">
+            <label data-i18n="lang" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 8px;">Language:</label>
+            <select id="languageSelect" style="width: 100%; padding: 10px; font-family: 'Twemoji Country Flags', 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
               <!-- options are populated dynamically from the localisation/ folder -->
             </select>
           </div>
           <div style="margin-bottom: 20px;">
-            <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
               <input type="checkbox" id="cutscenesCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
               <span data-i18n="showDialogues">Story Dialogues</span>
             </label>
-            <div style="margin-top: 5px; color: #888; font-size: 8px;" data-i18n="showDialoguesNote">* Turn off to skip all story cutscenes</div>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="showDialoguesNote">* Turn off to skip all story cutscenes</div>
           </div>
-          <label style="color: #4af; font-size: 11px; display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
+
+          <!-- Уведомления. Разрешение у системы можно спросить ТОЛЬКО по
+               действию игрока — само по себе оно не появится, и раньше игра
+               его вообще не спрашивала. Поэтому здесь и галочка, и кнопка
+               «разрешить», и честная строка состояния. -->
+          <div style="margin-bottom: 20px;">
+            <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer;">
+              <input type="checkbox" id="notifyCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
+              <span data-i18n="notifyTitle">Notifications</span>
+            </label>
+            <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="notifyNote">* Friend invites and studio news. They arrive while the game is open.</div>
+            <div style="margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <button id="notifyAllowBtn" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer;" data-i18n="notifyAllow">ALLOW</button>
+              <button id="notifyTestBtn" style="padding: 8px 14px; font-family: 'Press Start 2P', monospace; font-size: calc(9px * var(--bbText, 1)); background: #0a0a20; color: #8cf; border: 2px solid #48c; border-radius: 4px; cursor: pointer;" data-i18n="notifyTest">TEST</button>
+              <span id="notifyState" style="color: #8cf; font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1));"></span>
+            </div>
+          </div>
+          <label style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: flex; align-items: center; cursor: pointer; margin-bottom: 16px;">
             <input type="checkbox" id="autoSaveCheckbox" style="width: 18px; height: 18px; margin-right: 12px; cursor: pointer;">
             <span data-i18n="autoSave">Auto-Save Progress</span>
           </label>
@@ -1072,8 +1385,8 @@
         </div><!-- /scrollable area -->
 
         <div style="display: flex; gap: 15px; justify-content: center; margin-top: 18px; padding-top: 14px; border-top: 1px solid #4af4;">
-          <button id="saveSettingsBtn" data-i18n="save" style="padding: 12px 24px; font-family: 'Press Start 2P', monospace; font-size: 11px; background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer; transition: all 0.2s;">SAVE</button>
-          <button id="cancelSettingsBtn" data-i18n="cancel" style="padding: 12px 24px; font-family: 'Press Start 2P', monospace; font-size: 11px; background: #0a0a20; color: #f44; border: 2px solid #f44; border-radius: 4px; cursor: pointer; transition: all 0.2s;">CANCEL</button>
+          <button id="saveSettingsBtn" data-i18n="save" style="padding: 12px 24px; font-family: 'Press Start 2P', monospace; font-size: calc(11px * var(--bbText, 1)); background: #0a0a20; color: #0ff; border: 2px solid #0ff; border-radius: 4px; cursor: pointer; transition: all 0.2s;">SAVE</button>
+          <button id="cancelSettingsBtn" data-i18n="cancel" style="padding: 12px 24px; font-family: 'Press Start 2P', monospace; font-size: calc(11px * var(--bbText, 1)); background: #0a0a20; color: #f44; border: 2px solid #f44; border-radius: 4px; cursor: pointer; transition: all 0.2s;">CANCEL</button>
         </div>
       </div>
     `;
@@ -1168,6 +1481,70 @@
     resSelect.value = window.gameSettings.resolution;
     scaleSelect.value = window.gameSettings.gameScale.toString();
 
+    // Размеры текста и интерфейса применяются прямо во время перетаскивания —
+    // иначе выбирать «читаемо/нечитаемо» пришлось бы вслепую. Отмена
+    // возвращает сохранённые значения (см. обработчик cancelSettingsBtn).
+    //
+    // При включённом «подстроить под экран» ползунок показывает вычисленное
+    // значение и не редактируется: иначе игрок двигал бы его, а размер не
+    // менялся — самый обидный вид неработающей настройки.
+    const textSizeSlider = document.getElementById('textSizeSlider');
+    const textSizeVal = document.getElementById('textSizeVal');
+    const textAutoCheck = document.getElementById('textAutoCheckbox');
+    const uiSizeSlider = document.getElementById('uiSizeSlider');
+    const uiSizeVal = document.getElementById('uiSizeVal');
+    const uiAutoCheck = document.getElementById('uiAutoCheckbox');
+
+    function paintScaleRow(slider, valEl, autoEl, value, auto) {
+      if (!slider) return;
+      const pct = Math.round(value * 100);
+      slider.value = pct;
+      slider.disabled = !!auto;
+      slider.style.opacity = auto ? '0.45' : '1';
+      slider.style.cursor = auto ? 'default' : 'pointer';
+      if (valEl) valEl.textContent = pct;
+      if (autoEl) autoEl.checked = !!auto;
+    }
+    function syncScaleRows() {
+      const s = window.gameSettings;
+      paintScaleRow(textSizeSlider, textSizeVal, textAutoCheck,
+        effectiveTextScale(), s.textScaleAuto !== false);
+      paintScaleRow(uiSizeSlider, uiSizeVal, uiAutoCheck,
+        effectiveUiScale(), s.uiScaleAuto !== false);
+    }
+    window._syncScaleRows = syncScaleRows;
+    syncScaleRows();
+
+    if (textSizeSlider) {
+      textSizeSlider.oninput = function () {
+        if (textSizeVal) textSizeVal.textContent = this.value;
+        applyTextScale((parseInt(this.value, 10) || 100) / 100);
+      };
+    }
+    if (uiSizeSlider) {
+      uiSizeSlider.oninput = function () {
+        if (uiSizeVal) uiSizeVal.textContent = this.value;
+        applyUiScale((parseInt(this.value, 10) || 100) / 100);
+      };
+    }
+    // Галочки применяются сразу: игрок видит, что даёт «под экран», не выходя
+    // из панели. Ручное значение при этом не теряется — оно вернётся, если
+    // галочку снять.
+    if (textAutoCheck) {
+      textAutoCheck.onchange = function () {
+        window.gameSettings.textScaleAuto = this.checked;
+        applyTextScale(effectiveTextScale());
+        syncScaleRows();
+      };
+    }
+    if (uiAutoCheck) {
+      uiAutoCheck.onchange = function () {
+        window.gameSettings.uiScaleAuto = this.checked;
+        applyUiScale(effectiveUiScale());
+        syncScaleRows();
+      };
+    }
+
     // Display tab: phones/tablets get magnification, desktops get window size.
     // Window resolution and Game Scale both act on a window, so on a device that
     // has none they are dead controls — hidden rather than left to confuse.
@@ -1238,6 +1615,81 @@
         if (this.value !== 'custom' && tiers[this.value]) gfxFillSlidersFrom(tiers[this.value]);
       };
     }
+    const gameModeSelect = document.getElementById('gameModeSelect');
+    if (gameModeSelect) gameModeSelect.value = window.gameSettings.gameMode || 'normal';
+    const prismFxSelect = document.getElementById('prismFxSelect');
+    if (prismFxSelect) prismFxSelect.value = window.gameSettings.prismFx || 'auto';
+
+    /* ── Уведомления ──────────────────────────────────────────────────────
+       Здесь два разных «да»: разрешение системы и желание игрока. Галочка —
+       про желание, кнопка — про разрешение. Показываем оба состояния честно:
+       если система запретила, галочка ничего не изменит, и врать об этом
+       нельзя. */
+    const notifyCheck = document.getElementById('notifyCheckbox');
+    const notifyBtn = document.getElementById('notifyAllowBtn');
+    const notifyTestBtn = document.getElementById('notifyTestBtn');
+    const notifyState = document.getElementById('notifyState');
+
+    // Состояние спрашиваем у Notify, а не у Notification напрямую: в .exe и в
+    // .apk уведомления идут мимо веб-API, и его ответ там ничего не значит.
+    function notifyPermission() {
+      if (window.Notify && window.Notify.permission) return window.Notify.permission();
+      if (typeof Notification === 'undefined') return 'unsupported';
+      return Notification.permission;   // 'granted' | 'denied' | 'default'
+    }
+    function syncNotifyRow() {
+      if (!notifyCheck) return;
+      const perm = notifyPermission();
+      notifyCheck.checked = window.gameSettings.notifications !== false;
+      if (notifyState) {
+        notifyState.textContent =
+          perm === 'granted' ? T('notifyOn') :
+          perm === 'denied' ? T('notifyBlocked') :
+          perm === 'unsupported' ? T('notifyBlocked') : '';
+      }
+      // Просить разрешение имеет смысл ровно один раз — когда его ещё не дали
+      // и не запретили. В остальных случаях кнопка только мешала бы.
+      if (notifyBtn) notifyBtn.style.display = (perm === 'default') ? '' : 'none';
+      // Кнопка проверки видна всегда. Пока её не было, «работает ли канал»
+      // нельзя было выяснить вообще никак: тишина от исправной игры выглядит
+      // ровно как тишина от сломанной.
+      if (notifyTestBtn) notifyTestBtn.style.display = '';
+    }
+    window._syncNotifyRow = syncNotifyRow;
+    syncNotifyRow();
+
+    if (notifyCheck) {
+      notifyCheck.onchange = function () {
+        window.gameSettings.notifications = this.checked;
+        // Включили, а разрешения ещё нет — спрашиваем сразу: это и есть то
+        // действие игрока, без которого система молчит.
+        if (this.checked && notifyPermission() === 'default' && window.Notify) {
+          window.Notify.ask().then(syncNotifyRow);
+        } else syncNotifyRow();
+      };
+    }
+    if (notifyBtn) {
+      notifyBtn.onclick = function () {
+        if (!window.Notify) return;
+        window.Notify.ask().then(() => {
+          syncNotifyRow();
+          // Показываем, что канал живой: иначе «разрешил и ничего не понял».
+          if (window.Notify.test) window.Notify.test();
+        });
+      };
+    }
+    if (notifyTestBtn) {
+      notifyTestBtn.onclick = function () {
+        if (!window.Notify) return;
+        // Не спросили разрешение — сначала спросим: иначе проверка на Android и
+        // в браузере всегда упиралась бы во всплывашку внутри игры.
+        if (notifyPermission() === 'default') {
+          window.Notify.ask().then(() => { syncNotifyRow(); window.Notify.test(); });
+        } else {
+          window.Notify.test();
+        }
+      };
+    }
     if (windowModeSelect) windowModeSelect.value = window.gameSettings.windowMode || 'windowed';
     if (mapEnvSelect) mapEnvSelect.value = window.gameSettings.mapEnvironment || 'themed';
     const bossCamCheckbox = document.getElementById('bossCamCheckbox');
@@ -1267,9 +1719,42 @@
       sfxVolumeVal.textContent = sfxVolumeSlider.value;
       sfxVolumeSlider.oninput = function() { sfxVolumeVal.textContent = this.value; };
     }
+    // Стиль музыки применяем сразу по выбору, а не по «Сохранить»: иначе
+    // сравнить два варианта на слух невозможно.
+    const musicStyleSelect = document.getElementById('musicStyleSelect');
+    const musicStyleState = document.getElementById('musicStyleState');
+    // Набор 8 бит не лежит в сборке и качается при первом включении. Пока он
+    // едет, чиптюн играет живым синтезом — но игрок должен понимать, почему
+    // звук чуть другой и что происходит.
+    function syncStyleState() {
+      if (!musicStyleState) return;
+      const chip = window.gameSettings.musicStyle === 'chip';
+      if (!chip) { musicStyleState.textContent = ''; return; }
+      const st = window.AudioFiles && window.AudioFiles.chipState
+        ? window.AudioFiles.chipState() : 'ready';
+      musicStyleState.textContent =
+        st === 'loading' ? T('musicStyleLoading') :
+        st === 'offline' ? T('musicStyleOffline') : '';
+    }
+    window._syncStyleState = syncStyleState;
+    if (musicStyleSelect) {
+      musicStyleSelect.value = window.gameSettings.musicStyle === 'chip' ? 'chip' : 'modern';
+      syncStyleState();
+      musicStyleSelect.onchange = function () {
+        window.gameSettings.musicStyle = this.value;
+        if (window.AudioFiles && window.AudioFiles.reloadStyle) window.AudioFiles.reloadStyle();
+        syncStyleState();
+      };
+    }
 
     // Gameplay checkboxes
     const screenShakeCheck = document.getElementById('screenShakeCheckbox');
+    const hitStopCheck = document.getElementById('hitStopCheckbox');
+    if (hitStopCheck) hitStopCheck.checked = window.gameSettings.hitStop !== false;
+    const winScreenCheck = document.getElementById('winScreenCheckbox');
+    const gameOverScreenCheck = document.getElementById('gameOverScreenCheckbox');
+    if (winScreenCheck) winScreenCheck.checked = window.gameSettings.showWinScreen !== false;
+    if (gameOverScreenCheck) gameOverScreenCheck.checked = window.gameSettings.showGameOverScreen !== false;
     const particlesCheck = document.getElementById('particlesCheckbox');
     const autoSaveCheck = document.getElementById('autoSaveCheckbox');
     const combatTextCheck = document.getElementById('combatTextCheckbox');
@@ -1496,6 +1981,17 @@
       }
       
       window.gameSettings.gameScale = parseFloat(scaleSelect.value);
+      // Ручное значение записываем только когда авторежим выключен: иначе
+      // ползунок, показывающий вычисленный размер, затёр бы то, что игрок
+      // выставил руками до включения галочки.
+      if (textAutoCheck) window.gameSettings.textScaleAuto = textAutoCheck.checked;
+      if (uiAutoCheck) window.gameSettings.uiScaleAuto = uiAutoCheck.checked;
+      if (textSizeSlider && !window.gameSettings.textScaleAuto) {
+        window.gameSettings.textScale = clampTextScale((parseInt(textSizeSlider.value, 10) || 100) / 100);
+      }
+      if (uiSizeSlider && !window.gameSettings.uiScaleAuto) {
+        window.gameSettings.uiScale = clampUiScale((parseInt(uiSizeSlider.value, 10) || 100) / 100);
+      }
       // Mobile magnification: a preset, Auto (0), or a clamped custom value.
       const zoomSel = document.getElementById('mobileZoomSelect');
       if (zoomSel) {
@@ -1529,6 +2025,11 @@
       
       const gfxSel = document.getElementById('graphicsSelect');
       if (gfxSel) { window.gameSettings.graphicsQuality = gfxSel.value; }
+      const prismSel = document.getElementById('prismFxSelect');
+      if (prismSel) { window.gameSettings.prismFx = prismSel.value; }
+      const modeSel = document.getElementById('gameModeSelect');
+      if (modeSel) { window.gameSettings.gameMode = modeSel.value === 'easy' ? 'easy' : 'normal'; }
+      if (notifyCheck) { window.gameSettings.notifications = notifyCheck.checked; }
       // Read the per-parameter graphics sliders into gameSettings.gfx.
       (function () {
         const rows = [
@@ -1577,9 +2078,13 @@
       if (masterVolumeSlider) window.gameSettings.masterVolume = parseInt(masterVolumeSlider.value);
       if (musicVolumeSlider) window.gameSettings.musicVolume = parseInt(musicVolumeSlider.value);
       if (sfxVolumeSlider) window.gameSettings.sfxVolume = parseInt(sfxVolumeSlider.value);
+      if (musicStyleSelect) window.gameSettings.musicStyle = musicStyleSelect.value;
 
       // Gameplay settings
       if (screenShakeCheck) window.gameSettings.screenShake = screenShakeCheck.checked;
+      if (hitStopCheck) window.gameSettings.hitStop = hitStopCheck.checked;
+      if (winScreenCheck) window.gameSettings.showWinScreen = winScreenCheck.checked;
+      if (gameOverScreenCheck) window.gameSettings.showGameOverScreen = gameOverScreenCheck.checked;
       if (adaptiveCheck) window.gameSettings.adaptiveQuality = adaptiveCheck.checked ? 'on' : 'off';
       if (particlesCheck) window.gameSettings.particles = particlesCheck.checked;
       if (autoSaveCheck) window.gameSettings.autoSave = autoSaveCheck.checked;
@@ -1626,6 +2131,16 @@
 
     // Cancel button
     document.getElementById('cancelSettingsBtn').onclick = function() {
+      // Размеры применяются сразу при перетаскивании ползунка и переключении
+      // галочки, поэтому отмена обязана вернуть сохранённое состояние — иначе
+      // «Отмена» оставила бы примерку в силе до перезапуска.
+      const saved = loadSettings();
+      window.gameSettings.textScale = saved.textScale;
+      window.gameSettings.textScaleAuto = saved.textScaleAuto;
+      window.gameSettings.uiScale = saved.uiScale;
+      window.gameSettings.uiScaleAuto = saved.uiScaleAuto;
+      applyScales();
+      syncScaleRows();
       overlay.style.display = 'none';
       if (window.SFX && window.SFX.menu) window.SFX.menu();
     };
@@ -1652,30 +2167,91 @@
       // (closed via Cancel) don't linger.
       if (typeof window._syncControlsForm === 'function') window._syncControlsForm();
       if (typeof window._syncDisplayRows === 'function') window._syncDisplayRows();
+      // Ползунки показывают то, что реально применено сейчас (в авторежиме —
+      // вычисленное значение, а не последнее ручное).
+      if (typeof window._syncScaleRows === 'function') window._syncScaleRows();
+      // Разрешение могли выдать или отозвать в системе, пока панель была
+      // закрыта, — состояние всегда перечитываем при открытии.
+      if (typeof window._syncNotifyRow === 'function') window._syncNotifyRow();
       if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();
       overlay.style.display = 'flex';
     }
   };
 
-  // Add settings button to main menu (idempotent — safe to call repeatedly)
+  // Кнопка настроек в правом верхнем углу — зеркало кнопки аккаунта слева.
+  // В самом меню её больше нет: там теперь «Что нового». Кнопка — прямой
+  // ребёнок body с position:fixed, иначе масштабирование игрового поля утащит
+  // её в леттербокс на телефоне (та же причина, что и у кнопки аккаунта).
+  function ensureCornerStyles() {
+    if (document.getElementById('bbSetBtnCss')) return;
+    const css = document.createElement('style');
+    css.id = 'bbSetBtnCss';
+    css.textContent = [
+      '#bbSetBtn{position:fixed;top:16px;right:16px;z-index:55;display:none;',
+      'flex-direction:column;align-items:center;gap:7px;padding:13px 18px;',
+      'background:#0ff1;border:2px solid #0ff8;cursor:pointer;',
+      'transition:background .15s,box-shadow .15s,border-color .15s}',
+      '#bbSetBtn:hover{background:#0ff3;border-color:#0ff;box-shadow:0 0 16px #0ff8}',
+      // Размеры считаем по --bbFix, а не --bbText: кнопка живёт вне сцены и не
+      // ужимается вместе с ней, поэтому компенсирующий множитель раздувал её.
+      '#bbSetBtn .sbIcon{width:calc(28px * var(--bbFix, 1));'
+      + 'height:calc(28px * var(--bbFix, 1));display:block;color:#0ff;'
+      + 'filter:drop-shadow(0 0 6px #0ff8)}',
+      '#bbSetBtn:hover .sbIcon{filter:drop-shadow(0 0 10px #0ff)}',
+      '#bbSetBtn .sbText{font-family:"Press Start 2P",monospace;',
+      'font-size:calc(9px * var(--bbFix, 1));letter-spacing:1px;color:#0ff;',
+      'text-shadow:0 0 8px #0ff;max-width:118px;overflow:hidden;',
+      'text-overflow:ellipsis;white-space:nowrap}',
+      '@media (max-width:640px){',
+      '#bbSetBtn{top:10px;right:10px;padding:9px 12px;gap:5px}',
+      '#bbSetBtn .sbIcon{width:calc(21px * var(--bbFix, 1));height:calc(21px * var(--bbFix, 1))}',
+      '#bbSetBtn .sbText{font-size:calc(7px * var(--bbFix, 1));max-width:88px}}',
+    ].join('');
+    document.head.appendChild(css);
+  }
+
+  let cornerSetBtn = null;
+
+  /** Перекрыто ли меню другим полноэкранным окном (настройки, профиль, новости). */
+  function coveredByScreen() {
+    const mine = parseInt(getComputedStyle(cornerSetBtn).zIndex, 10) || 0;
+    for (const el of document.body.children) {
+      if (el === cornerSetBtn) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      if (cs.position !== 'fixed' && cs.position !== 'absolute') continue;
+      if ((parseInt(cs.zIndex, 10) || 0) <= mine) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width >= innerWidth * 0.8 && r.height >= innerHeight * 0.8) return true;
+    }
+    return false;
+  }
+
+  function updateCornerButton() {
+    if (!cornerSetBtn) return;
+    const main = document.getElementById('mainOv');
+    const onMenu = !!main && getComputedStyle(main).display !== 'none' && !coveredByScreen();
+    cornerSetBtn.style.display = onMenu ? 'flex' : 'none';
+    if (!onMenu) return;
+    const label = cornerSetBtn.querySelector('.sbText');
+    if (label) label.textContent = (typeof window.t === 'function') ? window.t('settingsShort') : 'SETTINGS';
+  }
+
   function addSettingsButton() {
-    if (document.getElementById('settingsBtn')) return true;
-    const mainOv = document.getElementById('mainOv');
-    if (!mainOv) return false;
-    const startBtn = mainOv.querySelector('.ovBtn');
-    if (!startBtn) return false;
-    const settingsBtn = document.createElement('button');
-    settingsBtn.id = 'settingsBtn';
-    settingsBtn.className = 'ovBtn';
-    settingsBtn.setAttribute('data-i18n', 'settings');
-    settingsBtn.textContent = (typeof window.t === 'function') ? window.t('settings') : '⚙ SETTINGS';
-    settingsBtn.style.marginTop = '10px';
-    settingsBtn.onclick = function() {
+    if (document.getElementById('bbSetBtn')) return true;
+    if (!document.body) return false;
+    ensureCornerStyles();
+    cornerSetBtn = document.createElement('div');
+    cornerSetBtn.id = 'bbSetBtn';
+    cornerSetBtn.innerHTML = '<svg class=\"sbIcon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M9.37 4.76L9.66 1.87L14.34 1.87L14.63 4.76A7.7 7.7 0 0 1 15.25 5.02L15.25 5.02L17.51 3.18L20.82 6.49L18.98 8.75A7.7 7.7 0 0 1 19.24 9.37L19.24 9.37L22.13 9.66L22.13 14.34L19.24 14.63A7.7 7.7 0 0 1 18.98 15.25L18.98 15.25L20.82 17.51L17.51 20.82L15.25 18.98A7.7 7.7 0 0 1 14.63 19.24L14.63 19.24L14.34 22.13L9.66 22.13L9.37 19.24A7.7 7.7 0 0 1 8.75 18.98L8.75 18.98L6.49 20.82L3.18 17.51L5.02 15.25A7.7 7.7 0 0 1 4.76 14.63L4.76 14.63L1.87 14.34L1.87 9.66L4.76 9.37A7.7 7.7 0 0 1 5.02 8.75L5.02 8.75L3.18 6.49L6.49 3.18L8.75 5.02A7.7 7.7 0 0 1 9.37 4.76ZM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z\"/></svg><span class=\"sbText\"></span>';
+    cornerSetBtn.onclick = function () {
       if (window.SFX && window.SFX.menu) window.SFX.menu();
       window.showSettings();
     };
-    startBtn.parentNode.insertBefore(settingsBtn, startBtn.nextSibling);
-    console.log('✔ Settings button added to menu');
+    document.body.appendChild(cornerSetBtn);
+    updateCornerButton();
+    // Опрос дешевле, чем хук на каждый переход между экранами.
+    setInterval(updateCornerButton, 400);
     return true;
   }
 
