@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Музыка — BYTE BLASTER</title>
+<meta name="description" content="Саундтрек Byte Blaster: шестнадцать тем — меню, карта мира, одиннадцать миров, босс, звезда и победа.">
+<link rel="icon" href="/byte-blaster/game/icons/favicon.ico" sizes="any">
+<style>
+  :root{--acc:#0ff}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;padding:24px 16px 80px;color:#c8dcf0;
+    background:radial-gradient(120% 120% at 50% 0%,#0b1030,#04040f 70%);
+    font-family:'Share Tech Mono',ui-monospace,monospace}
+  .wrap{max-width:820px;margin:0 auto}
+  .back{display:inline-block;margin-bottom:16px;color:#4af;text-decoration:none;font-size:14px}
+  .back:hover{color:#fff}
+  h1{font-family:'Press Start 2P',monospace;font-size:clamp(15px,4.2vw,24px);color:var(--acc);
+    letter-spacing:3px;text-shadow:0 0 18px #0ff8;margin:10px 0 8px}
+  .sub{color:#5a7a9a;font-size:14px;line-height:1.65;margin-bottom:24px}
+  .list{display:grid;gap:8px}
+  .tr{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #0ff3;
+    border-radius:6px;background:#06061acc;cursor:pointer;transition:border-color .15s,background .15s}
+  .tr:hover{border-color:#0ff8;background:#0a0a24cc}
+  .tr.on{border-color:var(--acc);background:#0ff14;box-shadow:0 0 18px #0ff3}
+  .ico{flex:0 0 auto;width:34px;height:34px;display:grid;place-items:center;border-radius:4px;
+    background:#0a0a24;border:1px solid #0ff4;color:var(--acc);font-size:15px}
+  .nm{flex:1 1 auto;min-width:0}
+  .nm b{display:block;font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:1px;
+    color:#dff;margin-bottom:5px;overflow-wrap:anywhere}
+  .nm span{color:#5a7a9a;font-size:13px}
+  .dur{flex:0 0 auto;color:#4a6a8a;font-size:13px;font-variant-numeric:tabular-nums}
+  .bar{height:3px;background:#0ff2;border-radius:2px;overflow:hidden;margin-top:8px;display:none}
+  .tr.on .bar{display:block}
+  .bar i{display:block;height:100%;width:0;background:var(--acc);box-shadow:0 0 8px #0ff}
+  .foot{position:fixed;left:0;right:0;bottom:0;padding:12px 16px;background:#04040fe8;
+    border-top:1px solid #0ff3;display:flex;align-items:center;gap:14px;justify-content:center;flex-wrap:wrap}
+  button{font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:1px;padding:11px 15px;
+    background:#0a0a20;color:var(--acc);border:2px solid var(--acc);border-radius:4px;cursor:pointer}
+  button:hover{background:#0ff2;color:#fff}
+  .vol{display:flex;align-items:center;gap:8px;color:#5a7a9a;font-size:13px}
+  input[type=range]{accent-color:#0ff;width:120px}
+  .note{margin-top:26px;color:#4a6a8a;font-size:13px;line-height:1.7;border-top:1px solid #0ff2;padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/byte-blaster/">← на главную</a>
+  <h1>МУЗЫКА ИГРЫ</h1>
+  <p class="sub">Шестнадцать тем Byte Blaster. Каждая собирается нотами прямо в браузере — как в самой игре.</p>
+  <div class="list" id="list"></div>
+  <p class="note" id="note">
+    Треков как файлов не существует: на сервере нет ни одного mp3. Музыка описана нотами
+    и звучит благодаря синтезатору в браузере — ровно так же, как внутри игры.
+  </p>
+</div>
+
+<div class="foot">
+  <button id="prev">⏮</button>
+  <button id="toggle">▶ ИГРАТЬ</button>
+  <button id="next">⏭</button>
+  <label class="vol">🔊 <input type="range" id="vol" min="0" max="100" value="80"></label>
+</div>
+
+<script src="/byte-blaster/assets/music-data.js"></script>
+<script src="/byte-blaster/assets/music-player.js"></script>
+<script>
+(function () {
+  'use strict';
+  // Порядок — как игрок встречает темы: меню, карта, одиннадцать миров, затем
+  // особые. Названия миров совпадают с картой мира в игре.
+  var TRACKS = [
+    ['menu',     '🎛', 'ГЛАВНОЕ МЕНЮ',      'спокойный пульс терминала'],
+    ['worldmap', '🗺', 'КАРТА МИРА',        'медленно, высоко, с эхом'],
+    ['world0',   '🏙', 'КИБЕРГОРОД',        'ровный ход, всё блестит'],
+    ['world1',   '🌿', 'НЕОНОВЫЕ ДЖУНГЛИ',  'живая чаща под кислотным светом'],
+    ['world2',   '🌋', 'МИР ЛАВЫ',          'тяжёлый жар'],
+    ['world3',   '❄',  'ЛЕДЯНЫЕ ПЕЩЕРЫ',    'хрустально и гулко'],
+    ['world4',   '☣',  'ТОКСИЧНОЕ БОЛОТО',  'вязко и мутно'],
+    ['world5',   '🛰', 'НЕБЕСНАЯ КРЕПОСТЬ', 'высота и ветер'],
+    ['world6',   '🌊', 'МОРСКИЕ ГЛУБИНЫ',   'давление и темнота'],
+    ['world7',   '🏜', 'ПУСТЫННЫЕ РУИНЫ',   'зной над мёртвым городом'],
+    ['world8',   '🛸', 'ПУСТОТНАЯ СТАНЦИЯ', 'холодный вакуум'],
+    ['world9',   '⚙',  'ФИНАЛЬНАЯ КРЕПОСТЬ','последний рубеж'],
+    ['world10',  '🌈', 'ПРИЗМА-АНОМАЛИЯ',   'преломлённый спектр'],
+    ['boss',     '💀', 'БОСС',              'фригийский лад, брейк'],
+    ['star',     '⭐', 'ЗВЕЗДА',            'короткий разгон'],
+    ['victory',  '🏆', 'ПОБЕДА',            'маршевая фанфара'],
+  ];
+
+  var listEl = document.getElementById('list');
+  var toggleBtn = document.getElementById('toggle');
+  var idx = -1, rows = [];
+
+  function mmss(s) {
+    s = Math.max(0, Math.round(s));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  TRACKS.forEach(function (t, i) {
+    var row = document.createElement('div');
+    row.className = 'tr';
+    var len = window.BBPlayer.length(t[0]);
+    row.innerHTML =
+      '<span class="ico">' + t[1] + '</span>' +
+      '<span class="nm"><b></b><span></span><span class="bar"><i></i></span></span>' +
+      '<span class="dur">' + (len ? mmss(len.seconds) : '—') + '</span>';
+    row.querySelector('b').textContent = t[2];
+    row.querySelector('.nm span').textContent = t[3];
+    row.onclick = function () { select(i); };
+    listEl.appendChild(row);
+    rows.push(row);
+  });
+
+  function paint() {
+    rows.forEach(function (r, i) { r.classList.toggle('on', i === idx); });
+    toggleBtn.textContent = window.BBPlayer.isPlaying() ? '⏸ ПАУЗА' : '▶ ИГРАТЬ';
+  }
+
+  function select(i) {
+    if (i === idx && window.BBPlayer.isPlaying()) { window.BBPlayer.stop(); paint(); return; }
+    idx = (i + TRACKS.length) % TRACKS.length;
+    window.BBPlayer.play(TRACKS[idx][0]);
+    paint();
+  }
+
+  window.BBPlayer.onTick(function (step, total) {
+    var row = rows[idx];
+    if (!row) return;
+    row.querySelector('.bar i').style.width = (step / total * 100).toFixed(1) + '%';
+  });
+  // Трек кончился — сам переходим к следующему, как в плейлисте.
+  window.BBPlayer.onEnd(function () { select(idx + 1); });
+
+  toggleBtn.onclick = function () {
+    if (window.BBPlayer.isPlaying()) { window.BBPlayer.stop(); paint(); }
+    else select(idx < 0 ? 0 : idx);
+  };
+  document.getElementById('prev').onclick = function () { select(idx - 1); };
+  document.getElementById('next').onclick = function () { select(idx + 1); };
+  document.getElementById('vol').oninput = function () { window.BBPlayer.volume(this.value / 100); };
+
+  // Пробел — играть/пауза, стрелки — соседний трек. Обычное поведение плеера.
+  document.addEventListener('keydown', function (e) {
+    if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.code === 'Space') { e.preventDefault(); toggleBtn.click(); }
+    else if (e.code === 'ArrowDown' || e.code === 'ArrowRight') select(idx + 1);
+    else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') select(idx - 1);
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>
