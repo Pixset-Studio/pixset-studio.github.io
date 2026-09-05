@@ -175,8 +175,6 @@
   "musicStyleModern": "Tavallinen",
   "musicStyleChip": "8-bittinen",
   "musicStyleNote": "* Samat sävelmät, eri soittimet",
-  "musicStyleLoading": "Ladataan 8-bittistä pakettia…",
-  "musicStyleOffline": "Ei verkkoa — soi live-syntetisointina",
   "gameplaySettings": "Peliasetukset:",
   "screenShake": "Ruudun tärinä",
   "hitStop": "Osumapysäytys",

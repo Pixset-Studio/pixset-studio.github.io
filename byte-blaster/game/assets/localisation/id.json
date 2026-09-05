@@ -175,8 +175,6 @@
   "musicStyleModern": "Normal",
   "musicStyleChip": "8-bit",
   "musicStyleNote": "* Melodi sama, instrumen berbeda",
-  "musicStyleLoading": "Mengunduh paket 8-bit…",
-  "musicStyleOffline": "Tidak ada koneksi — disintesis langsung",
   "gameplaySettings": "Pengaturan Gameplay:",
   "screenShake": "Getaran Layar",
   "hitStop": "Beku saat kena",

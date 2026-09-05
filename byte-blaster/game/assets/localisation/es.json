@@ -175,8 +175,6 @@
   "musicStyleModern": "Normal",
   "musicStyleChip": "8 bits",
   "musicStyleNote": "* Las mismas melodías, otros instrumentos",
-  "musicStyleLoading": "Descargando el paquete de 8 bits…",
-  "musicStyleOffline": "Sin conexión: se sintetiza en vivo",
   "gameplaySettings": "Ajustes de juego:",
   "screenShake": "Temblor de pantalla",
   "hitStop": "Congelado al impactar",

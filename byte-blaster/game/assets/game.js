@@ -12923,15 +12923,15 @@ document.getElementById('csOv').addEventListener('click',function(ev){
 document.getElementById('advCard').onclick=function(){
   initAudio();SFX.menu();showDiff();
 };
-// normalCard: show intro first time then map
+// normalCard: вступление показываем ОДИН раз на слот сохранения, потом сразу карта.
+// Метка раньше жила в sessionStorage — а он стирается при закрытии вкладки и
+// при каждом запуске .exe/.apk, поэтому похищение Лейлы Чен проигрывалось
+// заново при каждом входе в сохранение. Теперь как у всех остальных сцен:
+// _csFire помнит показанное в bbCsFired, а тот привязан к слоту (см. CANON),
+// так что новый профиль вступление всё-таки увидит.
 document.getElementById('normalCard').onclick=function(){
   initAudio();SFX.menu();hardMode=false;
-  let seen=false;
-  try{seen=!!sessionStorage.getItem('bb_intro');}catch(e){}
-  if(!seen){
-    try{sessionStorage.setItem('bb_intro','1');}catch(e){}
-    csPlay('intro',0,function(){showMap();});
-  } else { showMap(); }
+  _csFire('intro',0,function(){showMap();});
 };
 document.getElementById('hardCard').onclick=function(){
   if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}

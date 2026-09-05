@@ -175,8 +175,6 @@
   "musicStyleModern": "通常",
   "musicStyleChip": "8ビット",
   "musicStyleNote": "* 同じ曲、違う楽器",
-  "musicStyleLoading": "8ビット音源をダウンロード中…",
-  "musicStyleOffline": "接続なし — その場で合成しています",
   "gameplaySettings": "ゲームプレイ設定:",
   "screenShake": "画面シェイク",
   "hitStop": "ヒットストップ",

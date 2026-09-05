@@ -265,5 +265,55 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
 <script src="/byte-blaster/assets/price.js"></script>
+
+<!-- Пояснение, почему игрока вернуло с веб-версии. Без него шлюз выглядит как
+     поломка: нажал «играть» — и молча оказался на главной. -->
+<script>
+(function () {
+  var reason = new URLSearchParams(location.search).get('gate');
+  if (!reason) return;
+  var ru = document.documentElement.lang !== 'en';
+  var TEXT = {
+    closed:  [ 'Веб-версия сейчас закрыта. Игра доступна в приложении — на странице «Скачать».',
+               'The web version is closed right now. The game is available on the Download page.' ],
+    login:   [ 'Чтобы играть в браузере, войдите в аккаунт Pixset Studio.',
+               'Sign in to your Pixset Studio account to play in the browser.' ],
+    license: [ 'Игра в браузере доступна владельцам Byte Blaster.',
+               'Playing in the browser is available to Byte Blaster owners.' ],
+  };
+  var line = TEXT[reason]; if (!line) return;
+
+  var bar = document.createElement('div');
+  bar.setAttribute('role', 'status');
+  // Ширину задаём явно: у fixed-элемента с left:50% доступная ширина — это
+  // остаток справа от середины, и плашка ужималась вдвое, в узкий столбик.
+  bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:9999;' +
+    'width:min(560px,92vw);display:flex;align-items:center;gap:12px;padding:13px 16px;' +
+    'border:1px solid #0ff6;border-radius:6px;background:#080a20f2;color:#cfe6ff;' +
+    "font-family:'Share Tech Mono',ui-monospace,monospace;font-size:14px;line-height:1.5;" +
+    'box-shadow:0 8px 30px #000a';
+  var txt = document.createElement('span');
+  txt.style.flex = '1 1 auto';
+  txt.textContent = line[ru ? 0 : 1];
+  var act = document.createElement('a');
+  act.href = reason === 'closed' ? '/byte-blaster/download/'
+           : reason === 'license' ? '/byte-blaster/buy/' : '/byte-blaster/account/';
+  act.textContent = reason === 'closed' ? (ru ? 'Скачать' : 'Download')
+                  : reason === 'license' ? (ru ? 'Купить' : 'Buy')
+                  : (ru ? 'Войти' : 'Sign in');
+  act.style.cssText = 'flex:0 0 auto;color:#0ff;text-decoration:none;border-bottom:1px solid #0ff6';
+  var close = document.createElement('button');
+  close.textContent = '×';
+  close.setAttribute('aria-label', ru ? 'Закрыть' : 'Close');
+  close.style.cssText = 'flex:0 0 auto;background:none;border:0;color:#7a9ab8;font-size:20px;' +
+    'line-height:1;cursor:pointer;padding:0 2px';
+  close.onclick = function () { bar.remove(); };
+  bar.append(txt, act, close);
+  document.body.appendChild(bar);
+
+  // Убираем ?gate= из адреса, чтобы обновление страницы не показывало плашку снова.
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+})();
+</script>
 </body>
 </html>

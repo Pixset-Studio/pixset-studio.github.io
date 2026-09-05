@@ -175,8 +175,6 @@
   "musicStyleModern": "ปกติ",
   "musicStyleChip": "8 บิต",
   "musicStyleNote": "* ทำนองเดิม เครื่องดนตรีต่างกัน",
-  "musicStyleLoading": "กำลังดาวน์โหลดชุดเสียง 8 บิต…",
-  "musicStyleOffline": "ไม่มีการเชื่อมต่อ — สังเคราะห์เสียงสด",
   "gameplaySettings": "ตั้งค่าการเล่น:",
   "screenShake": "การสั่นหน้าจอ",
   "hitStop": "หยุดภาพเมื่อโดน",

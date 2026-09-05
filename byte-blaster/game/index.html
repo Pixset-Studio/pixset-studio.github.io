@@ -5,6 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>BYTE BLASTER</title>
 
+<!-- ШЛЮЗ ВЕБ-ВЕРСИИ.
+     Работает ТОЛЬКО когда игра открыта со страницы сайта (/byte-blaster/game/):
+     в .exe, .apk и при локальном запуске модуля шлюза рядом нет, а импорт с
+     чужого адреса и не нужен. Проверяет две вещи — открыта ли веб-версия
+     (app_config.bb_web_open) и есть ли лицензия. Не выполнено — уводит на
+     главную, даже если игрок пришёл прямо по адресу игры.
+
+     Страницу до ответа держим невидимой, чтобы гость не успел увидеть меню.
+     ЛЮБАЯ ошибка (нет сети, Supabase лежит, модуль не загрузился) снимает
+     занавес и пускает: падение сервиса не должно отбирать доступ у тех, кто
+     честно купил. -->
+<script>
+(function () {
+  var onSite = /^https?:$/.test(location.protocol) && /\/byte-blaster\/game\//.test(location.pathname);
+  if (!onSite) return;
+  var root = document.documentElement;
+  root.style.visibility = 'hidden';
+  var open = function () { root.style.visibility = ''; };
+  // Страховка от зависшего импорта: через 6 секунд показываем игру в любом случае.
+  var timer = setTimeout(open, 6000);
+  var s = document.createElement('script');
+  s.type = 'module';
+  s.textContent =
+    "import * as sdk from '/byte-blaster/assets/pixset-auth.js';" +
+    "import { guardWebPlay } from '/byte-blaster/assets/web-gate.js';" +
+    "guardWebPlay(sdk).then(function (ok) { if (ok) window.__bbGateOpen(); })" +
+    ".catch(function () { window.__bbGateOpen(); });";
+  window.__bbGateOpen = function () { clearTimeout(timer); open(); };
+  s.onerror = window.__bbGateOpen;
+  document.head.appendChild(s);
+})();
+</script>
+
 <!-- App / tab icons (favicon + mobile home-screen). Files live in icons/. -->
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">

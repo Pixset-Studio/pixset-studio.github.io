@@ -175,8 +175,6 @@
   "musicStyleModern": "Normal",
   "musicStyleChip": "8 bits",
   "musicStyleNote": "* Mêmes mélodies, autres instruments",
-  "musicStyleLoading": "Téléchargement du pack 8 bits…",
-  "musicStyleOffline": "Pas de réseau — synthétisé en direct",
   "gameplaySettings": "Réglages de jeu :",
   "screenShake": "Tremblement d'écran",
   "hitStop": "Arrêt sur impact",

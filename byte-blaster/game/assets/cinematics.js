@@ -324,8 +324,29 @@
   window.playPrologueCinematic = function (onDone) { playScriptedCinematic(prologueDef(), onDone); };
 
   // ── Re-wire the first-time Adventure entry: animated prologue →
-  //    existing intro dialogue → world map. Guarded by the same
-  //    sessionStorage flag the original used.
+  //    existing intro dialogue → world map.
+  //
+  //    Показывается ОДИН раз на слот сохранения. Метка раньше лежала в
+  //    sessionStorage — а он стирается при закрытии вкладки и при каждом
+  //    запуске .exe/.apk, поэтому похищение Лейлы Чен проигрывалось заново на
+  //    каждом входе в сохранение. Теперь метка та же, что у всех остальных
+  //    сцен: bbCsFired['intro'], привязанный к слоту (см. CANON в game.js).
+  //    Этот обработчик перекрывает такой же в game.js — там метка тоже
+  //    исправлена, чтобы поведение не разъезжалось, если пролог отключат.
+  function introSeen() {
+    if (typeof _csFired !== 'undefined' && _csFired && _csFired.intro) return true;
+    try { return !!(JSON.parse(localStorage.getItem('bbCsFired') || '{}') || {}).intro; }
+    catch (e) { return false; }
+  }
+  function markIntroSeen() {
+    if (typeof markCsFired === 'function') { markCsFired('intro'); return; }
+    try {
+      var m = JSON.parse(localStorage.getItem('bbCsFired') || '{}') || {};
+      m.intro = true;
+      localStorage.setItem('bbCsFired', JSON.stringify(m));
+    } catch (e) {}
+  }
+
   function hookEntry() {
     var card = document.getElementById('normalCard');
     if (!card) return;
@@ -333,14 +354,12 @@
       if (typeof initAudio === 'function') initAudio();
       if (window.SFX && SFX.menu) SFX.menu();
       window.hardMode = false;
-      var seen = false; try { seen = !!sessionStorage.getItem('bb_intro'); } catch (e) {}
       var toMap = function () { if (typeof showMap === 'function') showMap(); };
-      if (!seen) {
-        try { sessionStorage.setItem('bb_intro', '1'); } catch (e) {}
-        window.playPrologueCinematic(function () {
-          if (typeof csPlay === 'function') csPlay('intro', 0, toMap); else toMap();
-        });
-      } else { toMap(); }
+      if (introSeen()) { toMap(); return; }
+      markIntroSeen();
+      window.playPrologueCinematic(function () {
+        if (typeof csPlay === 'function') csPlay('intro', 0, toMap); else toMap();
+      });
     };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hookEntry);

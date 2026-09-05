@@ -27,7 +27,7 @@
 
   /* ── Сколько уже скачано ───────────────────────────────────────────────
      Через fetch читаем потоком и считаем байты: это единственное место, где
-     игра реально что-то качает (музыка в вебе и восьмибитный набор с сайта).
+     игра реально что-то качает (музыка обычного стиля в веб-сборке).
      Под Electron байты приходят одним куском по IPC — там прогресс сводится к
      «идёт/готово», и врать про мегабайты мы не будем. */
   const progressSubs = [];
@@ -91,81 +91,22 @@
   }
 
   /* ── Где лежит музыка ──────────────────────────────────────────────────
-     Обычный стиль лежит в самой сборке. Восьмибитный — нет: он весит столько
-     же, а нужен не каждому, и класть его в каждый .apk значит удваивать музыку ради
-     тех, кто её не включит. Он скачивается с сайта при выборе стиля и остаётся
-     в кэше устройства.
+     Обычный стиль лежит в самой сборке — готовыми mp3.
 
-     Пока пачка не скачалась (нет сети, первый запуск), игра играет чиптюн
-     живым синтезом. Это не заглушка: чиптюн — родной звук этого движка, так
-     что «8 бит» работает сразу и без интернета, просто чуть тяжелее для
-     телефона, пока файлы не приедут. */
-  // Адрес набора можно переопределить через window.BB_CHIP_BASE — пригодится,
-  // если музыка переедет на другой хост.
-  const CHIP_DEFAULT = 'https://pixset-studio.github.io/byte-blaster/audio/chip/';
-  const chipBase = () => window.BB_CHIP_BASE || CHIP_DEFAULT;
+     Восьмибитный не лежит нигде и НИОТКУДА НЕ КАЧАЕТСЯ: его целиком играет
+     живой синтез из assets/music-data.js. Раньше набор ехал с сайта при первом
+     включении, но это значило, что вся музыка игры лежит в открытом доступе и
+     скачивается одной ссылкой. Теперь на сайте её нет, а «8 бит» работает
+     сразу, без сети и без ожидания: чиптюн — родной звук этого движка, для
+     него синтез и писался.
 
+     Готовые mp3 обоих стилей по-прежнему печёт tools/gen-audio.js — их можно
+     послушать в assets/audio/Music/. Просто chip/ в сборки не попадает. */
   function musicStyle() {
     const s = window.gameSettings && window.gameSettings.musicStyle;
     return s === 'chip' ? 'chip' : 'modern';
   }
   const musicPath = (name) => 'assets/audio/Music/modern/' + name + '.mp3';
-
-  /* Кэш скачанного. В Electron страница живёт на file://, где Cache Storage
-     недоступен, поэтому там файлы кладёт на диск главный процесс. */
-  const chipStore = {
-    async get(name) {
-      if (window.audioAPI && window.audioAPI.cacheGet) {
-        const b64 = await window.audioAPI.cacheGet('chip/' + name + '.mp3');
-        if (!b64) return null;
-        const bin = atob(b64), a = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
-        return a.buffer;
-      }
-      if (!self.caches) return null;
-      const c = await caches.open('bb-chip-v1');
-      const r = await c.match(chipBase() + name + '.mp3');
-      return r ? await r.arrayBuffer() : null;
-    },
-    async put(name, ab) {
-      try {
-        if (window.audioAPI && window.audioAPI.cachePut) {
-          let s = '';
-          const a = new Uint8Array(ab);
-          for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192));
-          await window.audioAPI.cachePut('chip/' + name + '.mp3', btoa(s));
-          return;
-        }
-        if (!self.caches) return;
-        const c = await caches.open('bb-chip-v1');
-        await c.put(chipBase() + name + '.mp3', new Response(ab));
-      } catch (e) { /* нет места или запрещено — переживём, скачаем снова */ }
-    },
-  };
-
-  // Что показывать в настройках: 'ready' | 'loading' | 'offline'
-  let chipState = 'ready';
-  const notifyStyleState = () => {
-    if (typeof window._syncStyleState === 'function') { try { window._syncStyleState(); } catch (e) {} }
-  };
-
-  /** Байты восьмибитного трека: из кэша, иначе с сайта. */
-  async function chipBytes(name) {
-    const cached = await chipStore.get(name).catch(() => null);
-    if (cached && cached.byteLength) { chipState = 'ready'; notifyStyleState(); return cached; }
-    chipState = 'loading'; notifyStyleState();
-    try {
-      const ab = await fetchCounted(chipBase() + name + '.mp3', name, { cache: 'no-cache' });
-      chipStore.put(name, ab.slice(0));
-      chipState = 'ready'; notifyStyleState();
-      return ab;
-    } catch (e) {
-      // Нет сети или набор ещё не опубликован — не беда: чиптюн отыграет живой
-      // синтез, он для этого движка родной.
-      chipState = 'offline'; notifyStyleState();
-      throw e;
-    }
-  }
 
   async function loadSfx(name) {
     const ab = await readBytes('assets/audio/SFX/' + name + '.mp3');
@@ -197,11 +138,15 @@
   }
 
   async function loadMusic(name) {
+    // У восьмибитного стиля файлов нет вовсе — его целиком играет живой синтез
+    // (см. _mTick в game.js). Отвечаем «нечего декодировать», и вызывающий сам
+    // включит синтез, тем же путём, что и при отсутствующем mp3.
+    if (musicStyle() === 'chip') return null;
     if (musicBuf[name]) { remember(name); return musicBuf[name]; }
     if (decoding[name]) return decoding[name];
     const key = musicStyle() + '/' + name;
     decoding[name] = (async () => {
-      const bytes = key.startsWith('chip/') ? await chipBytes(name) : await readBytes(musicPath(name));
+      const bytes = await readBytes(musicPath(name));
       const buf = await decode(bytes);
       // Стиль могли переключить, пока файл декодировался — тогда результат
       // уже не тот, что нужен.
@@ -295,9 +240,9 @@
     hasMusic: (n) => !!musicBuf[n],
     hasSfx: (n) => !!sfxBuf[n],
     style: musicStyle,
-    chipState: () => chipState,
-    // Подписка на закачку: {label, loaded, total, done}. Срабатывает только там,
-    // где данные реально идут по сети (веб-сборка и восьмибитный набор).
+    // Подписка на закачку: {label, loaded, total, done}. Срабатывает только в
+    // веб-сборке, где mp3 обычного стиля идут по сети; в .exe и .apk они лежат
+    // рядом, а восьмибитный стиль не качается никогда.
     onProgress,
     // Для проверок: сколько треков реально держим в памяти.
     cached: () => Object.keys(musicBuf).length,

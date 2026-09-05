@@ -175,8 +175,6 @@
   "musicStyleModern": "Normal",
   "musicStyleChip": "8 bit",
   "musicStyleNote": "* Aynı ezgiler, farklı enstrümanlar",
-  "musicStyleLoading": "8 bit paketi indiriliyor…",
-  "musicStyleOffline": "Bağlantı yok — canlı sentezleniyor",
   "gameplaySettings": "Oynanış Ayarları:",
   "screenShake": "Ekran Sarsıntısı",
   "hitStop": "Vuruşta donma",

@@ -175,8 +175,6 @@
   "musicStyleModern": "普通",
   "musicStyleChip": "8 位元",
   "musicStyleNote": "* 同樣的曲子，不同的樂器",
-  "musicStyleLoading": "正在下載 8 位元音源…",
-  "musicStyleOffline": "無網路 — 正在即時合成",
   "gameplaySettings": "玩法設定：",
   "screenShake": "畫面震動",
   "hitStop": "命中頓幀",

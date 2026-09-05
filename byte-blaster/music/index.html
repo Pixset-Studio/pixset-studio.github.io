@@ -41,6 +41,14 @@
   .vol{display:flex;align-items:center;gap:8px;color:#5a7a9a;font-size:13px}
   input[type=range]{accent-color:#0ff;width:120px}
   .note{margin-top:26px;color:#4a6a8a;font-size:13px;line-height:1.7;border-top:1px solid #0ff2;padding-top:18px}
+  /* Переключатель состава: те же ноты, разные инструменты. */
+  .styles{display:flex;gap:0;margin-bottom:18px;border:1px solid #0ff4;border-radius:5px;
+    overflow:hidden;width:max-content;max-width:100%}
+  .st{font-family:'Press Start 2P',monospace;font-size:9px;letter-spacing:1px;padding:11px 16px;
+    background:#06061a;color:#5a7a9a;border:0;border-radius:0;cursor:pointer;white-space:nowrap}
+  .st + .st{border-left:1px solid #0ff4}
+  .st:hover{color:#9cf;background:#0a0a24}
+  .st.on{background:#0ff2;color:var(--acc);text-shadow:0 0 10px #0ff8}
 </style>
 </head>
 <body>
@@ -48,9 +56,17 @@
   <a class="back" href="/byte-blaster/">← на главную</a>
   <h1>МУЗЫКА ИГРЫ</h1>
   <p class="sub">Шестнадцать тем Byte Blaster. Каждая собирается нотами прямо в браузере — как в самой игре.</p>
+  <div class="styles" id="styles">
+    <button class="st on" data-style="modern">ОБЫЧНАЯ</button>
+    <button class="st" data-style="chip">8 БИТ</button>
+  </div>
   <div class="list" id="list"></div>
   <p class="note" id="note">
-    Треков как файлов не существует: на сервере нет ни одного mp3. Музыка описана нотами
+    Ноты одни и те же, отличается состав: в обычной версии у мелодии есть второй расстроенный
+    голос и мягкий фильтр на всю музыку, в восьмибитной — голые волны без обработки.
+    Переключать можно прямо во время игры трека.
+    <br><br>
+    Треков как файлов не существует: на сайте нет ни одного mp3. Музыка описана нотами
     и звучит благодаря синтезатору в браузере — ровно так же, как внутри игры.
   </p>
 </div>
@@ -91,6 +107,22 @@
   var listEl = document.getElementById('list');
   var toggleBtn = document.getElementById('toggle');
   var idx = -1, rows = [];
+
+  /* ── Состав ────────────────────────────────────────────────────────────
+     По умолчанию обычный — это оригинальное звучание игры. Выбор запоминаем,
+     чтобы не переключать при каждом заходе. */
+  var styleBtns = [].slice.call(document.querySelectorAll('.st'));
+  function setStyle(name, remember) {
+    var s = window.BBPlayer.style(name);
+    styleBtns.forEach(function (b) { b.classList.toggle('on', b.dataset.style === s); });
+    if (remember) { try { localStorage.setItem('bbMusicStyle', s); } catch (e) {} }
+  }
+  styleBtns.forEach(function (b) {
+    b.onclick = function () { setStyle(b.dataset.style, true); };
+  });
+  var saved = null;
+  try { saved = localStorage.getItem('bbMusicStyle'); } catch (e) {}
+  setStyle(saved || 'modern', false);
 
   function mmss(s) {
     s = Math.max(0, Math.round(s));
@@ -142,7 +174,9 @@
 
   // Пробел — играть/пауза, стрелки — соседний трек. Обычное поведение плеера.
   document.addEventListener('keydown', function (e) {
-    if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    // На кнопке пробел и так её нажимает — иначе выбор состава заодно ставил
+    // бы музыку на паузу.
+    if (e.target && /INPUT|TEXTAREA|BUTTON/.test(e.target.tagName)) return;
     if (e.code === 'Space') { e.preventDefault(); toggleBtn.click(); }
     else if (e.code === 'ArrowDown' || e.code === 'ArrowRight') select(idx + 1);
     else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') select(idx - 1);

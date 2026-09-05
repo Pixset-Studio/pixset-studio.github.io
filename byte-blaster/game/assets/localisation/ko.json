@@ -175,8 +175,6 @@
   "musicStyleModern": "일반",
   "musicStyleChip": "8비트",
   "musicStyleNote": "* 같은 곡, 다른 악기",
-  "musicStyleLoading": "8비트 음원 다운로드 중…",
-  "musicStyleOffline": "연결 없음 — 실시간 합성으로 재생",
   "gameplaySettings": "게임플레이 설정:",
   "screenShake": "화면 흔들림",
   "hitStop": "타격 정지",

@@ -175,8 +175,6 @@
   "musicStyleModern": "Normal",
   "musicStyleChip": "8-bit",
   "musicStyleNote": "* Samme melodier, andre instrumenter",
-  "musicStyleLoading": "Henter 8-bit-pakken…",
-  "musicStyleOffline": "Intet netværk — spilles med live syntese",
   "gameplaySettings": "Spilindstillinger:",
   "screenShake": "Skærmrysten",
   "hitStop": "Frys ved træffer",

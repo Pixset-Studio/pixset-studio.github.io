@@ -1220,7 +1220,6 @@
               <option value="chip" data-i18n="musicStyleChip">8-bit</option>
             </select>
             <div style="margin-top: 5px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="musicStyleNote">* Same tunes, different instruments</div>
-            <div id="musicStyleState" style="margin-top: 6px; color: #8cf; font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1));"></div>
           </div>
         </div>
 
@@ -1721,29 +1720,15 @@
     }
     // Стиль музыки применяем сразу по выбору, а не по «Сохранить»: иначе
     // сравнить два варианта на слух невозможно.
+    // Оба стиля включаются мгновенно: обычный лежит в сборке готовыми mp3,
+    // восьмибитный играет живой синтез. Строки «загружается»/«нет сети» здесь
+    // больше нет — качать нечего.
     const musicStyleSelect = document.getElementById('musicStyleSelect');
-    const musicStyleState = document.getElementById('musicStyleState');
-    // Набор 8 бит не лежит в сборке и качается при первом включении. Пока он
-    // едет, чиптюн играет живым синтезом — но игрок должен понимать, почему
-    // звук чуть другой и что происходит.
-    function syncStyleState() {
-      if (!musicStyleState) return;
-      const chip = window.gameSettings.musicStyle === 'chip';
-      if (!chip) { musicStyleState.textContent = ''; return; }
-      const st = window.AudioFiles && window.AudioFiles.chipState
-        ? window.AudioFiles.chipState() : 'ready';
-      musicStyleState.textContent =
-        st === 'loading' ? T('musicStyleLoading') :
-        st === 'offline' ? T('musicStyleOffline') : '';
-    }
-    window._syncStyleState = syncStyleState;
     if (musicStyleSelect) {
       musicStyleSelect.value = window.gameSettings.musicStyle === 'chip' ? 'chip' : 'modern';
-      syncStyleState();
       musicStyleSelect.onchange = function () {
         window.gameSettings.musicStyle = this.value;
         if (window.AudioFiles && window.AudioFiles.reloadStyle) window.AudioFiles.reloadStyle();
-        syncStyleState();
       };
     }
 

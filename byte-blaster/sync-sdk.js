@@ -41,7 +41,10 @@ fs.writeFileSync(copy, code, 'utf8');
 function htmlFiles(dir) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'game') continue;
+    // game/ раньше пропускали — но там тоже есть импорт SDK: шлюз веб-версии в
+    // game/index.html. Без метки браузер держал бы старый модуль, шлюз не нашёл
+    // бы getSession и увёл бы с сайта игрока с честной лицензией.
+    if (entry.name === 'node_modules') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...htmlFiles(full));
     else if (entry.name.endsWith('.html')) out.push(full);

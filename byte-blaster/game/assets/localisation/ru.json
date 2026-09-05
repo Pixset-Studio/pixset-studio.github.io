@@ -175,8 +175,6 @@
   "musicStyleModern": "Обычный",
   "musicStyleChip": "8 бит",
   "musicStyleNote": "* Те же мелодии, другие инструменты",
-  "musicStyleLoading": "Скачивается набор 8 бит…",
-  "musicStyleOffline": "Нет сети — играет живым синтезом",
   "gameplaySettings": "Настройки геймплея:",
   "screenShake": "Тряска экрана",
   "hitStop": "Замирание при ударе",

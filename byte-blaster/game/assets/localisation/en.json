@@ -175,8 +175,6 @@
   "musicStyleModern": "Modern",
   "musicStyleChip": "8-bit",
   "musicStyleNote": "* Same tunes, different instruments",
-  "musicStyleLoading": "Downloading the 8-bit pack…",
-  "musicStyleOffline": "No connection — synthesized live",
   "gameplaySettings": "Gameplay Settings:",
   "screenShake": "Screen Shake",
   "hitStop": "Impact Freeze",

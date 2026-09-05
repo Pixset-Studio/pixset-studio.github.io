@@ -51,6 +51,14 @@ export async function guardWebPlay(sdk) {
   const open = await config('bb_web_open', '1');
   if (open === '0' || open.toLowerCase() === 'false') { bounce('closed'); return false; }
 
+  // SDK старее шлюза (браузер отдал модуль из кэша без метки ?v=) — проверить
+  // лицензию нечем. Выгонять в этом случае нельзя: пострадает тот, кто купил,
+  // а не тот, кто не купил. Пускаем и оставляем след в консоли.
+  if (typeof sdk.getSession !== 'function') {
+    console.warn('web-gate: в загруженном pixset-auth.js нет getSession — проверка пропущена. Обновите метку ?v= (node sync-sdk.js).');
+    return true;
+  }
+
   let session = null;
   try { session = await sdk.getSession(); } catch (e) { session = null; }
   if (!session) { bounce('login'); return false; }

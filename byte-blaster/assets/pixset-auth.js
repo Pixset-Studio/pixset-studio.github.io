@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '745cfb09';
+export const SDK_VERSION = '59ef2b33';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -67,6 +67,18 @@ export async function login({ email, password }) {
 
 export async function logout() {
   await supabase.auth.signOut();
+}
+
+/** Текущая сессия или null.
+ *
+ *  Нужна страницам, которые сами решают, пускать гостя или нет: архив версий и
+ *  шлюз веб-версии (assets/web-gate.js). Обе они звали `sdk.getSession()`,
+ *  которого здесь не было, — вызов падал с TypeError, попадал в `catch` и
+ *  выглядел как «вы не вошли», хотя сессия и лицензия были на месте. */
+export async function getSession() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return (data && data.session) || null;
 }
 
 export async function resetPassword(email) {

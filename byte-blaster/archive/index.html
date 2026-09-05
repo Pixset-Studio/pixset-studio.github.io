@@ -46,16 +46,11 @@
 </div>
 
 <script type="module">
-import * as sdk from '/byte-blaster/assets/pixset-auth.js';
+import * as sdk from '/byte-blaster/assets/pixset-auth.js?v=59ef2b33';
 import { listBuilds, buildUrl } from '/byte-blaster/assets/web-gate.js';
 
 const out = document.getElementById('out');
 const say = (html, err) => { out.className = 'msg' + (err ? ' err' : ''); out.innerHTML = html; };
-
-function fmt(d) {
-  try { return new Date(d).toLocaleDateString('ru-RU', { year:'numeric', month:'long' }); }
-  catch (e) { return ''; }
-}
 
 (async function () {
   let session = null;
@@ -82,7 +77,6 @@ function fmt(d) {
     row.className = 'row';
     const ver = document.createElement('span'); ver.className = 'ver'; ver.textContent = b.version;
     const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = b.label || '';
-    const dt  = document.createElement('span'); dt.className = 'date'; dt.textContent = fmt(b.published_at);
     const btn = document.createElement('button'); btn.textContent = '▶ ИГРАТЬ';
     btn.onclick = async () => {
       btn.disabled = true; btn.textContent = '…';

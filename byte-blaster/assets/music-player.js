@@ -1,9 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    ПРОИГРЫВАТЕЛЬ МУЗЫКИ ИГРЫ
    ═══════════════════════════════════════════════════════════════════════════
-   Треков как файлов НЕ СУЩЕСТВУЕТ — ни здесь, ни в самой игре. Есть только
-   партитура (assets/music-data.js): лады, аккордовая последовательность, форма
-   и тембры. Музыка собирается из неё нотами прямо в браузере через Web Audio.
+   На сайте НЕТ НИ ОДНОГО музыкального файла — ни здесь, ни в веб-версии игры.
+   Есть только партитура (assets/music-data.js): лады, аккордовая
+   последовательность, форма и тембры. Музыка собирается из неё нотами прямо в
+   браузере через Web Audio.
 
    Отсюда и защита, о которой просили. Скачать нечего:
      • ни одного mp3/ogg/wav на сервере нет — в панели «Сеть» пусто;
@@ -15,15 +16,18 @@
    Но ГОТОВОГО ТРЕКА, который перетаскивают мышкой в папку, не существует —
    именно это и требовалось.
 
-   Синтез повторяет запасной движок игры (см. _mTick в assets/game.js): те же
-   виды событий, те же тембры, тот же общий фильтр на всю музыку.
+   Два стиля — те же ноты, разный состав. Повторяют _mTick из assets/game.js:
+     • modern — расстроенный второй голос у мелодии, пила и квадрат смягчены до
+       треугольника, вся музыка идёт через общий низкочастотный фильтр;
+     • chip   — наивные волны без всякой обработки, один голос, фильтра нет.
+       Это родное звучание движка, из него modern и вырос.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
 
   var AC = null, master = null, lp = null, noiseBuf = null;
   var song = null, map = null, step = 0, timer = 0;
-  var playing = false, current = null;
+  var playing = false, current = null, style = 'modern';
   var onTick = null, onEnd = null;
 
   function ctx() {
@@ -33,12 +37,24 @@
     AC = new C();
     master = AC.createGain();
     master.gain.value = 0.8;
-    // Общий низкочастотный фильтр на всю музыку, а не на каждую ноту: отдельный
-    // узел на ноту съел бы всю экономию, ради которой этот движок и существует.
-    lp = AC.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 4600; lp.Q.value = 0.5;
-    lp.connect(master); master.connect(AC.destination);
+    master.connect(AC.destination);
     return AC;
+  }
+
+  var modern = function () { return style !== 'chip'; };
+
+  /** Куда идут тональные голоса. В обычном стиле — через общий низкочастотный
+   *  фильтр на всю музыку, а не на каждую ноту: отдельный узел на ноту съел бы
+   *  всю экономию, ради которой этот движок и существует. В чиптюне фильтра
+   *  нет вовсе — жёсткость волн и есть его звук. Ударные мимо: они одинаковы. */
+  function bus() {
+    if (!modern()) return master;
+    if (!lp && AC) {
+      lp = AC.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 4600; lp.Q.value = 0.5;
+      lp.connect(master);
+    }
+    return lp || master;
   }
 
   function noise() {
@@ -49,7 +65,7 @@
   }
 
   /** Одна нота. Огибающая короткая на атаке и мягкая на спаде — иначе щелчки. */
-  function tone(f, w, dur, vol, detune) {
+  function tone(f, w, dur, vol, out, detune) {
     if (!AC || !f) return;
     var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
     o.type = w || 'sine';
@@ -58,7 +74,7 @@
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.03, dur));
-    o.connect(g); g.connect(lp);
+    o.connect(g); g.connect(out);
     o.start(t); o.stop(t + Math.max(0.05, dur) + 0.02);
   }
 
@@ -87,18 +103,20 @@
   function tick() {
     if (!playing || !song) return;
     var sec = song.spb, list = map[step % song.steps];
+    var mod = modern(), out = bus();
     if (list) for (var i = 0; i < list.length; i++) {
       var e = list[i];
       var d = sec * (e.len || 1) * 0.9;
-      // Пилу и квадрат смягчаем до треугольника — так же, как «обычный» стиль
-      // в игре: без этого Web Audio даёт жёсткий восьмибитный призвук.
-      var w = (e.w === 'sawtooth' || e.w === 'square') ? 'triangle' : (e.w || 'sine');
+      // В обычном стиле пилу и квадрат смягчаем до треугольника: наивные волны
+      // Web Audio и дают ту самую восьмибитную жёсткость.
+      var w = mod ? (e.w === 'sawtooth' || e.w === 'square' ? 'triangle' : e.w || 'sine') : (e.w || 'square');
       switch (e.k) {
-        case 'lead':  tone(e.f, w, d, e.vol, 7); tone(e.f, w, d, e.vol * 0.5, -11); break;
-        case 'lead2': tone(e.f, w, d, e.vol, -9); break;
-        case 'bass':  tone(e.f, w, d, e.vol, 0); break;
-        case 'sub':   tone(e.f, 'sine', d, e.vol, 0); break;
-        case 'arp':   tone(e.f, w, sec * (e.len || 1) * 0.7, e.vol, 4); break;
+        // Второй расстроенный голос добавляет толщины — в чиптюне он не нужен.
+        case 'lead':  tone(e.f, w, d, e.vol, out, 7); if (mod) tone(e.f, w, d, e.vol * 0.5, out, -11); break;
+        case 'lead2': tone(e.f, w, d, e.vol, out, -9); break;
+        case 'bass':  tone(e.f, w, d, e.vol, out, 0); break;
+        case 'sub':   tone(e.f, mod ? 'sine' : w, d, e.vol, out, 0); break;
+        case 'arp':   tone(e.f, w, sec * (e.len || 1) * 0.7, e.vol, out, 4); break;
         case 'kick':  kick(e.vol); break;
         case 'snare': snare(e.vol); break;
         case 'hat':   hat(e.vol); break;
@@ -132,6 +150,13 @@
     play: play,
     stop: stop,
     volume: volume,
+    /** Стиль звучания: 'modern' (по умолчанию) или 'chip'. Меняется на ходу —
+     *  трек не перезапускается, следующая же нота звучит по-новому. */
+    style: function (name) {
+      if (name === undefined) return style;
+      style = name === 'chip' ? 'chip' : 'modern';
+      return style;
+    },
     isPlaying: function () { return playing; },
     current: function () { return current; },
     /** Сколько всего шагов и секунд в треке — для полосы прогресса. */
