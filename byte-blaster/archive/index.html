@@ -87,6 +87,71 @@ function explain(code) {
   }
 }
 
+/* ── Заплатка совместимости для старых сборок ────────────────────────────
+   Вставляется в начало <head> сборки, до её собственных скриптов. Оригиналы в
+   архиве не трогаем — они должны остаться такими, какими были.
+
+   Лечит две болезни, из-за которых версии 0.2.0–0.6.0 спотыкались:
+
+   1. Хранилище. Кадр песочный и своего происхождения не имеет, поэтому
+      обращение к localStorage/sessionStorage кидает SecurityError. Обращения к
+      localStorage в сборках обёрнуты в try/catch, а к sessionStorage — нет, и
+      версии 0.5.0–0.6.0 падали на ровном месте. Подставляем хранилище в
+      памяти: работает как настоящее, живёт до закрытия окна и до сохранений
+      игрока не дотягивается.
+
+   2. Цвет с приклеенной альфой. Старый код клеил прозрачность к трёхзначному
+      HEX: '#0ff' + '00' даёт '#0ff00' — пять цифр, невалидный цвет. fillStyle
+      такое молча игнорирует, а addColorStop кидает исключение и роняет весь
+      кадр — поэтому выстрел из бластера обрывал отрисовку. Разворачиваем такой
+      цвет в правильный '#00ffff00'. (Ту же ошибку в нынешней игре закрывает
+      withAlpha() — здесь чиним снаружи, не переписывая архив.) */
+const COMPAT = `<script>
+(function () {
+  function mem() {
+    var d = Object.create(null);
+    return {
+      getItem: function (k) { return k in d ? d[k] : null; },
+      setItem: function (k, v) { d[k] = String(v); },
+      removeItem: function (k) { delete d[k]; },
+      clear: function () { d = Object.create(null); },
+      key: function (i) { var ks = Object.keys(d); return i < ks.length ? ks[i] : null; },
+      get length() { return Object.keys(d).length; }
+    };
+  }
+  ['localStorage', 'sessionStorage'].forEach(function (name) {
+    try { Object.defineProperty(window, name, { value: mem(), configurable: true, writable: true }); }
+    catch (e) {}
+  });
+
+  function fix(c) {
+    var m = /^#([0-9a-fA-F]{3})([0-9a-fA-F]{1,2})$/.exec(String(c));
+    if (!m) return null;
+    var h = m[1], a = m[2].length === 1 ? m[2] + m[2] : m[2];
+    return '#' + h[0] + h[0] + h[1] + h[1] + h[2] + h[2] + a;
+  }
+  var P = window.CanvasGradient && CanvasGradient.prototype;
+  if (P && P.addColorStop) {
+    var orig = P.addColorStop;
+    P.addColorStop = function (off, color) {
+      try { return orig.call(this, off, color); }
+      catch (e) {
+        var f = fix(color);
+        if (f) { try { return orig.call(this, off, f); } catch (e2) {} }
+        try { return orig.call(this, off, 'rgba(0,0,0,0)'); } catch (e3) {}
+      }
+    };
+  }
+})();
+<\/script>`;
+
+/** Ставим заплатку в самое начало <head>: до doctype нельзя — браузер уйдёт в
+ *  режим совместимости и поедет вёрстка. */
+function withCompat(html) {
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head([^>]*)>/i, '<head$1>' + COMPAT);
+  return html.replace(/(<!DOCTYPE[^>]*>)/i, '$1' + COMPAT);
+}
+
 /**
  * Запускает сборку в отдельном кадре поверх страницы.
  *
@@ -113,7 +178,7 @@ function openBuild(html, version) {
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-modals');
   frame.setAttribute('title', 'Byte Blaster ' + version);
-  frame.srcdoc = html;
+  frame.srcdoc = withCompat(html);
 
   const close = () => { ov.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
