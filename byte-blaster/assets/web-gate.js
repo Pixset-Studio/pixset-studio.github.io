@@ -87,7 +87,13 @@ export async function buildUrl(sdk, buildId) {
     body: JSON.stringify({ game_slug: GAME_SLUG, build_id: buildId }),
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || ('http_' + r.status));
+  if (!r.ok) {
+    // У функции verify_jwt=true, поэтому просроченный токен отбивает шлюз
+    // Supabase — до нашего кода запрос не доходит и поля `error` в ответе нет,
+    // только своё `message`. Без этой ветки владелец лицензии видел бы
+    // «http_401» вместо «войдите заново».
+    throw new Error(data.error || (r.status === 401 ? 'bad_token' : 'http_' + r.status));
+  }
   return data.url;
 }
 

@@ -30,6 +30,13 @@
   button:hover{background:#0ff2;color:#fff}
   button:disabled{opacity:.4;cursor:default}
   .note{margin-top:26px;color:#4a6a8a;font-size:13px;line-height:1.7}
+  /* Окно запуска: сборка живёт в отдельном кадре поверх страницы. */
+  .play{position:fixed;inset:0;z-index:9999;background:#04040f;display:flex;flex-direction:column}
+  .playbar{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:8px 12px;
+    border-bottom:1px solid #0ff3;background:#06061a}
+  .playbar span{color:#5a7a9a;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .playbar button{padding:9px 12px;font-size:9px}
+  .play iframe{flex:1 1 auto;width:100%;border:0;background:#000;display:block}
 </style>
 </head>
 <body>
@@ -38,10 +45,15 @@
   <h1>АРХИВ ВЕРСИЙ</h1>
   <p class="sub">Прошлые сборки Byte Blaster прямо в браузере. Доступны владельцам игры.</p>
   <div id="out" class="msg">Проверяем доступ…</div>
+  <div id="list"></div>
   <p class="note">
     Архивные сборки не лежат в открытом доступе — они хранятся в закрытом хранилище,
     и ссылка на запуск выдаётся лично вам на ограниченное время. Делиться ей бесполезно:
     она перестанет работать.
+    <br><br>
+    Старые версии запускаются в отдельном окне и не видят ваших сохранений: они пишут
+    прогресс в те же ячейки, что и нынешняя игра, и иначе затёрли бы её. Поэтому
+    внутри архивной версии прогресс не сохраняется между запусками.
   </p>
 </div>
 
@@ -50,9 +62,73 @@ import * as sdk from '/byte-blaster/assets/pixset-auth.js?v=59ef2b33';
 import { listBuilds, buildUrl } from '/byte-blaster/assets/web-gate.js';
 
 const out = document.getElementById('out');
-const say = (html, err) => { out.className = 'msg' + (err ? ' err' : ''); out.innerHTML = html; };
+const list = document.getElementById('list');
+// Блок сообщений живёт всю жизнь страницы и просто прячется. Раньше его
+// удаляли после отрисовки списка — и любая ошибка при запуске сборки писалась
+// в никуда: кнопка отжималась, а почему — не говорил никто.
+const say = (html, err) => {
+  out.className = 'msg' + (err ? ' err' : '');
+  out.style.display = '';
+  out.innerHTML = html;
+};
+const hush = () => { out.style.display = 'none'; out.innerHTML = ''; };
 
-(async function () {
+/** Человеческий текст вместо кода ошибки от build-access. */
+function explain(code) {
+  switch (code) {
+    case 'no_license':      return 'Лицензия не найдена. <a href="/byte-blaster/buy/">Купить Byte Blaster</a>.';
+    case 'no_token':
+    case 'bad_token':       return 'Сессия истекла. <a href="/byte-blaster/account/">Войдите заново</a>.';
+    case 'build_not_found': return 'Эта версия пропала из каталога — напишите в поддержку.';
+    case 'sign_failed':     return 'Файл сборки не найден в хранилище: путь в каталоге разошёлся с бакетом.';
+    case 'storage_400':
+    case 'storage_404':     return 'Ссылка получена, но файла по ней нет — путь в каталоге не совпадает с бакетом.';
+    default:                return 'Не удалось открыть сборку: ' + code;
+  }
+}
+
+/**
+ * Запускает сборку в отдельном кадре поверх страницы.
+ *
+ * Почему не переход по ссылке хранилища: во-первых, отдаст ли Supabase .html
+ * страницей или вложением — не наше решение. Во-вторых и главное — старые
+ * сборки пишут прогресс в те же ключи (`bbAdv3`, `bbAdvH`), что и нынешняя
+ * игра, и на общем адресе сайта запуск архивной версии затёр бы сохранение
+ * игрока. `sandbox` без `allow-same-origin` даёт кадру собственное
+ * происхождение: своё хранилище, до нашего не дотянуться. Обращения к
+ * localStorage внутри сборок обёрнуты в try/catch, поэтому отказ хранилища они
+ * переживают — теряется только сохранение между запусками.
+ */
+function openBuild(html, version) {
+  const ov = document.createElement('div');
+  ov.className = 'play';
+
+  const bar = document.createElement('div');
+  bar.className = 'playbar';
+  const back = document.createElement('button');
+  back.textContent = '← ЗАКРЫТЬ';
+  const ttl = document.createElement('span');
+  ttl.textContent = 'Byte Blaster ' + version;
+
+  const frame = document.createElement('iframe');
+  frame.setAttribute('sandbox', 'allow-scripts allow-modals');
+  frame.setAttribute('title', 'Byte Blaster ' + version);
+  frame.srcdoc = html;
+
+  const close = () => { ov.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  back.onclick = close;
+  document.addEventListener('keydown', onKey);
+
+  bar.append(back, ttl);
+  ov.append(bar, frame);
+  document.body.appendChild(ov);
+  document.body.style.overflow = 'hidden';
+  // Клавиатура должна работать сразу, без клика по игре.
+  frame.addEventListener('load', () => { try { frame.focus(); } catch (e) {} });
+}
+
+async function run() {
   let session = null;
   try { session = await sdk.getSession(); } catch (e) {}
   if (!session) {
@@ -60,18 +136,26 @@ const say = (html, err) => { out.className = 'msg' + (err ? ' err' : ''); out.in
     return;
   }
 
-  let ents = [];
-  try { ents = await sdk.getEntitlements(); } catch (e) {}
+  // Показываем, ПОД КЕМ вошли: почти всегда «нет доступа» — это вход не в тот
+  // аккаунт, а без подписи это не отличить от настоящей поломки.
+  const кто = (session.user && session.user.email) || '';
+
+  let ents = null;
+  try { ents = await sdk.getEntitlements(); }
+  catch (e) {
+    say('Не удалось проверить лицензию: ' + (e.message || e) + '. Попробуйте обновить страницу.', true);
+    return;
+  }
   if (!ents.some(e => e && e.game_slug === 'byte-blaster')) {
-    say('Архив открыт владельцам игры. <a href="/byte-blaster/buy/">Купить Byte Blaster</a>.', true);
+    say('Вы вошли как <b>' + кто + '</b>, но лицензии на Byte Blaster у этого аккаунта нет. ' +
+        '<a href="/byte-blaster/buy/">Купить</a>.', true);
     return;
   }
 
   const builds = await listBuilds();
   if (!builds.length) { say('Архивных версий пока нет.'); return; }
 
-  out.className = '';
-  out.innerHTML = '';
+  hush();
   for (const b of builds) {
     const row = document.createElement('div');
     row.className = 'row';
@@ -84,20 +168,27 @@ const say = (html, err) => { out.className = 'msg' + (err ? ' err' : ''); out.in
         // Ссылку просим В МОМЕНТ нажатия, а не заранее: она живёт полчаса, и
         // держать её открытой на странице незачем.
         const url = await buildUrl(sdk, b.id);
-        location.href = url;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('storage_' + res.status);
+        openBuild(await res.text(), b.version);
+        btn.disabled = false; btn.textContent = '▶ ИГРАТЬ';
       } catch (e) {
         btn.disabled = false; btn.textContent = '▶ ИГРАТЬ';
-        const m = String(e.message || e);
-        say(m === 'no_license'
-          ? 'Лицензия не найдена. <a href="/byte-blaster/buy/">Купить Byte Blaster</a>.'
-          : 'Не удалось открыть сборку: ' + m, true);
+        say(explain(String(e.message || e)), true);
       }
     };
-    row.append(ver, lbl, dt, btn);
-    out.parentNode.insertBefore(row, out.nextSibling);
+    row.append(ver, lbl, btn);
+    list.appendChild(row);
   }
-  out.remove();
-})();
+}
+
+// Любая необработанная ошибка выше оставляла страницу с вечным «Проверяем
+// доступ…» — снаружи это выглядело как «архив не работает» без единой подсказки.
+run().catch((e) => {
+  console.error(e);
+  say('Страница архива споткнулась: ' + (e && e.message ? e.message : e) +
+      '. Скажите это разработчику — по этой строке видно, где именно.', true);
+});
 </script>
 </body>
 </html>
