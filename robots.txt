@@ -1,0 +1,16 @@
+# Pixset Studio + Byte Blaster
+User-agent: *
+Allow: /
+
+# Личные кабинеты и служебное: индексировать нечего, а пускать робота — тем более.
+Disallow: /account/
+Disallow: /admin/
+Disallow: /u/
+Disallow: /byte-blaster/account/
+Disallow: /byte-blaster/admin/
+Disallow: /byte-blaster/archive/
+# Сама игра в браузере: она за проверкой лицензии и гостя всё равно уводит.
+Disallow: /byte-blaster/game/
+
+Sitemap: https://pixset-studio.github.io/sitemap.xml
+Sitemap: https://pixset-studio.github.io/byte-blaster/sitemap.xml

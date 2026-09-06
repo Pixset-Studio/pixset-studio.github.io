@@ -48,6 +48,9 @@ if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industria
 document.documentElement.setAttribute('data-theme',t);}catch(e){
 document.documentElement.setAttribute('data-theme','industrial');}})();
 </script>
+<!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
+<link rel="canonical" href="https://pixset-studio.github.io/u/">
+<!-- /поиск -->
 </head>
 <body>
 
@@ -115,7 +118,7 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 <script type="module">
 import {
   supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
-} from '/assets/pixset-auth.js?v=745cfb09';
+} from '/assets/pixset-auth.js?v=59ef2b33';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
