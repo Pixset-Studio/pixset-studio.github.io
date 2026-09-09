@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'ec4ff25c';
+export const SDK_VERSION = 'bc05e2a5';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -1024,6 +1024,49 @@ export async function adminDecideRegionRequest(id, approve, comment = '') {
   return data || { mailed: false };
 }
 
+/* ── Блокировка аккаунта ─────────────────────────────────────────────────
+   Вход забаненному оставлен намеренно: иначе он не увидит ни причины, ни
+   срока — только «неверный пароль». Всё остальное ему закрыто в самой базе,
+   а страницы аккаунта уводят на /banned/. */
+
+/**
+ * Блокировка текущего игрока или null, если её нет.
+ * `until === null` при active === true означает «навсегда».
+ */
+export async function getMyBan() {
+  const { data, error } = await supabase
+    .from('my_ban')
+    .select('nickname, banned_at, banned_until, ban_reason, active')
+    .maybeSingle();
+  if (error) return null;              // нет сессии или старая база — не бан
+  return data && data.active ? data : null;
+}
+
+/** Заблокировать игрока. `until = null` — навсегда, иначе дата снятия. */
+export async function adminBan(nickname, until, reason) {
+  const { data, error } = await supabase.rpc('admin_ban', {
+    p_nickname: String(nickname || '').trim(),
+    p_until: until ? new Date(until).toISOString() : null,
+    p_reason: String(reason || '').trim(),
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function adminUnban(nickname) {
+  const { error } = await supabase.rpc('admin_unban', {
+    p_nickname: String(nickname || '').trim(),
+  });
+  if (error) throw error;
+}
+
+/** Все блокировки: действующие сверху, истёкшие — ниже, как история. */
+export async function adminListBans() {
+  const { data, error } = await supabase.rpc('admin_bans');
+  if (error) throw error;
+  return data || [];
+}
+
 /* ── Человекочитаемые сообщения вместо английских ошибок Supabase ────────
    Правило = что должно найтись в тексте ошибки + пара «по-русски / по-английски».
    Порядок важен: первое совпадение и отвечает. Язык берём с самой страницы —
@@ -1103,6 +1146,13 @@ const ERROR_RULES = [
     ru: 'Оплата пока доступна только для России. Первый мир игры открыт бесплатно.',
     en: 'Payments are available in Russia only for now. The first world of the game is free.' },
   { any: ['payment_failed'], ru: 'Не удалось создать счёт. Попробуйте ещё раз.', en: 'Could not create the invoice. Please try again.' },
+  // Блокировки.
+  { any: ['account_banned'],
+    ru: 'Аккаунт заблокирован — действие недоступно.',
+    en: 'The account is blocked — this action is unavailable.' },
+  { any: ['cannot_ban_admin'], ru: 'Администратора заблокировать нельзя.', en: 'An administrator cannot be blocked.' },
+  { any: ['ban_reason_required'], ru: 'Укажите причину блокировки — её увидит игрок.', en: 'Give a reason for the block — the player will see it.' },
+  { any: ['ban_until_past'], ru: 'Срок блокировки должен быть в будущем.', en: 'The block must end in the future.' },
 ];
 
 export function humanError(err) {

@@ -1,6 +1,6 @@
 # Авторские права
 
-**© 2026 Pixset Studio. Все права защищены.**
+**© 2022–2026 Pixset Studio. Все права защищены.**
 
 Этот документ поясняет, кому принадлежат материалы репозитория и сайта, что с ними можно делать, а что нельзя. Юридически обязывающие условия изложены в файле [LICENSE](LICENSE) — при расхождениях приоритет у него.
 
@@ -85,6 +85,7 @@
 | Transformers.js 3.7.5 | Copyright 2023 The HuggingFace Inc. team<br>включает ONNX Runtime Web — Copyright (c) Microsoft Corporation | [Apache 2.0](https://github.com/huggingface/transformers.js/blob/main/LICENSE) | PixTool — нейросети в браузере |
 | Inter | Copyright (c) 2016-2020 The Inter Project Authors | [SIL OFL 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt) | шрифт интерфейса |
 | Space Mono | Copyright (c) 2016 The Space Mono Project Authors | [SIL OFL 1.1](https://openfontlicense.org) | шрифт интерфейса |
+| Twemoji Country Flags | Copyright 2020 Twitter, Inc and other contributors<br><sub>шрифт собран из графики Twemoji</sub> | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) | флаги стран в игре и на сайтах — Windows своих не имеет |
 
 Полный машинночитаемый перечень поставляется вместе со сборкой PixTool: [THIRD-PARTY-NOTICES.txt](PixTool/THIRD-PARTY-NOTICES.txt), а также доступен на странице [/PixTool/licenses/](https://pixset-studio.github.io/PixTool/licenses/).
 

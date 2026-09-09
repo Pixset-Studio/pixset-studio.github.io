@@ -341,22 +341,9 @@
       });
     }
 
-    // Если игрок вошёл, в шапке показываем ник вместо слова «Аккаунт».
-    // Сессию читаем прямо из localStorage, чтобы не тянуть SDK на каждую страницу.
-    try {
-      var raw = localStorage.getItem('sb-zyjhvuhovimorpokiwty-auth-token');
-      if (raw) {
-        if (raw.indexOf('base64-') === 0) raw = decodeURIComponent(escape(atob(raw.slice(7))));
-        var s = JSON.parse(raw);
-        var alive = !s.expires_at || s.expires_at * 1000 > Date.now();
-        var nick = alive && s.user && s.user.user_metadata && s.user.user_metadata.nickname;
-        if (nick) {
-          document.querySelectorAll('[data-account-label]').forEach(function (el) {
-            el.textContent = nick;
-          });
-        }
-      }
-    } catch (e) { /* чужое или повреждённое значение — оставляем как есть */ }
+    // Вошедшего игрока в шапке представляет его аватар, ник и бейджи — этим
+    // занимается assets/pixset-me.js: кнопка одинаковая на обоих сайтах, и
+    // держать её в двух местах незачем.
   }
 
   if (document.readyState === 'loading') {

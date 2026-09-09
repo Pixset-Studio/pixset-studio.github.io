@@ -213,7 +213,7 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 
 <footer class="site">
   <div class="wrap">
-    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
+    <div>© 2022–2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
     <div>
       <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
       <a href="/byte-blaster/wiki/"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a> ·
@@ -224,13 +224,14 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
+<script src="/byte-blaster/assets/pixset-me.js"></script>
 <script src="/byte-blaster/assets/price.js"></script>
 <script type="module">
 // Кнопка скачивания установщика. Файл лежит в закрытом хранилище: ссылка
 // выдаётся на десять минут и только владельцу лицензии, поэтому здесь мы
 // сначала выясняем, что вообще показать этому посетителю.
 import { supabase, getCurrentReleases, downloadRelease, getEntitlements, getSettings }
-  from '/byte-blaster/assets/pixset-auth.js?v=ec4ff25c';
+  from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';
 
 // Способы получить игру включаются и выключаются в админке студии: например,
 // .exe можно временно снять с раздачи, оставив браузерную версию.

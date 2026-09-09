@@ -73,6 +73,12 @@
     var d = document.querySelector('meta[name="description"]');
     var altD = document.documentElement.dataset['desc' + (lang === 'en' ? 'En' : 'Ru')];
     if (d && altD) d.setAttribute('content', altD);
+
+    // Страницы, которые строят содержимое сами (аккаунт, админка, блокировка),
+    // перерисовываются по этому событию — иначе половина текста осталась бы на
+    // прежнем языке до перезагрузки. Имя события общее с сайтом студии:
+    // assets/pixset-ui.js слушает именно его на обеих площадках.
+    document.dispatchEvent(new CustomEvent('pixset:lang', { detail: lang }));
   }
 
   apply(document.documentElement.getAttribute('data-site-lang') || detect(), false);

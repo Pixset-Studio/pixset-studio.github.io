@@ -18,6 +18,19 @@
    компоненты.
    ========================================================================== */
 
+/* ── Флаги стран ────────────────────────────────────────────────────────────
+   Windows не рисует флаги: в системном шрифте эмодзи их нет вовсе, и вместо
+   флага видно две буквы кода — «RU». Флаги приезжают отдельным шрифтом, тем
+   же, что уже стоит в самой игре. unicode-range сужает его до региональных
+   букв, поэтому весь остальной текст остаётся набран шрифтом темы, а файл
+   грузится только на страницах, где флаг действительно встретился. */
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  unicode-range: U+1F1E6-1F1FF;
+  src: url('fonts/TwemojiCountryFlags.woff2') format('woff2');
+  font-display: swap;
+}
+
 :root {
   /* Цвета логотипа — общие для всех тем. */
   --y:        #ffd400;
@@ -34,9 +47,9 @@
   --text:     #e7e1d2;
   --text-dim: #8a8578;
 
-  --font-head: 'Rajdhani', system-ui, sans-serif;
-  --font-body: 'Rajdhani', system-ui, sans-serif;
-  --font-mono: 'Share Tech Mono', ui-monospace, monospace;
+  --font-head: 'Twemoji Country Flags', 'Rajdhani', system-ui, sans-serif;
+  --font-body: 'Twemoji Country Flags', 'Rajdhani', system-ui, sans-serif;
+  --font-mono: 'Twemoji Country Flags', 'Share Tech Mono', ui-monospace, monospace;
 
   --radius:   4px;
   --head-weight: 700;
@@ -55,8 +68,8 @@
   --line-2: #3a3208;
   --text: #d8d2c2;
 
-  --font-head: 'Press Start 2P', monospace;
-  --font-body: 'Share Tech Mono', monospace;
+  --font-head: 'Twemoji Country Flags', 'Press Start 2P', monospace;
+  --font-body: 'Twemoji Country Flags', 'Share Tech Mono', monospace;
   --radius: 0px;
   --head-weight: 400;
   --head-spacing: 2px;
@@ -72,8 +85,8 @@
   --text: #f2efe8;
   --text-dim: #6d6858;
 
-  --font-head: 'Rajdhani', system-ui, sans-serif;
-  --font-body: 'Rajdhani', system-ui, sans-serif;
+  --font-head: 'Twemoji Country Flags', 'Rajdhani', system-ui, sans-serif;
+  --font-body: 'Twemoji Country Flags', 'Rajdhani', system-ui, sans-serif;
   --radius: 2px;
   --head-weight: 400;
   --head-spacing: 4px;
@@ -99,8 +112,8 @@
   --text:     #dbe9ff;
   --text-dim: #6f8bb5;
 
-  --font-head: 'Press Start 2P', monospace;
-  --font-body: 'Share Tech Mono', monospace;
+  --font-head: 'Twemoji Country Flags', 'Press Start 2P', monospace;
+  --font-body: 'Twemoji Country Flags', 'Share Tech Mono', monospace;
   --radius: 0px;
   --head-weight: 400;
   --head-spacing: 2px;
@@ -387,6 +400,24 @@ footer.site a:hover { color: var(--y); }
 }
 :root[data-theme='arcade'] .bdg b,
 :root[data-theme='byteblaster'] .bdg b { font-size: 11px; }
+
+/* ── Кнопка «мой аккаунт» ────────────────────────────────────────────────
+   Вошедший игрок видит в шапке себя: аватар, ник и бейджи. Разметку строит
+   assets/pixset-me.js, здесь только вид. */
+.me { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+.me-ava {
+  width: 22px; height: 22px; flex: 0 0 22px; border-radius: var(--radius);
+  object-fit: cover; display: grid; place-items: center;
+  border: 1px solid var(--line-2); background: rgba(255,212,0,.08);
+  font-family: var(--font-head); font-size: 12px; font-style: normal; color: var(--y);
+  line-height: 1; overflow: hidden;
+}
+.me-nick { max-width: 13ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* В шапке иконки бейджей мельче, чем в списках: строка меню и так плотная. */
+.me .nbdgs { margin-left: 0; gap: 3px; }
+.me .nbdg { width: 16px; height: 16px; flex-basis: 16px; }
+#mobileNav .me-ava { width: 26px; height: 26px; flex-basis: 26px; font-size: 14px; }
+#mobileNav .me-nick { max-width: none; }
 
 /* ── Язык ────────────────────────────────────────────────────────────────
    Оба языка лежат в разметке; лишний прячется по атрибуту на <html>. Так на

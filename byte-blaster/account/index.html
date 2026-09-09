@@ -304,7 +304,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <footer class="site">
   <div class="wrap">
-    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
+    <div>© 2022–2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
     <div>
       <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
       <a href="/byte-blaster/buy/"><span data-l="ru">Купить</span><span data-l="en">Buy</span></a> ·
@@ -315,6 +315,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
+<script src="/byte-blaster/assets/pixset-me.js"></script>
 <script type="module">
 // Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
 // сайта студии общая, вход достаточно выполнить один раз.
@@ -324,14 +325,14 @@ import {
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
-  verifyEmailCode, resendSignupCode,
+  verifyEmailCode, resendSignupCode, getMyBan,
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=ec4ff25c';
+} from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';
 import {
   badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/byte-blaster/assets/pixset-ui.js?v=ec4ff25c';
+} from '/byte-blaster/assets/pixset-ui.js?v=bc05e2a5';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -959,6 +960,18 @@ async function renderDevices() {
 
 // ── Маршрутизация ───────────────────────────────────────────────────────
 
+/* ── Блокировка ─────────────────────────────────────────────────────────
+   Забаненному в кабинете делать нечего: сервер всё равно откажет в любом
+   действии. Уводим на страницу блокировки — там написано, за что, до какого
+   времени и куда писать. */
+async function guardBan() {
+  let ban = null;
+  try { ban = await getMyBan(); } catch { ban = null; }
+  if (!ban) return false;
+  location.replace('/byte-blaster/banned/');
+  return true;
+}
+
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'PASSWORD_RECOVERY') {
     recovery = true;
@@ -970,6 +983,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 
   hide($('loading'));
   if (session?.user) {
+    guardBan();                       // ответ придёт позже — уведёт со страницы
     if (returnTo()) { location.replace(returnTo()); return; }
     hide($('guest')); hide($('confirm')); show($('profile')); renderProfile(session.user);
   }
@@ -989,7 +1003,8 @@ const { data: { session } } = await supabase.auth.getSession();
 if (!recovery) {
   hide($('loading'));
   if (session?.user) {
-    if (returnTo()) location.replace(returnTo());
+    if (await guardBan()) { /* ушли на страницу блокировки */ }
+    else if (returnTo()) location.replace(returnTo());
     else { show($('profile')); renderProfile(session.user); }
   }
   else { show($('guest')); }

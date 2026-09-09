@@ -48,6 +48,13 @@ if (fs.existsSync(uiSource)) {
   fs.writeFileSync(path.join(bbSite, 'assets', 'pixset-ui.js'), ui, 'utf8');
 }
 
+// Кнопка «мой аккаунт» в шапке (аватар, ник, бейджи). Обычный скрипт без
+// импортов — копируется как есть, адреса внутри не зависят от сайта.
+const meSource = path.join(studioSite, 'assets', 'pixset-me.js');
+if (fs.existsSync(meSource)) {
+  fs.copyFileSync(meSource, path.join(bbSite, 'assets', 'pixset-me.js'));
+}
+
 /* ── Метки в импортах ──────────────────────────────────────────────────── */
 function htmlFiles(dir) {
   const out = [];

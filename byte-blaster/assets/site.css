@@ -3,6 +3,18 @@
    near-black background, cyan/magenta neon, pixel font for headings and a
    monospace terminal face for body text. */
 
+/* ── Country flags ───────────────────────────────────────────────────────────
+   Windows ships no flag glyphs at all — a flag emoji falls back to the two
+   letters of its country code ("RU"). The game already carries this font, so
+   the site uses the same file. The unicode-range keeps it to regional
+   indicators: every other character still comes from the page's own type. */
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  unicode-range: U+1F1E6-1F1FF;
+  src: url('fonts/TwemojiCountryFlags.woff2') format('woff2');
+  font-display: swap;
+}
+
 :root {
   --bg:      #04040f;
   --bg-2:    #080818;
@@ -15,8 +27,8 @@
   --red:     #f55;
   --text:    #c8d4e8;
   --dim:     #7788a0;
-  --pixel:   'Press Start 2P', 'Courier New', monospace;
-  --mono:    'Share Tech Mono', 'Consolas', monospace;
+  --pixel:   'Twemoji Country Flags', 'Press Start 2P', 'Courier New', monospace;
+  --mono:    'Twemoji Country Flags', 'Share Tech Mono', 'Consolas', monospace;
   --maxw:    1180px;
 }
 
@@ -682,6 +694,21 @@ select {
   background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
   color: var(--text); font-family: var(--mono); font-size: 14px; padding: 10px 12px;
 }
+
+/* ── Кнопка «мой аккаунт» ────────────────────────────────────────────────
+   Вошедший игрок видит в шапке себя: аватар, ник и бейджи — ровно как на
+   кнопке аккаунта в самой игре. Разметку строит assets/pixset-me.js. */
+.me { display: inline-flex; align-items: center; gap: 7px; vertical-align: middle; }
+.me-ava {
+  width: 20px; height: 20px; flex: 0 0 20px; border-radius: 3px;
+  object-fit: cover; display: grid; place-items: center;
+  border: 1px solid var(--line); background: rgba(0,255,255,.08);
+  font-family: var(--pixel); font-size: 8px; font-style: normal; color: var(--cyan);
+  line-height: 1; overflow: hidden;
+}
+.me-nick { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me .nbdgs { margin-left: 0; gap: 3px; }
+.me .nbdg { width: 15px; height: 15px; flex-basis: 15px; }
 
 /* ── Бейджи игроков ──────────────────────────────────────────────────────
    Разметку строит общий модуль assets/pixset-ui.js — тот же, что и на сайте

@@ -142,7 +142,22 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
             <span data-l="ru">В друзья</span><span data-l="en">Add friend</span>
           </button>
         </div>
-        <!-- Полный список бейджей — под ником, с названием и объяснением. -->
+      </div>
+
+      <!-- Блокировка. Без этой строки непонятно, почему у игрока всё замерло. -->
+      <p class="note" id="banned" hidden style="margin-top:18px;border-left-color:var(--y-warm);background:rgba(255,163,0,.07)">
+        <span data-l="ru">⛔ Аккаунт заблокирован студией.</span>
+        <span data-l="en">⛔ This account is blocked by the studio.</span>
+        <span id="bannedUntil"></span>
+      </p>
+
+      <!-- ── Бейджи ──────────────────────────────────────────────────────
+           Своим разделом, а не строкой под ником: у бейджа есть название и
+           объяснение, и в карточке игрока они спорили за место с аватаром. -->
+      <div id="badgeBox" hidden>
+        <h2 style="margin-top:32px">
+          <span data-l="ru">Бейджи</span><span data-l="en">Badges</span>
+        </h2>
         <div class="bdgs" id="badges"></div>
       </div>
 
@@ -158,7 +173,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 <footer class="site">
   <div class="wrap">
     <div class="row">
-      <div>© 2024–2026 Pixset Studio</div>
+      <div>© 2022–2026 Pixset Studio</div>
       <div>
         <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
         <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
@@ -168,13 +183,14 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
+<script src="/assets/pixset-me.js"></script>
 <script type="module">
 import {
   supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
-} from '/assets/pixset-auth.js?v=ec4ff25c';
+} from '/assets/pixset-auth.js?v=bc05e2a5';
 import {
   badgeRowHtml, paintNickBadges, countryName, countryFlag,
-} from '/assets/pixset-ui.js?v=ec4ff25c';
+} from '/assets/pixset-ui.js?v=bc05e2a5';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -308,9 +324,15 @@ let loaded = null;               // ответ сервера: по нему п�
 
 function paintProfile() {
   if (!loaded) return;
-  // Под ником — все бейджи, кроме скрытых для профиля (их отсекает база).
+  // Отдельный раздел: все бейджи, кроме скрытых для профиля (их отсекает база).
   const badges = Array.isArray(loaded.badges) ? loaded.badges : [];
+  $('badgeBox').hidden = !badges.length;
   $('badges').innerHTML = badges.map(badgeRowHtml).join('');
+
+  $('banned').hidden = !loaded.banned;
+  $('bannedUntil').textContent = loaded.banned && loaded.banned_until
+    ? L('Снимется ', 'Lifts on ') + fmtDate(loaded.banned_until)
+    : '';
   // Иконки закреплённых — рядом с самим ником.
   $('nick').dataset.nick = loaded.nickname || '';
   delete $('nick').dataset.nickBadges;

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru"
+      data-title-ru="Аккаунт заблокирован — BYTE BLASTER"
+      data-title-en="Account blocked — BYTE BLASTER"
+      data-desc-ru="Доступ к аккаунту Pixset Studio ограничен."
+      data-desc-en="Access to this Pixset Studio account is restricted.">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аккаунт заблокирован — BYTE BLASTER</title>
+<meta name="description" content="Доступ к аккаунту Pixset Studio ограничен.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#04040f">
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/byte-blaster/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<style>
+  /* Табло обратного отсчёта: игроку важно видеть, сколько именно осталось. */
+  .clock { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 6px; }
+  .clock > div {
+    min-width: 84px; padding: 12px 14px; text-align: center;
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 3px;
+  }
+  .clock b { display: block; font-family: var(--pixel); font-size: 15px; color: var(--cyan); line-height: 1.3; }
+  .clock span { font-family: var(--mono); font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+  .stop { font-size: 46px; line-height: 1; margin-bottom: 10px; }
+  .why {
+    border-left: 3px solid var(--orange); background: rgba(255,136,0,.08);
+    padding: 14px 18px; margin: 18px 0; border-radius: 0 3px 3px 0;
+    white-space: pre-wrap; word-break: break-word;
+  }
+</style>
+<script>
+/* Pick the language BEFORE first paint so the page never flashes the wrong one. */
+(function(){try{var s=localStorage.getItem('bbSiteLang')||localStorage.getItem('pixsetSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
+</script>
+<!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
+<link rel="canonical" href="https://pixset-studio.github.io/byte-blaster/banned/">
+<!-- /поиск -->
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <nav class="main">
+      <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/account/"><span data-l="ru">АККАУНТ</span><span data-l="en">ACCOUNT</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section>
+  <div class="wrap">
+    <div class="panel wide">
+      <div id="loading" style="text-align:center">
+        <p class="dim"><span data-l="ru">Проверяем сессию…</span><span data-l="en">Checking your session…</span></p>
+      </div>
+
+      <!-- ── Блокировка действует ─────────────────────────────────────── -->
+      <div id="banned" hidden>
+        <div class="stop">⛔</div>
+        <h1><span data-l="ru">АККАУНТ ЗАБЛОКИРОВАН</span><span data-l="en">ACCOUNT BLOCKED</span></h1>
+        <p class="dim" id="who"></p>
+
+        <h3 style="margin-top:22px"><span data-l="ru">ПРИЧИНА</span><span data-l="en">REASON</span></h3>
+        <div class="why" id="why"></div>
+
+        <h3 style="margin-top:22px" id="termTitle"></h3>
+        <div id="forever" hidden>
+          <p><span data-l="ru">Блокировка бессрочная. Снять её может только студия.</span>
+             <span data-l="en">The block has no end date. Only the studio can lift it.</span></p>
+        </div>
+        <div id="temp" hidden>
+          <div class="clock">
+            <div><b id="cd">0</b><span data-l="ru">дней</span><span data-l="en">days</span></div>
+            <div><b id="ch">00</b><span data-l="ru">часов</span><span data-l="en">hours</span></div>
+            <div><b id="cm">00</b><span data-l="ru">минут</span><span data-l="en">minutes</span></div>
+            <div><b id="cs">00</b><span data-l="ru">секунд</span><span data-l="en">seconds</span></div>
+          </div>
+          <p class="dim" id="until"></p>
+        </div>
+
+        <p class="note" style="margin-top:22px">
+          <span data-l="ru">Считаете, что блокировка ошибочна? Напишите в поддержку студии — с почты, на которую зарегистрирован аккаунт:</span>
+          <span data-l="en">Think the block is a mistake? Write to studio support from the email the account is registered to:</span>
+          <br><a href="mailto:pixset.studio.offical@gmail.com?subject=Blocked%20account">pixset.studio.offical@gmail.com</a>
+        </p>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:22px">
+          <a class="btn small" href="/byte-blaster/"><span data-l="ru">НА ГЛАВНУЮ</span><span data-l="en">HOME</span></a>
+          <button class="btn small" id="logout"><span data-l="ru">ВЫЙТИ</span><span data-l="en">SIGN OUT</span></button>
+        </div>
+      </div>
+
+      <!-- ── Блокировки нет (или уже снята) ───────────────────────────── -->
+      <div id="clear" hidden>
+        <h1><span data-l="ru">ДОСТУП ОТКРЫТ</span><span data-l="en">ACCESS IS OPEN</span></h1>
+        <p><span data-l="ru">На этом аккаунте нет действующих ограничений.</span>
+           <span data-l="en">There are no active restrictions on this account.</span></p>
+        <p style="margin-top:18px">
+          <a class="btn small" href="/byte-blaster/account/"><span data-l="ru">В АККАУНТ</span><span data-l="en">TO THE ACCOUNT</span></a>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2022–2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
+    <div>
+      <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+      <a href="mailto:pixset.studio.offical@gmail.com">pixset.studio.offical@gmail.com</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/byte-blaster/assets/config.js"></script>
+<script src="/byte-blaster/assets/site.js"></script>
+<script src="/byte-blaster/assets/pixset-me.js"></script>
+<script type="module">
+import { supabase, getMyBan, logout } from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';
+
+const $ = (id) => document.getElementById(id);
+const isEn = () => document.documentElement.getAttribute('data-site-lang') === 'en';
+const L = (ru, en) => (isEn() ? en : ru);
+const fmtWhen = (iso) => new Date(iso).toLocaleString(isEn() ? 'en-GB' : 'ru-RU');
+
+let ban = null;
+let tick = null;
+
+/** Разница до срока; null, если срок уже вышел. */
+function left(untilIso) {
+  const ms = new Date(untilIso).getTime() - Date.now();
+  if (!(ms > 0)) return null;
+  const s = Math.floor(ms / 1000);
+  return {
+    d: Math.floor(s / 86400),
+    h: Math.floor((s % 86400) / 3600),
+    m: Math.floor((s % 3600) / 60),
+    s: s % 60,
+  };
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+
+function paint() {
+  if (!ban) {
+    $('banned').hidden = true;
+    $('clear').hidden = false;
+    return;
+  }
+  $('clear').hidden = true;
+  $('banned').hidden = false;
+
+  $('who').textContent = ban.nickname ? `${L('Аккаунт: ', 'Account: ')}${ban.nickname}` : '';
+  $('why').textContent = ban.ban_reason || L('Причина не указана.', 'No reason given.');
+
+  const forever = !ban.banned_until;
+  $('termTitle').textContent = forever
+    ? L('СРОК', 'TERM')
+    : L('ДО СНЯТИЯ БЛОКИРОВКИ', 'UNTIL THE BLOCK IS LIFTED');
+  $('forever').hidden = !forever;
+  $('temp').hidden = forever;
+
+  if (forever) return;
+  $('until').textContent = L('Снимется ', 'Lifts on ') + fmtWhen(ban.banned_until);
+  countdown();
+}
+
+/** Живой отсчёт. По нулю переспрашиваем сервер — вдруг бан продлили. */
+function countdown() {
+  const t = left(ban.banned_until);
+  if (!t) { clearInterval(tick); recheck(); return; }
+  $('cd').textContent = t.d;
+  $('ch').textContent = pad(t.h);
+  $('cm').textContent = pad(t.m);
+  $('cs').textContent = pad(t.s);
+}
+
+async function recheck() {
+  try { ban = await getMyBan(); } catch { ban = null; }
+  paint();
+}
+
+document.addEventListener('pixset:lang', paint);
+
+$('logout').onclick = async () => {
+  await logout();
+  location.href = '/byte-blaster/account/';
+};
+
+(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  $('loading').hidden = true;
+  if (!session) { location.replace('/byte-blaster/account/'); return; }
+
+  try { ban = await getMyBan(); } catch { ban = null; }
+  paint();
+  if (ban && ban.banned_until) tick = setInterval(countdown, 1000);
+})();
+</script>
+
+</body>
+</html>

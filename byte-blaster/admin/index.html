@@ -232,6 +232,35 @@
       <div class="msg" id="regionMsg"></div>
       <div id="regionList"></div>
 
+      <!-- ── Блокировки ──────────────────────────────────────────────────
+           Тот же раздел, что в админке студии: аккаунт один на все игры. -->
+      <h2 style="margin-top:34px">БЛОКИРОВКИ</h2>
+      <p class="dim" style="font-size:14px">
+        Игрок увидит причину и обратный отсчёт на странице
+        <a href="/byte-blaster/banned/">/byte-blaster/banned/</a>.
+        Причина обязательна — читать её будет он сам.
+      </p>
+      <div class="field"><label for="banNick">Ник игрока</label>
+        <input type="text" id="banNick" autocomplete="off" placeholder="player"></div>
+      <div class="field"><label for="banTerm">Срок</label>
+        <select id="banTerm">
+          <option value="1">1 день</option>
+          <option value="3">3 дня</option>
+          <option value="7" selected>7 дней</option>
+          <option value="30">30 дней</option>
+          <option value="90">90 дней</option>
+          <option value="custom">до даты и времени…</option>
+          <option value="forever">навсегда</option>
+        </select></div>
+      <div class="field" id="banUntilBox" hidden><label for="banUntil">Снять блокировку</label>
+        <input type="datetime-local" id="banUntil"></div>
+      <div class="field"><label for="banReason">Причина — её увидит игрок</label>
+        <textarea id="banReason" rows="3" maxlength="500"
+                  placeholder="Например: накрутка очков в таблице рекордов"></textarea></div>
+      <button class="btn" id="banBtn">ЗАБЛОКИРОВАТЬ</button>
+      <div class="msg" id="banMsg"></div>
+      <div id="banList" style="margin-top:12px"></div>
+
       <h2 style="margin-top:34px">СБОРКИ И ОБНОВЛЕНИЯ</h2>
       <p class="dim" style="font-size:14px">
         Файл уходит в закрытое хранилище. Прямых ссылок нет: игрок с лицензией
@@ -314,7 +343,7 @@
 
 <footer class="site">
   <div class="wrap">
-    <div>© 2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
+    <div>© 2022–2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
     <div><a href="/byte-blaster/">На сайт</a></div>
   </div>
 </footer>
@@ -557,8 +586,9 @@ import {
   listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
   adminBadgeHolders, badgeIconFromFile,
   adminListRegionRequests, adminDecideRegionRequest,
-} from '/byte-blaster/assets/pixset-auth.js?v=ec4ff25c';
-import { paintNickBadges, countryName, countryFlag } from '/byte-blaster/assets/pixset-ui.js?v=ec4ff25c';
+  adminBan, adminUnban, adminListBans,
+} from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';
+import { paintNickBadges, countryName, countryFlag } from '/byte-blaster/assets/pixset-ui.js?v=bc05e2a5';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -1260,9 +1290,95 @@ async function loadRegionRequests() {
   });
 }
 
+
+/* ── Блокировки ──────────────────────────────────────────────────────────
+   Бан бывает срочный и бессрочный. Срок здесь считается в браузере и уходит
+   на сервер точным моментом времени: «7 дней» от нажатия кнопки, а не от
+   полуночи. */
+function banSay(text, kind = 'err') {
+  $('banMsg').textContent = text;
+  $('banMsg').className = `msg show ${kind}`;
+}
+
+$('banTerm').onchange = () => {
+  $('banUntilBox').hidden = $('banTerm').value !== 'custom';
+};
+
+/** Момент снятия по выбранному сроку. null — навсегда, false — поле не заполнено. */
+function banUntilValue() {
+  const v = $('banTerm').value;
+  if (v === 'forever') return null;
+  if (v === 'custom') {
+    const raw = $('banUntil').value;
+    return raw ? new Date(raw) : false;
+  }
+  const d = new Date();
+  d.setDate(d.getDate() + Number(v));
+  return d;
+}
+
+const banWhen = (iso) => new Date(iso).toLocaleString('ru-RU');
+
+async function loadBans() {
+  let rows = [];
+  try { rows = await adminListBans(); }
+  catch (err) { $('banList').innerHTML = `<p class="dim">${esc(humanError(err))}</p>`; return; }
+
+  $('banList').innerHTML = rows.length
+    ? rows.map((r) => `
+        <div class="item" style="display:block">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <b data-nick="${esc(r.nickname)}">${esc(r.nickname)}</b>
+            <span class="dim mono" style="font-size:12px">${esc(r.email || '')}</span>
+            <span class="badge${r.active ? '' : ' mute'}">${
+              !r.active ? 'истекла'
+                : r.banned_until ? 'до ' + esc(banWhen(r.banned_until)) : 'навсегда'}</span>
+            <span class="dim mono" style="font-size:12px">${
+              esc(banWhen(r.banned_at))}${r.banned_by ? ' · ' + esc(r.banned_by) : ''}</span>
+          </div>
+          <div class="dim" style="font-size:14px;margin:8px 0 10px;white-space:pre-wrap">${
+            esc(r.ban_reason || '')}</div>
+          ${r.active ? `<button class="btn small" data-unban="${esc(r.nickname)}">Снять блокировку</button>` : ''}
+        </div>`).join('')
+    : '<p class="dim">Заблокированных нет.</p>';
+
+  paintNickBadges($('banList')).catch(() => {});
+
+  $('banList').querySelectorAll('[data-unban]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await adminUnban(b.dataset.unban);
+        banSay('Блокировка снята.', 'ok');
+        await loadBans();
+      } catch (err) { banSay(humanError(err)); b.disabled = false; }
+    };
+  });
+}
+
+$('banBtn').onclick = async () => {
+  const nick = $('banNick').value.trim();
+  const reason = $('banReason').value.trim();
+  const until = banUntilValue();
+
+  if (!nick) { banSay('Укажите ник игрока.'); return; }
+  if (until === false) { banSay('Выберите дату и время снятия.'); return; }
+  if (reason.length < 5) { banSay('Опишите причину — её увидит игрок.'); return; }
+
+  $('banBtn').disabled = true;
+  try {
+    await adminBan(nick, until, reason);
+    banSay(until ? `Заблокирован до ${until.toLocaleString('ru-RU')}.` : 'Заблокирован навсегда.', 'ok');
+    $('banNick').value = '';
+    $('banReason').value = '';
+    await loadBans();
+  } catch (err) { banSay(humanError(err)); }
+  finally { $('banBtn').disabled = false; }
+};
+
 async function refreshAll() {
   await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders(),
-    loadAnnouncements(), loadBadges(), loadRegionRequests()]);
+    loadAnnouncements(), loadBadges(), loadRegionRequests(), loadBans()]);
 }
 
 // График подстраивается под ширину окна — перерисовываем без перезапроса.
