@@ -9,6 +9,7 @@
 | `magic-link.html` | то же → **Magic Link** |
 | `reset-password.html` | то же → **Reset Password** |
 | `change-email.html` | то же → **Change Email Address** |
+| `reauthentication.html` | то же → **Reauthentication** — код при смене пароля в кабинете |
 
 Шаблоны написаны под вход **по коду**, а не по ссылке: в них подставляется
 `{{ .Token }}` — те самые шесть цифр. Если когда-нибудь понадобится ссылка,

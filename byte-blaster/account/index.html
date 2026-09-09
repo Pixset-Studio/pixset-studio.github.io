@@ -38,6 +38,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <a class="tostudio" href="/" title="Pixset Studio"><img src="/byte-blaster/assets/pixset-mark.png" alt="" width="18" height="18"><span data-l="ru">СТУДИЯ</span><span data-l="en">STUDIO</span></a>
     <nav class="main">
       <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
       <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
@@ -237,6 +238,12 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
           <label for="newPass2"><span data-l="ru">НОВЫЙ ПАРОЛЬ</span><span data-l="en">NEW PASSWORD</span></label>
           <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
         </div>
+        <!-- Код появляется после первого нажатия: сначала письмо, потом смена. -->
+        <div class="field" id="passCodeBox" hidden>
+          <label for="passCode"><span data-l="ru">КОД С ПОЧТЫ</span><span data-l="en">CODE FROM THE EMAIL</span></label>
+          <input type="text" id="passCode" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="8" placeholder="000000">
+        </div>
         <button class="btn small" id="savePass"><span data-l="ru">СМЕНИТЬ ПАРОЛЬ</span><span data-l="en">CHANGE PASSWORD</span></button>
 
         <!-- ── Регион ──────────────────────────────────────────────────────
@@ -304,7 +311,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <footer class="site">
   <div class="wrap">
-    <div>© 2022–2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
+    <div>© 2022–2026 <a href="/">Pixset Studio</a> · BYTE BLASTER v1.0.3</div>
     <div>
       <a href="/byte-blaster/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
       <a href="/byte-blaster/buy/"><span data-l="ru">Купить</span><span data-l="en">Buy</span></a> ·
@@ -322,17 +329,18 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 import {
   supabase, register, login, logout, resetPassword,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
-  updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
+  updateNickname, changeEmail, changePassword, requestPasswordCode,
+  deleteAccount, getMyOrders,
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   verifyEmailCode, resendSignupCode, getMyBan,
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';
+} from '/byte-blaster/assets/pixset-auth.js?v=7dac15d8';
 import {
   badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/byte-blaster/assets/pixset-ui.js?v=bc05e2a5';
+} from '/byte-blaster/assets/pixset-ui.js?v=7dac15d8';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -511,6 +519,9 @@ async function renderRegion() {
 
   const open = req && req.status === 'pending';
   $('regionForm').hidden = !!open;
+  // Писем студия не шлёт, поэтому ответ живёт здесь — и раздел раскрывается
+  // сам, как только по заявке что-то происходит.
+  if (req) $('regionBox').hidden = false;
 
   $('regionStatus').innerHTML = req
     ? `<div class="item" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
@@ -557,8 +568,8 @@ $('regionSend').onclick = () => busy($('regionSend'), async () => {
     $('regionReason').value = '';
     $('regionCount').textContent = '0 / 1000';
     say($('regionMsg'),
-        'Заявка отправлена. Ответ придёт на почту аккаунта.',
-        'Request sent. The answer will come to your account email.', 'ok');
+        'Заявка отправлена. Решение появится здесь же, в этом разделе.',
+        'Request sent. The decision will appear right here.', 'ok');
     await renderRegion();
   } catch (err) { fail($('regionMsg'), err); }
 });
@@ -835,6 +846,8 @@ $('saveEmail').onclick = (e) => busy(e.currentTarget, async () => {
   } catch (err) { fail($('profMsg'), err); }
 });
 
+/* Смена пароля в два шага: письмо с кодом, потом сама смена. Открытой
+   вкладки для такого мало — за компьютер садятся не только владельцы. */
 $('savePass').onclick = (e) => busy(e.currentTarget, async () => {
   clear($('profMsg'));
   const pass = $('newPass2').value;
@@ -842,9 +855,24 @@ $('savePass').onclick = (e) => busy(e.currentTarget, async () => {
     say($('profMsg'), 'Пароль — минимум 6 символов.', 'The password needs at least 6 characters.');
     return;
   }
+
+  if ($('passCodeBox').hidden) {
+    try {
+      await requestPasswordCode();
+      $('passCodeBox').hidden = false;
+      $('passCode').value = '';
+      $('passCode').focus();
+      say($('profMsg'), 'Отправили код на почту. Введите его и нажмите «Сменить пароль» ещё раз.',
+          'We sent a code to your email. Enter it and press “Change password” again.', 'ok');
+    } catch (err) { fail($('profMsg'), err); }
+    return;
+  }
+
   try {
-    await changePassword(pass);
+    await changePassword(pass, $('passCode').value);
     $('newPass2').value = '';
+    $('passCode').value = '';
+    $('passCodeBox').hidden = true;
     say($('profMsg'), 'Пароль изменён.', 'Password changed.', 'ok');
   } catch (err) { fail($('profMsg'), err); }
 });

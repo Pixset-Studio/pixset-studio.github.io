@@ -28,9 +28,8 @@
   var s = document.createElement('script');
   s.type = 'module';
   s.textContent =
-    "import * as sdk from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';" +
     "import { guardWebPlay } from '/byte-blaster/assets/web-gate.js';" +
-    "guardWebPlay(sdk).then(function (ok) { if (ok) window.__bbGateOpen(); })" +
+    "guardWebPlay().then(function (ok) { if (ok) window.__bbGateOpen(); })" +
     ".catch(function () { window.__bbGateOpen(); });";
   window.__bbGateOpen = function () { clearTimeout(timer); open(); };
   s.onerror = window.__bbGateOpen;

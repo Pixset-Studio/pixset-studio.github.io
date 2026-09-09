@@ -249,16 +249,53 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 
       <!-- ── Заявки на смену региона ─────────────────────────────────────
            Регион определяет валюту цен, поэтому меняется только через студию.
-           Решение и письмо игроку уходят одним действием (edge-функция
-           region-decide) — иначе легко получить «регион сменён, а игрок не в
-           курсе». -->
+           Решение игрок видит у себя в кабинете: письма студия не шлёт. -->
       <h3 style="margin-top:32px">Заявки на смену региона</h3>
       <p class="dim" style="font-size:14px">
-        Игрок объясняет причину, вы решаете. По решению игроку уходит письмо;
-        при одобрении регион и валюта в его профиле меняются сразу.
+        Игрок объясняет причину, вы решаете. При одобрении регион и валюта в его
+        профиле меняются сразу, а решение с вашим комментарием он увидит в своём
+        кабинете.
       </p>
       <div class="msg" id="regionMsg"></div>
       <div class="rows" id="regionList"></div>
+
+      <!-- ── Блокировки ──────────────────────────────────────────────────
+           Вход заблокированному оставлен намеренно: иначе он увидит только
+           «неверный пароль» и не узнает ни причины, ни срока. Всё остальное
+           ему закрыто в самой базе. -->
+      <h3 style="margin-top:32px">Блокировки</h3>
+      <p class="dim" style="font-size:14px">
+        Игрок увидит причину и обратный отсчёт на странице
+        <a href="/banned/">/banned/</a>. Причина обязательна — читать её будет он сам.
+      </p>
+      <div class="field">
+        <label for="banNick">Ник игрока</label>
+        <input type="text" id="banNick" autocomplete="off" placeholder="player">
+      </div>
+      <div class="field">
+        <label for="banTerm">Срок</label>
+        <select id="banTerm">
+          <option value="1">1 день</option>
+          <option value="3">3 дня</option>
+          <option value="7" selected>7 дней</option>
+          <option value="30">30 дней</option>
+          <option value="90">90 дней</option>
+          <option value="custom">до даты и времени…</option>
+          <option value="forever">навсегда</option>
+        </select>
+      </div>
+      <div class="field" id="banUntilBox" hidden>
+        <label for="banUntil">Снять блокировку</label>
+        <input type="datetime-local" id="banUntil">
+      </div>
+      <div class="field">
+        <label for="banReason">Причина — её увидит игрок</label>
+        <textarea id="banReason" rows="3" maxlength="500"
+                  placeholder="Например: накрутка очков в таблице рекордов"></textarea>
+      </div>
+      <button class="btn solid" id="banBtn" style="width:auto">Заблокировать</button>
+      <div class="msg" id="banMsg"></div>
+      <div class="rows" id="banList" style="margin-top:12px"></div>
 
       <h3 style="margin-top:32px">Заказы</h3>
       <div class="tblwrap"><table id="ordersTbl"></table></div>
@@ -283,10 +320,11 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 </main>
 
 <footer class="site">
-  <div class="wrap"><div class="row"><div>© 2024–2026 Pixset Studio</div></div></div>
+  <div class="wrap"><div class="row"><div>© 2022–2026 Pixset Studio</div></div></div>
 </footer>
 
 <script src="/assets/studio.js"></script>
+<script src="/assets/pixset-me.js"></script>
 <script type="module">
 import {
   supabase, getProfile, getGames,
@@ -299,8 +337,9 @@ import {
   listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
   adminBadgeHolders, badgeIconFromFile,
   adminListRegionRequests, adminDecideRegionRequest,
-} from '/assets/pixset-auth.js?v=ec4ff25c';
-import { paintNickBadges, countryName, countryFlag } from '/assets/pixset-ui.js?v=ec4ff25c';
+  adminBan, adminUnban, adminListBans,
+} from '/assets/pixset-auth.js?v=7dac15d8';
+import { paintNickBadges, countryName, countryFlag } from '/assets/pixset-ui.js?v=7dac15d8';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -799,8 +838,7 @@ $('badgeGrant').onclick  = () => withBadge(adminGrantBadge,  'Бейдж выд�
 $('badgeRevoke').onclick = () => withBadge(adminRevokeBadge, 'Бейдж забран.');
 
 /* ── Заявки на смену региона ─────────────────────────────────────────────
-   Решение и письмо игроку уходят одним вызовом edge-функции. Если почта не
-   настроена, решение всё равно сохраняется — об этом честно пишем. */
+   Решение сохраняется в базе; игрок читает его в своём кабинете. */
 // Названия стран берём у браузера (см. pixset-ui.js): игрок может выбрать
 // любую из списка ISO, и свой словарь тут же отстал бы от него.
 const countryRu = (code) => (code ? `${countryFlag(code)} ${countryName(code, 'ru')}` : '—');
@@ -839,11 +877,10 @@ async function loadRegionRequests() {
     const input = $('regionList').querySelector(`[data-region-comment="${id}"]`);
     btn.disabled = true;
     try {
-      const res = await adminDecideRegionRequest(id, approve, input ? input.value : '');
-      regionSay(res.mailed
-        ? (approve ? 'Регион изменён, письмо отправлено.' : 'Заявка отклонена, письмо отправлено.')
-        : `Решение сохранено, но письмо не ушло (${res.reason || 'почта не настроена'}).`,
-        res.mailed ? 'ok' : 'err');
+      await adminDecideRegionRequest(id, approve, input ? input.value : '');
+      regionSay(approve
+        ? 'Регион изменён. Игрок увидит это в своём кабинете.'
+        : 'Заявка отклонена. Игрок увидит это в своём кабинете.', 'ok');
       await loadRegionRequests();
     } catch (err) { regionSay(humanError(err)); btn.disabled = false; }
   };
@@ -858,11 +895,97 @@ async function loadRegionRequests() {
   });
 }
 
+
+/* ── Блокировки ──────────────────────────────────────────────────────────
+   Бан бывает срочный и бессрочный. Срок здесь считается в браузере и уходит
+   на сервер точным моментом времени: «7 дней» от нажатия кнопки, а не от
+   полуночи. */
+function banSay(text, kind = 'err') {
+  $('banMsg').textContent = text;
+  $('banMsg').className = `msg show ${kind}`;
+}
+
+$('banTerm').onchange = () => {
+  $('banUntilBox').hidden = $('banTerm').value !== 'custom';
+};
+
+/** Момент снятия по выбранному сроку. null — навсегда, false — поле не заполнено. */
+function banUntilValue() {
+  const v = $('banTerm').value;
+  if (v === 'forever') return null;
+  if (v === 'custom') {
+    const raw = $('banUntil').value;
+    return raw ? new Date(raw) : false;
+  }
+  const d = new Date();
+  d.setDate(d.getDate() + Number(v));
+  return d;
+}
+
+const banWhen = (iso) => new Date(iso).toLocaleString('ru-RU');
+
+async function loadBans() {
+  let rows = [];
+  try { rows = await adminListBans(); }
+  catch (err) { $('banList').innerHTML = `<p class="dim">${esc(humanError(err))}</p>`; return; }
+
+  $('banList').innerHTML = rows.length
+    ? rows.map((r) => `
+        <div class="row" style="display:block">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <b data-nick="${esc(r.nickname)}">${esc(r.nickname)}</b>
+            <span class="dim mono" style="font-size:12px">${esc(r.email || '')}</span>
+            <span class="badge${r.active ? '' : ' mute'}">${
+              !r.active ? 'истекла'
+                : r.banned_until ? 'до ' + esc(banWhen(r.banned_until)) : 'навсегда'}</span>
+            <span class="dim mono" style="font-size:12px">${
+              esc(banWhen(r.banned_at))}${r.banned_by ? ' · ' + esc(r.banned_by) : ''}</span>
+          </div>
+          <div class="dim" style="font-size:14px;margin:8px 0 10px;white-space:pre-wrap">${
+            esc(r.ban_reason || '')}</div>
+          ${r.active ? `<button class="btn quiet" data-unban="${esc(r.nickname)}">Снять блокировку</button>` : ''}
+        </div>`).join('')
+    : '<p class="dim">Заблокированных нет.</p>';
+
+  paintNickBadges($('banList')).catch(() => {});
+
+  $('banList').querySelectorAll('[data-unban]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await adminUnban(b.dataset.unban);
+        banSay('Блокировка снята.', 'ok');
+        await loadBans();
+      } catch (err) { banSay(humanError(err)); b.disabled = false; }
+    };
+  });
+}
+
+$('banBtn').onclick = async () => {
+  const nick = $('banNick').value.trim();
+  const reason = $('banReason').value.trim();
+  const until = banUntilValue();
+
+  if (!nick) { banSay('Укажите ник игрока.'); return; }
+  if (until === false) { banSay('Выберите дату и время снятия.'); return; }
+  if (reason.length < 5) { banSay('Опишите причину — её увидит игрок.'); return; }
+
+  $('banBtn').disabled = true;
+  try {
+    await adminBan(nick, until, reason);
+    banSay(until ? `Заблокирован до ${until.toLocaleString('ru-RU')}.` : 'Заблокирован навсегда.', 'ok');
+    $('banNick').value = '';
+    $('banReason').value = '';
+    await loadBans();
+  } catch (err) { banSay(humanError(err)); }
+  finally { $('banBtn').disabled = false; }
+};
+
 async function refresh() {
   await Promise.all([
     loadOrders(), loadPlayers(), loadEvents(),
     loadPayToggle(), loadChannels(), loadReleases(), loadAnnouncements(),
-    loadBadges(), loadRegionRequests(),
+    loadBadges(), loadRegionRequests(), loadBans(),
   ]);
 }
 

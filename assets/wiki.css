@@ -62,6 +62,18 @@ nav.wiki-nav {
 }
 .mobile-nav a:hover { color: var(--y); border-left-color: var(--y); background: rgba(255,212,0,.06); }
 
+/* Дерево статей в мобильном меню — копия бокового, его кладёт туда wiki.js. */
+.mobile-nav .wiki-tree { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.mobile-nav .wiki-tree .sidebar-title {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 4px;
+  text-transform: uppercase; color: var(--y); padding: 0 14px 8px;
+}
+.mobile-nav .wiki-tree a {
+  font-size: 12px; padding: 8px 14px; white-space: pre-wrap;
+  color: var(--text-dim);
+}
+.mobile-nav .wiki-tree a.active { color: var(--y); border-left-color: var(--y); }
+
 /* ── Раскладка ────────────────────────────────────────────────────────── */
 .wiki-wrapper {
   position: relative; z-index: 2; min-height: 100vh;

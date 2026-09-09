@@ -22,6 +22,7 @@
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <a class="tostudio" href="/" title="Pixset Studio"><img src="/byte-blaster/assets/pixset-mark.png" alt="" width="18" height="18"><span data-l="ru">СТУДИЯ</span><span data-l="en">STUDIO</span></a>
     <nav class="main">
       <a href="/byte-blaster/">ГЛАВНАЯ</a>
       <a href="/byte-blaster/wiki/">ВИКИ</a>
@@ -223,11 +224,11 @@
       <div id="badgeHolders" style="margin-top:10px"></div>
 
       <!-- ── Заявки на смену региона ─────────────────────────────────────
-           Решение и письмо игроку уходят одним вызовом edge-функции. -->
+           Решение игрок видит у себя в кабинете: письма студия не шлёт. -->
       <h2 style="margin-top:34px">ЗАЯВКИ НА СМЕНУ РЕГИОНА</h2>
       <p class="dim" style="font-size:14px">
-        Игрок объясняет причину, вы решаете. По решению игроку уходит письмо;
-        при одобрении регион и валюта меняются сразу.
+        Игрок объясняет причину, вы решаете. При одобрении регион и валюта
+        меняются сразу, а решение с комментарием он увидит в своём кабинете.
       </p>
       <div class="msg" id="regionMsg"></div>
       <div id="regionList"></div>
@@ -343,7 +344,7 @@
 
 <footer class="site">
   <div class="wrap">
-    <div>© 2022–2026 Pixset Studio · BYTE BLASTER v1.0.3</div>
+    <div>© 2022–2026 <a href="/">Pixset Studio</a> · BYTE BLASTER v1.0.3</div>
     <div><a href="/byte-blaster/">На сайт</a></div>
   </div>
 </footer>
@@ -587,8 +588,8 @@ import {
   adminBadgeHolders, badgeIconFromFile,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/byte-blaster/assets/pixset-auth.js?v=bc05e2a5';
-import { paintNickBadges, countryName, countryFlag } from '/byte-blaster/assets/pixset-ui.js?v=bc05e2a5';
+} from '/byte-blaster/assets/pixset-auth.js?v=7dac15d8';
+import { paintNickBadges, countryName, countryFlag } from '/byte-blaster/assets/pixset-ui.js?v=7dac15d8';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -1231,8 +1232,7 @@ $('badgeGrant').onclick  = () => withBadge(adminGrantBadge,  'Бейдж выд�
 $('badgeRevoke').onclick = () => withBadge(adminRevokeBadge, 'Бейдж забран.');
 
 /* ── Заявки на смену региона ─────────────────────────────────────────────
-   Решение и письмо игроку уходят одним вызовом edge-функции. Если почта не
-   настроена, решение всё равно сохраняется — об этом честно пишем. */
+   Решение сохраняется в базе; игрок читает его в своём кабинете. */
 // Названия стран берём у браузера (см. pixset-ui.js): игрок может выбрать
 // любую из списка ISO, и свой словарь тут же отстал бы от него.
 const countryRu = (code) => (code ? `${countryFlag(code)} ${countryName(code, 'ru')}` : '—');
@@ -1271,11 +1271,10 @@ async function loadRegionRequests() {
     const input = $('regionList').querySelector(`[data-region-comment="${id}"]`);
     btn.disabled = true;
     try {
-      const res = await adminDecideRegionRequest(id, approve, input ? input.value : '');
-      regionSay(res.mailed
-        ? (approve ? 'Регион изменён, письмо отправлено.' : 'Заявка отклонена, письмо отправлено.')
-        : `Решение сохранено, но письмо не ушло (${res.reason || 'почта не настроена'}).`,
-        res.mailed ? 'ok' : 'err');
+      await adminDecideRegionRequest(id, approve, input ? input.value : '');
+      regionSay(approve
+        ? 'Регион изменён. Игрок увидит это в своём кабинете.'
+        : 'Заявка отклонена. Игрок увидит это в своём кабинете.', 'ok');
       await loadRegionRequests();
     } catch (err) { regionSay(humanError(err)); btn.disabled = false; }
   };

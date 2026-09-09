@@ -140,6 +140,17 @@ header.top {
   text-shadow: 0 0 12px rgba(0,255,255,.5); border: none; white-space: nowrap;
 }
 .brand:hover { color: #fff; }
+/* Возврат на сайт студии. Byte Blaster — её игра, и уходить со страницы игры
+   «кнопкой назад» игрок не должен: путь домой видно сразу. */
+.tostudio {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+  color: var(--dim); border: none; white-space: nowrap;
+}
+.tostudio:hover { color: var(--cyan); border: none; }
+.tostudio img { width: 18px; height: 18px; object-fit: contain; display: block; }
+@media (max-width: 900px) { .tostudio span { display: none !important; } }
+
 nav.main { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 nav.main a {
   font-family: var(--pixel); font-size: 9px; padding: 9px 12px; border: 1px solid var(--line);

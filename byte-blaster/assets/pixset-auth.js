@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'bc05e2a5';
+export const SDK_VERSION = '7dac15d8';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -309,8 +309,23 @@ export async function updateLocale(locale) {
 }
 
 /** Смена пароля у вошедшего игрока. */
-export async function changePassword(newPassword) {
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
+/* ── Смена пароля вошедшим игроком ───────────────────────────────────────
+   Одного факта «вкладка открыта» мало: за чужой компьютер садятся, сессия
+   живёт долго, и смена пароля без подтверждения означала бы угон аккаунта
+   одним кликом. Поэтому сперва просим код на почту (reauthenticate шлёт его
+   письмом Reauthentication), а меняем пароль уже вместе с этим кодом. */
+
+/** Отправляет код подтверждения на почту аккаунта. */
+export async function requestPasswordCode() {
+  const { error } = await supabase.auth.reauthenticate();
+  if (error) throw error;
+}
+
+/** Смена пароля. Код — тот, что пришёл письмом после requestPasswordCode. */
+export async function changePassword(newPassword, code) {
+  const nonce = cleanCode(code);
+  if (!nonce) throw new Error('password_code_required');
+  const { error } = await supabase.auth.updateUser({ password: newPassword, nonce });
   if (error) throw error;
 }
 
@@ -1007,21 +1022,18 @@ export async function adminListRegionRequests() {
 }
 
 /**
- * Решение по заявке. Идёт через edge-функцию: она меняет регион и тут же
- * отправляет письмо игроку. Возвращает { mailed: boolean, reason?: string } —
- * решение сохраняется даже если почта не настроена, и админка об этом скажет.
+ * Решение по заявке. Письма студия не шлёт: свой SMTP ради одного уведомления
+ * держать незачем, а настройки почты Supabase доступны только письмам входа.
+ * Игрок видит решение и комментарий в кабинете — там же, где отправлял заявку.
  */
 export async function adminDecideRegionRequest(id, approve, comment = '') {
-  const { data, error } = await supabase.functions.invoke('region-decide', {
-    body: { id, approve: !!approve, comment: String(comment || '').trim() },
+  const { data, error } = await supabase.rpc('region_decide', {
+    p_id: id,
+    p_approve: !!approve,
+    p_comment: String(comment || '').trim() || null,
   });
-  if (error) {
-    // Тело ответа функции информативнее, чем «non-2xx status code».
-    let detail = '';
-    try { detail = (await error.context?.json())?.error || ''; } catch { /* не JSON */ }
-    throw new Error(detail || error.message);
-  }
-  return data || { mailed: false };
+  if (error) throw error;
+  return (data && data[0]) || null;
 }
 
 /* ── Блокировка аккаунта ─────────────────────────────────────────────────
@@ -1133,9 +1145,13 @@ const ERROR_RULES = [
   { any: ['same_region'], ru: 'Этот регион уже стоит в аккаунте.', en: 'That region is already set on your account.' },
   { any: ['bad_country'], ru: 'Выберите страну из списка.', en: 'Pick a country from the list.' },
   { any: ['already_decided'], ru: 'По этой заявке уже принято решение.', en: 'This request has already been decided.' },
-  { any: ['smtp_not_configured'],
-    ru: 'Решение сохранено, но письмо не ушло: в секретах Supabase нет SMTP_USER и SMTP_PASS.',
-    en: 'The decision is saved, but no email was sent: SMTP_USER and SMTP_PASS are missing from the Supabase secrets.' },
+  // Смена пароля подтверждается кодом с почты.
+  { any: ['password_code_required'],
+    ru: 'Введите код, который пришёл на почту.',
+    en: 'Enter the code we sent to your email.' },
+  { any: ['nonce'],
+    ru: 'Код не подошёл. Проверьте цифры или запросите новый.',
+    en: 'That code did not work. Check the digits or request a new one.' },
   { any: ['payments_not_configured'],
     ru: 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.',
     en: 'Payments are still being set up. Write to us and we will grant the licence by hand.' },

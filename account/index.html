@@ -281,6 +281,12 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
             <label for="newPass2"><span data-l="ru">Новый пароль</span><span data-l="en">New password</span></label>
             <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
           </div>
+          <!-- Код появляется после первого нажатия: сначала письмо, потом смена. -->
+          <div class="field" id="passCodeBox" hidden>
+            <label for="passCode"><span data-l="ru">Код с почты</span><span data-l="en">Code from the email</span></label>
+            <input type="text" id="passCode" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="8" placeholder="000000">
+          </div>
           <button class="btn quiet" id="savePass" style="width:auto"><span data-l="ru">Сменить</span><span data-l="en">Change</span></button>
         </div>
 
@@ -386,7 +392,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 <footer class="site">
   <div class="wrap">
     <div class="row">
-      <div>© 2024–2026 Pixset Studio</div>
+      <div>© 2022–2026 Pixset Studio</div>
       <div><a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
            <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a></div>
     </div>
@@ -394,21 +400,23 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
+<script src="/assets/pixset-me.js"></script>
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
-  verifyEmailCode, resendSignupCode,
+  verifyEmailCode, resendSignupCode, getMyBan,
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
-  updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
+  updateNickname, changeEmail, changePassword, requestPasswordCode,
+  deleteAccount, getMyOrders,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=ec4ff25c';
+} from '/assets/pixset-auth.js?v=7dac15d8';
 import {
   badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/assets/pixset-ui.js?v=ec4ff25c';
+} from '/assets/pixset-ui.js?v=7dac15d8';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -826,6 +834,9 @@ async function renderRegion() {
 
   const open = req && req.status === 'pending';
   $('regionForm').hidden = !!open;
+  // Писем студия не шлёт, поэтому ответ живёт здесь — и раздел раскрывается
+  // сам, как только по заявке что-то происходит.
+  if (req) $('regionBox').hidden = false;
 
   $('regionStatus').innerHTML = req
     ? `<div class="row">
@@ -877,8 +888,8 @@ $('regionSend').onclick = () => busy($('regionSend'), async () => {
     await requestRegionChange($('regionPick').value, reason);
     $('regionReason').value = '';
     $('regionCount').textContent = '0 / 1000';
-    sayRegion(L('Заявка отправлена. Ответ придёт на почту аккаунта.',
-                'Request sent. The answer will come to your account email.'), 'ok');
+    sayRegion(L('Заявка отправлена. Решение появится здесь же, в этом разделе.',
+                'Request sent. The decision will appear right here.'), 'ok');
     await renderRegion();
   } catch (err) { sayRegion(humanError(err)); }
 });
@@ -1053,15 +1064,32 @@ $('emailCodeBtn').onclick = () => busy($('emailCodeBtn'), async () => {
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
 
+/* Смена пароля в два шага: письмо с кодом, потом сама смена. Открытой
+   вкладки для такого мало — за компьютер садятся не только владельцы. */
 $('savePass').onclick = () => busy($('savePass'), async () => {
   const pass = $('newPass2').value;
   if (pass.length < 6) {
     say($('profMsg'), L('Пароль должен быть не короче 6 символов.', 'The password must be at least 6 characters.'));
     return;
   }
+
+  if ($('passCodeBox').hidden) {
+    try {
+      await requestPasswordCode();
+      $('passCodeBox').hidden = false;
+      $('passCode').value = '';
+      $('passCode').focus();
+      say($('profMsg'), L('Отправили код на почту. Введите его и нажмите «Сменить» ещё раз.',
+                          'We sent a code to your email. Enter it and press “Change” again.'), 'ok');
+    } catch (err) { say($('profMsg'), humanError(err)); }
+    return;
+  }
+
   try {
-    await changePassword(pass);
+    await changePassword(pass, $('passCode').value);
     $('newPass2').value = '';
+    $('passCode').value = '';
+    $('passCodeBox').hidden = true;
     say($('profMsg'), L('Пароль изменён.', 'Password changed.'), 'ok');
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
@@ -1141,6 +1169,18 @@ function returnTo() {
   return next;
 }
 
+/* ── Блокировка ─────────────────────────────────────────────────────────
+   Забаненному в кабинете делать нечего: сервер всё равно откажет в любом
+   действии. Уводим на страницу блокировки — там написано, за что, до какого
+   времени и куда писать. */
+async function guardBan() {
+  let ban = null;
+  try { ban = await getMyBan(); } catch { ban = null; }
+  if (!ban) return false;
+  location.replace('/banned/');
+  return true;
+}
+
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'PASSWORD_RECOVERY') {
     recovery = true;
@@ -1152,6 +1192,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 
   hide($('loading'));
   if (session?.user) {
+    guardBan();                       // ответ придёт позже — уведёт со страницы
     if (returnTo()) { location.replace(returnTo()); return; }
     hide($('guest')); hide($('confirm')); show($('profile')); renderProfile(session.user);
   } else { hide($('profile')); if ($('confirm').hidden) show($('guest')); }
@@ -1161,7 +1202,8 @@ const { data: { session } } = await supabase.auth.getSession();
 if (!recovery) {
   hide($('loading'));
   if (session?.user) {
-    if (returnTo()) location.replace(returnTo());
+    if (await guardBan()) { /* ушли на страницу блокировки */ }
+    else if (returnTo()) location.replace(returnTo());
     else { show($('profile')); renderProfile(session.user); }
   } else { show($('guest')); }
 }

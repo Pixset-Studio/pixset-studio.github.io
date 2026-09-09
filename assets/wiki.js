@@ -138,6 +138,23 @@
     });
   }
 
+  /* ── Дерево статей на узком экране ────────────────────────────────────
+     Боковое меню там скрыто, а в шапке пункта «Вики» больше нет — он вёл на
+     страницу, где читатель уже стоит. Значит переходить между статьями с
+     телефона нужно откуда-то ещё: копируем дерево в мобильное меню. */
+  function treeIntoMenu() {
+    var side = document.querySelector('.wiki-sidebar');
+    var panel = document.getElementById('mobileNav');
+    if (!side || !panel || panel.querySelector('.wiki-tree')) return;
+
+    var box = document.createElement('div');
+    box.className = 'wiki-tree';
+    var head = side.querySelector('.sidebar-title');
+    if (head) box.appendChild(head.cloneNode(true));
+    side.querySelectorAll('a').forEach(function (a) { box.appendChild(a.cloneNode(true)); });
+    panel.appendChild(box);
+  }
+
   /* ── Появление блоков ─────────────────────────────────────────────────── */
   function reveal() {
     var nodes = document.querySelectorAll('.reveal');
@@ -240,6 +257,7 @@
 
   function init() {
     switchers();
+    treeIntoMenu();
     menu();
     reveal();
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
