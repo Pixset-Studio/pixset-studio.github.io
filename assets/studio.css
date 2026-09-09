@@ -347,6 +347,23 @@ footer.site .row { display: flex; flex-wrap: wrap; gap: 14px; justify-content: s
 footer.site a { color: var(--text-dim); }
 footer.site a:hover { color: var(--y); }
 
+/* ── Бейджи игроков ──────────────────────────────────────────────────────
+   Отметка студии рядом с ником. Живёт в общем стиле, потому что показывается
+   в трёх местах: публичный профиль, личный кабинет и предпросмотр в админке. */
+.nickline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bdgs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bdg {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 6px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--bg-2);
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
+}
+.bdg img { width: 18px; height: 18px; object-fit: contain; display: block; }
+.bdg .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--y); flex: 0 0 8px; }
+:root[data-theme='arcade'] .bdg,
+:root[data-theme='byteblaster'] .bdg { border-radius: 0; }
+
 /* ── Язык ────────────────────────────────────────────────────────────────
    Оба языка лежат в разметке; лишний прячется по атрибуту на <html>. Так на
    странице не бывает ни мигания чужим языком, ни ожидания словаря. */

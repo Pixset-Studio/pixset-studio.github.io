@@ -32,6 +32,8 @@
   }
   .pcard .ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .pcard h2 { margin: 0 0 4px; }
+  /* Сами бейджи (.bdg, .nickline) описаны в общем studio.css: их показывает
+     не только эта страница. */
 
   /* ── Карточка игры ──────────────────────────────────────────────────────
      Шапка: название, звание и общая доля прохождения. Дальше — числа,
@@ -130,7 +132,10 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         <div class="pcard">
           <div class="ava" id="ava">?</div>
           <div style="min-width:0;flex:1">
-            <h2 id="nick">…</h2>
+            <div class="nickline">
+              <h2 id="nick">…</h2>
+              <div class="bdgs" id="badges"></div>
+            </div>
             <div class="dim mono" id="since"></div>
           </div>
           <button class="btn" id="addBtn" hidden style="width:auto;padding:11px 20px">
@@ -164,7 +169,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 <script type="module">
 import {
   supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
-} from '/assets/pixset-auth.js?v=d9da1664';
+} from '/assets/pixset-auth.js?v=1a7916fb';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -296,8 +301,23 @@ function gameCard(g) {
 const nickParam = new URLSearchParams(location.search).get('n');
 let loaded = null;               // ответ сервера: по нему перерисовываемся при смене языка
 
+/* Бейдж студии рядом с ником. Иконка необязательна: без неё рисуем точку
+   цветом бейджа, чтобы строка не расползалась. В src пускаем только картинку —
+   в колонке может оказаться что угодно. */
+function badgeHtml(b) {
+  const title = L(b.title_ru, b.title_en) || b.slug;
+  const hint = L(b.hint_ru, b.hint_en) || '';
+  const icon = /^data:image\/(png|jpeg|webp);base64,/.test(b.icon_url || '')
+    ? `<img alt="" src="${esc(b.icon_url)}">`
+    : `<span class="dot"${b.color ? ` style="background:${esc(b.color)}"` : ''}></span>`;
+  const style = b.color ? ` style="border-color:${esc(b.color)};color:${esc(b.color)}"` : '';
+  return `<span class="bdg"${style}${hint ? ` title="${esc(hint)}"` : ''}>${icon}${esc(title)}</span>`;
+}
+
 function paintProfile() {
   if (!loaded) return;
+  const badges = Array.isArray(loaded.badges) ? loaded.badges : [];
+  $('badges').innerHTML = badges.map(badgeHtml).join('');
   $('since').textContent = loaded.created_at
     ? L('С нами с ', 'With us since ') + fmtDate(loaded.created_at) : '';
   const games = Array.isArray(loaded.games) ? loaded.games : [];

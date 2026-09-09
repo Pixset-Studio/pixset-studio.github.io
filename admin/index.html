@@ -166,6 +166,84 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       </div>
       <div class="tblwrap" style="margin-top:14px"><table id="releasesTbl"></table></div>
 
+      <!-- ── Бейджи ──────────────────────────────────────────────────────
+           Отметка рядом с ником в профиле: «бета-тестер», «победитель
+           турнира». Каталог ведётся здесь, выдача — по нику игрока. -->
+      <h3 style="margin-top:32px">Бейджи игроков</h3>
+      <p class="dim" style="font-size:14px">
+        Бейдж показывается справа от ника в публичном профиле. Код менять нельзя:
+        по нему бейдж и находится — сохранение с тем же кодом правит существующий.
+      </p>
+      <div class="grantbox" style="margin-bottom:12px">
+        <div class="field">
+          <label for="badgeSlug">Код</label>
+          <input type="text" id="badgeSlug" placeholder="beta-tester" maxlength="39">
+        </div>
+        <div class="field">
+          <label for="badgeRu">Название (RU)</label>
+          <input type="text" id="badgeRu" placeholder="Бета-тестер" maxlength="40">
+        </div>
+        <div class="field">
+          <label for="badgeEn">Название (EN)</label>
+          <input type="text" id="badgeEn" placeholder="Beta tester" maxlength="40">
+        </div>
+      </div>
+      <div class="grantbox" style="margin-bottom:12px">
+        <div class="field">
+          <label for="badgeHintRu">Подсказка (RU)</label>
+          <input type="text" id="badgeHintRu" placeholder="За участие в закрытом тесте" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="badgeHintEn">Подсказка (EN)</label>
+          <input type="text" id="badgeHintEn" placeholder="For joining the closed test" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="badgeColor">Цвет</label>
+          <input type="color" id="badgeColor" value="#ffd400" style="height:44px;padding:4px">
+        </div>
+      </div>
+      <div class="grantbox" style="margin-bottom:12px">
+        <div class="field">
+          <label for="badgeIcon">Иконка (PNG, ужимается до 96×96)</label>
+          <input type="file" id="badgeIcon" accept="image/*">
+        </div>
+        <div class="field" style="flex:0 0 auto;min-width:0">
+          <label>Как выглядит</label>
+          <div id="badgePreview" class="bdg" style="margin-top:4px"><span class="dot"></span>—</div>
+        </div>
+        <button class="btn solid" id="badgeSave">Сохранить бейдж</button>
+        <button class="btn quiet" id="badgeClear">Очистить форму</button>
+      </div>
+      <div class="rows" id="badgeList"></div>
+
+      <div class="grantbox" style="margin-top:14px">
+        <div class="field">
+          <label for="badgeNick">Ник игрока</label>
+          <input type="text" id="badgeNick" placeholder="player" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="badgePick">Бейдж</label>
+          <select id="badgePick"></select>
+        </div>
+        <button class="btn solid" id="badgeGrant">Выдать</button>
+        <button class="btn quiet" id="badgeRevoke">Забрать</button>
+      </div>
+      <div class="msg" id="badgeMsg"></div>
+      <div class="rows" id="badgeHolders" style="margin-top:10px"></div>
+
+      <!-- ── Заявки на смену региона ─────────────────────────────────────
+           Регион определяет валюту цен, поэтому меняется только через студию.
+           Решение и письмо игроку уходят одним действием (edge-функция
+           region-decide) — иначе легко получить «регион сменён, а игрок не в
+           курсе». -->
+      <h3 style="margin-top:32px">Заявки на смену региона</h3>
+      <p class="dim" style="font-size:14px">
+        Игрок объясняет причину, вы решаете. По решению игроку уходит письмо;
+        при одобрении регион и валюта в его профиле меняются сразу.
+      </p>
+      <div class="msg" id="regionMsg"></div>
+      <div class="rows" id="regionList"></div>
+
       <h3 style="margin-top:32px">Заказы</h3>
       <div class="tblwrap"><table id="ordersTbl"></table></div>
 
@@ -202,7 +280,10 @@ import {
   adminEditRelease, SDK_VERSION,
   getSettings, adminSetSetting, humanError,
   postAnnouncement, listAnnouncements, deleteAnnouncement,
-} from '/assets/pixset-auth.js?v=d9da1664';
+  listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
+  adminBadgeHolders, badgeIconFromFile,
+  adminListRegionRequests, adminDecideRegionRequest,
+} from '/assets/pixset-auth.js?v=1a7916fb';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -533,10 +614,221 @@ $('annSend').onclick = async () => {
   } finally { btn.disabled = false; }
 };
 
+/* ── Бейджи ──────────────────────────────────────────────────────────────
+   Каталог и выдача. Иконку ужимает браузер (badgeIconFromFile) — в базу
+   уезжает готовая строка, как у аватаров. */
+let badgeIconUrl = null;      // подготовленная иконка текущей формы
+
+function paintBadgePreview() {
+  const title = $('badgeRu').value.trim() || '—';
+  const color = $('badgeColor').value;
+  const icon = badgeIconUrl
+    ? `<img alt="" src="${esc(badgeIconUrl)}" style="width:18px;height:18px;object-fit:contain">`
+    : `<span class="dot" style="background:${esc(color)}"></span>`;
+  const box = $('badgePreview');
+  box.innerHTML = icon + esc(title);
+  box.style.borderColor = color;
+  box.style.color = color;
+}
+
+['badgeRu', 'badgeColor'].forEach((id) => { $(id).oninput = paintBadgePreview; });
+
+$('badgeIcon').onchange = async () => {
+  const file = $('badgeIcon').files && $('badgeIcon').files[0];
+  if (!file) return;
+  try {
+    badgeIconUrl = await badgeIconFromFile(file);
+    paintBadgePreview();
+  } catch (err) { say(humanError(err)); }
+};
+
+$('badgeClear').onclick = () => {
+  ['badgeSlug', 'badgeRu', 'badgeEn', 'badgeHintRu', 'badgeHintEn'].forEach((id) => { $(id).value = ''; });
+  $('badgeIcon').value = '';
+  badgeIconUrl = null;
+  paintBadgePreview();
+};
+
+$('badgeSave').onclick = async () => {
+  const btn = $('badgeSave');
+  btn.disabled = true;
+  try {
+    await adminSaveBadge({
+      slug: $('badgeSlug').value,
+      title_ru: $('badgeRu').value,
+      title_en: $('badgeEn').value,
+      hint_ru: $('badgeHintRu').value,
+      hint_en: $('badgeHintEn').value,
+      icon_url: badgeIconUrl,
+      color: $('badgeColor').value,
+    });
+    say('Бейдж сохранён.', 'ok');
+    $('badgeClear').click();
+    await loadBadges();
+  } catch (err) { say(humanError(err)); }
+  finally { btn.disabled = false; }
+};
+
+async function loadBadges() {
+  let rows = [];
+  try { rows = await listBadges(); }
+  catch (err) { $('badgeList').innerHTML = `<p class="dim">${esc(humanError(err))}</p>`; return; }
+
+  $('badgeList').innerHTML = rows.length
+    ? rows.map((b) => {
+        const icon = /^data:image\//.test(b.icon_url || '')
+          ? `<img alt="" src="${esc(b.icon_url)}" style="width:22px;height:22px;object-fit:contain">`
+          : `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(b.color || '#ffd400')}"></span>`;
+        return `<div class="row" style="display:flex;gap:12px;align-items:center">
+          ${icon}
+          <div style="flex:1;min-width:0">
+            <b>${esc(b.title_ru)}</b> <span class="dim">/ ${esc(b.title_en)}</span>
+            <div class="dim mono" style="font-size:12px">${esc(b.slug)}${
+              b.hint_ru ? ' · ' + esc(b.hint_ru) : ''}</div>
+          </div>
+          <button class="btn quiet" data-badge-edit="${esc(b.slug)}" style="width:auto">В форму</button>
+          <button class="btn quiet" data-badge-del="${esc(b.slug)}" style="width:auto">Удалить</button>
+        </div>`;
+      }).join('')
+    : '<p class="dim">Бейджей пока нет.</p>';
+
+  $('badgePick').innerHTML = rows
+    .map((b) => `<option value="${esc(b.slug)}">${esc(b.title_ru)}</option>`).join('');
+
+  $('badgeList').querySelectorAll('[data-badge-edit]').forEach((btn) => {
+    btn.onclick = () => {
+      const b = rows.find((x) => x.slug === btn.dataset.badgeEdit);
+      if (!b) return;
+      $('badgeSlug').value = b.slug;
+      $('badgeRu').value = b.title_ru;
+      $('badgeEn').value = b.title_en;
+      $('badgeHintRu').value = b.hint_ru || '';
+      $('badgeHintEn').value = b.hint_en || '';
+      $('badgeColor').value = b.color || '#ffd400';
+      badgeIconUrl = b.icon_url || null;
+      paintBadgePreview();
+      $('badgeSlug').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+  });
+
+  // Удаление снимает бейдж со всех, кому он выдан (каскад в базе) — поэтому
+  // спрашиваем, а не убираем молча.
+  $('badgeList').querySelectorAll('[data-badge-del]').forEach((btn) => {
+    btn.onclick = async () => {
+      const slug = btn.dataset.badgeDel;
+      if (!confirm(`Удалить бейдж «${slug}»? Он пропадёт у всех, кому выдан.`)) return;
+      btn.disabled = true;
+      try { await adminDeleteBadge(slug); await loadBadges(); }
+      catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+}
+
+function badgeSay(text, kind = 'err') {
+  $('badgeMsg').textContent = text;
+  $('badgeMsg').className = `msg show ${kind}`;
+}
+
+async function showHolders(slug) {
+  try {
+    const rows = await adminBadgeHolders(slug);
+    $('badgeHolders').innerHTML = rows.length
+      ? `<div class="dim" style="margin:6px 0">Кому выдан «${esc(slug)}»:</div>` + rows.map((r) =>
+          `<div class="row"><b>${esc(r.nickname)}</b>
+             <span class="dim mono" style="font-size:12px">${
+               new Date(r.granted_at).toLocaleDateString('ru-RU')}</span></div>`).join('')
+      : `<p class="dim">Бейдж «${esc(slug)}» пока никому не выдан.</p>`;
+  } catch (err) { badgeSay(humanError(err)); }
+}
+
+$('badgePick').onchange = () => showHolders($('badgePick').value);
+
+async function withBadge(fn, okText) {
+  const nick = $('badgeNick').value.trim();
+  const slug = $('badgePick').value;
+  if (!nick) { badgeSay('Укажите ник игрока.'); return; }
+  if (!slug) { badgeSay('Сначала создайте бейдж.'); return; }
+  try {
+    await fn(nick, slug);
+    badgeSay(okText, 'ok');
+    $('badgeNick').value = '';
+    await showHolders(slug);
+  } catch (err) { badgeSay(humanError(err)); }
+}
+
+$('badgeGrant').onclick  = () => withBadge(adminGrantBadge,  'Бейдж выдан.');
+$('badgeRevoke').onclick = () => withBadge(adminRevokeBadge, 'Бейдж забран.');
+
+/* ── Заявки на смену региона ─────────────────────────────────────────────
+   Решение и письмо игроку уходят одним вызовом edge-функции. Если почта не
+   настроена, решение всё равно сохраняется — об этом честно пишем. */
+const COUNTRY_RU = {
+  RU: 'Россия', BY: 'Беларусь', KZ: 'Казахстан', UA: 'Украина', AM: 'Армения',
+  AZ: 'Азербайджан', GE: 'Грузия', KG: 'Киргизия', MD: 'Молдова', TJ: 'Таджикистан',
+  TM: 'Туркменистан', UZ: 'Узбекистан', DE: 'Германия', FR: 'Франция',
+  GB: 'Великобритания', US: 'США', CA: 'Канада', PL: 'Польша', ES: 'Испания',
+  IT: 'Италия', TR: 'Турция', IL: 'Израиль', RS: 'Сербия', AE: 'ОАЭ',
+  TH: 'Таиланд', VN: 'Вьетнам', CN: 'Китай', JP: 'Япония', KR: 'Республика Корея',
+  IN: 'Индия', BR: 'Бразилия', AR: 'Аргентина', AU: 'Австралия', NZ: 'Новая Зеландия',
+};
+const countryRu = (code) => COUNTRY_RU[code] || code || '—';
+
+function regionSay(text, kind = 'err') {
+  $('regionMsg').textContent = text;
+  $('regionMsg').className = `msg show ${kind}`;
+}
+
+async function loadRegionRequests() {
+  let rows = [];
+  try { rows = await adminListRegionRequests(); }
+  catch (err) { $('regionList').innerHTML = `<p class="dim">${esc(humanError(err))}</p>`; return; }
+
+  $('regionList').innerHTML = rows.length
+    ? rows.map((r) => `
+        <div class="row" style="display:block">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <b>${esc(r.nickname)}</b>
+            <span class="dim mono" style="font-size:12px">${esc(r.email)}</span>
+            <span class="badge mute">${esc(countryRu(r.from_country))} → ${esc(countryRu(r.to_country))}</span>
+            <span class="dim mono" style="font-size:12px">${
+              new Date(r.created_at).toLocaleDateString('ru-RU')} · ${esc(r.to_currency)}</span>
+          </div>
+          <div class="dim" style="font-size:14px;margin:8px 0 10px;white-space:pre-wrap">${esc(r.reason)}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input type="text" data-region-comment="${esc(r.id)}" placeholder="комментарий игроку (необязательно)"
+                   style="flex:1;min-width:220px">
+            <button class="btn solid" data-region-ok="${esc(r.id)}" style="width:auto">Одобрить</button>
+            <button class="btn quiet" data-region-no="${esc(r.id)}" style="width:auto">Отклонить</button>
+          </div>
+        </div>`).join('')
+    : '<p class="dim">Новых заявок нет.</p>';
+
+  const decide = async (id, approve, btn) => {
+    const input = $('regionList').querySelector(`[data-region-comment="${id}"]`);
+    btn.disabled = true;
+    try {
+      const res = await adminDecideRegionRequest(id, approve, input ? input.value : '');
+      regionSay(res.mailed
+        ? (approve ? 'Регион изменён, письмо отправлено.' : 'Заявка отклонена, письмо отправлено.')
+        : `Решение сохранено, но письмо не ушло (${res.reason || 'почта не настроена'}).`,
+        res.mailed ? 'ok' : 'err');
+      await loadRegionRequests();
+    } catch (err) { regionSay(humanError(err)); btn.disabled = false; }
+  };
+
+  $('regionList').querySelectorAll('[data-region-ok]').forEach((b) => {
+    b.onclick = () => decide(b.dataset.regionOk, true, b);
+  });
+  $('regionList').querySelectorAll('[data-region-no]').forEach((b) => {
+    b.onclick = () => decide(b.dataset.regionNo, false, b);
+  });
+}
+
 async function refresh() {
   await Promise.all([
     loadOrders(), loadPlayers(), loadEvents(),
     loadPayToggle(), loadChannels(), loadReleases(), loadAnnouncements(),
+    loadBadges(), loadRegionRequests(),
   ]);
 }
 

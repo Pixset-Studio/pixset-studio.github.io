@@ -120,6 +120,43 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
       </div>
     </div>
 
+    <!-- ── Код из письма ─────────────────────────────────────────────────
+         Письма студии построены вокруг короткого кода ({{ .Token }}), ссылки
+         в них нет. Раньше код приходил, а вписать его было некуда — почта не
+         подтверждалась вовсе. Экран один на два случая: подтверждение
+         регистрации и сброс пароля, режим держит confirmMode. -->
+    <div id="confirm" hidden>
+      <p class="kicker" style="text-align:center">
+        <span data-l="ru">Код из письма</span><span data-l="en">Code from the email</span>
+      </p>
+      <h2 style="text-align:center" id="confirmTitle"></h2>
+      <div class="panel">
+        <p class="dim" style="text-align:center;margin-bottom:20px">
+          <span data-l="ru">Мы отправили код на</span><span data-l="en">We sent a code to</span>
+          <b id="confirmMail"></b>
+        </p>
+        <div class="msg" id="confirmMsg"></div>
+        <form id="formConfirm">
+          <div class="field">
+            <label for="confirmCode">
+              <span data-l="ru">Код из письма</span><span data-l="en">Code from the email</span>
+            </label>
+            <input type="text" id="confirmCode" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="8" required placeholder="000000"
+                   style="letter-spacing:6px;font-family:var(--font-mono);font-size:20px;text-align:center">
+          </div>
+          <button type="submit" class="btn solid">
+            <span data-l="ru">Подтвердить</span><span data-l="en">Confirm</span>
+          </button>
+        </form>
+        <p style="text-align:center;margin:14px 0 0;font-size:14px">
+          <a href="#" id="resendCode"><span data-l="ru">Отправить код ещё раз</span><span data-l="en">Send the code again</span></a>
+          ·
+          <a href="#" id="confirmBack"><span data-l="ru">Назад ко входу</span><span data-l="en">Back to sign-in</span></a>
+        </p>
+      </div>
+    </div>
+
     <!-- ── Новый пароль ──────────────────────────────────────────────── -->
     <div id="recovery" hidden>
       <h2 style="text-align:center"><span data-l="ru">Новый пароль</span><span data-l="en">New password</span></h2>
@@ -146,7 +183,10 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
           <button type="button" class="ava" id="ava"
                   data-tip-ru="Сменить фото" data-tip-en="Change photo" title="Сменить фото">?</button>
           <div style="min-width:0">
-            <div class="nick" id="nick">…</div>
+            <div class="nickline">
+              <div class="nick" id="nick">…</div>
+              <div class="bdgs" id="myBadges"></div>
+            </div>
             <div class="mail" id="mail"></div>
             <div class="avaActions">
               <button type="button" id="avaPick"></button>
@@ -203,11 +243,25 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
           </div>
           <button class="btn quiet" id="saveEmail" style="width:auto"><span data-l="ru">Изменить</span><span data-l="en">Change</span></button>
         </div>
+        <!-- Код подтверждения новой почты. Если в проекте включена «безопасная
+             смена адреса», Supabase шлёт по коду на оба адреса — тогда после
+             первого кода здесь же спрашивается второй. -->
+        <div class="grantbox" id="emailCodeBox" hidden style="margin-bottom:10px">
+          <div class="field">
+            <label for="emailCode" id="emailCodeLabel"></label>
+            <input type="text" id="emailCode" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="8" placeholder="000000"
+                   style="letter-spacing:4px;font-family:var(--font-mono);text-align:center">
+          </div>
+          <button class="btn quiet" id="emailCodeBtn" style="width:auto">
+            <span data-l="ru">Подтвердить</span><span data-l="en">Confirm</span>
+          </button>
+        </div>
         <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="ru">
-          На новый адрес придёт письмо. Пока вы его не подтвердите, вход остаётся по старому.
+          На новый адрес придёт письмо с кодом. Пока вы его не введёте, вход остаётся по старому.
         </p>
         <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="en">
-          We will email the new address. Until you confirm it, you keep signing in with the old one.
+          We will email a code to the new address. Until you enter it, you keep signing in with the old one.
         </p>
 
         <div class="grantbox" style="margin-bottom:10px">
@@ -218,14 +272,46 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
           <button class="btn quiet" id="savePass" style="width:auto"><span data-l="ru">Сменить</span><span data-l="en">Change</span></button>
         </div>
 
+        <!-- ── Регион ──────────────────────────────────────────────────────
+             Регион определяет валюту цен, поэтому меняется не кнопкой, а
+             заявкой: игрок объясняет причину, студия решает и отвечает
+             письмом. Форма и статус живут в одном месте — так видно, на каком
+             шаге сейчас игрок. -->
         <div class="rows" style="margin-top:20px">
           <div class="row">
             <div>
               <b><span data-l="ru">Регион и валюта</span><span data-l="en">Region and currency</span></b>
               <div class="dim" style="font-size:14px" id="regionInfo">—</div>
             </div>
-            <span class="badge mute"><span data-l="ru">задаётся при регистрации</span><span data-l="en">set at sign-up</span></span>
+            <button class="btn quiet" id="regionToggle" style="width:auto">
+              <span data-l="ru">Сменить регион</span><span data-l="en">Change region</span>
+            </button>
           </div>
+        </div>
+
+        <div id="regionBox" hidden style="margin-top:12px">
+          <div class="msg" id="regionMsg"></div>
+          <div id="regionForm">
+            <div class="field" style="max-width:420px">
+              <label for="regionPick"><span data-l="ru">Новый регион</span><span data-l="en">New region</span></label>
+              <select id="regionPick"></select>
+            </div>
+            <div class="field">
+              <label for="regionReason">
+                <span data-l="ru">Причина смены — подробно, не меньше 30 символов</span>
+                <span data-l="en">Reason for the change — in detail, at least 30 characters</span>
+              </label>
+              <textarea id="regionReason" rows="4" maxlength="1000"
+                        data-ph-ru="Например: переехал в другую страну, живу и плачу здесь, прежний регион указан по ошибке"
+                        data-ph-en="For example: I moved to another country and pay for things here; the old region was set by mistake"
+                        style="width:100%;resize:vertical"></textarea>
+              <div class="dim mono" style="font-size:12px;margin-top:6px" id="regionCount">0 / 1000</div>
+            </div>
+            <button class="btn solid" id="regionSend" style="width:auto">
+              <span data-l="ru">Отправить заявку</span><span data-l="en">Send the request</span>
+            </button>
+          </div>
+          <div class="rows" id="regionStatus"></div>
         </div>
 
         <h3 style="margin-top:26px"><span data-l="ru">Устройства</span><span data-l="en">Devices</span></h3>
@@ -285,12 +371,14 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
+  verifyEmailCode, resendSignupCode,
+  getMyBadges, requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=d9da1664';
+} from '/assets/pixset-auth.js?v=1a7916fb';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -508,14 +596,12 @@ $('formReg').onsubmit = (e) => {
   }
   return busy(e.submitter, async () => {
     try {
+      const email = $('regEmail').value.trim();
       const { needsConfirmation } = await register({
-        email: $('regEmail').value.trim(), password: $('regPass').value, nickname,
+        email, password: $('regPass').value, nickname,
       });
-      if (needsConfirmation) {
-        say($('guestMsg'), L('Готово! Мы отправили письмо — подтвердите почту и возвращайтесь.',
-                             'Done! Check your inbox, confirm the address and come back.'), 'ok');
-        $('formReg').reset();
-      }
+      $('formReg').reset();
+      if (needsConfirmation) askCode('signup', email);
     } catch (err) { say($('guestMsg'), humanError(err)); }
   });
 };
@@ -524,15 +610,76 @@ $('forgot').onclick = async (e) => {
   e.preventDefault();
   const email = $('loginEmail').value.trim();
   if (!email) {
-    say($('guestMsg'), L('Введите почту в поле выше — пришлём ссылку для сброса.',
-                         'Enter your email above and we will send a reset link.'));
+    say($('guestMsg'), L('Введите почту в поле выше — пришлём код для сброса.',
+                         'Enter your email above and we will send a reset code.'));
     return;
   }
   try {
     await resetPassword(email);
-    say($('guestMsg'), L('Ссылка для сброса отправлена на почту.',
-                         'A reset link is on its way to your inbox.'), 'ok');
+    askCode('recovery', email);
   } catch (err) { say($('guestMsg'), humanError(err)); }
+};
+
+/* ── Экран ввода кода ────────────────────────────────────────────────────
+   Один на два случая: подтверждение регистрации и сброс пароля. После
+   успешной проверки Supabase выдаёт сессию — при регистрации этого хватает,
+   при сбросе следом показываем форму нового пароля. */
+let confirmMode = 'signup';
+let confirmEmail = '';
+
+function askCode(mode, email) {
+  confirmMode = mode;
+  confirmEmail = email;
+  clear($('guestMsg')); clear($('confirmMsg'));
+  $('confirmCode').value = '';
+  $('confirmMail').textContent = email;
+  $('confirmTitle').textContent = mode === 'recovery'
+    ? L('Сброс пароля', 'Password reset')
+    : L('Подтверждение почты', 'Confirm your email');
+  // Повторная отправка есть только у регистрации: у сброса для этого достаточно
+  // снова нажать «Забыли пароль?».
+  $('resendCode').hidden = mode !== 'signup';
+  hide($('guest')); hide($('recovery')); hide($('profile'));
+  show($('confirm'));
+  $('confirmCode').focus();
+}
+
+$('formConfirm').onsubmit = (e) => {
+  e.preventDefault();
+  clear($('confirmMsg'));
+  return busy(e.submitter, async () => {
+    // Флаг ставим ДО проверки: сессия появляется в тот же миг, и обработчик
+    // onAuthStateChange иначе успел бы показать профиль вместо формы пароля.
+    if (confirmMode === 'recovery') recovery = true;
+    try {
+      await verifyEmailCode({ email: confirmEmail, code: $('confirmCode').value, type: confirmMode });
+      if (confirmMode === 'recovery') {
+        hide($('confirm')); show($('recovery'));
+        say($('recMsg'), L('Код принят. Задайте новый пароль.',
+                           'Code accepted. Set a new password.'), 'ok');
+      }
+      // При регистрации сессия появилась — профиль покажет onAuthStateChange.
+    } catch (err) {
+      if (confirmMode === 'recovery') recovery = false;
+      say($('confirmMsg'), humanError(err));
+    }
+  });
+};
+
+$('resendCode').onclick = (e) => {
+  e.preventDefault();
+  clear($('confirmMsg'));
+  return busy(e.currentTarget, async () => {
+    try {
+      await resendSignupCode(confirmEmail);
+      say($('confirmMsg'), L('Отправили новый код.', 'A new code is on its way.'), 'ok');
+    } catch (err) { say($('confirmMsg'), humanError(err)); }
+  });
+};
+
+$('confirmBack').onclick = (e) => {
+  e.preventDefault();
+  hide($('confirm')); show($('guest'));
 };
 
 $('formRec').onsubmit = (e) => {
@@ -555,6 +702,124 @@ $('logout').onclick = async () => {
   location.reload();
 };
 
+/* ── Бейджи и регион ─────────────────────────────────────────────────────
+   Бейдж выдаёт студия — здесь он только показывается. Регион меняется
+   заявкой: игрок объясняет причину, студия отвечает письмом. */
+
+/** Страны, между которыми имеет смысл переезжать. Валюта выводится из страны:
+    Россия — рубли, остальные — доллары (то же правило в базе). */
+const COUNTRIES = [
+  ['RU', 'Россия', 'Russia'], ['BY', 'Беларусь', 'Belarus'], ['KZ', 'Казахстан', 'Kazakhstan'],
+  ['UA', 'Украина', 'Ukraine'], ['AM', 'Армения', 'Armenia'], ['AZ', 'Азербайджан', 'Azerbaijan'],
+  ['GE', 'Грузия', 'Georgia'], ['KG', 'Киргизия', 'Kyrgyzstan'], ['MD', 'Молдова', 'Moldova'],
+  ['TJ', 'Таджикистан', 'Tajikistan'], ['TM', 'Туркменистан', 'Turkmenistan'],
+  ['UZ', 'Узбекистан', 'Uzbekistan'], ['DE', 'Германия', 'Germany'], ['FR', 'Франция', 'France'],
+  ['GB', 'Великобритания', 'United Kingdom'], ['US', 'США', 'United States'],
+  ['CA', 'Канада', 'Canada'], ['PL', 'Польша', 'Poland'], ['ES', 'Испания', 'Spain'],
+  ['IT', 'Италия', 'Italy'], ['TR', 'Турция', 'Türkiye'], ['IL', 'Израиль', 'Israel'],
+  ['RS', 'Сербия', 'Serbia'], ['AE', 'ОАЭ', 'United Arab Emirates'],
+  ['TH', 'Таиланд', 'Thailand'], ['VN', 'Вьетнам', 'Vietnam'], ['CN', 'Китай', 'China'],
+  ['JP', 'Япония', 'Japan'], ['KR', 'Республика Корея', 'South Korea'],
+  ['IN', 'Индия', 'India'], ['BR', 'Бразилия', 'Brazil'], ['AR', 'Аргентина', 'Argentina'],
+  ['AU', 'Австралия', 'Australia'], ['NZ', 'Новая Зеландия', 'New Zealand'],
+];
+
+let myCountry = '';
+
+function countryName(code) {
+  const row = COUNTRIES.find((c) => c[0] === code);
+  if (row) return L(row[1], row[2]);
+  return code || L('регион не указан', 'region not set');
+}
+
+async function renderMyBadges() {
+  let rows = [];
+  try { rows = await getMyBadges(); } catch { rows = []; }
+  $('myBadges').innerHTML = rows.map((b) => {
+    const title = L(b.title_ru, b.title_en) || b.slug;
+    const hint = L(b.hint_ru, b.hint_en) || '';
+    const icon = /^data:image\/(png|jpeg|webp);base64,/.test(b.icon_url || '')
+      ? `<img alt="" src="${esc(b.icon_url)}">`
+      : `<span class="dot"${b.color ? ` style="background:${esc(b.color)}"` : ''}></span>`;
+    const style = b.color ? ` style="border-color:${esc(b.color)};color:${esc(b.color)}"` : '';
+    return `<span class="bdg"${style}${hint ? ` title="${esc(hint)}"` : ''}>${icon}${esc(title)}</span>`;
+  }).join('');
+}
+
+const REGION_STATUS = {
+  pending:  ['на рассмотрении', 'under review'],
+  approved: ['одобрена', 'approved'],
+  rejected: ['отклонена', 'declined'],
+};
+
+async function renderRegion() {
+  let req = null;
+  try { req = await getMyRegionRequest(); } catch { req = null; }
+
+  // Список стран без той, что уже стоит: переезжать в себя же незачем.
+  $('regionPick').innerHTML = COUNTRIES
+    .filter((c) => c[0] !== myCountry)
+    .map((c) => `<option value="${c[0]}">${esc(L(c[1], c[2]))}</option>`).join('');
+
+  const open = req && req.status === 'pending';
+  $('regionForm').hidden = !!open;
+
+  $('regionStatus').innerHTML = req
+    ? `<div class="row">
+         <div>
+           <b>${esc(L('Заявка на ', 'Request for '))}${esc(countryName(req.to_country))}</b>
+           <div class="dim" style="font-size:14px">${esc(
+             new Date(req.created_at).toLocaleDateString(locale()))}${
+             req.admin_comment ? ' · ' + esc(req.admin_comment) : ''}</div>
+         </div>
+         <span class="badge ${req.status === 'approved' ? '' : 'mute'}">${
+           esc(L(REGION_STATUS[req.status][0], REGION_STATUS[req.status][1]))}</span>
+         ${open ? `<button class="btn quiet" id="regionCancel" style="width:auto">${
+           esc(L('Отозвать', 'Withdraw'))}</button>` : ''}
+       </div>`
+    : '';
+
+  if (open) {
+    $('regionCancel').onclick = () => busy($('regionCancel'), async () => {
+      try { await cancelRegionRequest(); await renderRegion(); }
+      catch (err) { sayRegion(humanError(err)); }
+    });
+  }
+}
+
+function sayRegion(text, kind = 'err') {
+  $('regionMsg').textContent = text;
+  $('regionMsg').className = `msg show ${kind}`;
+}
+
+$('regionToggle').onclick = () => {
+  const box = $('regionBox');
+  box.hidden = !box.hidden;
+  if (!box.hidden) renderRegion();
+};
+
+$('regionReason').oninput = () => {
+  $('regionCount').textContent = `${$('regionReason').value.trim().length} / 1000`;
+};
+
+$('regionSend').onclick = () => busy($('regionSend'), async () => {
+  clear($('regionMsg'));
+  const reason = $('regionReason').value.trim();
+  if (reason.length < 30) {
+    sayRegion(L('Опишите причину подробнее — не меньше 30 символов.',
+                'Describe the reason in more detail — at least 30 characters.'));
+    return;
+  }
+  try {
+    await requestRegionChange($('regionPick').value, reason);
+    $('regionReason').value = '';
+    $('regionCount').textContent = '0 / 1000';
+    sayRegion(L('Заявка отправлена. Ответ придёт на почту аккаунта.',
+                'Request sent. The answer will come to your account email.'), 'ok');
+    await renderRegion();
+  } catch (err) { sayRegion(humanError(err)); }
+});
+
 // ── Профиль ─────────────────────────────────────────────────────────────
 // Последний вошедший: по смене языка страницу пересобираем этим же вызовом.
 let currentUser = null;
@@ -570,13 +835,16 @@ async function renderProfile(user) {
     paintOwnAvatar(profile.avatar_url, profile.nickname);
     $('hello').textContent = profile.nickname;
     $('newNick').value = profile.nickname;
-    $('regionInfo').textContent = profile.currency === 'RUB'
-      ? L('Россия · цены в рублях', 'Russia · prices in roubles')
-      : L('Другие страны · цены в долларах', 'Other countries · prices in dollars');
+    myCountry = (profile.country || '').toUpperCase();
+    $('regionInfo').textContent = `${countryName(myCountry)} · ${profile.currency === 'RUB'
+      ? L('цены в рублях', 'prices in roubles')
+      : L('цены в долларах', 'prices in dollars')}`;
   } catch { $('nick').textContent = L('Игрок', 'Player'); }
 
   renderOrders();
   renderFriends();
+  renderMyBadges();
+  renderRegion();
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
@@ -672,13 +940,48 @@ $('saveNick').onclick = () => busy($('saveNick'), async () => {
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
 
+/* Смена почты идёт кодом, а не ссылкой: в письме студии ссылки нет вовсе.
+   Адрес, на который ждём код, держим здесь — поле ввода игрок может и
+   поправить, пока письмо идёт. */
+let pendingEmail = '';
+
+function askEmailCode(target) {
+  pendingEmail = target;
+  $('emailCode').value = '';
+  $('emailCodeLabel').textContent = L('Код с нового адреса', 'Code from the new address');
+  $('emailCodeBox').hidden = false;
+  $('emailCode').focus();
+}
+
 $('saveEmail').onclick = () => busy($('saveEmail'), async () => {
   const email = $('newEmail').value.trim();
   if (!email.includes('@')) { say($('profMsg'), L('Проверьте адрес почты.', 'Check the email address.')); return; }
   try {
     await changeEmail(email);
-    say($('profMsg'), L('Письмо отправлено на новый адрес. Подтвердите его, чтобы смена вступила в силу.',
-                        'We emailed the new address. Confirm it to complete the change.'), 'ok');
+    askEmailCode(email);
+    say($('profMsg'), L('Код отправлен на новый адрес — введите его ниже.',
+                        'A code is on its way to the new address — enter it below.'), 'ok');
+  } catch (err) { say($('profMsg'), humanError(err)); }
+});
+
+$('emailCodeBtn').onclick = () => busy($('emailCodeBtn'), async () => {
+  clear($('profMsg'));
+  try {
+    await verifyEmailCode({ email: pendingEmail, code: $('emailCode').value, type: 'email_change' });
+    // При включённой «безопасной смене адреса» Supabase ждёт ещё код со
+    // старой почты — тогда адрес пока не меняется, и мы просим второй код.
+    const { data } = await supabase.auth.getUser();
+    const done = data?.user?.email === pendingEmail;
+    if (done) {
+      $('emailCodeBox').hidden = true;
+      $('mail').textContent = pendingEmail;
+      say($('profMsg'), L('Почта изменена.', 'Email changed.'), 'ok');
+    } else {
+      $('emailCode').value = '';
+      $('emailCodeLabel').textContent = L('Код со старого адреса', 'Code from the old address');
+      say($('profMsg'), L('Принято. Теперь введите код, который пришёл на прежний адрес.',
+                          'Accepted. Now enter the code sent to your previous address.'), 'ok');
+    }
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
 
@@ -751,6 +1054,14 @@ function renderThemes() {
 document.addEventListener('pixset:lang', () => {
   paintOwnAvatar(ownAvatarUrl, ownNick);
   if (currentUser) renderProfile(currentUser);
+  if (!$('confirm').hidden) {
+    $('confirmTitle').textContent = confirmMode === 'recovery'
+      ? L('Сброс пароля', 'Password reset')
+      : L('Подтверждение почты', 'Confirm your email');
+  }
+  if (!$('emailCodeBox').hidden) {
+    $('emailCodeLabel').textContent = L('Код с нового адреса', 'Code from the new address');
+  }
 });
 
 // ── Маршрутизация ───────────────────────────────────────────────────────
@@ -765,7 +1076,7 @@ function returnTo() {
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'PASSWORD_RECOVERY') {
     recovery = true;
-    hide($('loading')); hide($('guest')); hide($('profile'));
+    hide($('loading')); hide($('guest')); hide($('profile')); hide($('confirm'));
     show($('recovery'));
     return;
   }
@@ -774,8 +1085,8 @@ supabase.auth.onAuthStateChange((event, session) => {
   hide($('loading'));
   if (session?.user) {
     if (returnTo()) { location.replace(returnTo()); return; }
-    hide($('guest')); show($('profile')); renderProfile(session.user);
-  } else { hide($('profile')); show($('guest')); }
+    hide($('guest')); hide($('confirm')); show($('profile')); renderProfile(session.user);
+  } else { hide($('profile')); if ($('confirm').hidden) show($('guest')); }
 });
 
 const { data: { session } } = await supabase.auth.getSession();

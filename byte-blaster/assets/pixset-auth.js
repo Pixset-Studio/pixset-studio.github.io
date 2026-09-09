@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'd9da1664';
+export const SDK_VERSION = '1a7916fb';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -58,6 +58,34 @@ export async function register({ email, password, nickname }) {
   if (error) throw error;
   // Если подтверждение почты включено, сессии не будет — это не ошибка.
   return { needsConfirmation: !data.session };
+}
+
+/* ── Подтверждение кодом из письма ───────────────────────────────────────
+   Письма студии (supabase/emails) построены вокруг {{ .Token }} — короткого
+   кода, а не ссылки. Ссылки в них нет вовсе, поэтому без ввода кода почту
+   подтвердить было нечем: письмо приходило, а вписать его было некуда.
+
+   Тип OTP определяет, что именно подтверждаем:
+     signup       — регистрация,
+     recovery     — сброс пароля (после проверки появляется сессия),
+     email_change — смена адреса.
+   Код Supabase присылает шестизначным; пробелы игрок нередко копирует вместе
+   с ним, поэтому чистим строку сами. */
+const cleanCode = (code) => String(code || '').replace(/\D/g, '');
+
+export async function verifyEmailCode({ email, code, type = 'signup' }) {
+  const { error } = await supabase.auth.verifyOtp({
+    email, token: cleanCode(code), type,
+  });
+  if (error) throw error;
+}
+
+/** Повторная отправка кода регистрации — письмо теряется чаще, чем кажется. */
+export async function resendSignupCode(email) {
+  const { error } = await supabase.auth.resend({
+    type: 'signup', email, options: { emailRedirectTo: ACCOUNT_URL },
+  });
+  if (error) throw error;
 }
 
 export async function login({ email, password }) {
@@ -822,6 +850,161 @@ export async function revokeDevice(id) {
   if (error) throw error;
 }
 
+/* ── Бейджи ──────────────────────────────────────────────────────────────
+   Отметка студии рядом с ником: «бета-тестер», «победитель турнира». Каталог
+   ведёт администратор, игрок себе ничего выдать не может — иначе отметка
+   ничего бы не значила (правила живут в политиках, см. 0006_badges.sql). */
+
+export const BADGE_ICON_MAX_BYTES = 48 * 1024;
+
+/** Весь каталог — нужен и админке, и странице, где бейджи объясняются. */
+export async function listBadges() {
+  const { data, error } = await supabase
+    .from('badges')
+    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, created_at')
+    .order('created_at');
+  if (error) throw error;
+  return data || [];
+}
+
+/** Свои бейджи вошедшего — для личного кабинета. */
+export async function getMyBadges() {
+  const { data, error } = await supabase
+    .from('my_badges')
+    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, granted_at');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function adminSaveBadge(badge) {
+  const row = {
+    slug: String(badge.slug || '').trim().toLowerCase(),
+    title_ru: String(badge.title_ru || '').trim(),
+    title_en: String(badge.title_en || '').trim(),
+    hint_ru: badge.hint_ru ? String(badge.hint_ru).trim() : null,
+    hint_en: badge.hint_en ? String(badge.hint_en).trim() : null,
+    icon_url: badge.icon_url || null,
+    color: badge.color || null,
+  };
+  if (!/^[a-z0-9][a-z0-9-]{1,38}$/.test(row.slug)) throw new Error('bad_badge_slug');
+  if (!row.title_ru || !row.title_en) throw new Error('badge_title_required');
+  if (row.icon_url && row.icon_url.length > BADGE_ICON_MAX_BYTES) throw new Error('badge_icon_too_big');
+
+  // upsert по slug: правка существующего бейджа — то же действие, что создание.
+  const { error } = await supabase.from('badges').upsert(row, { onConflict: 'slug' });
+  if (error) throw error;
+  return row;
+}
+
+export async function adminDeleteBadge(slug) {
+  const { error } = await supabase.from('badges').delete().eq('slug', slug);
+  if (error) throw error;
+}
+
+export async function adminGrantBadge(nickname, slug) {
+  const { error } = await supabase.rpc('badge_grant', { p_nickname: nickname, p_slug: slug });
+  if (error) throw error;
+}
+
+export async function adminRevokeBadge(nickname, slug) {
+  const { error } = await supabase.rpc('badge_revoke', { p_nickname: nickname, p_slug: slug });
+  if (error) throw error;
+}
+
+export async function adminBadgeHolders(slug) {
+  const { data, error } = await supabase.rpc('badge_holders', { p_slug: slug });
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Готовит картинку бейджа: вписывает в квадрат и отдаёт PNG (прозрачность
+ * иконке нужна — она стоит рядом с ником, а не в рамке). Если PNG не влез в
+ * лимит, уменьшаем сторону, а не качество: у PNG его нет.
+ */
+export function badgeIconFromFile(file, size = 96) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) { reject(new Error('avatar_not_image')); return; }
+
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        if (!side) { reject(new Error('avatar_not_image')); return; }
+        for (let px = size; px >= 32; px -= 16) {
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = px;
+          const ctx = cv.getContext('2d');
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img,
+            (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side,
+            0, 0, px, px);
+          const out = cv.toDataURL('image/png');
+          if (out.length <= BADGE_ICON_MAX_BYTES) { resolve(out); return; }
+        }
+        reject(new Error('badge_icon_too_big'));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('avatar_not_image')); };
+    img.src = url;
+  });
+}
+
+/* ── Регион аккаунта ─────────────────────────────────────────────────────
+   Регион определяет валюту цен, поэтому меняется не кнопкой, а заявкой:
+   игрок объясняет причину, студия решает. Решение и письмо игроку делает
+   edge-функция region-decide — одним действием, чтобы не расходились. */
+
+export async function requestRegionChange(country, reason) {
+  const { data, error } = await supabase.rpc('region_request', {
+    p_country: String(country || '').trim().toUpperCase(),
+    p_reason: String(reason || '').trim(),
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelRegionRequest() {
+  const { error } = await supabase.rpc('region_request_cancel');
+  if (error) throw error;
+}
+
+/** Последняя заявка игрока: и открытая, и уже рассмотренная. */
+export async function getMyRegionRequest() {
+  const { data, error } = await supabase
+    .from('my_region_request')
+    .select('id, to_country, to_currency, reason, status, admin_comment, created_at, decided_at')
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function adminListRegionRequests() {
+  const { data, error } = await supabase.rpc('region_requests_open');
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Решение по заявке. Идёт через edge-функцию: она меняет регион и тут же
+ * отправляет письмо игроку. Возвращает { mailed: boolean, reason?: string } —
+ * решение сохраняется даже если почта не настроена, и админка об этом скажет.
+ */
+export async function adminDecideRegionRequest(id, approve, comment = '') {
+  const { data, error } = await supabase.functions.invoke('region-decide', {
+    body: { id, approve: !!approve, comment: String(comment || '').trim() },
+  });
+  if (error) {
+    // Тело ответа функции информативнее, чем «non-2xx status code».
+    let detail = '';
+    try { detail = (await error.context?.json())?.error || ''; } catch { /* не JSON */ }
+    throw new Error(detail || error.message);
+  }
+  return data || { mailed: false };
+}
+
 /* ── Человекочитаемые сообщения вместо английских ошибок Supabase ────────
    Правило = что должно найтись в тексте ошибки + пара «по-русски / по-английски».
    Порядок важен: первое совпадение и отвечает. Язык берём с самой страницы —
@@ -833,6 +1016,13 @@ const ERROR_RULES = [
   { any: ['password should be at least'], ru: 'Пароль слишком короткий — минимум 6 символов.', en: 'Password too short — 6 characters minimum.' },
   { all: ['duplicate key', 'nickname'], ru: 'Этот ник уже занят.', en: 'That nickname is taken.' },
   { any: ['unable to validate email'], ru: 'Проверь правильность адреса почты.', en: 'Check that the email address is correct.' },
+  // Код из письма: истёк, введён с опечаткой или уже использован.
+  { any: ['token has expired', 'otp_expired', 'expired_token'],
+    ru: 'Код устарел. Запросите новый — он действует один час.',
+    en: 'The code has expired. Ask for a new one — codes last an hour.' },
+  { any: ['invalid token', 'token not found', 'otp_disabled', 'invalid_otp'],
+    ru: 'Код не подошёл. Проверьте цифры или запросите новый.',
+    en: 'That code did not work. Check the digits or request a new one.' },
   { any: ['for security purposes', 'rate limit'],
     ru: 'Слишком много попыток. Подожди минуту и попробуй снова.',
     en: 'Too many attempts. Wait a minute and try again.' },
@@ -870,6 +1060,20 @@ const ERROR_RULES = [
   { any: ['cannot_add_self'], ru: 'Себя в друзья добавить нельзя.', en: 'You cannot add yourself as a friend.' },
   { any: ['request_not_found'], ru: 'Заявка уже отозвана или принята.', en: 'That request was already withdrawn or accepted.' },
   { any: ['stats_too_big'], ru: 'Сводка прогресса слишком большая.', en: 'The progress summary is too large.' },
+  // Бейджи.
+  { any: ['bad_badge_slug'], ru: 'Код бейджа: латиница, цифры и дефис, 2–39 символов.', en: 'Badge code: Latin letters, digits and hyphens, 2-39 characters.' },
+  { any: ['badge_title_required'], ru: 'Заполните название бейджа на обоих языках.', en: 'Fill in the badge title in both languages.' },
+  { any: ['badge_icon_too_big'], ru: 'Иконку не удалось ужать. Возьмите картинку попроще.', en: 'The icon could not be compressed. Try a simpler picture.' },
+  { any: ['badge_not_found'], ru: 'Такого бейджа нет.', en: 'No such badge.' },
+  // Заявки на смену региона.
+  { any: ['reason_too_short'], ru: 'Опишите причину подробнее — не меньше 30 символов.', en: 'Describe the reason in more detail — at least 30 characters.' },
+  { any: ['request_pending'], ru: 'Заявка уже отправлена и ждёт решения.', en: 'A request is already waiting for a decision.' },
+  { any: ['same_region'], ru: 'Этот регион уже стоит в аккаунте.', en: 'That region is already set on your account.' },
+  { any: ['bad_country'], ru: 'Выберите страну из списка.', en: 'Pick a country from the list.' },
+  { any: ['already_decided'], ru: 'По этой заявке уже принято решение.', en: 'This request has already been decided.' },
+  { any: ['smtp_not_configured'],
+    ru: 'Решение сохранено, но письмо не ушло: в секретах Supabase нет SMTP_USER и SMTP_PASS.',
+    en: 'The decision is saved, but no email was sent: SMTP_USER and SMTP_PASS are missing from the Supabase secrets.' },
   { any: ['payments_not_configured'],
     ru: 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.',
     en: 'Payments are still being set up. Write to us and we will grant the licence by hand.' },
