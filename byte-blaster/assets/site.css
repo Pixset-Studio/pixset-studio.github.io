@@ -660,15 +660,52 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
   display: block; font-family: var(--pixel); font-size: 8px;
   letter-spacing: 1px; color: var(--dim); margin-bottom: 7px;
 }
-.field input {
+/* textarea и select идут наравне с input: иначе браузер рисует их белым
+   листом посреди тёмной страницы. */
+.field input,
+.field textarea,
+.field select {
   width: 100%; box-sizing: border-box; padding: 12px 13px;
   background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
   color: var(--text); font-family: var(--mono); font-size: 15px;
   transition: border-color .15s, box-shadow .15s;
 }
-.field input:focus {
+.field textarea { line-height: 1.55; min-height: 96px; resize: vertical; }
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
   outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,255,255,.25);
 }
+.field input::placeholder,
+.field textarea::placeholder { color: var(--dim); }
+select {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--text); font-family: var(--mono); font-size: 14px; padding: 10px 12px;
+}
+
+/* ── Бейджи игроков ──────────────────────────────────────────────────────
+   Разметку строит общий модуль assets/pixset-ui.js — тот же, что и на сайте
+   студии; здесь только оформление в цветах игры.
+
+     .nbdg — иконка у ника где угодно: название уезжает в подсказку;
+     .bdg  — строка в профиле: иконка, название и объяснение. */
+.nbdgs { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }
+.nbdg { display: inline-flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; flex: 0 0 20px; }
+.nbdg img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.nbdg i { width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); display: block; }
+
+.bdgs { display: grid; gap: 8px; }
+.bdg {
+  display: grid; grid-template-columns: 28px 1fr; align-items: center;
+  gap: 4px 12px; padding: 10px 12px;
+  border: 1px solid var(--line); border-left: 3px solid var(--cyan); border-radius: 4px;
+  background: rgba(0,255,255,.04);
+}
+.bdg img { width: 28px; height: 28px; object-fit: contain; display: block; grid-row: span 2; }
+.bdg i { width: 12px; height: 12px; border-radius: 50%; display: block; grid-row: span 2; margin: 0 8px; }
+.bdg b { font-family: var(--pixel); font-size: 10px; letter-spacing: 1px; color: var(--text); }
+.bdg .bdg-hint { grid-column: 2; font-family: var(--mono); font-size: 12px; color: var(--dim); line-height: 1.5; }
 
 /* <button> должен выглядеть ровно как ссылка-кнопка .btn рядом с ним. */
 button.btn { cursor: pointer; font-family: var(--pixel); }

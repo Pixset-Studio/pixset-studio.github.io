@@ -78,7 +78,7 @@ as $$
 declare
   me       uuid := (select auth.uid());
   target   uuid;
-  badge    uuid;
+  badge    public.badges%rowtype;
 begin
   if me is null then raise exception 'not_authenticated'; end if;
   if not exists (select 1 from public.profiles where id = me and is_admin) then
@@ -88,11 +88,13 @@ begin
   select id into target from public.profiles where nickname = p_nickname;
   if target is null then raise exception 'player_not_found'; end if;
 
-  select id into badge from public.badges where slug = p_slug;
+  select * into badge from public.badges where slug = p_slug;
   if badge is null then raise exception 'badge_not_found'; end if;
 
-  insert into public.user_badges (user_id, badge_id, granted_by)
-  values (target, badge, me)
+  -- pinned берём из самого бейджа: «не для ника» не должен там оказаться,
+  -- а всё остальное игрок видит рядом с ником сразу (см. 0008).
+  insert into public.user_badges (user_id, badge_id, granted_by, pinned)
+  values (target, badge.id, me, badge.nick_allowed)
   on conflict (user_id, badge_id) do nothing;   -- повторная выдача не ошибка
 end;
 $$;

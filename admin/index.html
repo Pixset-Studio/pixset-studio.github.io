@@ -202,6 +202,22 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
           <input type="color" id="badgeColor" value="#ffd400" style="height:44px;padding:4px">
         </div>
       </div>
+      <!-- Повадки бейджа. Рядом с ником он живёт только картинкой, поэтому
+           «можно в ник» имеет смысл лишь для бейджей с иконкой. -->
+      <div class="grantbox" style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+          <input type="checkbox" id="badgeNickAllowed" checked>
+          <span>Можно поставить в ник</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+          <input type="checkbox" id="badgeNickForced">
+          <span>Всегда в нике</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+          <input type="checkbox" id="badgeHideProfile">
+          <span>Не показывать в профиле</span>
+        </label>
+      </div>
       <div class="grantbox" style="margin-bottom:12px">
         <div class="field">
           <label for="badgeIcon">Иконка (PNG, ужимается до 96×96)</label>
@@ -283,7 +299,8 @@ import {
   listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
   adminBadgeHolders, badgeIconFromFile,
   adminListRegionRequests, adminDecideRegionRequest,
-} from '/assets/pixset-auth.js?v=1a7916fb';
+} from '/assets/pixset-auth.js?v=ec4ff25c';
+import { paintNickBadges, countryName, countryFlag } from '/assets/pixset-ui.js?v=ec4ff25c';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -645,8 +662,19 @@ $('badgeIcon').onchange = async () => {
 $('badgeClear').onclick = () => {
   ['badgeSlug', 'badgeRu', 'badgeEn', 'badgeHintRu', 'badgeHintEn'].forEach((id) => { $(id).value = ''; });
   $('badgeIcon').value = '';
+  $('badgeNickAllowed').checked = true;
+  $('badgeNickForced').checked = false;
+  $('badgeHideProfile').checked = false;
   badgeIconUrl = null;
   paintBadgePreview();
+};
+
+// «Всегда в нике» без «можно в ник» база не примет — чиним прямо в форме.
+$('badgeNickForced').onchange = () => {
+  if ($('badgeNickForced').checked) $('badgeNickAllowed').checked = true;
+};
+$('badgeNickAllowed').onchange = () => {
+  if (!$('badgeNickAllowed').checked) $('badgeNickForced').checked = false;
 };
 
 $('badgeSave').onclick = async () => {
@@ -661,6 +689,9 @@ $('badgeSave').onclick = async () => {
       hint_en: $('badgeHintEn').value,
       icon_url: badgeIconUrl,
       color: $('badgeColor').value,
+      nick_allowed: $('badgeNickAllowed').checked,
+      nick_forced: $('badgeNickForced').checked,
+      hide_in_profile: $('badgeHideProfile').checked,
     });
     say('Бейдж сохранён.', 'ok');
     $('badgeClear').click();
@@ -685,6 +716,10 @@ async function loadBadges() {
             <b>${esc(b.title_ru)}</b> <span class="dim">/ ${esc(b.title_en)}</span>
             <div class="dim mono" style="font-size:12px">${esc(b.slug)}${
               b.hint_ru ? ' · ' + esc(b.hint_ru) : ''}</div>
+            <div class="dim mono" style="font-size:12px">${[
+              b.nick_forced ? 'всегда в нике' : (b.nick_allowed ? 'можно в ник' : 'не для ника'),
+              b.hide_in_profile ? 'скрыт в профиле' : null,
+            ].filter(Boolean).join(' · ')}</div>
           </div>
           <button class="btn quiet" data-badge-edit="${esc(b.slug)}" style="width:auto">В форму</button>
           <button class="btn quiet" data-badge-del="${esc(b.slug)}" style="width:auto">Удалить</button>
@@ -705,6 +740,9 @@ async function loadBadges() {
       $('badgeHintRu').value = b.hint_ru || '';
       $('badgeHintEn').value = b.hint_en || '';
       $('badgeColor').value = b.color || '#ffd400';
+      $('badgeNickAllowed').checked = b.nick_allowed !== false;
+      $('badgeNickForced').checked = !!b.nick_forced;
+      $('badgeHideProfile').checked = !!b.hide_in_profile;
       badgeIconUrl = b.icon_url || null;
       paintBadgePreview();
       $('badgeSlug').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -734,10 +772,11 @@ async function showHolders(slug) {
     const rows = await adminBadgeHolders(slug);
     $('badgeHolders').innerHTML = rows.length
       ? `<div class="dim" style="margin:6px 0">Кому выдан «${esc(slug)}»:</div>` + rows.map((r) =>
-          `<div class="row"><b>${esc(r.nickname)}</b>
+          `<div class="row"><b data-nick="${esc(r.nickname)}">${esc(r.nickname)}</b>
              <span class="dim mono" style="font-size:12px">${
                new Date(r.granted_at).toLocaleDateString('ru-RU')}</span></div>`).join('')
       : `<p class="dim">Бейдж «${esc(slug)}» пока никому не выдан.</p>`;
+    paintNickBadges($('badgeHolders')).catch(() => {});
   } catch (err) { badgeSay(humanError(err)); }
 }
 
@@ -762,16 +801,9 @@ $('badgeRevoke').onclick = () => withBadge(adminRevokeBadge, 'Бейдж заб�
 /* ── Заявки на смену региона ─────────────────────────────────────────────
    Решение и письмо игроку уходят одним вызовом edge-функции. Если почта не
    настроена, решение всё равно сохраняется — об этом честно пишем. */
-const COUNTRY_RU = {
-  RU: 'Россия', BY: 'Беларусь', KZ: 'Казахстан', UA: 'Украина', AM: 'Армения',
-  AZ: 'Азербайджан', GE: 'Грузия', KG: 'Киргизия', MD: 'Молдова', TJ: 'Таджикистан',
-  TM: 'Туркменистан', UZ: 'Узбекистан', DE: 'Германия', FR: 'Франция',
-  GB: 'Великобритания', US: 'США', CA: 'Канада', PL: 'Польша', ES: 'Испания',
-  IT: 'Италия', TR: 'Турция', IL: 'Израиль', RS: 'Сербия', AE: 'ОАЭ',
-  TH: 'Таиланд', VN: 'Вьетнам', CN: 'Китай', JP: 'Япония', KR: 'Республика Корея',
-  IN: 'Индия', BR: 'Бразилия', AR: 'Аргентина', AU: 'Австралия', NZ: 'Новая Зеландия',
-};
-const countryRu = (code) => COUNTRY_RU[code] || code || '—';
+// Названия стран берём у браузера (см. pixset-ui.js): игрок может выбрать
+// любую из списка ISO, и свой словарь тут же отстал бы от него.
+const countryRu = (code) => (code ? `${countryFlag(code)} ${countryName(code, 'ru')}` : '—');
 
 function regionSay(text, kind = 'err') {
   $('regionMsg').textContent = text;
@@ -787,7 +819,7 @@ async function loadRegionRequests() {
     ? rows.map((r) => `
         <div class="row" style="display:block">
           <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-            <b>${esc(r.nickname)}</b>
+            <b data-nick="${esc(r.nickname)}">${esc(r.nickname)}</b>
             <span class="dim mono" style="font-size:12px">${esc(r.email)}</span>
             <span class="badge mute">${esc(countryRu(r.from_country))} → ${esc(countryRu(r.to_country))}</span>
             <span class="dim mono" style="font-size:12px">${
@@ -815,6 +847,8 @@ async function loadRegionRequests() {
       await loadRegionRequests();
     } catch (err) { regionSay(humanError(err)); btn.disabled = false; }
   };
+
+  paintNickBadges($('regionList')).catch(() => {});
 
   $('regionList').querySelectorAll('[data-region-ok]').forEach((b) => {
     b.onclick = () => decide(b.dataset.regionOk, true, b);

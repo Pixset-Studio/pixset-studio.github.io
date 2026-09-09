@@ -37,6 +37,17 @@ fs.writeFileSync(source, code, 'utf8');
 const copy = path.join(bbSite, 'assets', 'pixset-auth.js');
 fs.writeFileSync(copy, code, 'utf8');
 
+// Общие куски интерфейса аккаунта (бейджи у ника, список стран, подписи) лежат
+// рядом с SDK и нужны обоим сайтам: аккаунт и админка на них обязаны быть
+// наполнены одинаково. Копия получает ту же метку версии, что и SDK.
+const uiSource = path.join(studioSite, 'assets', 'pixset-ui.js');
+if (fs.existsSync(uiSource)) {
+  const ui = fs.readFileSync(uiSource, 'utf8')
+    // В копии для сайта игры импорт SDK ведёт в её собственную папку.
+    .replace("from './pixset-auth.js'", "from '/byte-blaster/assets/pixset-auth.js'");
+  fs.writeFileSync(path.join(bbSite, 'assets', 'pixset-ui.js'), ui, 'utf8');
+}
+
 /* ── Метки в импортах ──────────────────────────────────────────────────── */
 function htmlFiles(dir) {
   const out = [];
@@ -57,7 +68,7 @@ for (const dir of [studioSite, bbSite]) {
   for (const file of htmlFiles(dir)) {
     const html = fs.readFileSync(file, 'utf8');
     const next = html.replace(
-      /(['"])((?:\/byte-blaster)?\/assets\/pixset-auth\.js)(?:\?v=[^'"]*)?\1/g,
+      /(['"])((?:\/byte-blaster)?\/assets\/pixset-(?:auth|ui)\.js)(?:\?v=[^'"]*)?\1/g,
       (m, quote, url) => `${quote}${url}?v=${stamp}${quote}`);
     if (next !== html) {
       fs.writeFileSync(file, next, 'utf8');

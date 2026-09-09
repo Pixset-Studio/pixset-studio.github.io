@@ -348,21 +348,45 @@ footer.site a { color: var(--text-dim); }
 footer.site a:hover { color: var(--y); }
 
 /* ── Бейджи игроков ──────────────────────────────────────────────────────
-   Отметка студии рядом с ником. Живёт в общем стиле, потому что показывается
-   в трёх местах: публичный профиль, личный кабинет и предпросмотр в админке. */
+   Два вида одного и того же:
+
+     .nbdg — у ника, где угодно на сайте: только иконка, название в подсказке.
+             Подпись рядом с ником превратила бы любой список в кашу.
+     .bdg  — в профиле под ником: иконка, название во всю строку и объяснение,
+             ради которого бейдж вообще выдавали.
+
+   Разметку обоих строит assets/pixset-ui.js — она общая для сайта студии и
+   сайта Byte Blaster, различается только оформление. */
 .nickline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.bdgs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.bdg {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 10px 4px 6px; border-radius: 999px;
-  border: 1px solid var(--line-2); background: var(--bg-2);
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
-  text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
+
+.nbdgs { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }
+.nbdg {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: 0 0 20px;
 }
-.bdg img { width: 18px; height: 18px; object-fit: contain; display: block; }
-.bdg .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--y); flex: 0 0 8px; }
-:root[data-theme='arcade'] .bdg,
-:root[data-theme='byteblaster'] .bdg { border-radius: 0; }
+.nbdg img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.nbdg i { width: 10px; height: 10px; border-radius: 50%; background: var(--y); display: block; }
+
+.bdgs { display: grid; gap: 8px; margin-top: 12px; }
+.bdg {
+  display: grid; grid-template-columns: 28px 1fr; align-items: center;
+  gap: 4px 12px; padding: 10px 14px;
+  border: 1px solid var(--line); border-left: 3px solid var(--line-2);
+  border-radius: var(--radius); background: var(--card);
+}
+.bdg img { width: 28px; height: 28px; object-fit: contain; display: block; grid-row: span 2; }
+.bdg i { width: 12px; height: 12px; border-radius: 50%; display: block; grid-row: span 2; margin: 0 8px; }
+.bdg b {
+  font-family: var(--font-head); font-weight: var(--head-weight);
+  font-size: 15px; letter-spacing: var(--head-spacing);
+  text-transform: var(--head-transform); color: var(--text);
+}
+.bdg .bdg-hint {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+  grid-column: 2; line-height: 1.5;
+}
+:root[data-theme='arcade'] .bdg b,
+:root[data-theme='byteblaster'] .bdg b { font-size: 11px; }
 
 /* ── Язык ────────────────────────────────────────────────────────────────
    Оба языка лежат в разметке; лишний прячется по атрибуту на <html>. Так на
@@ -430,12 +454,29 @@ body.langswap { animation: langFade .34s ease; }
   display: block; font-family: var(--font-mono); font-size: 11px;
   letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px;
 }
-.field input {
+/* Поля ввода. textarea попадает сюда наравне с input: без этого правила
+   браузер рисовал её белым листом посреди тёмной страницы — ни одна тема
+   такого не предполагает. */
+.field input,
+.field textarea,
+.field select {
   width: 100%; padding: 12px 13px; border-radius: var(--radius);
   background: var(--bg); border: 1px solid var(--line-2); color: var(--text);
   font-family: var(--font-body); font-size: 16px;
 }
-.field input:focus { outline: none; border-color: var(--y); box-shadow: 0 0 0 1px rgba(255,212,0,.25); }
+.field textarea { line-height: 1.55; min-height: 96px; resize: vertical; }
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none; border-color: var(--y); box-shadow: 0 0 0 1px rgba(255,212,0,.25);
+}
+.field input::placeholder,
+.field textarea::placeholder { color: var(--text-dim); opacity: .8; }
+/* Пиксельные темы: 16px этим шрифтом не помещаются в поле. */
+:root[data-theme='arcade'] .field input,
+:root[data-theme='arcade'] .field textarea,
+:root[data-theme='byteblaster'] .field input,
+:root[data-theme='byteblaster'] .field textarea { font-size: 14px; }
 
 form .btn, .panel > .btn { width: 100%; }
 

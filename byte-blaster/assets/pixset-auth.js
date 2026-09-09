@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '1a7916fb';
+export const SDK_VERSION = 'ec4ff25c';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -119,7 +119,7 @@ export async function resetPassword(email) {
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('nickname, avatar_url, created_at, is_admin, country, currency')
+    .select('nickname, avatar_url, created_at, is_admin, country, currency, country_visibility')
     .eq('id', userId)
     .single();
   if (error) throw error;
@@ -861,19 +861,33 @@ export const BADGE_ICON_MAX_BYTES = 48 * 1024;
 export async function listBadges() {
   const { data, error } = await supabase
     .from('badges')
-    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, created_at')
+    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, '
+          + 'nick_allowed, nick_forced, hide_in_profile, created_at')
     .order('created_at');
   if (error) throw error;
   return data || [];
 }
 
-/** Свои бейджи вошедшего — для личного кабинета. */
+/** Свои бейджи вошедшего — с флагами, чтобы кабинет знал, что закрепляется. */
 export async function getMyBadges() {
   const { data, error } = await supabase
     .from('my_badges')
-    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, granted_at');
+    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, '
+          + 'nick_allowed, nick_forced, hide_in_profile, pinned, granted_at');
   if (error) throw error;
   return data || [];
+}
+
+/** Закрепить или снять свой бейдж у ника. Только для тех, что это разрешают. */
+export async function pinBadge(slug, pinned) {
+  const { error } = await supabase.rpc('badge_pin', { p_slug: slug, p_pinned: !!pinned });
+  if (error) throw error;
+}
+
+/** Кому видна страна в профиле: 'public' | 'friends' | 'none'. */
+export async function setCountryVisibility(mode) {
+  const { error } = await supabase.rpc('set_country_visibility', { p_mode: mode });
+  if (error) throw error;
 }
 
 export async function adminSaveBadge(badge) {
@@ -885,6 +899,11 @@ export async function adminSaveBadge(badge) {
     hint_en: badge.hint_en ? String(badge.hint_en).trim() : null,
     icon_url: badge.icon_url || null,
     color: badge.color || null,
+    // Повадки бейджа. «Всегда в нике» подразумевает разрешение — база это
+    // проверяет, но чинить значение лучше здесь, чем ловить ошибку.
+    nick_allowed: badge.nick_forced ? true : badge.nick_allowed !== false,
+    nick_forced: !!badge.nick_forced,
+    hide_in_profile: !!badge.hide_in_profile,
   };
   if (!/^[a-z0-9][a-z0-9-]{1,38}$/.test(row.slug)) throw new Error('bad_badge_slug');
   if (!row.title_ru || !row.title_en) throw new Error('badge_title_required');

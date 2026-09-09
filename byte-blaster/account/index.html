@@ -113,6 +113,34 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
       </div>
     </div>
 
+    <!-- ── Код из письма ─────────────────────────────────────────────────
+         Письма студии построены вокруг короткого кода ({{ .Token }}), ссылки
+         в них нет вовсе. Экран один на два случая: подтверждение регистрации
+         и сброс пароля. -->
+    <div id="confirm" hidden>
+      <h1 style="text-align:center" id="confirmTitle"></h1>
+      <div class="panel">
+        <p class="dim" style="text-align:center;margin-bottom:20px">
+          <span data-l="ru">Мы отправили код на</span><span data-l="en">We sent a code to</span>
+          <b id="confirmMail"></b>
+        </p>
+        <div class="msg" id="confirmMsg"></div>
+        <form id="formConfirm">
+          <div class="field">
+            <label for="confirmCode"><span data-l="ru">КОД ИЗ ПИСЬМА</span><span data-l="en">CODE FROM THE EMAIL</span></label>
+            <input type="text" id="confirmCode" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="8" required placeholder="000000" style="letter-spacing:6px;text-align:center">
+          </div>
+          <button type="submit" class="btn primary"><span data-l="ru">ПОДТВЕРДИТЬ</span><span data-l="en">CONFIRM</span></button>
+          <p style="text-align:center;margin:16px 0 0;font-size:13px">
+            <a href="#" id="resendCode"><span data-l="ru">Отправить код ещё раз</span><span data-l="en">Send the code again</span></a>
+            ·
+            <a href="#" id="confirmBack"><span data-l="ru">Назад ко входу</span><span data-l="en">Back to sign-in</span></a>
+          </p>
+        </form>
+      </div>
+    </div>
+
     <!-- ── Новый пароль после письма ─────────────────────────────────── -->
     <div id="recovery" hidden>
       <h1 style="text-align:center"><span data-l="ru">НОВЫЙ ПАРОЛЬ</span><span data-l="en">NEW PASSWORD</span></h1>
@@ -138,7 +166,8 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
                ссылка «Изменить» нужна для клавиатуры и для ясности. -->
           <button type="button" class="ava" id="ava" title="">?</button>
           <div style="min-width:0">
-            <div class="nick" id="nick">…</div>
+            <!-- Иконки бейджей дорисовывает pixset-ui.js по data-nick. -->
+            <div class="nick" id="nick" data-nick="">…</div>
             <div class="mail" id="mail"></div>
             <div class="avaActions">
               <button type="button" id="avaPick"><span data-l="ru">Сменить фото</span><span data-l="en">Change photo</span></button>
@@ -152,6 +181,11 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
         <h3><span data-l="ru">Лицензии</span><span data-l="en">Licences</span></h3>
         <div class="lib" id="lib"></div>
+
+        <!-- ── Бейджи ──────────────────────────────────────────────────────
+             Выдаёт студия; отмеченные видны рядом с ником на обоих сайтах. -->
+        <h3 style="margin-top:26px"><span data-l="ru">Бейджи</span><span data-l="en">Badges</span></h3>
+        <div class="lib" id="myBadges"></div>
 
         <!-- ── Друзья ──────────────────────────────────────────────────────
              То же, что на сайте студии: аккаунт один, список общий. Заявка идёт
@@ -205,12 +239,50 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         </div>
         <button class="btn small" id="savePass"><span data-l="ru">СМЕНИТЬ ПАРОЛЬ</span><span data-l="en">CHANGE PASSWORD</span></button>
 
+        <!-- ── Регион ──────────────────────────────────────────────────────
+             Меняется заявкой: игрок объясняет причину, студия отвечает
+             письмом. Точно так же, как на сайте студии. -->
         <p class="note" style="margin-top:18px">
           <span data-l="ru">Регион и валюта:</span><span data-l="en">Region and currency:</span>
           <b id="regionInfo">—</b>
-          <span data-l="ru"> — задаётся при регистрации и не меняется.</span>
-          <span data-l="en"> — set at sign-up and cannot be changed.</span>
         </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
+          <button class="btn small" id="regionToggle">
+            <span data-l="ru">СМЕНИТЬ РЕГИОН</span><span data-l="en">CHANGE REGION</span>
+          </button>
+          <label style="display:flex;gap:8px;align-items:center">
+            <span class="dim" style="font-size:13px">
+              <span data-l="ru">Кто видит страну</span><span data-l="en">Who sees my country</span>
+            </span>
+            <select id="countryVis" style="width:auto">
+              <option value="friends"></option>
+              <option value="public"></option>
+              <option value="none"></option>
+            </select>
+          </label>
+        </div>
+
+        <div id="regionBox" hidden style="margin-top:14px">
+          <div class="msg" id="regionMsg"></div>
+          <div id="regionForm">
+            <div class="field" style="max-width:420px">
+              <label for="regionPick"><span data-l="ru">НОВЫЙ РЕГИОН</span><span data-l="en">NEW REGION</span></label>
+              <select id="regionPick"></select>
+            </div>
+            <div class="field">
+              <label for="regionReason">
+                <span data-l="ru">ПРИЧИНА — ПОДРОБНО, НЕ МЕНЬШЕ 30 СИМВОЛОВ</span>
+                <span data-l="en">REASON — IN DETAIL, AT LEAST 30 CHARACTERS</span>
+              </label>
+              <textarea id="regionReason" rows="4" maxlength="1000" style="width:100%;resize:vertical"></textarea>
+              <div class="dim" style="font-size:12px;margin-top:6px" id="regionCount">0 / 1000</div>
+            </div>
+            <button class="btn small" id="regionSend">
+              <span data-l="ru">ОТПРАВИТЬ ЗАЯВКУ</span><span data-l="en">SEND THE REQUEST</span>
+            </button>
+          </div>
+          <div class="lib" id="regionStatus"></div>
+        </div>
 
         <h3 style="margin-top:26px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Delete account</span></h3>
         <p class="note">
@@ -252,8 +324,14 @@ import {
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
+  verifyEmailCode, resendSignupCode,
+  getMyBadges, pinBadge, setCountryVisibility,
+  requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=1a7916fb';
+} from '/byte-blaster/assets/pixset-auth.js?v=ec4ff25c';
+import {
+  badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
+} from '/byte-blaster/assets/pixset-ui.js?v=ec4ff25c';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -281,15 +359,208 @@ function say(box, ru, en, kind = 'err') {
 }
 const clear = (box) => { box.className = 'msg'; };
 
-/** Ошибки Supabase приходят по-русски из общего модуля; для EN даём общий текст. */
+/** Ошибки Supabase приходят из общего модуля уже на языке страницы. */
 function fail(box, err) {
-  say(box, humanError(err), 'Something went wrong. Please try again.');
+  const message = humanError(err);
+  say(box, message, message);
 }
 
 async function busy(btn, fn) {
   btn.disabled = true;
   try { await fn(); } finally { btn.disabled = false; }
 }
+
+// Режим восстановления: пока он включён, маршрутизация не показывает профиль
+// поверх формы нового пароля.
+let recovery = false;
+
+/* ── Код из письма ──────────────────────────────────────────────────────
+   Один экран на два случая: подтверждение регистрации и сброс пароля. Ссылок
+   в письмах студии нет — только код. */
+let confirmMode = 'signup';
+let confirmEmail = '';
+
+function askCode(mode, email) {
+  confirmMode = mode;
+  confirmEmail = email;
+  clear($('guestMsg')); clear($('confirmMsg'));
+  $('confirmCode').value = '';
+  $('confirmMail').textContent = email;
+  $('confirmTitle').innerHTML = mode === 'recovery'
+    ? bi('СБРОС ПАРОЛЯ', 'PASSWORD RESET')
+    : bi('ПОДТВЕРЖДЕНИЕ ПОЧТЫ', 'CONFIRM YOUR EMAIL');
+  $('resendCode').hidden = mode !== 'signup';
+  hide($('guest')); hide($('recovery')); hide($('profile'));
+  show($('confirm'));
+  $('confirmCode').focus();
+}
+
+$('formConfirm').onsubmit = (e) => {
+  e.preventDefault();
+  clear($('confirmMsg'));
+  return busy(e.submitter, async () => {
+    // Флаг ставим до проверки: сессия появляется сразу, и обработчик
+    // onAuthStateChange иначе показал бы профиль вместо формы пароля.
+    if (confirmMode === 'recovery') recovery = true;
+    try {
+      await verifyEmailCode({ email: confirmEmail, code: $('confirmCode').value, type: confirmMode });
+      if (confirmMode === 'recovery') {
+        hide($('confirm')); show($('recovery'));
+        say($('recMsg'), 'Код принят. Задайте новый пароль.', 'Code accepted. Set a new password.', 'ok');
+      }
+    } catch (err) {
+      if (confirmMode === 'recovery') recovery = false;
+      fail($('confirmMsg'), err);
+    }
+  });
+};
+
+$('resendCode').onclick = (e) => {
+  e.preventDefault();
+  clear($('confirmMsg'));
+  return busy(e.currentTarget, async () => {
+    try {
+      await resendSignupCode(confirmEmail);
+      say($('confirmMsg'), 'Отправили новый код.', 'A new code is on its way.', 'ok');
+    } catch (err) { fail($('confirmMsg'), err); }
+  });
+};
+
+$('confirmBack').onclick = (e) => {
+  e.preventDefault();
+  hide($('confirm')); show($('guest'));
+};
+
+/* ── Бейджи и регион ────────────────────────────────────────────────────
+   То же, что в кабинете на сайте студии: аккаунт один, наполнение общее. */
+let myCountry = '';
+
+async function renderMyBadges() {
+  let rows = [];
+  try { rows = await getMyBadges(); } catch { rows = []; }
+
+  $('myBadges').innerHTML = rows.length
+    ? rows.map((b) => {
+        const control = b.nick_forced
+          ? `<span class="badge">${bi('ВСЕГДА В НИКЕ', 'ALWAYS ON NICKNAME')}</span>`
+          : b.nick_allowed
+            ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+                 <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
+                 <span class="dim" style="font-size:12px">${bi('рядом с ником', 'next to nickname')}</span>
+               </label>`
+            : `<span class="badge">${bi('ТОЛЬКО В ПРОФИЛЕ', 'PROFILE ONLY')}</span>`;
+        return `<div class="item" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${control}
+        </div>`;
+      }).join('')
+    : `<div class="item"><span class="dim">${bi(
+        'Бейджей пока нет. Их выдаёт студия.', 'No badges yet. The studio hands them out.')}</span></div>`;
+
+  $('myBadges').querySelectorAll('[data-pin]').forEach((box) => {
+    box.onchange = async () => {
+      box.disabled = true;
+      try {
+        await pinBadge(box.dataset.pin, box.checked);
+        delete $('nick').dataset.nickBadges;
+        await paintNickBadges($('profile'));
+      } catch (err) {
+        box.checked = !box.checked;
+        fail($('profMsg'), err);
+      } finally { box.disabled = false; }
+    };
+  });
+}
+
+const VISIBILITY = [
+  ['friends', 'Только друзьям', 'Friends only'],
+  ['public',  'Всем',            'Everyone'],
+  ['none',    'Никому',          'Nobody'],
+];
+
+function paintVisibilityOptions(current) {
+  [...$('countryVis').options].forEach((opt) => {
+    const row = VISIBILITY.find((v) => v[0] === opt.value);
+    if (row) opt.textContent = txt(row[1], row[2]);
+  });
+  if (current) $('countryVis').value = current;
+}
+
+$('countryVis').onchange = async () => {
+  $('countryVis').disabled = true;
+  try {
+    await setCountryVisibility($('countryVis').value);
+    say($('profMsg'), 'Видимость страны обновлена.', 'Country visibility updated.', 'ok');
+  } catch (err) { fail($('profMsg'), err); }
+  finally { $('countryVis').disabled = false; }
+};
+
+const REGION_STATUS = {
+  pending:  ['на рассмотрении', 'under review'],
+  approved: ['одобрена', 'approved'],
+  rejected: ['отклонена', 'declined'],
+};
+
+async function renderRegion() {
+  let req = null;
+  try { req = await getMyRegionRequest(); } catch { req = null; }
+
+  $('regionPick').innerHTML = countryOptions()
+    .filter((c) => c.code !== myCountry)
+    .map((c) => `<option value="${c.code}">${esc(c.name)}</option>`).join('');
+
+  const open = req && req.status === 'pending';
+  $('regionForm').hidden = !!open;
+
+  $('regionStatus').innerHTML = req
+    ? `<div class="item" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+         <div style="flex:1;min-width:180px">
+           <b>${bi('Заявка на ', 'Request for ')}${esc(countryName(req.to_country))}</b>
+           <div class="dim" style="font-size:13px">${esc(
+             new Date(req.created_at).toLocaleDateString(uiLang() === 'en' ? 'en-GB' : 'ru-RU'))}${
+             req.admin_comment ? ' · ' + esc(req.admin_comment) : ''}</div>
+         </div>
+         <span class="badge">${bi(...REGION_STATUS[req.status].map(esc))}</span>
+         ${open ? `<button class="btn small" id="regionCancel">${bi('ОТОЗВАТЬ', 'WITHDRAW')}</button>` : ''}
+       </div>`
+    : '';
+
+  if (open) {
+    $('regionCancel').onclick = () => busy($('regionCancel'), async () => {
+      try { await cancelRegionRequest(); await renderRegion(); }
+      catch (err) { fail($('regionMsg'), err); }
+    });
+  }
+}
+
+$('regionToggle').onclick = () => {
+  const box = $('regionBox');
+  box.hidden = !box.hidden;
+  if (!box.hidden) renderRegion();
+};
+
+$('regionReason').oninput = () => {
+  $('regionCount').textContent = `${$('regionReason').value.trim().length} / 1000`;
+};
+
+$('regionSend').onclick = () => busy($('regionSend'), async () => {
+  clear($('regionMsg'));
+  const reason = $('regionReason').value.trim();
+  if (reason.length < 30) {
+    say($('regionMsg'),
+        'Опишите причину подробнее — не меньше 30 символов.',
+        'Describe the reason in more detail — at least 30 characters.');
+    return;
+  }
+  try {
+    await requestRegionChange($('regionPick').value, reason);
+    $('regionReason').value = '';
+    $('regionCount').textContent = '0 / 1000';
+    say($('regionMsg'),
+        'Заявка отправлена. Ответ придёт на почту аккаунта.',
+        'Request sent. The answer will come to your account email.', 'ok');
+    await renderRegion();
+  } catch (err) { fail($('regionMsg'), err); }
+});
 
 // ── Вкладки ─────────────────────────────────────────────────────────────
 $('tabLogin').onclick = () => {
@@ -326,17 +597,14 @@ $('formReg').onsubmit = (e) => {
   }
   return busy(e.submitter, async () => {
     try {
+      const email = $('regEmail').value.trim();
       const { needsConfirmation } = await register({
-        email: $('regEmail').value.trim(),
+        email,
         password: $('regPass').value,
         nickname,
       });
-      if (needsConfirmation) {
-        say($('guestMsg'),
-          'Готово! Мы отправили письмо — подтвердите почту и возвращайтесь.',
-          'Done! Check your inbox to confirm your email, then come back.', 'ok');
-        $('formReg').reset();
-      }
+      $('formReg').reset();
+      if (needsConfirmation) askCode('signup', email);
     } catch (err) { fail($('guestMsg'), err); }
   });
 };
@@ -353,8 +621,7 @@ $('forgot').onclick = async (e) => {
   }
   try {
     await resetPassword(email);
-    say($('guestMsg'), 'Ссылка для сброса отправлена на почту.',
-      'A reset link is on its way to your inbox.', 'ok');
+    askCode('recovery', email);
   } catch (err) { fail($('guestMsg'), err); }
 };
 
@@ -401,7 +668,7 @@ async function renderFriends() {
 
   const row = (f) => {
     const link = `<a href="https://pixset-studio.github.io/u/?n=${encodeURIComponent(f.nickname)}"
-                     target="_blank" rel="noopener">${esc(f.nickname)}</a>`;
+                     target="_blank" rel="noopener" data-nick="${esc(f.nickname)}">${esc(f.nickname)}</a>`;
     const buttons = f.kind === 'incoming'
       ? `<button class="btn small" data-accept="${esc(f.id)}">${bi('ПРИНЯТЬ', 'ACCEPT')}</button>
          <button class="btn small" data-remove="${esc(f.id)}">${bi('ОТКЛОНИТЬ', 'DECLINE')}</button>`
@@ -421,6 +688,8 @@ async function renderFriends() {
   $('friendList').innerHTML = html || `<div class="item"><span class="dim">${
     bi('Пока никого — найдите игрока по нику выше.',
        'Nobody yet — find a player by nickname above.')}</span></div>`;
+
+  paintNickBadges($('friendList')).catch(() => {});
 
   $('friendList').querySelectorAll('[data-accept]').forEach((b) => {
     b.onclick = () => busy(b, async () => {
@@ -605,11 +874,19 @@ async function renderProfile(user) {
   try {
     const profile = await getProfile(user.id);
     $('nick').textContent = profile.nickname;
+    $('nick').dataset.nick = profile.nickname;
     paintAvatar(profile.avatar_url, profile.nickname);
     $('newNick').value = profile.nickname || '';
-    $('regionInfo').textContent =
-      (profile.country || '—') + ' · ' + (profile.currency || (profile.country === 'RU' ? 'RUB' : 'USD'));
+    myCountry = (profile.country || '').toUpperCase();
+    $('regionInfo').textContent = `${countryFlag(myCountry)} ${
+      countryName(myCountry) || txt('регион не указан', 'region not set')} · ${
+      profile.currency || (myCountry === 'RU' ? 'RUB' : 'USD')}`;
+    paintVisibilityOptions(profile.country_visibility || 'friends');
   } catch { $('nick').textContent = 'Player'; }
+
+  renderMyBadges();
+  renderRegion();
+  paintNickBadges($('profile')).catch(() => {});
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
@@ -681,12 +958,11 @@ async function renderDevices() {
 }
 
 // ── Маршрутизация ───────────────────────────────────────────────────────
-let recovery = false;
 
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'PASSWORD_RECOVERY') {
     recovery = true;
-    hide($('loading')); hide($('guest')); hide($('profile'));
+    hide($('loading')); hide($('guest')); hide($('profile')); hide($('confirm'));
     show($('recovery'));
     return;
   }
@@ -695,9 +971,10 @@ supabase.auth.onAuthStateChange((event, session) => {
   hide($('loading'));
   if (session?.user) {
     if (returnTo()) { location.replace(returnTo()); return; }
-    hide($('guest')); show($('profile')); renderProfile(session.user);
+    hide($('guest')); hide($('confirm')); show($('profile')); renderProfile(session.user);
   }
-  else { hide($('profile')); show($('guest')); }
+  // Пока игрок вводит код, гостевую форму не показываем — он уже на полпути.
+  else { hide($('profile')); if ($('confirm').hidden) show($('guest')); }
 });
 
 // Куда вернуть игрока после входа (?next=/byte-blaster/buy/). Принимаем только

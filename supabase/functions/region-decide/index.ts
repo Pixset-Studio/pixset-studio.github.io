@@ -32,26 +32,14 @@ const json = (body: unknown, status = 200) =>
     status, headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-/** Названия стран для письма. Показываем и код — на случай редкой страны. */
-const COUNTRY: Record<string, [string, string]> = {
-  RU: ['Россия', 'Russia'], BY: ['Беларусь', 'Belarus'], KZ: ['Казахстан', 'Kazakhstan'],
-  UA: ['Украина', 'Ukraine'], AM: ['Армения', 'Armenia'], AZ: ['Азербайджан', 'Azerbaijan'],
-  GE: ['Грузия', 'Georgia'], KG: ['Киргизия', 'Kyrgyzstan'], MD: ['Молдова', 'Moldova'],
-  TJ: ['Таджикистан', 'Tajikistan'], TM: ['Туркменистан', 'Turkmenistan'],
-  UZ: ['Узбекистан', 'Uzbekistan'], DE: ['Германия', 'Germany'], FR: ['Франция', 'France'],
-  GB: ['Великобритания', 'United Kingdom'], US: ['США', 'United States'],
-  CA: ['Канада', 'Canada'], PL: ['Польша', 'Poland'], ES: ['Испания', 'Spain'],
-  IT: ['Италия', 'Italy'], TR: ['Турция', 'Türkiye'], IL: ['Израиль', 'Israel'],
-  RS: ['Сербия', 'Serbia'], AE: ['ОАЭ', 'United Arab Emirates'],
-  TH: ['Таиланд', 'Thailand'], VN: ['Вьетнам', 'Vietnam'], CN: ['Китай', 'China'],
-  JP: ['Япония', 'Japan'], KR: ['Республика Корея', 'South Korea'],
-  IN: ['Индия', 'India'], BR: ['Бразилия', 'Brazil'], AR: ['Аргентина', 'Argentina'],
-  AU: ['Австралия', 'Australia'], NZ: ['Новая Зеландия', 'New Zealand'],
-};
-
+/** Название страны на нужном языке. Список стран полный (ISO 3166-1), поэтому
+    свой словарь тут только отставал бы: спрашиваем Intl, как и сайт. */
 const countryName = (code: string, ru: boolean) => {
-  const pair = COUNTRY[code];
-  return pair ? (ru ? pair[0] : pair[1]) : code;
+  const cc = String(code || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return code;
+  try {
+    return new Intl.DisplayNames([ru ? 'ru' : 'en'], { type: 'region' }).of(cc) || cc;
+  } catch { return cc; }
 };
 
 const esc = (s: string) =>

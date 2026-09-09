@@ -183,10 +183,9 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
           <button type="button" class="ava" id="ava"
                   data-tip-ru="Сменить фото" data-tip-en="Change photo" title="Сменить фото">?</button>
           <div style="min-width:0">
-            <div class="nickline">
-              <div class="nick" id="nick">…</div>
-              <div class="bdgs" id="myBadges"></div>
-            </div>
+            <!-- Иконки закреплённых бейджей дорисовывает pixset-ui.js по
+                 атрибуту data-nick — так же, как в любом другом списке. -->
+            <div class="nick" id="nick" data-nick="">…</div>
             <div class="mail" id="mail"></div>
             <div class="avaActions">
               <button type="button" id="avaPick"></button>
@@ -202,6 +201,19 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 
         <h3><span data-l="ru">Мои игры</span><span data-l="en">My games</span></h3>
         <div class="rows" id="lib"></div>
+
+        <!-- ── Бейджи ──────────────────────────────────────────────────────
+             Выдаёт студия. Часть из них игрок может показывать рядом с ником
+             на всём сайте, часть висит там всегда, а часть в профиле вовсе не
+             показывается — какая именно, решает бейдж (см. 0008). -->
+        <h3 style="margin-top:26px"><span data-l="ru">Мои бейджи</span><span data-l="en">My badges</span></h3>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
+          Отмеченные видны рядом с ником везде на сайте. В профиле показываются все, кроме скрытых.
+        </p>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
+          The ones you tick appear next to your nickname everywhere on the site. Your profile shows all of them except the hidden ones.
+        </p>
+        <div class="rows" id="myBadges"></div>
 
         <!-- ── Друзья ──────────────────────────────────────────────────────
              Заявка идёт по нику: игрок знает ник, а не UUID. Встречная заявка
@@ -286,6 +298,20 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
             <button class="btn quiet" id="regionToggle" style="width:auto">
               <span data-l="ru">Сменить регион</span><span data-l="en">Change region</span>
             </button>
+          </div>
+          <!-- Кому видно страну в публичном профиле. Решает база: «скрыто»
+               означает, что страна вообще не уезжает в чужой браузер. -->
+          <div class="row">
+            <div>
+              <b><span data-l="ru">Кто видит мою страну</span><span data-l="en">Who sees my country</span></b>
+              <div class="dim" style="font-size:14px" data-l="ru">В публичном профиле, рядом с датой регистрации.</div>
+              <div class="dim" style="font-size:14px" data-l="en">In the public profile, next to the join date.</div>
+            </div>
+            <select id="countryVis" style="width:auto;min-width:190px">
+              <option value="friends"></option>
+              <option value="public"></option>
+              <option value="none"></option>
+            </select>
           </div>
         </div>
 
@@ -372,13 +398,17 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 import {
   supabase, register, login, logout, resetPassword,
   verifyEmailCode, resendSignupCode,
-  getMyBadges, requestRegionChange, cancelRegionRequest, getMyRegionRequest,
+  getMyBadges, pinBadge, setCountryVisibility,
+  requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, changeEmail, changePassword, deleteAccount, getMyOrders,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=1a7916fb';
+} from '/assets/pixset-auth.js?v=ec4ff25c';
+import {
+  badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
+} from '/assets/pixset-ui.js?v=ec4ff25c';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -485,7 +515,7 @@ async function renderFriends() {
   try { list = await getFriends(); } catch { list = []; }
 
   const row = (f) => {
-    const link = `<a href="/u/?n=${encodeURIComponent(f.nickname)}">${esc(f.nickname)}</a>`;
+    const link = `<a href="/u/?n=${encodeURIComponent(f.nickname)}" data-nick="${esc(f.nickname)}">${esc(f.nickname)}</a>`;
     const buttons = f.kind === 'incoming'
       ? `<button class="btn small" data-accept="${esc(f.id)}">${esc(L('Принять', 'Accept'))}</button>
          <button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Отклонить', 'Decline'))}</button>`
@@ -507,6 +537,8 @@ async function renderFriends() {
     || `<div class="row"><span class="dim">${esc(L(
          'Пока никого. Найдите игрока по нику выше.',
          'Nobody yet. Find a player by nickname above.'))}</span></div>`;
+
+  paintNickBadges($('friendList')).catch(() => {});
 
   $('friendList').querySelectorAll('[data-accept]').forEach((b) => {
     b.onclick = () => busy(b, async () => {
@@ -556,9 +588,10 @@ $('friendNick').addEventListener('input', () => {
     $('friendSearch').innerHTML = found.map((p) =>
       `<div class="row" style="display:flex;align-items:center;gap:12px">
          ${avaHtml(p.avatar_url, p.nickname)}
-         <b style="flex:1;min-width:0">${esc(p.nickname)}</b>
+         <b style="flex:1;min-width:0" data-nick="${esc(p.nickname)}">${esc(p.nickname)}</b>
          <button class="btn small" data-add="${esc(p.nickname)}">${esc(L('Позвать', 'Invite'))}</button>
        </div>`).join('');
+    paintNickBadges($('friendSearch')).catch(() => {});
     $('friendSearch').querySelectorAll('[data-add]').forEach((b) => {
       b.onclick = () => busy(b, () => addFriend(b.dataset.add));
     });
@@ -706,45 +739,75 @@ $('logout').onclick = async () => {
    Бейдж выдаёт студия — здесь он только показывается. Регион меняется
    заявкой: игрок объясняет причину, студия отвечает письмом. */
 
-/** Страны, между которыми имеет смысл переезжать. Валюта выводится из страны:
-    Россия — рубли, остальные — доллары (то же правило в базе). */
-const COUNTRIES = [
-  ['RU', 'Россия', 'Russia'], ['BY', 'Беларусь', 'Belarus'], ['KZ', 'Казахстан', 'Kazakhstan'],
-  ['UA', 'Украина', 'Ukraine'], ['AM', 'Армения', 'Armenia'], ['AZ', 'Азербайджан', 'Azerbaijan'],
-  ['GE', 'Грузия', 'Georgia'], ['KG', 'Киргизия', 'Kyrgyzstan'], ['MD', 'Молдова', 'Moldova'],
-  ['TJ', 'Таджикистан', 'Tajikistan'], ['TM', 'Туркменистан', 'Turkmenistan'],
-  ['UZ', 'Узбекистан', 'Uzbekistan'], ['DE', 'Германия', 'Germany'], ['FR', 'Франция', 'France'],
-  ['GB', 'Великобритания', 'United Kingdom'], ['US', 'США', 'United States'],
-  ['CA', 'Канада', 'Canada'], ['PL', 'Польша', 'Poland'], ['ES', 'Испания', 'Spain'],
-  ['IT', 'Италия', 'Italy'], ['TR', 'Турция', 'Türkiye'], ['IL', 'Израиль', 'Israel'],
-  ['RS', 'Сербия', 'Serbia'], ['AE', 'ОАЭ', 'United Arab Emirates'],
-  ['TH', 'Таиланд', 'Thailand'], ['VN', 'Вьетнам', 'Vietnam'], ['CN', 'Китай', 'China'],
-  ['JP', 'Япония', 'Japan'], ['KR', 'Республика Корея', 'South Korea'],
-  ['IN', 'Индия', 'India'], ['BR', 'Бразилия', 'Brazil'], ['AR', 'Аргентина', 'Argentina'],
-  ['AU', 'Австралия', 'Australia'], ['NZ', 'Новая Зеландия', 'New Zealand'],
-];
-
+/** Страну игрок выбирает из полного списка ISO 3166-1: названия и сортировку
+    даёт браузер, поэтому список сразу совпадает с языком страницы. */
 let myCountry = '';
-
-function countryName(code) {
-  const row = COUNTRIES.find((c) => c[0] === code);
-  if (row) return L(row[1], row[2]);
-  return code || L('регион не указан', 'region not set');
-}
 
 async function renderMyBadges() {
   let rows = [];
   try { rows = await getMyBadges(); } catch { rows = []; }
-  $('myBadges').innerHTML = rows.map((b) => {
-    const title = L(b.title_ru, b.title_en) || b.slug;
-    const hint = L(b.hint_ru, b.hint_en) || '';
-    const icon = /^data:image\/(png|jpeg|webp);base64,/.test(b.icon_url || '')
-      ? `<img alt="" src="${esc(b.icon_url)}">`
-      : `<span class="dot"${b.color ? ` style="background:${esc(b.color)}"` : ''}></span>`;
-    const style = b.color ? ` style="border-color:${esc(b.color)};color:${esc(b.color)}"` : '';
-    return `<span class="bdg"${style}${hint ? ` title="${esc(hint)}"` : ''}>${icon}${esc(title)}</span>`;
-  }).join('');
+
+  $('myBadges').innerHTML = rows.length
+    ? rows.map((b) => {
+        // Закрепить можно только то, что бейдж разрешает; «всегда в нике»
+        // снять нельзя — об этом и пишем вместо переключателя.
+        const control = b.nick_forced
+          ? `<span class="badge">${esc(L('всегда в нике', 'always on the nickname'))}</span>`
+          : b.nick_allowed
+            ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+                 <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
+                 <span class="dim" style="font-size:13px">${esc(L('рядом с ником', 'next to nickname'))}</span>
+               </label>`
+            : `<span class="badge mute">${esc(L('только в профиле', 'profile only'))}</span>`;
+        const hidden = b.hide_in_profile
+          ? `<span class="badge mute">${esc(L('скрыт в профиле', 'hidden in profile'))}</span>` : '';
+        return `<div class="row" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${hidden}${control}
+        </div>`;
+      }).join('')
+    : `<div class="row"><span class="dim">${esc(L(
+        'Бейджей пока нет. Их выдаёт студия.',
+        'No badges yet. The studio hands them out.'))}</span></div>`;
+
+  $('myBadges').querySelectorAll('[data-pin]').forEach((box) => {
+    box.onchange = async () => {
+      box.disabled = true;
+      try {
+        await pinBadge(box.dataset.pin, box.checked);
+        // Иконки у ника пересобираем сразу — игрок должен видеть результат.
+        delete $('nick').dataset.nickBadges;
+        await paintNickBadges($('profile'));
+      } catch (err) {
+        box.checked = !box.checked;
+        say($('profMsg'), humanError(err));
+      } finally { box.disabled = false; }
+    };
+  });
 }
+
+const VISIBILITY = [
+  ['friends', 'Только друзьям', 'Friends only'],
+  ['public',  'Всем',            'Everyone'],
+  ['none',    'Никому',          'Nobody'],
+];
+
+function paintVisibilityOptions(current) {
+  [...$('countryVis').options].forEach((opt) => {
+    const row = VISIBILITY.find((v) => v[0] === opt.value);
+    if (row) opt.textContent = L(row[1], row[2]);
+  });
+  if (current) $('countryVis').value = current;
+}
+
+$('countryVis').onchange = async () => {
+  const mode = $('countryVis').value;
+  $('countryVis').disabled = true;
+  try {
+    await setCountryVisibility(mode);
+    say($('profMsg'), L('Видимость страны обновлена.', 'Country visibility updated.'), 'ok');
+  } catch (err) { say($('profMsg'), humanError(err)); }
+  finally { $('countryVis').disabled = false; }
+};
 
 const REGION_STATUS = {
   pending:  ['на рассмотрении', 'under review'],
@@ -757,9 +820,9 @@ async function renderRegion() {
   try { req = await getMyRegionRequest(); } catch { req = null; }
 
   // Список стран без той, что уже стоит: переезжать в себя же незачем.
-  $('regionPick').innerHTML = COUNTRIES
-    .filter((c) => c[0] !== myCountry)
-    .map((c) => `<option value="${c[0]}">${esc(L(c[1], c[2]))}</option>`).join('');
+  $('regionPick').innerHTML = countryOptions()
+    .filter((c) => c.code !== myCountry)
+    .map((c) => `<option value="${c.code}">${esc(c.name)}</option>`).join('');
 
   const open = req && req.status === 'pending';
   $('regionForm').hidden = !!open;
@@ -836,15 +899,20 @@ async function renderProfile(user) {
     $('hello').textContent = profile.nickname;
     $('newNick').value = profile.nickname;
     myCountry = (profile.country || '').toUpperCase();
-    $('regionInfo').textContent = `${countryName(myCountry)} · ${profile.currency === 'RUB'
-      ? L('цены в рублях', 'prices in roubles')
-      : L('цены в долларах', 'prices in dollars')}`;
+    $('nick').dataset.nick = profile.nickname;
+    $('regionInfo').textContent = `${countryFlag(myCountry)} ${
+      countryName(myCountry) || L('регион не указан', 'region not set')} · ${
+      profile.currency === 'RUB'
+        ? L('цены в рублях', 'prices in roubles')
+        : L('цены в долларах', 'prices in dollars')}`;
+    paintVisibilityOptions(profile.country_visibility || 'friends');
   } catch { $('nick').textContent = L('Игрок', 'Player'); }
 
   renderOrders();
   renderFriends();
   renderMyBadges();
   renderRegion();
+  paintNickBadges($('profile')).catch(() => {});
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
