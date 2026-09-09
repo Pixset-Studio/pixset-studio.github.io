@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '59ef2b33';
+export const SDK_VERSION = 'd9da1664';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -822,58 +822,75 @@ export async function revokeDevice(id) {
   if (error) throw error;
 }
 
-/** Человекочитаемые сообщения вместо английских ошибок Supabase. */
-export function humanError(err) {
-  const m = (err?.message || '').toLowerCase();
-  if (m.includes('invalid login credentials')) return 'Неверная почта или пароль.';
-  if (m.includes('email not confirmed'))       return 'Почта не подтверждена — проверь входящие.';
-  if (m.includes('user already registered'))   return 'Такая почта уже зарегистрирована.';
-  if (m.includes('password should be at least')) return 'Пароль слишком короткий — минимум 6 символов.';
-  if (m.includes('duplicate key') && m.includes('nickname')) return 'Этот ник уже занят.';
-  if (m.includes('unable to validate email'))  return 'Проверь правильность адреса почты.';
-  if (m.includes('for security purposes') || m.includes('rate limit')) {
-    return 'Слишком много попыток. Подожди минуту и попробуй снова.';
-  }
-  if (m.includes('failed to fetch')) return 'Нет связи с сервером. Проверь интернет.';
-  if (m.includes('already_owned'))    return 'Эта игра уже есть на твоём аккаунте.';
-  if (m.includes('not_authenticated'))return 'Сначала войди в аккаунт.';
-  if (m.includes('user_not_found'))   return 'Игрок с такой почтой не найден.';
-  if (m.includes('game_not_found'))   return 'Игра не найдена или ещё не вышла.';
-  if (m.includes('price_not_set'))    return 'Для этой игры не задана цена.';
-  if (m.includes('order_not_found'))  return 'Заказ не найден.';
-  if (m.includes('forbidden'))        return 'Нужны права администратора.';
-  if (m.includes('bad_nickname'))     return 'Ник: 3-20 символов, латиница, цифры, _ и -';
-  if (m.includes('nickname_taken'))   return 'Этот ник уже занят.';
-  if (m.includes('nickname_too_soon'))return 'Ник можно менять раз в сутки.';
-  if (m.includes('admin_cannot_self_delete')) {
-    return 'Аккаунт администратора нельзя удалить из профиля.';
-  }
-  if (m.includes('same_password'))    return 'Новый пароль совпадает со старым.';
-  if (m.includes('avatar_not_image')) return 'Это не картинка. Подойдут JPG, PNG или WebP.';
-  if (m.includes('avatar_too_big'))   return 'Картинку не удалось ужать. Возьмите изображение попроще.';
-  if (m.includes('avatar_bad_format'))return 'Неподдерживаемый формат картинки.';
+/* ── Человекочитаемые сообщения вместо английских ошибок Supabase ────────
+   Правило = что должно найтись в тексте ошибки + пара «по-русски / по-английски».
+   Порядок важен: первое совпадение и отвечает. Язык берём с самой страницы —
+   тот же атрибут, по которому сайт прячет неактивные надписи. */
+const ERROR_RULES = [
+  { any: ['invalid login credentials'], ru: 'Неверная почта или пароль.', en: 'Wrong email or password.' },
+  { any: ['email not confirmed'], ru: 'Почта не подтверждена — проверь входящие.', en: 'Email not confirmed — check your inbox.' },
+  { any: ['user already registered'], ru: 'Такая почта уже зарегистрирована.', en: 'That email is already registered.' },
+  { any: ['password should be at least'], ru: 'Пароль слишком короткий — минимум 6 символов.', en: 'Password too short — 6 characters minimum.' },
+  { all: ['duplicate key', 'nickname'], ru: 'Этот ник уже занят.', en: 'That nickname is taken.' },
+  { any: ['unable to validate email'], ru: 'Проверь правильность адреса почты.', en: 'Check that the email address is correct.' },
+  { any: ['for security purposes', 'rate limit'],
+    ru: 'Слишком много попыток. Подожди минуту и попробуй снова.',
+    en: 'Too many attempts. Wait a minute and try again.' },
+  { any: ['failed to fetch'], ru: 'Нет связи с сервером. Проверь интернет.', en: 'No connection to the server. Check your internet.' },
+  { any: ['already_owned'], ru: 'Эта игра уже есть на твоём аккаунте.', en: 'This game is already on your account.' },
+  { any: ['not_authenticated'], ru: 'Сначала войди в аккаунт.', en: 'Sign in first.' },
+  { any: ['user_not_found'], ru: 'Игрок с такой почтой не найден.', en: 'No player with that email.' },
+  { any: ['game_not_found'], ru: 'Игра не найдена или ещё не вышла.', en: 'Game not found, or not released yet.' },
+  { any: ['price_not_set'], ru: 'Для этой игры не задана цена.', en: 'No price is set for this game.' },
+  { any: ['order_not_found'], ru: 'Заказ не найден.', en: 'Order not found.' },
+  { any: ['forbidden'], ru: 'Нужны права администратора.', en: 'Administrator rights are required.' },
+  { any: ['bad_nickname'], ru: 'Ник: 3-20 символов, латиница, цифры, _ и -', en: 'Nickname: 3-20 characters, Latin letters, digits, _ and -' },
+  { any: ['nickname_taken'], ru: 'Этот ник уже занят.', en: 'That nickname is taken.' },
+  { any: ['nickname_too_soon'], ru: 'Ник можно менять раз в сутки.', en: 'A nickname can be changed once a day.' },
+  { any: ['admin_cannot_self_delete'],
+    ru: 'Аккаунт администратора нельзя удалить из профиля.',
+    en: 'An administrator account cannot be deleted from the profile.' },
+  { any: ['same_password'], ru: 'Новый пароль совпадает со старым.', en: 'The new password matches the old one.' },
+  { any: ['avatar_not_image'], ru: 'Это не картинка. Подойдут JPG, PNG или WebP.', en: 'That is not an image. JPG, PNG or WebP will do.' },
+  { any: ['avatar_too_big'],
+    ru: 'Картинку не удалось ужать. Возьмите изображение попроще.',
+    en: 'The image could not be compressed. Try a simpler picture.' },
+  { any: ['avatar_bad_format'], ru: 'Неподдерживаемый формат картинки.', en: 'Unsupported image format.' },
   // PostgREST так отвечает, когда функции в базе ещё нет. Для владельца это
   // однозначный сигнал: миграция не применена, а не «что-то сломалось».
-  if (m.includes('could not find the function') || m.includes('schema cache')) {
-    return 'Эта возможность ещё не включена в базе: примените миграцию '
-         + 'supabase/migrations/0002_friends.sql в SQL Editor.';
-  }
+  { any: ['could not find the function', 'schema cache'],
+    ru: 'Эта возможность ещё не включена в базе: примените миграцию supabase/migrations/0002_friends.sql в SQL Editor.',
+    en: 'This feature is not enabled in the database yet: apply supabase/migrations/0002_friends.sql in the SQL Editor.' },
   // Отказ политики RLS. Для владельца это почти всегда «нет прав админа»,
   // а не поломка — сырой текст Postgres тут только пугает.
-  if (m.includes('row-level security')) return 'Недостаточно прав: нужен аккаунт администратора.';
-  if (m.includes('not_friends'))      return 'Позвать в комнату можно только друга.';
-  if (m.includes('bad_room'))         return 'Некорректный код комнаты.';
-  if (m.includes('player_not_found')) return 'Игрок с таким ником не найден.';
-  if (m.includes('cannot_add_self'))  return 'Себя в друзья добавить нельзя.';
-  if (m.includes('request_not_found'))return 'Заявка уже отозвана или принята.';
-  if (m.includes('stats_too_big'))    return 'Сводка прогресса слишком большая.';
-  if (m.includes('payments_not_configured')) return 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.';
-  if (m.includes('provider_error') || m.includes('no_payment_url')) {
-    return 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.';
+  { any: ['row-level security'], ru: 'Недостаточно прав: нужен аккаунт администратора.', en: 'Not enough rights: an administrator account is required.' },
+  { any: ['not_friends'], ru: 'Позвать в комнату можно только друга.', en: 'Only a friend can be invited to a room.' },
+  { any: ['bad_room'], ru: 'Некорректный код комнаты.', en: 'Invalid room code.' },
+  { any: ['player_not_found'], ru: 'Игрок с таким ником не найден.', en: 'No player with that nickname.' },
+  { any: ['cannot_add_self'], ru: 'Себя в друзья добавить нельзя.', en: 'You cannot add yourself as a friend.' },
+  { any: ['request_not_found'], ru: 'Заявка уже отозвана или принята.', en: 'That request was already withdrawn or accepted.' },
+  { any: ['stats_too_big'], ru: 'Сводка прогресса слишком большая.', en: 'The progress summary is too large.' },
+  { any: ['payments_not_configured'],
+    ru: 'Приём оплаты ещё настраивается. Напишите нам — выдадим лицензию вручную.',
+    en: 'Payments are still being set up. Write to us and we will grant the licence by hand.' },
+  { any: ['provider_error', 'no_payment_url'],
+    ru: 'Платёжная система не приняла заказ. Попробуйте позже или напишите нам.',
+    en: 'The payment provider rejected the order. Try later or write to us.' },
+  { any: ['currency_not_supported'],
+    ru: 'Оплата пока доступна только для России. Первый мир игры открыт бесплатно.',
+    en: 'Payments are available in Russia only for now. The first world of the game is free.' },
+  { any: ['payment_failed'], ru: 'Не удалось создать счёт. Попробуйте ещё раз.', en: 'Could not create the invoice. Please try again.' },
+];
+
+export function humanError(err) {
+  const m = (err?.message || '').toLowerCase();
+  const en = typeof document !== 'undefined'
+    && document.documentElement.getAttribute('data-site-lang') === 'en';
+  for (const rule of ERROR_RULES) {
+    const hit = rule.all
+      ? rule.all.every((needle) => m.includes(needle))
+      : rule.any.some((needle) => m.includes(needle));
+    if (hit) return en ? rule.en : rule.ru;
   }
-  if (m.includes('currency_not_supported')) {
-    return 'Оплата пока доступна только для России. Первый мир игры открыт бесплатно.';
-  }
-  if (m.includes('payment_failed'))   return 'Не удалось создать счёт. Попробуйте ещё раз.';
-  return err?.message || 'Неизвестная ошибка.';
+  return err?.message || (en ? 'Unknown error.' : 'Неизвестная ошибка.');
 }

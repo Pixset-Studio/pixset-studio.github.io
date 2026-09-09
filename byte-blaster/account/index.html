@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="/byte-blaster/assets/site.css">
 <script>
 /* Pick the language BEFORE first paint so the page never flashes the wrong one. */
-(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+(function(){try{var s=localStorage.getItem('bbSiteLang')||localStorage.getItem('pixsetSiteLang');if(s!=='ru'&&s!=='en'){
 var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
 s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
 document.documentElement.setAttribute('data-site-lang',s);
@@ -253,7 +253,7 @@ import {
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=59ef2b33';
+} from '/byte-blaster/assets/pixset-auth.js?v=d9da1664';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };

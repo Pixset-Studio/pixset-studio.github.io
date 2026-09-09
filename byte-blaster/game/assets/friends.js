@@ -98,35 +98,49 @@
     let s;
     try { s = window.Profile.snapshot(); } catch (e) { return null; }
     if (!s) return null;
+    const kills = (s.stompKills | 0) + (s.blasterKills | 0)
+                + (s.burnKills | 0) + (s.freezeKills | 0);
     const out = {
       levels: s.done | 0, levelsMax: s.total | 0,
       stars: s.stars | 0, starsMax: s.starsMax | 0,
+      stars3: s.stars3 | 0,                     // уровней на все три звезды
       crystals: s.shards | 0, crystalsMax: s.shardsMax | 0,
       ach: s.ach | 0, achMax: s.achMax | 0,
       score: s.score | 0,
       playtime: s.playtime | 0,
-      hardcore: s.doneHard | 0,
+      // Хардкор без своего максимума читался как голое число («хардкор 103»);
+      // уровни в нём те же, поэтому потолок общий с кампанией.
+      hardcore: s.doneHard | 0, hardcoreMax: s.total | 0,
       // ── Витрина пошире ────────────────────────────────────────────────
       // Всё это профиль уже считает; раньше наружу уходил только прогресс,
       // и карточка игрока выглядела одинаково у всех, кто дошёл до конца.
       coins: s.coins | 0,                       // собрано монет за всё время
+      coinsLevels: s.coinsLevels | 0,           // из них — на уровнях кампании
       bestAdv: s.bestAdv | 0,                   // рекорд в кампании
       bestInf: s.bestInf | 0,                   // рекорд в бесконечном режиме
-      bosses: (s.bosses | 0) + (s.bossesHard | 0),
-      secrets: s.secrets | 0,                   // найдено секретных выходов
+      bosses: s.bosses | 0, bossesMax: s.bossesMax | 0,
+      bossesHard: s.bossesHard | 0,             // те же боссы, но в хардкоре
       worlds: s.worlds | 0, worldsMax: s.worldsMax | 0,
       rainbow: s.rainbow | 0, rainbowMax: 10,   // радужные осколки
       logs: s.logs | 0, logsMax: s.logsMax | 0, // прочитано сюжетного архива
       perfect: s.perfect | 0,                   // идеальных уровней
       streak: s.streak | 0,                     // серия без смертей
+      deaths: s.deaths | 0,                     // сколько раз погиб за всё время
       // Боевой почерк: по чему видно, как именно игрок проходит игру.
+      kills: kills,
       stompKills: s.stompKills | 0, blasterKills: s.blasterKills | 0,
       burnKills: s.burnKills | 0, freezeKills: s.freezeKills | 0,
       jumps: s.jumps | 0,
     };
+    // Секретных выходов в игре давно нет (см. _persistAdvProgress в game.js) —
+    // поле уехало бы на сайт вечным нулём и путало бы карточку.
     try {
       if (typeof window.Profile.completion === 'function') {
-        out.completion = +window.Profile.completion(s).toFixed(3);
+        const c = window.Profile.completion(s);
+        out.completion = +c.toFixed(3);
+        // Звание отправляем ключом (rank0…rank6): сайт покажет его на своём
+        // языке, а не на том, на котором игрок в тот день играл.
+        if (typeof window.Profile.rankKey === 'function') out.rank = window.Profile.rankKey(c);
       }
     } catch (e) { /* без общей доли обойдёмся */ }
     return out;

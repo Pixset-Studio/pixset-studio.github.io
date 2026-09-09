@@ -1,0 +1,45 @@
+/* Вики Pixset Studio — переключатель RU/EN.
+ *
+ * У вики своё оформление (неоновый терминал) и свой инлайн-CSS в каждой
+ * странице, поэтому язык живёт отдельным файлом: 19 копий одного правила
+ * разошлись бы при первой же правке.
+ *
+ * Оба языка лежат в самой разметке, лишний прячется по атрибуту на <html> —
+ * ровно как на остальном сайте и на сайте Byte Blaster. */
+
+[data-site-lang='ru'] [data-l='en'],
+[data-site-lang='en'] [data-l='ru'] { display: none !important; }
+
+.langsw {
+  display: inline-flex;
+  border: 1px solid rgba(57, 255, 20, .4);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+.langsw button {
+  background: none;
+  border: none;
+  cursor: none;                 /* у вики свой курсор — системный тут лишний */
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: rgba(200, 230, 255, .7);
+  padding: 7px 10px;
+  transition: color .25s, background .25s;
+}
+.langsw button + button { border-left: 1px solid rgba(57, 255, 20, .3); }
+.langsw button:hover { color: #39ff14; }
+.langsw button[aria-pressed='true'] {
+  color: #39ff14;
+  background: rgba(57, 255, 20, .1);
+  text-shadow: 0 0 8px #39ff14;
+}
+
+/* В мобильном меню пункты идут в столбик — переключатель занимает всю ширину. */
+.mobile-nav .langsw { display: flex; margin: 8px 0 0; }
+.mobile-nav .langsw button { flex: 1; padding: 12px 0; font-size: 13px; }
+
+@keyframes wikiLangFade { 0% { opacity: 1 } 38% { opacity: .25 } 100% { opacity: 1 } }
+body.langswap { animation: wikiLangFade .34s ease; }
+@media (prefers-reduced-motion: reduce) { body.langswap { animation: none; } }

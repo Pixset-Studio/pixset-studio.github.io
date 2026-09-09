@@ -123,6 +123,9 @@
       max: (Number(p.max) >= 1) ? Math.floor(Number(p.max)) : 1,
       done: Array.isArray(p.done) ? p.done : [],
       stars: obj(p.stars), scores: obj(p.scores), shards: obj(p.shards),
+      // Монеты по уровням игра сохраняет (recordLevelCoins), но сюда их не
+      // возвращали — и «собрано на уровнях» в сводке всегда выходило нулём.
+      coins: obj(p.coins),
     };
   }
   function obj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
@@ -173,6 +176,11 @@
       stompKills: stat('stompKills'), blasterKills: stat('blasterKills'),
       burnKills: stat('burnKills'), freezeKills: stat('freezeKills'),
       perfect: stat('perfectLevels'), streak: stat('noDeathStreak'),
+      deaths: stat('deaths'),
+      // Уровни, пройденные на все три звезды — это не то же самое, что сумма
+      // звёзд: она копится и с двух-звёздочных прохождений.
+      stars3: Object.keys(p.stars).filter((n) => (p.stars[n] | 0) >= 3).length
+            + Object.keys(ph.stars).filter((n) => (ph.stars[n] | 0) >= 3).length,
       // Ниже — то, что не нужно считать отдельным счётчиком: всё уже лежит в
       // прогрессе, надо только сложить. Отдельные счётчики пришлось бы
       // расставлять по коду и они разошлись бы с реальным сохранением.
@@ -180,6 +188,7 @@
       // Босс-уровень — каждый десятый; пройденные боссы видны прямо в списке.
       bosses: p.done.filter(n => n % 10 === 0).length,
       bossesHard: ph.done.filter(n => n % 10 === 0).length,
+      bossesMax: Math.floor(total / 10),
       secrets: (Array.isArray(p.secrets) ? p.secrets.length : 0)
              + (Array.isArray(ph.secrets) ? ph.secrets.length : 0),
       // Мир засчитан, когда пройден хотя бы один его уровень.
@@ -206,11 +215,14 @@
     { at: 0.45, key: 'rank3' }, { at: 0.65, key: 'rank4' }, { at: 0.85, key: 'rank5' },
     { at: 1.00, key: 'rank6' },
   ];
-  function rankFor(c) {
+  // Ключ, а не готовая строка: сводка для сайта уходит на сервер один раз, а
+  // читают её и по-русски, и по-английски — переводит уже тот, кто показывает.
+  function rankKeyFor(c) {
     let r = RANKS[0];
     for (const x of RANKS) if (c >= x.at) r = x;
-    return T(r.key);
+    return r.key;
   }
+  function rankFor(c) { return T(rankKeyFor(c)); }
 
   function fmtTime(sec) {
     sec = sec | 0;
@@ -777,6 +789,6 @@
 
   // paintAvatar наружу: кнопка аккаунта в углу рисует ту же аватарку, что и
   // профиль, вместо эмодзи-заглушки.
-  window.Profile = { show, hide, isOpen, avatar, nick, snapshot, completion, paintAvatar };
+  window.Profile = { show, hide, isOpen, avatar, nick, snapshot, completion, rankKey: rankKeyFor, paintAvatar };
   console.log('✅ Profile loaded');
 })();

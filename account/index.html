@@ -1,25 +1,36 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru"
+      data-title-ru="Аккаунт — Pixset Studio"
+      data-title-en="Account — Pixset Studio">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Аккаунт — Pixset Studio</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0a0a0a">
-<link rel="icon" href="/assets/logo.jpg">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/studio.css">
 <script>
-(function(){try{var t=localStorage.getItem('pixsetTheme');
+/* Тема и язык ставятся до первой отрисовки, иначе страница мигнёт чужим
+   оформлением и чужим алфавитом. */
+(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('pixsetTheme');
 /* Тема Byte Blaster открыта владельцам лицензии. Ответ сервера кэширован
    (pixsetOwnsBB): сюда, до первой отрисовки, сетевой запрос не успеет. */
 var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
 if(t==='byteblaster'&&!own)t='industrial';
 if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
-document.documentElement.setAttribute('data-theme',t);}catch(e){
-document.documentElement.setAttribute('data-theme','industrial');}})();
+d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial');}
+try{var l=localStorage.getItem('pixsetSiteLang')||localStorage.getItem('bbSiteLang');
+if(l!=='ru'&&l!=='en'){var b=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+l=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(b)?'ru':'en';}
+d.setAttribute('data-site-lang',l);d.setAttribute('lang',l);}
+catch(e){d.setAttribute('data-site-lang','ru');}})();
 </script>
 <!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
 <link rel="canonical" href="https://pixset-studio.github.io/account/">
@@ -31,204 +42,226 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
     <button class="burger" id="burger" aria-label="Меню">☰</button>
     <nav class="main">
-      <a href="/">Главная</a>
-      <a href="/wikipedia">Вики</a>
-      <a href="/store">Магазин</a>
-      <a href="/account" aria-current="page"><span data-account-label>Аккаунт</span></a>
+      <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+      <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+      <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/account" aria-current="page"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
     </nav>
   </div>
 </header>
 
 <div id="mobileNav">
-  <a href="/">Главная</a>
-  <a href="/wikipedia">Вики</a>
-  <a href="/store">Магазин</a>
-  <a href="/account"><span data-account-label>Аккаунт</span></a>
+  <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+  <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+  <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
 </div>
 
 <main>
 <section style="border-top:none">
   <div class="wrap">
 
-    <div id="loading"><p class="empty">Проверяем сессию…</p></div>
+    <div id="loading"><p class="empty"><span data-l="ru">Проверяем сессию…</span><span data-l="en">Checking your session…</span></p></div>
 
     <!-- ── Гость ─────────────────────────────────────────────────────── -->
     <div id="guest" hidden>
-      <p class="kicker" style="text-align:center">Аккаунт студии</p>
-      <h2 style="text-align:center">Вход</h2>
-      <p class="dim" style="text-align:center;max-width:520px;margin:0 auto 26px">
+      <p class="kicker" style="text-align:center"><span data-l="ru">Аккаунт студии</span><span data-l="en">Studio account</span></p>
+      <h2 style="text-align:center"><span data-l="ru">Вход</span><span data-l="en">Sign in</span></h2>
+      <p class="dim" style="text-align:center;max-width:520px;margin:0 auto 26px" data-l="ru">
         Один аккаунт на все игры Pixset Studio. Купленная игра открывается везде, где вы вошли.
+      </p>
+      <p class="dim" style="text-align:center;max-width:520px;margin:0 auto 26px" data-l="en">
+        One account for every Pixset Studio game. A game you bought unlocks everywhere you sign in.
       </p>
 
       <div class="panel">
         <div class="tabs">
-          <button id="tabLogin" class="on">Вход</button>
-          <button id="tabReg">Регистрация</button>
+          <button id="tabLogin" class="on"><span data-l="ru">Вход</span><span data-l="en">Sign in</span></button>
+          <button id="tabReg"><span data-l="ru">Регистрация</span><span data-l="en">Sign up</span></button>
         </div>
 
         <div class="msg" id="guestMsg"></div>
 
         <form id="formLogin">
           <div class="field">
-            <label for="loginEmail">Почта</label>
+            <label for="loginEmail"><span data-l="ru">Почта</span><span data-l="en">Email</span></label>
             <input type="email" id="loginEmail" autocomplete="email" required>
           </div>
           <div class="field">
-            <label for="loginPass">Пароль</label>
+            <label for="loginPass"><span data-l="ru">Пароль</span><span data-l="en">Password</span></label>
             <input type="password" id="loginPass" autocomplete="current-password" required>
           </div>
-          <button type="submit" class="btn solid">Войти</button>
+          <button type="submit" class="btn solid"><span data-l="ru">Войти</span><span data-l="en">Sign in</span></button>
           <p style="text-align:center;margin:14px 0 0;font-size:14px">
-            <a href="#" id="forgot">Забыли пароль?</a>
+            <a href="#" id="forgot"><span data-l="ru">Забыли пароль?</span><span data-l="en">Forgot your password?</span></a>
           </p>
         </form>
 
         <form id="formReg" hidden>
           <div class="field">
-            <label for="regNick">Ник</label>
+            <label for="regNick"><span data-l="ru">Ник</span><span data-l="en">Nickname</span></label>
             <input type="text" id="regNick" autocomplete="username" required
-                   minlength="3" maxlength="20" placeholder="3-20, латиница, цифры, _ и -">
+                   minlength="3" maxlength="20" data-ph-ru="3-20, латиница, цифры, _ и -"
+                   data-ph-en="3-20, Latin letters, digits, _ and -">
           </div>
           <div class="field">
-            <label for="regEmail">Почта</label>
+            <label for="regEmail"><span data-l="ru">Почта</span><span data-l="en">Email</span></label>
             <input type="email" id="regEmail" autocomplete="email" required>
           </div>
           <div class="field">
-            <label for="regPass">Пароль</label>
+            <label for="regPass"><span data-l="ru">Пароль</span><span data-l="en">Password</span></label>
             <input type="password" id="regPass" autocomplete="new-password" required minlength="6">
           </div>
-          <button type="submit" class="btn solid">Создать аккаунт</button>
+          <button type="submit" class="btn solid"><span data-l="ru">Создать аккаунт</span><span data-l="en">Create account</span></button>
         </form>
       </div>
     </div>
 
     <!-- ── Новый пароль ──────────────────────────────────────────────── -->
     <div id="recovery" hidden>
-      <h2 style="text-align:center">Новый пароль</h2>
+      <h2 style="text-align:center"><span data-l="ru">Новый пароль</span><span data-l="en">New password</span></h2>
       <div class="panel">
         <div class="msg" id="recMsg"></div>
         <form id="formRec">
           <div class="field">
-            <label for="newPass">Пароль</label>
+            <label for="newPass"><span data-l="ru">Пароль</span><span data-l="en">Password</span></label>
             <input type="password" id="newPass" autocomplete="new-password" required minlength="6">
           </div>
-          <button type="submit" class="btn solid">Сохранить</button>
+          <button type="submit" class="btn solid"><span data-l="ru">Сохранить</span><span data-l="en">Save</span></button>
         </form>
       </div>
     </div>
 
     <!-- ── Профиль ───────────────────────────────────────────────────── -->
     <div id="profile" hidden>
-      <p class="kicker">Мой аккаунт</p>
-      <h2 id="hello">Профиль</h2>
+      <p class="kicker"><span data-l="ru">Мой аккаунт</span><span data-l="en">My account</span></p>
+      <h2 id="hello"><span data-l="ru">Профиль</span><span data-l="en">Profile</span></h2>
 
       <div class="panel wide">
         <div class="who">
           <!-- Аватар — кнопка: клик открывает выбор файла. -->
-          <button type="button" class="ava" id="ava" title="Сменить фото">?</button>
+          <button type="button" class="ava" id="ava"
+                  data-tip-ru="Сменить фото" data-tip-en="Change photo" title="Сменить фото">?</button>
           <div style="min-width:0">
             <div class="nick" id="nick">…</div>
             <div class="mail" id="mail"></div>
             <div class="avaActions">
-              <button type="button" id="avaPick">Загрузить фото</button>
-              <button type="button" id="avaClear" hidden>Убрать</button>
-              <a id="myPublic" href="#">Мой публичный профиль</a>
+              <button type="button" id="avaPick"></button>
+              <button type="button" id="avaClear" hidden><span data-l="ru">Убрать</span><span data-l="en">Remove</span></button>
+              <a id="myPublic" href="#"><span data-l="ru">Мой публичный профиль</span><span data-l="en">My public profile</span></a>
             </div>
           </div>
           <input type="file" id="avaFile" accept="image/*" hidden>
-          <button class="btn quiet" id="logout" style="margin-left:auto;width:auto;padding:9px 16px">Выйти</button>
+          <button class="btn quiet" id="logout" style="margin-left:auto;width:auto;padding:9px 16px"><span data-l="ru">Выйти</span><span data-l="en">Sign out</span></button>
         </div>
 
         <div class="msg" id="profMsg"></div>
 
-        <h3>Мои игры</h3>
+        <h3><span data-l="ru">Мои игры</span><span data-l="en">My games</span></h3>
         <div class="rows" id="lib"></div>
 
         <!-- ── Друзья ──────────────────────────────────────────────────────
              Заявка идёт по нику: игрок знает ник, а не UUID. Встречная заявка
              сразу становится дружбой — см. friend_request в миграции 0002. -->
-        <h3 style="margin-top:26px">Друзья</h3>
+        <h3 style="margin-top:26px"><span data-l="ru">Друзья</span><span data-l="en">Friends</span></h3>
         <div class="field" style="max-width:420px">
-          <label for="friendNick">Добавить по нику</label>
+          <label for="friendNick"><span data-l="ru">Добавить по нику</span><span data-l="en">Add by nickname</span></label>
           <div style="display:flex;gap:8px">
-            <input type="text" id="friendNick" placeholder="ник игрока" autocomplete="off" style="flex:1">
-            <button class="btn" id="friendAdd" style="width:auto;padding:9px 18px">Позвать</button>
+            <input type="text" id="friendNick" data-ph-ru="ник игрока" data-ph-en="player nickname"
+                   placeholder="ник игрока" autocomplete="off" style="flex:1">
+            <button class="btn" id="friendAdd" style="width:auto;padding:9px 18px"><span data-l="ru">Позвать</span><span data-l="en">Invite</span></button>
           </div>
         </div>
         <div class="msg" id="friendMsg"></div>
         <div class="rows" id="friendSearch" style="margin-bottom:12px"></div>
         <div class="rows" id="friendList"></div>
 
-        <h3 style="margin-top:26px">Профиль</h3>
+        <h3 style="margin-top:26px"><span data-l="ru">Профиль</span><span data-l="en">Profile</span></h3>
         <div class="grantbox" style="margin-bottom:10px">
           <div class="field">
-            <label for="newNick">Ник</label>
+            <label for="newNick"><span data-l="ru">Ник</span><span data-l="en">Nickname</span></label>
             <input type="text" id="newNick" minlength="3" maxlength="20"
+                   data-ph-ru="3-20, латиница, цифры, _ и -" data-ph-en="3-20, Latin letters, digits, _ and -"
                    placeholder="3-20, латиница, цифры, _ и -">
           </div>
-          <button class="btn quiet" id="saveNick" style="width:auto">Сохранить</button>
+          <button class="btn quiet" id="saveNick" style="width:auto"><span data-l="ru">Сохранить</span><span data-l="en">Save</span></button>
         </div>
-        <p class="dim" style="font-size:13px;margin-bottom:20px">
+        <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="ru">
           Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.
         </p>
-
-        <div class="grantbox" style="margin-bottom:10px">
-          <div class="field">
-            <label for="newEmail">Почта для входа</label>
-            <input type="email" id="newEmail" placeholder="new@mail.com">
-          </div>
-          <button class="btn quiet" id="saveEmail" style="width:auto">Изменить</button>
-        </div>
-        <p class="dim" style="font-size:13px;margin-bottom:20px">
-          На новый адрес придёт письмо. Пока вы его не подтвердите, вход остаётся по старому.
+        <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="en">
+          Other players see this nickname in multiplayer. It can be changed once a day.
         </p>
 
         <div class="grantbox" style="margin-bottom:10px">
           <div class="field">
-            <label for="newPass2">Новый пароль</label>
+            <label for="newEmail"><span data-l="ru">Почта для входа</span><span data-l="en">Sign-in email</span></label>
+            <input type="email" id="newEmail" placeholder="new@mail.com">
+          </div>
+          <button class="btn quiet" id="saveEmail" style="width:auto"><span data-l="ru">Изменить</span><span data-l="en">Change</span></button>
+        </div>
+        <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="ru">
+          На новый адрес придёт письмо. Пока вы его не подтвердите, вход остаётся по старому.
+        </p>
+        <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="en">
+          We will email the new address. Until you confirm it, you keep signing in with the old one.
+        </p>
+
+        <div class="grantbox" style="margin-bottom:10px">
+          <div class="field">
+            <label for="newPass2"><span data-l="ru">Новый пароль</span><span data-l="en">New password</span></label>
             <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
           </div>
-          <button class="btn quiet" id="savePass" style="width:auto">Сменить</button>
+          <button class="btn quiet" id="savePass" style="width:auto"><span data-l="ru">Сменить</span><span data-l="en">Change</span></button>
         </div>
 
         <div class="rows" style="margin-top:20px">
           <div class="row">
             <div>
-              <b>Регион и валюта</b>
+              <b><span data-l="ru">Регион и валюта</span><span data-l="en">Region and currency</span></b>
               <div class="dim" style="font-size:14px" id="regionInfo">—</div>
             </div>
-            <span class="badge mute">задаётся при регистрации</span>
+            <span class="badge mute"><span data-l="ru">задаётся при регистрации</span><span data-l="en">set at sign-up</span></span>
           </div>
         </div>
 
-        <h3 style="margin-top:26px">Устройства</h3>
-        <p class="dim" style="font-size:13px;margin-bottom:12px">
+        <h3 style="margin-top:26px"><span data-l="ru">Устройства</span><span data-l="en">Devices</span></h3>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
           Устройства, с которых входили в игру. Отвязка не мешает войти снова.
+        </p>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
+          Devices the game was signed in from. Unlinking one does not stop you signing in again.
         </p>
         <div class="rows" id="devices"></div>
 
-        <h3 style="margin-top:26px">Покупки</h3>
+        <h3 style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
         <div class="rows" id="orders"></div>
 
-        <h3 style="margin-top:26px">Внешний вид сайта</h3>
-        <p class="dim" style="font-size:14px;margin-bottom:12px">
+        <h3 style="margin-top:26px"><span data-l="ru">Внешний вид сайта</span><span data-l="en">Site appearance</span></h3>
+        <p class="dim" style="font-size:14px;margin-bottom:12px" data-l="ru">
           Тема сохраняется в браузере и действует на всех страницах студии.
+        </p>
+        <p class="dim" style="font-size:14px;margin-bottom:12px" data-l="en">
+          The theme is stored in your browser and applies across every studio page.
         </p>
         <div class="rows" id="themes"></div>
 
-        <h3 style="margin-top:32px">Удаление аккаунта</h3>
+        <h3 style="margin-top:32px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Deleting the account</span></h3>
         <div class="rows">
           <div class="row">
             <div>
-              <b>Удалить аккаунт навсегда</b>
-              <div class="dim" style="font-size:14px">
+              <b><span data-l="ru">Удалить аккаунт навсегда</span><span data-l="en">Delete the account for good</span></b>
+              <div class="dim" style="font-size:14px" data-l="ru">
                 Вместе с ним пропадут лицензии на игры и история покупок. Отменить нельзя.
               </div>
+              <div class="dim" style="font-size:14px" data-l="en">
+                Game licences and the purchase history go with it. This cannot be undone.
+              </div>
             </div>
-            <button class="btn quiet" id="deleteAcc">Удалить</button>
+            <button class="btn quiet" id="deleteAcc"><span data-l="ru">Удалить</span><span data-l="en">Delete</span></button>
           </div>
         </div>
       </div>
@@ -242,7 +275,8 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
   <div class="wrap">
     <div class="row">
       <div>© 2024–2026 Pixset Studio</div>
-      <div><a href="/">Главная</a> · <a href="/store">Магазин</a></div>
+      <div><a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+           <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a></div>
     </div>
   </div>
 </footer>
@@ -256,11 +290,16 @@ import {
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=59ef2b33';
+} from '/assets/pixset-auth.js?v=d9da1664';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
 const hide = (el) => { el.hidden = true; };
+
+/** Строка на языке страницы — для текста, который рисует этот скрипт. */
+const L = (ru, en) => (window.PixsetLang ? window.PixsetLang.L(ru, en) : ru);
+const isEn = () => !!(window.PixsetLang && window.PixsetLang.now() === 'en');
+const locale = () => (isEn() ? 'en-GB' : 'ru-RU');
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -295,7 +334,8 @@ function paintOwnAvatar(url, nickname) {
     box.textContent = (ownNick || '?').charAt(0).toUpperCase();
   }
   $('avaClear').hidden = !ownAvatarUrl;
-  $('avaPick').textContent = ownAvatarUrl ? 'Сменить фото' : 'Загрузить фото';
+  $('avaPick').textContent = ownAvatarUrl
+    ? L('Сменить фото', 'Change photo') : L('Загрузить фото', 'Upload a photo');
   if (ownNick) $('myPublic').href = '/u/?n=' + encodeURIComponent(ownNick);
 }
 
@@ -312,7 +352,7 @@ $('avaFile').onchange = async () => {
     const dataUrl = await avatarFromFile(file);
     await updateAvatar(dataUrl);
     paintOwnAvatar(dataUrl, ownNick);
-    say($('profMsg'), 'Аватар обновлён.', 'ok');
+    say($('profMsg'), L('Аватар обновлён.', 'Avatar updated.'), 'ok');
   } catch (err) { say($('profMsg'), humanError(err)); }
   finally { $('avaPick').disabled = false; }
 };
@@ -322,7 +362,7 @@ $('avaClear').onclick = (e) => busy(e.currentTarget, async () => {
   try {
     await removeAvatar();
     paintOwnAvatar(null, ownNick);
-    say($('profMsg'), 'Аватар убран.', 'ok');
+    say($('profMsg'), L('Аватар убран.', 'Avatar removed.'), 'ok');
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
 
@@ -347,9 +387,9 @@ function avaHtml(url, nickname, px = 34) {
 }
 
 const FRIEND_GROUPS = [
-  { kind: 'incoming', title: 'Зовут в друзья' },
-  { kind: 'friend',   title: 'Друзья' },
-  { kind: 'outgoing', title: 'Отправлено' },
+  { kind: 'incoming', ru: 'Зовут в друзья', en: 'Friend requests' },
+  { kind: 'friend',   ru: 'Друзья',         en: 'Friends' },
+  { kind: 'outgoing', ru: 'Отправлено',     en: 'Sent' },
 ];
 
 async function renderFriends() {
@@ -359,11 +399,11 @@ async function renderFriends() {
   const row = (f) => {
     const link = `<a href="/u/?n=${encodeURIComponent(f.nickname)}">${esc(f.nickname)}</a>`;
     const buttons = f.kind === 'incoming'
-      ? `<button class="btn small" data-accept="${esc(f.id)}">Принять</button>
-         <button class="btn small quiet" data-remove="${esc(f.id)}">Отклонить</button>`
+      ? `<button class="btn small" data-accept="${esc(f.id)}">${esc(L('Принять', 'Accept'))}</button>
+         <button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Отклонить', 'Decline'))}</button>`
       : f.kind === 'outgoing'
-        ? `<button class="btn small quiet" data-remove="${esc(f.id)}">Отменить</button>`
-        : `<button class="btn small quiet" data-remove="${esc(f.id)}">Удалить</button>`;
+        ? `<button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Отменить', 'Cancel'))}</button>`
+        : `<button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Удалить', 'Remove'))}</button>`;
     return `<div class="row" style="display:flex;align-items:center;gap:12px">
       ${avaHtml(f.avatar_url, f.nickname)}
       <b style="flex:1;min-width:0">${link}</b>${buttons}</div>`;
@@ -372,11 +412,13 @@ async function renderFriends() {
   const html = FRIEND_GROUPS.map((g) => {
     const items = list.filter((f) => f.kind === g.kind);
     if (!items.length) return '';
-    return `<div class="dim" style="margin:10px 0 4px">${g.title}</div>` + items.map(row).join('');
+    return `<div class="dim" style="margin:10px 0 4px">${esc(L(g.ru, g.en))}</div>` + items.map(row).join('');
   }).join('');
 
   $('friendList').innerHTML = html
-    || '<div class="row"><span class="dim">Пока никого. Найдите игрока по нику выше.</span></div>';
+    || `<div class="row"><span class="dim">${esc(L(
+         'Пока никого. Найдите игрока по нику выше.',
+         'Nobody yet. Find a player by nickname above.'))}</span></div>`;
 
   $('friendList').querySelectorAll('[data-accept]').forEach((b) => {
     b.onclick = () => busy(b, async () => {
@@ -400,8 +442,9 @@ async function addFriend(nickname) {
   try {
     const res = await sendFriendRequest(nick);
     say($('friendMsg'), res === 'accepted'
-      ? `Теперь вы друзья с ${nick} — заявка уже ждала вас.`
-      : `Заявка отправлена игроку ${nick}.`, 'ok');
+      ? L(`Теперь вы друзья с ${nick} — заявка уже ждала вас.`,
+          `You and ${nick} are friends now — their request was already waiting.`)
+      : L(`Заявка отправлена игроку ${nick}.`, `Request sent to ${nick}.`), 'ok');
     $('friendNick').value = '';
     $('friendSearch').innerHTML = '';
     await renderFriends();
@@ -426,7 +469,7 @@ $('friendNick').addEventListener('input', () => {
       `<div class="row" style="display:flex;align-items:center;gap:12px">
          ${avaHtml(p.avatar_url, p.nickname)}
          <b style="flex:1;min-width:0">${esc(p.nickname)}</b>
-         <button class="btn small" data-add="${esc(p.nickname)}">Позвать</button>
+         <button class="btn small" data-add="${esc(p.nickname)}">${esc(L('Позвать', 'Invite'))}</button>
        </div>`).join('');
     $('friendSearch').querySelectorAll('[data-add]').forEach((b) => {
       b.onclick = () => busy(b, () => addFriend(b.dataset.add));
@@ -459,7 +502,8 @@ $('formReg').onsubmit = (e) => {
   clear($('guestMsg'));
   const nickname = $('regNick').value.trim();
   if (!NICKNAME_RE.test(nickname)) {
-    say($('guestMsg'), 'Ник: 3-20 символов, только латиница, цифры, _ и -');
+    say($('guestMsg'), L('Ник: 3-20 символов, только латиница, цифры, _ и -',
+                         'Nickname: 3-20 characters, Latin letters, digits, _ and - only'));
     return;
   }
   return busy(e.submitter, async () => {
@@ -468,7 +512,8 @@ $('formReg').onsubmit = (e) => {
         email: $('regEmail').value.trim(), password: $('regPass').value, nickname,
       });
       if (needsConfirmation) {
-        say($('guestMsg'), 'Готово! Мы отправили письмо — подтвердите почту и возвращайтесь.', 'ok');
+        say($('guestMsg'), L('Готово! Мы отправили письмо — подтвердите почту и возвращайтесь.',
+                             'Done! Check your inbox, confirm the address and come back.'), 'ok');
         $('formReg').reset();
       }
     } catch (err) { say($('guestMsg'), humanError(err)); }
@@ -478,10 +523,15 @@ $('formReg').onsubmit = (e) => {
 $('forgot').onclick = async (e) => {
   e.preventDefault();
   const email = $('loginEmail').value.trim();
-  if (!email) { say($('guestMsg'), 'Введите почту в поле выше — пришлём ссылку для сброса.'); return; }
+  if (!email) {
+    say($('guestMsg'), L('Введите почту в поле выше — пришлём ссылку для сброса.',
+                         'Enter your email above and we will send a reset link.'));
+    return;
+  }
   try {
     await resetPassword(email);
-    say($('guestMsg'), 'Ссылка для сброса отправлена на почту.', 'ok');
+    say($('guestMsg'), L('Ссылка для сброса отправлена на почту.',
+                         'A reset link is on its way to your inbox.'), 'ok');
   } catch (err) { say($('guestMsg'), humanError(err)); }
 };
 
@@ -491,7 +541,7 @@ $('formRec').onsubmit = (e) => {
   return busy(e.submitter, async () => {
     const { error } = await supabase.auth.updateUser({ password: $('newPass').value });
     if (error) { say($('recMsg'), humanError(error)); return; }
-    say($('recMsg'), 'Пароль обновлён.', 'ok');
+    say($('recMsg'), L('Пароль обновлён.', 'Password updated.'), 'ok');
     setTimeout(() => location.replace(location.pathname), 900);
   });
 };
@@ -506,7 +556,11 @@ $('logout').onclick = async () => {
 };
 
 // ── Профиль ─────────────────────────────────────────────────────────────
+// Последний вошедший: по смене языка страницу пересобираем этим же вызовом.
+let currentUser = null;
+
 async function renderProfile(user) {
+  currentUser = user;
   $('mail').textContent = user.email;
   $('newEmail').value = user.email;
 
@@ -517,9 +571,9 @@ async function renderProfile(user) {
     $('hello').textContent = profile.nickname;
     $('newNick').value = profile.nickname;
     $('regionInfo').textContent = profile.currency === 'RUB'
-      ? 'Россия · цены в рублях'
-      : 'Другие страны · цены в долларах';
-  } catch { $('nick').textContent = 'Игрок'; }
+      ? L('Россия · цены в рублях', 'Russia · prices in roubles')
+      : L('Другие страны · цены в долларах', 'Other countries · prices in dollars');
+  } catch { $('nick').textContent = L('Игрок', 'Player'); }
 
   renderOrders();
   renderFriends();
@@ -529,17 +583,22 @@ async function renderProfile(user) {
 
   // Тема оформления Byte Blaster открывается владельцу лицензии. Сообщаем об
   // этом сразу после входа, иначе она появилась бы в меню тем только на
-  // следующей загрузке страницы (список строится по кэшу прав).
-  if (window.PixsetTheme && window.PixsetTheme.refreshOwnership) window.PixsetTheme.refreshOwnership();
+  // следующей загрузке страницы (список строится по кэшу прав). Список в
+  // настройках перерисовываем тем же ответом — он строится по тому же кэшу.
+  if (window.PixsetTheme && window.PixsetTheme.refreshOwnership) {
+    window.PixsetTheme.refreshOwnership(() => renderThemes());
+  }
 
   $('lib').innerHTML = owned.length
     ? owned.map((e) => {
         const g = byslug.get(e.game_slug) || { title: e.game_slug };
         return `<div class="row"><b>${esc(g.title)}</b>
-          <span class="badge">Лицензия активна</span></div>`;
+          <span class="badge">${esc(L('Лицензия активна', 'Licence active'))}</span></div>`;
       }).join('')
-    : `<div class="row"><span class="dim">Пока пусто — первый мир Byte Blaster открыт бесплатно.</span>
-       <a class="btn" href="/store">В магазин</a></div>`;
+    : `<div class="row"><span class="dim">${esc(L(
+         'Пока пусто — первый мир Byte Blaster открыт бесплатно.',
+         'Nothing yet — the first world of Byte Blaster is free.'))}</span>
+       <a class="btn" href="/store">${esc(L('В магазин', 'To the store'))}</a></div>`;
 
   renderDevices();
   renderThemes();
@@ -550,11 +609,12 @@ async function renderDevices() {
   $('devices').innerHTML = devices.length
     ? devices.map((d) => `
         <div class="row">
-          <b>${esc(d.label || d.platform || 'Устройство')}</b>
-          <span class="dim">${new Date(d.last_seen).toLocaleDateString('ru-RU')}</span>
-          <button class="btn quiet" data-dev="${esc(d.id)}">Отвязать</button>
+          <b>${esc(d.label || d.platform || L('Устройство', 'Device'))}</b>
+          <span class="dim">${new Date(d.last_seen).toLocaleDateString(locale())}</span>
+          <button class="btn quiet" data-dev="${esc(d.id)}">${esc(L('Отвязать', 'Unlink'))}</button>
         </div>`).join('')
-    : '<div class="row"><span class="dim">Входов из игры пока не было.</span></div>';
+    : `<div class="row"><span class="dim">${esc(L(
+         'Входов из игры пока не было.', 'No sign-ins from a game yet.'))}</span></div>`;
 
   $('devices').querySelectorAll('[data-dev]').forEach((btn) => {
     btn.onclick = () => busy(btn, async () => {
@@ -568,23 +628,29 @@ async function renderOrders() {
   try {
     const orders = await getMyOrders();
     const money = (a, c) => c === 'USD' ? '$' + (a / 100).toFixed(2)
-                                        : (a / 100).toLocaleString('ru-RU') + ' ₽';
-    const status = { pending: 'ожидает оплаты', paid: 'оплачен',
-                     failed: 'не прошёл', refunded: 'возврат' };
+                                        : (a / 100).toLocaleString(locale()) + ' ₽';
+    const status = {
+      pending:  L('ожидает оплаты', 'awaiting payment'),
+      paid:     L('оплачен', 'paid'),
+      failed:   L('не прошёл', 'failed'),
+      refunded: L('возврат', 'refunded'),
+    };
     $('orders').innerHTML = orders.length
       ? orders.map((o) => `
           <div class="row">
             <div>
               <b>${esc(o.game_slug)}</b>
               <div class="dim" style="font-size:14px">
-                ${new Date(o.created_at).toLocaleDateString('ru-RU')} · ${money(o.amount, o.currency)}
+                ${new Date(o.created_at).toLocaleDateString(locale())} · ${money(o.amount, o.currency)}
               </div>
             </div>
             <span class="badge ${o.status === 'paid' ? '' : 'mute'}">${status[o.status] || o.status}</span>
           </div>`).join('')
-      : '<div class="row"><span class="dim">Покупок пока не было.</span></div>';
+      : `<div class="row"><span class="dim">${esc(L(
+           'Покупок пока не было.', 'No purchases yet.'))}</span></div>`;
   } catch {
-    $('orders').innerHTML = '<div class="row"><span class="dim">Не удалось загрузить покупки.</span></div>';
+    $('orders').innerHTML = `<div class="row"><span class="dim">${esc(L(
+      'Не удалось загрузить покупки.', 'Could not load your purchases.'))}</span></div>`;
   }
 }
 
@@ -592,12 +658,14 @@ async function renderOrders() {
 $('saveNick').onclick = () => busy($('saveNick'), async () => {
   const nickname = $('newNick').value.trim();
   if (!NICKNAME_RE.test(nickname)) {
-    say($('profMsg'), 'Ник: 3-20 символов, латиница, цифры, _ и -');
+    say($('profMsg'), L('Ник: 3-20 символов, латиница, цифры, _ и -',
+                        'Nickname: 3-20 characters, Latin letters, digits, _ and -'));
     return;
   }
   try {
     await updateNickname(nickname);
-    say($('profMsg'), 'Ник изменён. В игре он обновится при следующем входе.', 'ok');
+    say($('profMsg'), L('Ник изменён. В игре он обновится при следующем входе.',
+                        'Nickname changed. The game picks it up at your next sign-in.'), 'ok');
     $('nick').textContent = nickname;
     $('hello').textContent = nickname;
     paintOwnAvatar(ownAvatarUrl, nickname);
@@ -606,32 +674,37 @@ $('saveNick').onclick = () => busy($('saveNick'), async () => {
 
 $('saveEmail').onclick = () => busy($('saveEmail'), async () => {
   const email = $('newEmail').value.trim();
-  if (!email.includes('@')) { say($('profMsg'), 'Проверьте адрес почты.'); return; }
+  if (!email.includes('@')) { say($('profMsg'), L('Проверьте адрес почты.', 'Check the email address.')); return; }
   try {
     await changeEmail(email);
-    say($('profMsg'), 'Письмо отправлено на новый адрес. Подтвердите его, чтобы смена вступила в силу.', 'ok');
+    say($('profMsg'), L('Письмо отправлено на новый адрес. Подтвердите его, чтобы смена вступила в силу.',
+                        'We emailed the new address. Confirm it to complete the change.'), 'ok');
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
 
 $('savePass').onclick = () => busy($('savePass'), async () => {
   const pass = $('newPass2').value;
-  if (pass.length < 6) { say($('profMsg'), 'Пароль должен быть не короче 6 символов.'); return; }
+  if (pass.length < 6) {
+    say($('profMsg'), L('Пароль должен быть не короче 6 символов.', 'The password must be at least 6 characters.'));
+    return;
+  }
   try {
     await changePassword(pass);
     $('newPass2').value = '';
-    say($('profMsg'), 'Пароль изменён.', 'ok');
+    say($('profMsg'), L('Пароль изменён.', 'Password changed.'), 'ok');
   } catch (err) { say($('profMsg'), humanError(err)); }
 });
 
 // Удаление необратимо, поэтому подтверждаем вводом слова — случайный клик
 // не должен стоить игроку купленных игр.
 $('deleteAcc').onclick = async () => {
+  const word = L('УДАЛИТЬ', 'DELETE');
   const answer = prompt(
-    'Аккаунт и все лицензии будут удалены навсегда.\n' +
-    'Чтобы подтвердить, введите: УДАЛИТЬ');
+    L('Аккаунт и все лицензии будут удалены навсегда.\nЧтобы подтвердить, введите: ',
+      'The account and every licence will be deleted for good.\nType this to confirm: ') + word);
   if (answer === null) return;
-  if (answer.trim().toUpperCase() !== 'УДАЛИТЬ') {
-    say($('profMsg'), 'Удаление отменено.');
+  if (answer.trim().toUpperCase() !== word) {
+    say($('profMsg'), L('Удаление отменено.', 'Deletion cancelled.'));
     return;
   }
   try {
@@ -642,25 +715,43 @@ $('deleteAcc').onclick = async () => {
 
 // Выбор темы продублирован здесь: в шапке он под кнопкой, а в настройках
 // видно все варианты сразу с описанием.
+//
+// Права спрашиваем у самого PixsetTheme (isOpen), а не проверяем лицензию
+// заново: раньше этот список строил кнопку «Включить» для любой темы, и
+// оформление Byte Blaster включалось из настроек без всякой лицензии.
 function renderThemes() {
   const T = window.PixsetTheme;
   if (!T) return;
   const now = T.current();
-  $('themes').innerHTML = T.themes.map((t) => `
+  $('themes').innerHTML = T.themes.map((t) => {
+    const open = T.isOpen ? T.isOpen(t.id) : true;
+    const action = t.id === now && open
+      ? `<span class="badge">${esc(L('Выбрана', 'Selected'))}</span>`
+      : open
+        ? `<button class="btn quiet" data-theme-set="${t.id}">${esc(L('Включить', 'Use'))}</button>`
+        : `<a class="btn quiet" href="${esc(t.buy || '/store')}">${esc(L('Купить игру', 'Buy the game'))}</a>`;
+    return `
     <div class="row">
       <div>
-        <b>${esc(t.name)}</b>
-        <div class="dim" style="font-size:14px">${esc(t.hint)}</div>
+        <b>${open ? '' : '🔒 '}${esc(L(t.ru, t.en))}</b>
+        <div class="dim" style="font-size:14px">${esc(open
+          ? L(t.hintRu, t.hintEn)
+          : L('нужна лицензия Byte Blaster', 'requires a Byte Blaster licence'))}</div>
       </div>
-      ${t.id === now
-        ? '<span class="badge">Выбрана</span>'
-        : `<button class="btn quiet" data-theme-set="${t.id}">Включить</button>`}
-    </div>`).join('');
+      ${action}
+    </div>`;
+  }).join('');
 
   $('themes').querySelectorAll('[data-theme-set]').forEach((btn) => {
     btn.onclick = () => { T.apply(btn.dataset.themeSet); renderThemes(); };
   });
 }
+
+// Язык меняется без перезагрузки: то, что нарисовал скрипт, собираем заново.
+document.addEventListener('pixset:lang', () => {
+  paintOwnAvatar(ownAvatarUrl, ownNick);
+  if (currentUser) renderProfile(currentUser);
+});
 
 // ── Маршрутизация ───────────────────────────────────────────────────────
 let recovery = false;

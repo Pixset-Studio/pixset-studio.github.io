@@ -33,10 +33,13 @@
      Russian. The attribute is written by an inline snippet in <head> so the page
      never flashes the wrong language before this file loads. */
   var KEY = 'bbSiteLang';
+  // Сайт студии на том же домене помнит язык в своём ключе. Пишем оба и читаем
+  // оба, чтобы выбор не сбрасывался при переходе Byte Blaster ↔ студия.
+  var KEY_STUDIO = 'pixsetSiteLang';
 
   function detect() {
     try {
-      var saved = localStorage.getItem(KEY);
+      var saved = localStorage.getItem(KEY) || localStorage.getItem(KEY_STUDIO);
       if (saved === 'ru' || saved === 'en') return saved;
     } catch (e) {}
     // Cyrillic-script locales get Russian; everyone else gets English.
@@ -53,7 +56,12 @@
   function apply(lang, remember) {
     document.documentElement.setAttribute('data-site-lang', lang);
     document.documentElement.setAttribute('lang', lang);
-    if (remember) { try { localStorage.setItem(KEY, lang); } catch (e) {} }
+    if (remember) {
+      try {
+        localStorage.setItem(KEY, lang);
+        localStorage.setItem(KEY_STUDIO, lang);
+      } catch (e) {}
+    }
     var btns = document.querySelectorAll('.langsw button');
     for (var i = 0; i < btns.length; i++) {
       btns[i].setAttribute('aria-pressed', String(btns[i].dataset.lang === lang));

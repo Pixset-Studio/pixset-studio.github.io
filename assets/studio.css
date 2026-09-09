@@ -347,6 +347,33 @@ footer.site .row { display: flex; flex-wrap: wrap; gap: 14px; justify-content: s
 footer.site a { color: var(--text-dim); }
 footer.site a:hover { color: var(--y); }
 
+/* ── Язык ────────────────────────────────────────────────────────────────
+   Оба языка лежат в разметке; лишний прячется по атрибуту на <html>. Так на
+   странице не бывает ни мигания чужим языком, ни ожидания словаря. */
+[data-site-lang='ru'] [data-l='en'],
+[data-site-lang='en'] [data-l='ru'] { display: none !important; }
+
+.langsw {
+  display: inline-flex; margin-left: 6px;
+  border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden;
+}
+.langsw button {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+  color: var(--text-dim); padding: 8px 10px;
+  transition: color .2s, background .25s;
+}
+.langsw button + button { border-left: 1px solid var(--line-2); }
+.langsw button:hover { color: var(--y); }
+.langsw button[aria-pressed='true'] { color: var(--y); background: rgba(255,212,0,.10); }
+/* В мобильном меню строка меню занимает всю ширину — переключатель тоже. */
+.langsw.wide { display: flex; margin: 10px 22px 14px; width: calc(100% - 44px); }
+.langsw.wide button { flex: 1; padding: 11px 0; font-size: 13px; }
+
+@keyframes langFade { 0% { opacity: 1 } 38% { opacity: .25 } 100% { opacity: 1 } }
+body.langswap { animation: langFade .34s ease; }
+@media (prefers-reduced-motion: reduce) { body.langswap { animation: none; } }
+
 /* ── Переключатель темы ──────────────────────────────────────────────────── */
 .theme-pick { position: relative; }
 .theme-pick > button {

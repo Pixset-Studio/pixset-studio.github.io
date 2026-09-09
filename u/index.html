@@ -1,5 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru"
+      data-title-ru="Профиль игрока — Pixset Studio"
+      data-title-en="Player profile — Pixset Studio"
+      data-desc-ru="Профиль игрока Pixset Studio: прогресс в играх студии."
+      data-desc-en="A Pixset Studio player profile: progress across the studio's games.">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +11,9 @@
 <meta name="description" content="Профиль игрока Pixset Studio: прогресс в играх студии.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0a0a0a">
-<link rel="icon" href="/assets/logo.jpg">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -27,26 +33,59 @@
   .pcard .ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .pcard h2 { margin: 0 0 4px; }
 
-  .gstats { display: grid; gap: 14px; margin-top: 10px; }
-  .gcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
-  .gcard h3 { margin-bottom: 12px; }
-  .gnums { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-  .gnum { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
-  .gnum b { display: block; font-family: var(--font-head); font-size: 20px; color: #fff; }
-  .gnum span { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
-               text-transform: uppercase; letter-spacing: 1px; }
-  .gbar { height: 6px; background: var(--bg-2); border: 1px solid var(--line); margin-top: 12px; }
+  /* ── Карточка игры ──────────────────────────────────────────────────────
+     Шапка: название, звание и общая доля прохождения. Дальше — числа,
+     разложенные по смыслу: сперва прохождение, потом рекорды, потом бой. */
+  .gstats { display: grid; gap: 16px; margin-top: 10px; }
+  .gcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
+  .ghead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ghead h3 { margin: 0; }
+  .gdone { margin: 14px 0 4px; max-width: 420px; }
+  .gdone .cap { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+                text-transform: uppercase; letter-spacing: 1px; }
+  .gdone .num { font-family: var(--font-head); font-weight: var(--head-weight);
+                font-size: 26px; color: var(--y); line-height: 1.2; }
+
+  .gsec { font-family: var(--font-mono); font-size: 12px; letter-spacing: 2px;
+          text-transform: uppercase; color: var(--y); margin: 22px 0 10px;
+          padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .gnums { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 10px; }
+
+  /* Иконка и число в строке, подпись под ними: подпись сбоку читается как
+     обрывок фразы («хардкор 103»), а под числом — как заголовок графы. */
+  .gnum { border: 1px solid var(--line); border-radius: var(--radius);
+          padding: 12px 14px; background: var(--bg-2); }
+  .gnum .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .gnum .ico { font-size: 15px; line-height: 1; flex: 0 0 auto; }
+  .gnum b { font-family: var(--font-head); font-weight: var(--head-weight);
+            font-size: 21px; color: #fff; line-height: 1.15; }
+  .gnum .of { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
+  .gnum .lab { display: block; font-family: var(--font-mono); font-size: 11px;
+               color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
+               margin-top: 6px; line-height: 1.5; }
+  .gbar { height: 5px; background: var(--bg); border: 1px solid var(--line);
+          margin-top: 9px; border-radius: 2px; overflow: hidden; }
   .gbar > i { display: block; height: 100%; background: var(--y); }
+  /* Пиксельный шрифт крупнее своего кегля — иначе числа не влезают в плитку. */
+  :root[data-theme='byteblaster'] .gnum b,
+  :root[data-theme='arcade'] .gnum b { font-size: 13px; }
 </style>
 <script>
-(function(){try{var t=localStorage.getItem('pixsetTheme');
+/* Тема и язык ставятся до первой отрисовки, иначе страница мигнёт чужим
+   оформлением и чужим алфавитом. */
+(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('pixsetTheme');
 /* Тема Byte Blaster открыта владельцам лицензии. Ответ сервера кэширован
    (pixsetOwnsBB): сюда, до первой отрисовки, сетевой запрос не успеет. */
 var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
 if(t==='byteblaster'&&!own)t='industrial';
 if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
-document.documentElement.setAttribute('data-theme',t);}catch(e){
-document.documentElement.setAttribute('data-theme','industrial');}})();
+d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial');}
+try{var l=localStorage.getItem('pixsetSiteLang')||localStorage.getItem('bbSiteLang');
+if(l!=='ru'&&l!=='en'){var b=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+l=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(b)?'ru':'en';}
+d.setAttribute('data-site-lang',l);d.setAttribute('lang',l);}
+catch(e){d.setAttribute('data-site-lang','ru');}})();
 </script>
 <!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
 <link rel="canonical" href="https://pixset-studio.github.io/u/">
@@ -58,32 +97,32 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
     <button class="burger" id="burger" aria-label="Меню">☰</button>
     <nav class="main">
-      <a href="/">Главная</a>
-      <a href="/wikipedia">Вики</a>
+      <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+      <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
       <a href="/byte-blaster/">Byte Blaster</a>
-      <a href="/store">Магазин</a>
-      <a href="/account"><span data-account-label>Аккаунт</span></a>
+      <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/account"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
     </nav>
   </div>
 </header>
 
 <div id="mobileNav">
-  <a href="/">Главная</a>
-  <a href="/wikipedia">Вики</a>
+  <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
   <a href="/byte-blaster/">Byte Blaster</a>
-  <a href="/store">Магазин</a>
-  <a href="/account">Аккаунт</a>
+  <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+  <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
 </div>
 
 <main>
 <section>
   <div class="wrap">
-    <p class="kicker">Профиль игрока</p>
+    <p class="kicker"><span data-l="ru">Профиль игрока</span><span data-l="en">Player profile</span></p>
 
-    <div id="loading"><p class="dim">Загружаем…</p></div>
+    <div id="loading"><p class="dim"><span data-l="ru">Загружаем…</span><span data-l="en">Loading…</span></p></div>
     <div class="msg" id="msg"></div>
 
     <div id="card" hidden>
@@ -94,11 +133,15 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
             <h2 id="nick">…</h2>
             <div class="dim mono" id="since"></div>
           </div>
-          <button class="btn" id="addBtn" hidden style="width:auto;padding:11px 20px">В друзья</button>
+          <button class="btn" id="addBtn" hidden style="width:auto;padding:11px 20px">
+            <span data-l="ru">В друзья</span><span data-l="en">Add friend</span>
+          </button>
         </div>
       </div>
 
-      <h2 style="margin-top:32px">Прогресс в играх</h2>
+      <h2 style="margin-top:32px">
+        <span data-l="ru">Прогресс в играх</span><span data-l="en">Game progress</span>
+      </h2>
       <div class="gstats" id="games"></div>
     </div>
   </div>
@@ -109,7 +152,10 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
   <div class="wrap">
     <div class="row">
       <div>© 2024–2026 Pixset Studio</div>
-      <div><a href="/">Главная</a> · <a href="/account">Аккаунт</a></div>
+      <div>
+        <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+        <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
+      </div>
     </div>
   </div>
 </footer>
@@ -118,96 +164,170 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 <script type="module">
 import {
   supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
-} from '/assets/pixset-auth.js?v=59ef2b33';
+} from '/assets/pixset-auth.js?v=d9da1664';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/** Строка на языке страницы. Разметке хватает атрибута data-l, но то, что
+    рисует этот скрипт, выбирается здесь. */
+const L = (ru, en) => (window.PixsetLang ? window.PixsetLang.L(ru, en) : ru);
+const isEn = () => !!(window.PixsetLang && window.PixsetLang.now() === 'en');
 
 function say(text, kind = 'err') {
   $('msg').textContent = text;
   $('msg').className = `msg show ${kind}`;
 }
 
-/* Каждая игра публикует свою сводку сама, поэтому набор полей у неё свой.
-   Здесь описано, ЧТО из этого показывать и как называть — незнакомые поля
-   просто не выводятся, а не ломают карточку. Добавили игре новое число —
-   допишите строку сюда, менять больше ничего не нужно. */
-const STAT_FIELDS = [
-  // Прогресс
-  { key: 'levels',   label: 'Уровни',      max: 'levelsMax' },
-  { key: 'worlds',   label: 'Миры',        max: 'worldsMax' },
-  { key: 'stars',    label: 'Звёзды',      max: 'starsMax' },
-  { key: 'crystals', label: 'Кристаллы',   max: 'crystalsMax' },
-  { key: 'rainbow',  label: 'Радужные',    max: 'rainbowMax' },
-  { key: 'ach',      label: 'Достижения',  max: 'achMax' },
-  { key: 'logs',     label: 'Архив',       max: 'logsMax' },
-  // Итоги и рекорды
-  { key: 'score',    label: 'Счёт' },
-  { key: 'bestAdv',  label: 'Рекорд кампании' },
-  { key: 'bestInf',  label: 'Рекорд бесконечного' },
-  { key: 'coins',    label: 'Монеты' },
-  { key: 'playtime', label: 'В игре',      fmt: 'time' },
-  // Мастерство
-  { key: 'bosses',   label: 'Боссы' },
-  { key: 'secrets',  label: 'Секретные выходы' },
-  { key: 'perfect',  label: 'Идеальных уровней' },
-  { key: 'streak',   label: 'Серия без смертей' },
-  { key: 'hardcore', label: 'Хардкор' },
-  // Боевой почерк — по нему видно, КАК игрок проходит игру
-  { key: 'stompKills',   label: 'Прыжком' },
-  { key: 'blasterKills', label: 'Бластером' },
-  { key: 'burnKills',    label: 'Огнём' },
-  { key: 'freezeKills',  label: 'Льдом' },
-  { key: 'jumps',        label: 'Прыжков' },
+/* ── Что показываем и как это называется ─────────────────────────────────
+   Каждая игра публикует свою сводку сама, поэтому набор полей у неё свой.
+   Здесь описано, ЧТО из неё показывать, в каком разделе и КАК подписать —
+   незнакомые поля просто не выводятся, а не ломают карточку. Добавили игре
+   новое число — допишите строку сюда, менять больше ничего не нужно.
+
+   Подписи развёрнутые не для красоты: «Хардкор 103» ни о чём не говорит, а
+   «103 / 110 · уровни в хардкоре» — говорит. */
+const GROUPS = [
+  {
+    ru: 'Прохождение', en: 'Campaign',
+    fields: [
+      { key: 'levels',     ico: '▦',  max: 'levelsMax',   ru: 'Уровни кампании',       en: 'Campaign levels' },
+      { key: 'hardcore',   ico: '💀', max: 'hardcoreMax', ru: 'Уровни в хардкоре',     en: 'Hardcore levels' },
+      { key: 'worlds',     ico: '🌐', max: 'worldsMax',   ru: 'Открыто миров',         en: 'Worlds reached' },
+      { key: 'bosses',     ico: '👹', max: 'bossesMax',   ru: 'Побеждено боссов',      en: 'Bosses defeated' },
+      { key: 'bossesHard', ico: '☠️', max: 'bossesMax',   ru: 'Боссы в хардкоре',      en: 'Bosses on hardcore' },
+      { key: 'stars',      ico: '⭐', max: 'starsMax',    ru: 'Собрано звёзд',         en: 'Stars collected' },
+      { key: 'stars3',     ico: '✨', ru: 'Уровней на три звезды',                     en: 'Levels at three stars' },
+      { key: 'crystals',   ico: '💠', max: 'crystalsMax', ru: 'Кристаллы данных',      en: 'Data crystals' },
+      { key: 'rainbow',    ico: '🌈', max: 'rainbowMax',  ru: 'Радужные осколки',      en: 'Rainbow shards' },
+      { key: 'ach',        ico: '🏆', max: 'achMax',      ru: 'Достижения',            en: 'Achievements' },
+      { key: 'logs',       ico: '📖', max: 'logsMax',     ru: 'Записи сюжетного архива', en: 'Story archive entries' },
+    ],
+  },
+  {
+    ru: 'Рекорды', en: 'Records',
+    fields: [
+      { key: 'score',    ico: '🎯', ru: 'Очков за всё время',      en: 'Score all-time' },
+      { key: 'bestAdv',  ico: '🚩', ru: 'Лучший забег в кампании', en: 'Best campaign run' },
+      { key: 'bestInf',  ico: '♾️', ru: 'Рекорд в бесконечном',    en: 'Best endless run' },
+      { key: 'coins',    ico: '🪙', ru: 'Собрано монет',           en: 'Coins collected' },
+      { key: 'playtime', ico: '⏱️', ru: 'Времени в игре',          en: 'Time played', fmt: 'time' },
+    ],
+  },
+  {
+    ru: 'Боевой почерк', en: 'Combat record',
+    fields: [
+      { key: 'kills',        ico: '💥', ru: 'Побеждено врагов',     en: 'Enemies defeated' },
+      { key: 'stompKills',   ico: '👟', ru: 'Врагов — прыжком',     en: 'Enemies — stomped' },
+      { key: 'blasterKills', ico: '🔫', ru: 'Врагов — из бластера', en: 'Enemies — blasted' },
+      { key: 'burnKills',    ico: '🔥', ru: 'Врагов — огнём',       en: 'Enemies — burned' },
+      { key: 'freezeKills',  ico: '❄️', ru: 'Врагов — льдом',       en: 'Enemies — frozen' },
+      { key: 'perfect',      ico: '💯', ru: 'Идеальных уровней',    en: 'Flawless levels' },
+      { key: 'streak',       ico: '🔗', ru: 'Серия без смертей',    en: 'No-death streak' },
+      { key: 'deaths',       ico: '⚰️', ru: 'Смертей за всё время', en: 'Deaths all-time' },
+      { key: 'jumps',        ico: '🦿', ru: 'Прыжков сделано',      en: 'Jumps made' },
+    ],
+  },
 ];
 
-const fmtNum = (n) => Number(n || 0).toLocaleString('ru-RU');
+/* Звание Byte Blaster приходит ключом (rank0…rank6) — карточка показывает
+   его на языке читателя, а не на языке того, кто играл. */
+const RANKS = {
+  rank0: ['Нарушитель', 'Intruder'],
+  rank1: ['Диверсант', 'Saboteur'],
+  rank2: ['Призрак в сети', 'Ghost in the GRID'],
+  rank3: ['Взломщик защиты', 'Firewall breaker'],
+  rank4: ['Еретик системы', 'System heretic'],
+  rank5: ['Разрыв протокола', 'Protocol breaker'],
+  rank6: ['Свободен', 'Free'],
+};
+
+const fmtNum = (n) => Number(n || 0).toLocaleString(isEn() ? 'en-US' : 'ru-RU');
 function fmtTime(sec) {
   const s = Number(sec) || 0;
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h ? h + ' ч ' + m + ' мин' : m + ' мин';
+  return h ? L(`${h} ч ${m} мин`, `${h} h ${m} min`) : L(`${m} мин`, `${m} min`);
+}
+const fmtDate = (iso) => new Date(iso).toLocaleDateString(isEn() ? 'en-GB' : 'ru-RU');
+
+function statCard(f, d) {
+  const value = f.fmt === 'time' ? fmtTime(d[f.key]) : fmtNum(d[f.key]);
+  const total = (f.max != null && d[f.max] != null) ? Number(d[f.max]) || 0 : null;
+  const pct = total ? Math.max(0, Math.min(100,
+    Math.round((Number(d[f.key]) || 0) / total * 100))) : null;
+
+  return `<div class="gnum">
+    <div class="top"><span class="ico">${f.ico}</span><b>${esc(value)}</b>${
+      total != null ? `<span class="of">/ ${esc(fmtNum(total))}</span>` : ''}</div>
+    <span class="lab">${esc(L(f.ru, f.en))}</span>
+    ${pct != null ? `<div class="gbar"><i style="width:${pct}%"></i></div>` : ''}
+  </div>`;
 }
 
 function gameCard(g) {
   const d = (g && g.data) || {};
-  const nums = STAT_FIELDS
-    .filter((f) => d[f.key] != null)
-    .map((f) => {
-      const value = f.fmt === 'time' ? fmtTime(d[f.key])
-        : fmtNum(d[f.key]) + (d[f.max] != null ? ' / ' + fmtNum(d[f.max]) : '');
-      return `<div class="gnum"><b>${esc(value)}</b><span>${esc(f.label)}</span></div>`;
-    }).join('');
 
-  // Общая полоса завершённости — если игра её посчитала сама.
+  const groups = GROUPS.map((grp) => {
+    const cards = grp.fields.filter((f) => d[f.key] != null).map((f) => statCard(f, d)).join('');
+    return cards ? `<div class="gsec">${esc(L(grp.ru, grp.en))}</div><div class="gnums">${cards}</div>` : '';
+  }).join('');
+
+  // Общая доля прохождения — если игра посчитала её сама.
   const pct = d.completion != null ? Math.max(0, Math.min(100, Math.round(d.completion * 100))) : null;
+  const rank = (d.rank && RANKS[d.rank]) ? L(RANKS[d.rank][0], RANKS[d.rank][1]) : null;
 
   return `<div class="gcard">
-    <h3>${esc(g.title || g.game_slug)}</h3>
-    ${nums ? `<div class="gnums">${nums}</div>` : '<p class="dim">Игрок ещё не начинал.</p>'}
-    ${pct != null ? `<div class="gbar"><i style="width:${pct}%"></i></div>
-       <div class="dim mono" style="margin-top:6px">Пройдено на ${pct}%</div>` : ''}
-    <div class="dim mono" style="margin-top:10px">Обновлено ${
-      g.updated_at ? new Date(g.updated_at).toLocaleDateString('ru-RU') : '—'}</div>
+    <div class="ghead">
+      <h3>${esc(g.title || g.game_slug)}</h3>
+      ${rank ? `<span class="badge">${esc(rank)}</span>` : ''}
+    </div>
+    ${pct != null ? `<div class="gdone">
+        <div class="cap">${esc(L('Игра пройдена на', 'Game completed'))}</div>
+        <div class="num">${pct}%</div>
+        <div class="gbar"><i style="width:${pct}%"></i></div>
+      </div>` : ''}
+    ${groups || `<p class="dim">${esc(L('Игрок ещё не начинал.', 'This player has not started yet.'))}</p>`}
+    <div class="dim mono" style="margin-top:16px;font-size:12px">${
+      esc(L('Обновлено ', 'Updated '))}${g.updated_at ? esc(fmtDate(g.updated_at)) : '—'}</div>
   </div>`;
 }
 
 const nickParam = new URLSearchParams(location.search).get('n');
+let loaded = null;               // ответ сервера: по нему перерисовываемся при смене языка
+
+function paintProfile() {
+  if (!loaded) return;
+  $('since').textContent = loaded.created_at
+    ? L('С нами с ', 'With us since ') + fmtDate(loaded.created_at) : '';
+  const games = Array.isArray(loaded.games) ? loaded.games : [];
+  $('games').innerHTML = games.length
+    ? games.map(gameCard).join('')
+    : `<div class="gcard"><p class="dim">${esc(L(
+        'Игрок пока не публиковал прогресс. Он появляется, когда игра сохраняет прогресс в аккаунт.',
+        'This player has not published any progress yet. It appears once a game saves progress to the account.'))}</p></div>`;
+}
+
+// Язык меняется без перезагрузки — числа и подписи пересобираем на месте.
+document.addEventListener('pixset:lang', paintProfile);
 
 async function render() {
-  if (!nickParam) { $('loading').hidden = true; say('Не указан ник игрока.'); return; }
+  if (!nickParam) {
+    $('loading').hidden = true;
+    say(L('Не указан ник игрока.', 'No player nickname given.'));
+    return;
+  }
 
   let profile = null;
   try { profile = await getPublicProfile(nickParam); }
   catch (err) { $('loading').hidden = true; say(humanError(err)); return; }
 
   $('loading').hidden = true;
-  if (!profile) { say('Игрок с таким ником не найден.'); return; }
+  if (!profile) { say(L('Игрок с таким ником не найден.', 'No player with that nickname.')); return; }
 
+  loaded = profile;
   document.title = profile.nickname + ' — Pixset Studio';
   $('nick').textContent = profile.nickname;
-  $('since').textContent = profile.created_at
-    ? 'С нами с ' + new Date(profile.created_at).toLocaleDateString('ru-RU') : '';
 
   // В src пускаем только картинку: в колонке может оказаться что угодно.
   const url = profile.avatar_url;
@@ -217,12 +337,7 @@ async function render() {
     $('ava').textContent = (profile.nickname || '?').charAt(0).toUpperCase();
   }
 
-  const games = Array.isArray(profile.games) ? profile.games : [];
-  $('games').innerHTML = games.length
-    ? games.map(gameCard).join('')
-    : '<div class="gcard"><p class="dim">Игрок пока не публиковал прогресс. '
-      + 'Он появляется, когда игра сохраняет прогресс в аккаунт.</p></div>';
-
+  paintProfile();
   $('card').hidden = false;
 
   // Кнопка «в друзья» — только вошедшему и только если он ещё не в связи.
@@ -238,7 +353,9 @@ async function render() {
     btn.disabled = true;
     try {
       const res = await sendFriendRequest(profile.nickname);
-      say(res === 'accepted' ? 'Теперь вы друзья.' : 'Заявка отправлена.', 'ok');
+      say(res === 'accepted'
+        ? L('Теперь вы друзья.', 'You are friends now.')
+        : L('Заявка отправлена.', 'Request sent.'), 'ok');
       btn.hidden = true;
     } catch (err) { say(humanError(err)); btn.disabled = false; }
   };

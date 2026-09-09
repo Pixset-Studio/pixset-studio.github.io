@@ -18,7 +18,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/byte-blaster/assets/site.css">
 <script>
-(function(){try{var s=localStorage.getItem('bbSiteLang');if(s!=='ru'&&s!=='en'){
+(function(){try{var s=localStorage.getItem('bbSiteLang')||localStorage.getItem('pixsetSiteLang');if(s!=='ru'&&s!=='en'){
 var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
 s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
 document.documentElement.setAttribute('data-site-lang',s);

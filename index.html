@@ -1,12 +1,18 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru"
+      data-title-ru="Pixset Studio — игры, сделанные вручную"
+      data-title-en="Pixset Studio — games made by hand"
+      data-desc-ru="Pixset Studio — независимая студия: платформер Byte Blaster, проекты в Roblox, инструменты и приложения. Магазин, вики и аккаунт студии."
+      data-desc-en="Pixset Studio — an independent studio: the platformer Byte Blaster, Roblox projects, tools and apps. Store, wiki and studio account.">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pixset Studio — игры, сделанные вручную</title>
 <meta name="description" content="Pixset Studio — независимая студия: платформер Byte Blaster, проекты в Roblox, инструменты и приложения. Магазин, вики и аккаунт студии.">
 <meta name="theme-color" content="#0a0a0a">
-<link rel="icon" href="/assets/logo.jpg">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Pixset Studio">
 <meta property="og:description" content="Независимая студия: игры, инструменты и приложения.">
@@ -16,15 +22,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/studio.css">
 <script>
-/* Тема ставится до первой отрисовки, иначе страница мигнёт чужим оформлением. */
-(function(){try{var t=localStorage.getItem('pixsetTheme');
+/* Тема и язык ставятся до первой отрисовки, иначе страница мигнёт чужим
+   оформлением и чужим алфавитом. */
+(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('pixsetTheme');
 /* Тема Byte Blaster открыта владельцам лицензии. Ответ сервера кэширован
    (pixsetOwnsBB): сюда, до первой отрисовки, сетевой запрос не успеет. */
 var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
 if(t==='byteblaster'&&!own)t='industrial';
 if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
-document.documentElement.setAttribute('data-theme',t);}catch(e){
-document.documentElement.setAttribute('data-theme','industrial');}})();
+d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial');}
+try{var l=localStorage.getItem('pixsetSiteLang')||localStorage.getItem('bbSiteLang');
+if(l!=='ru'&&l!=='en'){var b=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+l=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(b)?'ru':'en';}
+d.setAttribute('data-site-lang',l);d.setAttribute('lang',l);}
+catch(e){d.setAttribute('data-site-lang','ru');}})();
 </script>
 <!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
 <link rel="canonical" href="https://pixset-studio.github.io/">
@@ -44,77 +56,103 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="/"><img src="/assets/logo.jpg" alt="">Pixset Studio</a>
+    <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
     <button class="burger" id="burger" aria-label="Меню">☰</button>
     <nav class="main">
-      <a href="#about">О нас</a>
+      <a href="#about"><span data-l="ru">О нас</span><span data-l="en">About us</span></a>
       <span class="has-sub">
-        <a href="/wikipedia">Вики ▾</a>
+        <a href="/wikipedia"><span data-l="ru">Вики ▾</span><span data-l="en">Wiki ▾</span></a>
         <span class="sub">
           <a href="/wikipedia/madness-fight-alpha">Madness Fight [Alpha]</a>
           <a href="/wikipedia/madness-fight-beta">Madness Fight [Beta]</a>
-          <a href="/wikipedia/first-games">Первые игры Pixset</a>
+          <a href="/wikipedia/first-games"><span data-l="ru">Первые игры Pixset</span><span data-l="en">The first Pixset games</span></a>
           <a href="/wikipedia/the-castle">The Castle</a>
-          <a href="/wikipedia/the-castle/characters">— Персонажи</a>
+          <a href="/wikipedia/the-castle/characters"><span data-l="ru">— Персонажи</span><span data-l="en">— Characters</span></a>
           <a href="/wikipedia/pirate-event">Pirate Event</a>
-          <a href="/wikipedia/cybersport">Кибер-спорт</a>
+          <a href="/wikipedia/cybersport"><span data-l="ru">Кибер-спорт</span><span data-l="en">Esports</span></a>
           <a href="/wikipedia/collaboration">Pixset Studio × ORS</a>
         </span>
       </span>
       <a href="/byte-blaster/">Byte Blaster</a>
-      <a href="/store" class="cta">Магазин</a>
-      <a href="/account"><span data-account-label>Аккаунт</span></a>
+      <a href="/store" class="cta"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/account"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
     </nav>
   </div>
 </header>
 
 <div id="mobileNav">
-  <a href="#about">О нас</a>
-  <a href="/wikipedia">Вики</a>
+  <a href="#about"><span data-l="ru">О нас</span><span data-l="en">About us</span></a>
+  <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
   <a href="/byte-blaster/">Byte Blaster</a>
-  <a href="/store">Магазин</a>
-  <a href="/account"><span data-account-label>Аккаунт</span></a>
+  <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+  <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
 </div>
 
 <main>
 
 <div class="hero wrap">
-  <p class="kicker">Независимая студия · с первого дня</p>
-  <h1>Мы делаем <span class="tagline">игры</span></h1>
+  <p class="kicker"><span data-l="ru">Независимая студия · с первого дня</span><span data-l="en">Independent studio · from day one</span></p>
+  <h1><span data-l="ru">Мы делаем <span class="tagline">игры</span></span><span data-l="en">We make <span class="tagline">games</span></span></h1>
   <div class="rule"></div>
-  <p class="lead">
+  <p class="lead" data-l="ru">
     Pixset Studio — небольшая команда, которая делает игры и инструменты своими руками:
     от проектов в Roblox до платформера Byte Blaster на трёх платформах.
   </p>
+  <p class="lead" data-l="en">
+    Pixset Studio is a small team that builds its games and tools by hand:
+    from Roblox projects to Byte Blaster, a platformer running on three platforms.
+  </p>
   <div class="btns" style="margin-top:26px">
-    <a class="btn solid" href="/store">Магазин студии<small>купить наши игры</small></a>
-    <a class="btn" href="/byte-blaster/">Byte Blaster<small>первый мир бесплатно</small></a>
+    <a class="btn solid" href="/store">
+      <span data-l="ru">Магазин студии<small>купить наши игры</small></span>
+      <span data-l="en">Studio store<small>buy our games</small></span>
+    </a>
+    <a class="btn" href="/byte-blaster/">
+      <span data-l="ru">Byte Blaster<small>первый мир бесплатно</small></span>
+      <span data-l="en">Byte Blaster<small>first world free</small></span>
+    </a>
   </div>
 </div>
 
 <section id="about">
   <div class="wrap">
-    <p class="kicker">01 // О студии</p>
-    <h2>Добро пожаловать</h2>
+    <p class="kicker"><span data-l="ru">01 // О студии</span><span data-l="en">01 // About the studio</span></p>
+    <h2><span data-l="ru">Добро пожаловать</span><span data-l="en">Welcome</span></h2>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
       <div>
-        <p>
+        <p data-l="ru">
           Pixset Studio — команда разработчиков, которая создаёт игры в Roblox и за его пределами.
           У студии уже сложилась своя история и собственное комьюнити.
         </p>
-        <p class="dim">
+        <p data-l="en">
+          Pixset Studio is a team of developers making games inside Roblox and beyond it.
+          The studio already has a history of its own and a community around it.
+        </p>
+        <p class="dim" data-l="ru">
           Полная история проектов собрана в <a href="/wikipedia">вики</a>: Madness Fight,
           The Castle, Pirate Event, кибер-спорт и первые игры студии.
         </p>
+        <p class="dim" data-l="en">
+          The full history of our projects lives in the <a href="/wikipedia">wiki</a>: Madness Fight,
+          The Castle, Pirate Event, esports and the studio's first games.
+        </p>
       </div>
       <div>
-        <p class="dim">
+        <p class="dim" data-l="ru">
           Наш главный проект сейчас — <a href="/byte-blaster/">Byte Blaster</a>, киберпанк-платформер
           на 110 уровней с онлайн-кооперативом. Первый мир открыт бесплатно.
         </p>
-        <p class="dim">
+        <p class="dim" data-l="en">
+          Our main project right now is <a href="/byte-blaster/">Byte Blaster</a>, a cyberpunk platformer
+          with 110 levels and online co-op. The first world is free.
+        </p>
+        <p class="dim" data-l="ru">
           Купленные игры привязываются к <a href="/account">аккаунту студии</a> и открываются
           на всех устройствах, где вы вошли.
+        </p>
+        <p class="dim" data-l="en">
+          Games you buy are tied to your <a href="/account">studio account</a> and unlock
+          on every device you sign in on.
         </p>
       </div>
     </div>
@@ -123,36 +161,40 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
 <section>
   <div class="wrap">
-    <p class="kicker">02 // Разделы</p>
-    <h2>Куда идти</h2>
+    <p class="kicker"><span data-l="ru">02 // Разделы</span><span data-l="en">02 // Sections</span></p>
+    <h2><span data-l="ru">Куда идти</span><span data-l="en">Where to go</span></h2>
     <div class="grid">
 
       <div class="card">
         <span class="ico">🛒</span>
-        <h3>Магазин</h3>
-        <p>Купить игры студии. Одна лицензия — все устройства, где вы вошли в аккаунт.</p>
-        <a class="go" href="/store">Открыть →</a>
+        <h3><span data-l="ru">Магазин</span><span data-l="en">Store</span></h3>
+        <p data-l="ru">Купить игры студии. Одна лицензия — все устройства, где вы вошли в аккаунт.</p>
+        <p data-l="en">Buy the studio's games. One licence covers every device you sign in on.</p>
+        <a class="go" href="/store"><span data-l="ru">Открыть →</span><span data-l="en">Open →</span></a>
       </div>
 
       <div class="card">
         <span class="ico">🎮</span>
         <h3>Byte Blaster</h3>
-        <p>Киберпанк-платформер: 110 уровней, 11 миров, кооператив до пяти игроков.</p>
-        <a class="go" href="/byte-blaster/">Играть →</a>
+        <p data-l="ru">Киберпанк-платформер: 110 уровней, 11 миров, кооператив до пяти игроков.</p>
+        <p data-l="en">A cyberpunk platformer: 110 levels, 11 worlds, co-op for up to five players.</p>
+        <a class="go" href="/byte-blaster/"><span data-l="ru">Играть →</span><span data-l="en">Play →</span></a>
       </div>
 
       <div class="card">
         <span class="ico">📖</span>
-        <h3>Вики</h3>
-        <p>Madness Fight, The Castle, Pirate Event, кибер-спорт и история студии.</p>
-        <a class="go" href="/wikipedia">Открыть →</a>
+        <h3><span data-l="ru">Вики</span><span data-l="en">Wiki</span></h3>
+        <p data-l="ru">Madness Fight, The Castle, Pirate Event, кибер-спорт и история студии.</p>
+        <p data-l="en">Madness Fight, The Castle, Pirate Event, esports and the studio's history.</p>
+        <a class="go" href="/wikipedia"><span data-l="ru">Открыть →</span><span data-l="en">Open →</span></a>
       </div>
 
       <div class="card">
         <span class="ico">👤</span>
-        <h3>Аккаунт</h3>
-        <p>Ваши лицензии, устройства и настройки внешнего вида сайта.</p>
-        <a class="go" href="/account">Войти →</a>
+        <h3><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></h3>
+        <p data-l="ru">Ваши лицензии, устройства и настройки внешнего вида сайта.</p>
+        <p data-l="en">Your licences, devices and the site's appearance settings.</p>
+        <a class="go" href="/account"><span data-l="ru">Войти →</span><span data-l="en">Sign in →</span></a>
       </div>
 
     </div>
@@ -161,31 +203,36 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
 
 <section>
   <div class="wrap">
-    <p class="kicker">03 // Соцсети</p>
-    <h2>Следите за нами</h2>
+    <p class="kicker"><span data-l="ru">03 // Соцсети</span><span data-l="en">03 // Social</span></p>
+    <h2><span data-l="ru">Следите за нами</span><span data-l="en">Follow us</span></h2>
     <div class="grid">
       <div class="card">
         <span class="ico">▶</span>
         <h3>YouTube</h3>
-        <p>Ролики о проектах и разработке.</p>
+        <p data-l="ru">Ролики о проектах и разработке.</p>
+        <p data-l="en">Videos about our projects and how they are made.</p>
         <a class="go" href="https://www.youtube.com/@pixset" target="_blank" rel="noopener">@pixset →</a>
       </div>
       <div class="card">
         <span class="ico">◈</span>
         <h3>Roblox</h3>
-        <p>Группа студии и наши игры на платформе.</p>
+        <p data-l="ru">Группа студии и наши игры на платформе.</p>
+        <p data-l="en">The studio group and our games on the platform.</p>
         <a class="go" href="https://www.roblox.com/groups/16590279/Pixset-Studio#!/about" target="_blank" rel="noopener">Pixset-Studio →</a>
       </div>
       <div class="card">
         <span class="ico">◉</span>
         <h3>Discord</h3>
-        <p>Комьюнити, тесты и обратная связь.</p>
-        <a class="go" href="https://discord.gg/4DvuhfJpTT" target="_blank" rel="noopener">Присоединиться →</a>
+        <p data-l="ru">Комьюнити, тесты и обратная связь.</p>
+        <p data-l="en">Community, playtests and feedback.</p>
+        <a class="go" href="https://discord.gg/4DvuhfJpTT" target="_blank" rel="noopener">
+          <span data-l="ru">Присоединиться →</span><span data-l="en">Join →</span></a>
       </div>
       <div class="card">
         <span class="ico">✈</span>
         <h3>Telegram</h3>
-        <p>Короткие новости и анонсы.</p>
+        <p data-l="ru">Короткие новости и анонсы.</p>
+        <p data-l="en">Short news and announcements.</p>
         <a class="go" href="https://t.me/Pixset_Studio" target="_blank" rel="noopener">@Pixset_Studio →</a>
       </div>
     </div>
@@ -199,20 +246,26 @@ document.documentElement.setAttribute('data-theme','industrial');}})();
     <div class="row">
       <div>
         <div class="mono" style="color:var(--y);letter-spacing:2px">PIXSET STUDIO</div>
-        <div>© 2024–2026 Pixset Studio. Все права защищены.</div>
+        <div><span data-l="ru">© 2024–2026 Pixset Studio. Все права защищены.</span><span data-l="en">© 2024–2026 Pixset Studio. All rights reserved.</span></div>
       </div>
       <div>
-        <a href="/store">Магазин</a> ·
-        <a href="/account">Аккаунт</a> ·
-        <a href="/wikipedia">Вики</a> ·
+        <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a> ·
+        <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a> ·
+        <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a> ·
         <a href="https://github.com/pixset" target="_blank" rel="noopener">GitHub</a>
       </div>
     </div>
-    <p class="dim" style="font-size:13px;margin:18px 0 0">
+    <p class="dim" style="font-size:13px;margin:18px 0 0" data-l="ru">
       Исходный код сайта и проектов © 2026 Pixset Studio, проприетарная лицензия.
       Проекты студии — PixTool, Byte Blaster, Brawl Legends, Pixset AI Studio, Smehotvoriki —
       самостоятельные объекты авторского права. Сторонние библиотеки используются
       по лицензиям MIT, Apache 2.0 и SIL OFL 1.1.
+    </p>
+    <p class="dim" style="font-size:13px;margin:18px 0 0" data-l="en">
+      The source code of the site and of our projects is © 2026 Pixset Studio, proprietary licence.
+      The studio's projects — PixTool, Byte Blaster, Brawl Legends, Pixset AI Studio, Smehotvoriki —
+      are separate copyrighted works. Third-party libraries are used under the
+      MIT, Apache 2.0 and SIL OFL 1.1 licences.
     </p>
   </div>
 </footer>

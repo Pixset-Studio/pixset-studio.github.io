@@ -204,7 +204,10 @@ const AchTrack={
     // CSCENES is a lang-proxy with no own keys — count from the backing table instead.
     const total=(typeof _CSCENES_EN!=='undefined'&&_CSCENES_EN)?Object.keys(_CSCENES_EN).length:0;
     if(total>0&&seen>=total)A.unlock('achievement_all_cutscenes'); },
-  death(){ const A=this._A(); _levelDied=true; _worldDied=true; if(A)A.setStat('noDeathStreak',0); },
+  // Смерти считаем всего одним счётчиком: серия без смертей обнуляется здесь
+  // же, а «сколько раз я погиб за всё время» игрок в профиле раньше не видел.
+  death(){ const A=this._A(); _levelDied=true; _worldDied=true;
+    if(A){A.setStat('noDeathStreak',0); A.addStat('deaths',1);} },
   // Called when an adventure level is cleared. `worldEnd` = last level of a world.
   levelClear(worldEnd){ const A=this._A(); if(!A)return;
     if(!_levelDied){ if(A.addStat('noDeathStreak',1)>=10)A.unlock('achievement_no_death_10'); }

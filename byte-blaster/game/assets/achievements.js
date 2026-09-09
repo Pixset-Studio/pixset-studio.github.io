@@ -107,6 +107,7 @@
     stompKills: 0,
     perfectLevels: 0,
     noDeathStreak: 0,
+    deaths: 0,
     musicWorlds: [],
     cutscenes: [],
   };
