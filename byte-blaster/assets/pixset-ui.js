@@ -74,6 +74,70 @@ export function countryOptions(lang = uiLang()) {
     .sort((a, b) => a.name.localeCompare(b.name, lang));
 }
 
+/* ── Показатели игр ──────────────────────────────────────────────────────
+   Что игра публикует о своём игроке и как это называется по-человечески.
+   Один список на два места: публичный профиль рисует по нему карточки, а
+   админка предлагает эти же поля как условие выдачи бейджа. Добавили игре
+   новое число — допишите строку сюда, и оно появится в обоих местах.
+
+   `max` — ключ с максимумом (для полосы прогресса), `fmt: 'time'` — секунды. */
+export const STAT_GROUPS = [
+  {
+    ru: 'Прохождение', en: 'Campaign',
+    fields: [
+      { key: 'levels',     ico: '▦',  max: 'levelsMax',   ru: 'Уровни кампании',       en: 'Campaign levels' },
+      { key: 'hardcore',   ico: '💀', max: 'hardcoreMax', ru: 'Уровни в хардкоре',     en: 'Hardcore levels' },
+      { key: 'worlds',     ico: '🌐', max: 'worldsMax',   ru: 'Открыто миров',         en: 'Worlds reached' },
+      { key: 'bosses',     ico: '👹', max: 'bossesMax',   ru: 'Побеждено боссов',      en: 'Bosses defeated' },
+      { key: 'bossesHard', ico: '☠️', max: 'bossesMax',   ru: 'Боссы в хардкоре',      en: 'Bosses on hardcore' },
+      { key: 'stars',      ico: '⭐', max: 'starsMax',    ru: 'Собрано звёзд',         en: 'Stars collected' },
+      { key: 'stars3',     ico: '✨', ru: 'Уровней на три звезды',                     en: 'Levels at three stars' },
+      { key: 'crystals',   ico: '💠', max: 'crystalsMax', ru: 'Кристаллы данных',      en: 'Data crystals' },
+      { key: 'rainbow',    ico: '🌈', max: 'rainbowMax',  ru: 'Радужные осколки',      en: 'Rainbow shards' },
+      { key: 'ach',        ico: '🏆', max: 'achMax',      ru: 'Достижения',            en: 'Achievements' },
+      { key: 'logs',       ico: '📖', max: 'logsMax',     ru: 'Записи сюжетного архива', en: 'Story archive entries' },
+      // Общую долю прохождения профиль показывает отдельной строкой над
+      // числами, поэтому плиткой её не дублируем — но условием для бейджа она
+      // нужна: «пройти игру на 100%» просят чаще всего.
+      { key: 'completion', ico: '📈', ruleOnly: true,
+        ru: 'Игра пройдена (1 = 100%)', en: 'Game completed (1 = 100%)' },
+    ],
+  },
+  {
+    ru: 'Рекорды', en: 'Records',
+    fields: [
+      { key: 'score',    ico: '🎯', ru: 'Очков за всё время',      en: 'Score all-time' },
+      { key: 'bestAdv',  ico: '🚩', ru: 'Лучший забег в кампании', en: 'Best campaign run' },
+      { key: 'bestInf',  ico: '♾️', ru: 'Рекорд в бесконечном',    en: 'Best endless run' },
+      { key: 'coins',    ico: '🪙', ru: 'Собрано монет',           en: 'Coins collected' },
+      { key: 'playtime', ico: '⏱️', ru: 'Времени в игре',          en: 'Time played', fmt: 'time' },
+    ],
+  },
+  {
+    ru: 'Боевой почерк', en: 'Combat record',
+    fields: [
+      { key: 'kills',        ico: '💥', ru: 'Побеждено врагов',     en: 'Enemies defeated' },
+      { key: 'stompKills',   ico: '👟', ru: 'Врагов — прыжком',     en: 'Enemies — stomped' },
+      { key: 'blasterKills', ico: '🔫', ru: 'Врагов — из бластера', en: 'Enemies — blasted' },
+      { key: 'burnKills',    ico: '🔥', ru: 'Врагов — огнём',       en: 'Enemies — burned' },
+      { key: 'freezeKills',  ico: '❄️', ru: 'Врагов — льдом',       en: 'Enemies — frozen' },
+      { key: 'perfect',      ico: '💯', ru: 'Идеальных уровней',    en: 'Flawless levels' },
+      { key: 'streak',       ico: '🔗', ru: 'Серия без смертей',    en: 'No-death streak' },
+      { key: 'deaths',       ico: '⚰️', ru: 'Смертей за всё время', en: 'Deaths all-time' },
+      { key: 'jumps',        ico: '🦿', ru: 'Прыжков сделано',      en: 'Jumps made' },
+    ],
+  },
+];
+
+/** Название показателя по ключу; неизвестный ключ возвращается как есть. */
+export function statLabel(key, lang = uiLang()) {
+  for (const group of STAT_GROUPS) {
+    const f = group.fields.find((x) => x.key === key);
+    if (f) return lang === 'en' ? f.en : f.ru;
+  }
+  return key;
+}
+
 /* ── Бейджи ──────────────────────────────────────────────────────────────
    Рядом с ником бейдж живёт КАРТИНКОЙ: подпись там не помещается, а строка
    ников превратилась бы в кашу. Название уезжает в подсказку. Развёрнутый вид
@@ -147,3 +211,83 @@ document.addEventListener('pixset:lang', () => {
   document.querySelectorAll('[data-nick]').forEach((n) => { delete n.dataset.nickBadges; });
   paintNickBadges().catch(() => {});
 });
+
+/* ── Разделы админки ─────────────────────────────────────────────────────
+   Панель управления росла лентой: игроки, лицензии, бейджи, блокировки,
+   заявки, сборки, заказы — всё подряд на одной странице, и до нужного места
+   приходилось прокручивать пол-экрана.
+
+   Разметку при этом не переписываем. Заголовок раздела помечен атрибутами
+   data-sect="ключ" data-sect-title="Название", а эта функция сама разрезает
+   ленту по таким заголовкам, складывает куски по разделам и рисует
+   переключатель. Соседние заголовки с одним ключом попадают в один раздел —
+   так «Заказы» и «События оплат» живут вместе, а разметка остаётся плоской.
+
+   Выбранный раздел живёт в адресе (#players): перезагрузка страницы и
+   закладка возвращают туда же, где человек работал. */
+export function adminSections(root) {
+  if (!root || root.dataset.sectioned) return;
+  const heads = [...root.querySelectorAll('[data-sect]')];
+  if (heads.length < 2) return;
+  root.dataset.sectioned = '1';
+
+  // Каждый заголовок забирает себе всё, что идёт следом до заголовка
+  // следующего раздела.
+  const order = [];
+  const boxes = new Map();
+
+  heads.forEach((head) => {
+    const key = head.dataset.sect;
+    if (!boxes.has(key)) {
+      const box = document.createElement('div');
+      box.className = 'sect';
+      box.dataset.sect = key;
+      box.dataset.title = head.dataset.sectTitle || key;
+      boxes.set(key, box);
+      order.push(key);
+      head.parentNode.insertBefore(box, head);
+    }
+    const box = boxes.get(key);
+    let node = head;
+    const chunk = [];
+    while (node) {
+      chunk.push(node);
+      node = node.nextElementSibling;
+      if (node && node.hasAttribute('data-sect')) break;
+    }
+    chunk.forEach((n) => box.appendChild(n));
+  });
+
+  const nav = document.createElement('div');
+  nav.className = 'sectnav';
+  order.forEach((key) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.go = key;
+    b.textContent = boxes.get(key).dataset.title;
+    nav.appendChild(b);
+  });
+  root.insertBefore(nav, root.firstChild);
+
+  function show(key) {
+    const target = boxes.has(key) ? key : order[0];
+    boxes.forEach((box, id) => { box.hidden = id !== target; });
+    nav.querySelectorAll('button').forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.go === target));
+    });
+    return target;
+  }
+
+  nav.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-go]');
+    if (!b) return;
+    show(b.dataset.go);
+    // Заменяем запись в истории, а не добавляем: «назад» должно уводить с
+    // админки, а не листать разделы по одному.
+    history.replaceState(null, '', '#' + b.dataset.go);
+    root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+
+  show(location.hash.replace('#', ''));
+  window.addEventListener('hashchange', () => show(location.hash.replace('#', '')));
+}

@@ -79,17 +79,17 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 
       <div class="msg" id="msg"></div>
 
-      <h3 style="margin-top:26px">Приём оплаты</h3>
+      <h3 data-sect="sales" data-sect-title="Магазин" style="margin-top:26px">Приём оплаты</h3>
       <div class="rows" id="payToggle"></div>
 
-      <h3 style="margin-top:32px">Способы получить игру</h3>
+      <h3 data-sect="sales" style="margin-top:32px">Способы получить игру</h3>
       <p class="dim" style="font-size:14px">
         Выключённый способ исчезает со страницы скачивания и перестаёт
         предлагаться в обновлениях. Купленные игроки лицензию не теряют.
       </p>
       <div class="rows" id="channels"></div>
 
-      <h3 style="margin-top:32px">Выдать лицензию вручную</h3>
+      <h3 data-sect="players" data-sect-title="Игроки" style="margin-top:32px">Выдать лицензию вручную</h3>
       <div class="grantbox">
         <div class="field">
           <label for="grantEmail">Почта игрока</label>
@@ -107,7 +107,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
            Уходит на все устройства, где игра ОТКРЫТА: .exe, браузер, .apk.
            Игра сама спрашивает базу раз в полминуты, пока игрок в меню.
            Закрытую игру этим не разбудить — для этого нужен Web Push. -->
-      <h3 style="margin-top:32px">Уведомление игрокам</h3>
+      <h3 data-sect="news" data-sect-title="Уведомления" style="margin-top:32px">Уведомление игрокам</h3>
       <p class="dim" style="font-size:14px">
         Придёт туда, где игра открыта и уведомления разрешены. Живёт неделю.
       </p>
@@ -127,7 +127,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <div class="msg" id="annMsg"></div>
       <div class="rows" id="annList" style="margin-top:14px"></div>
 
-      <h3 style="margin-top:32px">Сборки и обновления</h3>
+      <h3 data-sect="builds" data-sect-title="Сборки" style="margin-top:32px">Сборки и обновления</h3>
       <p class="dim" style="font-size:14px">
         Файл кладётся в закрытое хранилище. Прямых ссылок нет: игроку с лицензией
         выдаётся временная ссылка на 10 минут, каждая выдача записывается.
@@ -169,7 +169,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <!-- ── Бейджи ──────────────────────────────────────────────────────
            Отметка рядом с ником в профиле: «бета-тестер», «победитель
            турнира». Каталог ведётся здесь, выдача — по нику игрока. -->
-      <h3 style="margin-top:32px">Бейджи игроков</h3>
+      <h3 data-sect="badges" data-sect-title="Бейджи" style="margin-top:32px">Бейджи игроков</h3>
       <p class="dim" style="font-size:14px">
         Бейдж показывается справа от ника в публичном профиле. Код менять нельзя:
         по нему бейдж и находится — сохранение с тем же кодом правит существующий.
@@ -218,6 +218,22 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
           <span>Не показывать в профиле</span>
         </label>
       </div>
+      <!-- ── За что выдаётся ─────────────────────────────────────────────
+           Пусто в первом поле — бейдж выдаётся только руками. -->
+      <div class="grantbox" style="margin-bottom:12px">
+        <div class="field">
+          <label for="badgeAutoGame">Выдавать за достижение в игре</label>
+          <select id="badgeAutoGame"><option value="">— только вручную —</option></select>
+        </div>
+        <div class="field">
+          <label for="badgeAutoField">Показатель</label>
+          <select id="badgeAutoField"></select>
+        </div>
+        <div class="field" style="flex:0 0 150px;min-width:120px">
+          <label for="badgeAutoMin">Не меньше</label>
+          <input type="number" id="badgeAutoMin" step="any" min="0" placeholder="100">
+        </div>
+      </div>
       <div class="grantbox" style="margin-bottom:12px">
         <div class="field">
           <label for="badgeIcon">Иконка (PNG, ужимается до 96×96)</label>
@@ -231,6 +247,10 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
         <button class="btn quiet" id="badgeClear">Очистить форму</button>
       </div>
       <div class="rows" id="badgeList"></div>
+      <p style="margin-top:12px">
+        <button class="btn quiet" id="badgeRecheck" style="width:auto">Пересчитать достижения</button>
+        <span class="dim" style="font-size:13px">выдаст бейджи тем, кто уже выполнил условие</span>
+      </p>
 
       <div class="grantbox" style="margin-top:14px">
         <div class="field">
@@ -250,7 +270,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <!-- ── Заявки на смену региона ─────────────────────────────────────
            Регион определяет валюту цен, поэтому меняется только через студию.
            Решение игрок видит у себя в кабинете: письма студия не шлёт. -->
-      <h3 style="margin-top:32px">Заявки на смену региона</h3>
+      <h3 data-sect="moderation" data-sect-title="Модерация" style="margin-top:32px">Заявки на смену региона</h3>
       <p class="dim" style="font-size:14px">
         Игрок объясняет причину, вы решаете. При одобрении регион и валюта в его
         профиле меняются сразу, а решение с вашим комментарием он увидит в своём
@@ -263,7 +283,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
            Вход заблокированному оставлен намеренно: иначе он увидит только
            «неверный пароль» и не узнает ни причины, ни срока. Всё остальное
            ему закрыто в самой базе. -->
-      <h3 style="margin-top:32px">Блокировки</h3>
+      <h3 data-sect="moderation" style="margin-top:32px">Блокировки</h3>
       <p class="dim" style="font-size:14px">
         Игрок увидит причину и обратный отсчёт на странице
         <a href="/banned/">/banned/</a>. Причина обязательна — читать её будет он сам.
@@ -297,13 +317,13 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <div class="msg" id="banMsg"></div>
       <div class="rows" id="banList" style="margin-top:12px"></div>
 
-      <h3 style="margin-top:32px">Заказы</h3>
+      <h3 data-sect="sales" style="margin-top:32px">Заказы</h3>
       <div class="tblwrap"><table id="ordersTbl"></table></div>
 
-      <h3 style="margin-top:32px">Игроки</h3>
+      <h3 data-sect="players" style="margin-top:32px">Игроки</h3>
       <div class="tblwrap"><table id="playersTbl"></table></div>
 
-      <h3 style="margin-top:32px">События оплат</h3>
+      <h3 data-sect="sales" style="margin-top:32px">События оплат</h3>
       <p class="dim" style="font-size:14px">
         Уведомления от платёжной системы. «Не найден» значит, что оплата пришла,
         но заказ по ней не определился — лицензию нужно выдать вручную.
@@ -335,11 +355,13 @@ import {
   getSettings, adminSetSetting, humanError,
   postAnnouncement, listAnnouncements, deleteAnnouncement,
   listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
-  adminBadgeHolders, badgeIconFromFile,
+  adminBadgeHolders, badgeIconFromFile, adminRecheckBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/assets/pixset-auth.js?v=7dac15d8';
-import { paintNickBadges, countryName, countryFlag } from '/assets/pixset-ui.js?v=7dac15d8';
+} from '/assets/pixset-auth.js?v=d580e50f';
+import {
+  paintNickBadges, countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
+} from '/assets/pixset-ui.js?v=d580e50f';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -704,6 +726,9 @@ $('badgeClear').onclick = () => {
   $('badgeNickAllowed').checked = true;
   $('badgeNickForced').checked = false;
   $('badgeHideProfile').checked = false;
+  $('badgeAutoGame').value = '';
+  $('badgeAutoMin').value = '';
+  paintBadgeRule();
   badgeIconUrl = null;
   paintBadgePreview();
 };
@@ -731,9 +756,55 @@ $('badgeSave').onclick = async () => {
       nick_allowed: $('badgeNickAllowed').checked,
       nick_forced: $('badgeNickForced').checked,
       hide_in_profile: $('badgeHideProfile').checked,
+      auto_game: $('badgeAutoGame').value,
+      auto_field: $('badgeAutoField').value,
+      auto_min: $('badgeAutoMin').value,
     });
     say('Бейдж сохранён.', 'ok');
     $('badgeClear').click();
+    await loadBadges();
+  } catch (err) { say(humanError(err)); }
+  finally { btn.disabled = false; }
+};
+
+
+/* ── Правило выдачи ──────────────────────────────────────────────────────
+   Список показателей — общий с публичным профилем (STAT_GROUPS), поэтому
+   условие можно поставить на любое число, которое игра публикует о себе. */
+function fillBadgeStats() {
+  $('badgeAutoField').innerHTML = STAT_GROUPS.map((g) => `<optgroup label="${esc(g.ru)}">${
+    g.fields.map((f) => `<option value="${esc(f.key)}">${esc(f.ru)}</option>`).join('')
+  }</optgroup>`).join('');
+}
+
+/** Правило имеет смысл только вместе с игрой — без неё поля прячем. */
+function paintBadgeRule() {
+  const on = !!$('badgeAutoGame').value;
+  $('badgeAutoField').closest('.field').hidden = !on;
+  $('badgeAutoMin').closest('.field').hidden = !on;
+}
+$('badgeAutoGame').onchange = paintBadgeRule;
+
+// Показатели общие с профилем и от сервера не зависят — заполняем сразу.
+fillBadgeStats();
+paintBadgeRule();
+
+/** Человеческое описание правила для списка бейджей. */
+function badgeRuleText(b) {
+  if (!b.auto_game) return '';
+  const label = statLabel(b.auto_field, 'ru');
+  const value = b.auto_field === 'completion'
+    ? Math.round(Number(b.auto_min) * 100) + '%'
+    : Number(b.auto_min).toLocaleString('ru-RU');
+  return `автоматически: ${label} ≥ ${value} (${b.auto_game})`;
+}
+
+$('badgeRecheck').onclick = async () => {
+  const btn = $('badgeRecheck');
+  btn.disabled = true;
+  try {
+    const n = await adminRecheckBadges();
+    say(n ? `Выдано бейджей: ${n}.` : 'Все, кто заслужил, уже с бейджами.', 'ok');
     await loadBadges();
   } catch (err) { say(humanError(err)); }
   finally { btn.disabled = false; }
@@ -758,6 +829,7 @@ async function loadBadges() {
             <div class="dim mono" style="font-size:12px">${[
               b.nick_forced ? 'всегда в нике' : (b.nick_allowed ? 'можно в ник' : 'не для ника'),
               b.hide_in_profile ? 'скрыт в профиле' : null,
+              badgeRuleText(b) || null,
             ].filter(Boolean).join(' · ')}</div>
           </div>
           <button class="btn quiet" data-badge-edit="${esc(b.slug)}" style="width:auto">В форму</button>
@@ -782,6 +854,10 @@ async function loadBadges() {
       $('badgeNickAllowed').checked = b.nick_allowed !== false;
       $('badgeNickForced').checked = !!b.nick_forced;
       $('badgeHideProfile').checked = !!b.hide_in_profile;
+      $('badgeAutoGame').value = b.auto_game || '';
+      $('badgeAutoField').value = b.auto_field || '';
+      $('badgeAutoMin').value = b.auto_min ?? '';
+      paintBadgeRule();
       badgeIconUrl = b.icon_url || null;
       paintBadgePreview();
       $('badgeSlug').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -998,6 +1074,9 @@ async function fillGames() {
     .map((g) => `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
   $('grantGame').innerHTML = options;
   $('relGame').innerHTML = options;
+  // В правиле выдачи бейджа игру можно и не указывать — тогда он выдаётся руками.
+  $('badgeAutoGame').innerHTML = '<option value="">— только вручную —</option>' + options;
+  paintBadgeRule();
 }
 
 async function withGrant(fn, okText) {
@@ -1030,6 +1109,9 @@ if (!session) {
     show($('denied'));
   } else {
     show($('panel'));
+    // Панель длинная — режем её на разделы: метки data-sect стоят прямо
+    // на заголовках, см. assets/pixset-ui.js.
+    adminSections($('panel'));
     // Версия модуля видна сразу: если браузер подсунул старую копию из кэша,
     // это заметно до того, как «ничего не работает без ошибок».
     $('me').textContent = profile.nickname + ' · ' + session.user.email

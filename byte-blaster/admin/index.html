@@ -145,14 +145,14 @@
         </p>
       </div>
 
-      <h2 style="margin-top:34px">СПОСОБЫ ПОЛУЧИТЬ ИГРУ</h2>
+      <h2 data-sect="sales" data-sect-title="МАГАЗИН" style="margin-top:34px">СПОСОБЫ ПОЛУЧИТЬ ИГРУ</h2>
       <p class="dim" style="font-size:14px">
         Выключённый способ сразу исчезает со страницы «Скачать». Купленные игроки
         лицензию не теряют.
       </p>
       <div id="gaChannels"></div>
 
-      <h2 style="margin-top:34px">ПРИЁМ ОПЛАТЫ</h2>
+      <h2 data-sect="sales" style="margin-top:34px">ПРИЁМ ОПЛАТЫ</h2>
       <div id="gaPay"></div>
 
       <!-- ── Рассылка ────────────────────────────────────────────────────
@@ -161,7 +161,7 @@
            показывает системное уведомление (если разрешено) либо всплывашку
            внутри игры. Разбудить закрытую игру этим нельзя — для этого нужен
            Web Push с ключами и служба доставки. -->
-      <h2 style="margin-top:34px">УВЕДОМЛЕНИЕ ИГРОКАМ</h2>
+      <h2 data-sect="news" data-sect-title="УВЕДОМЛЕНИЯ" style="margin-top:34px">УВЕДОМЛЕНИЕ ИГРОКАМ</h2>
       <p class="dim" style="font-size:14px">
         Придёт туда, где игра открыта и уведомления разрешены: на ПК, в браузере
         и на телефоне. Живёт неделю, потом пропадает само.
@@ -185,7 +185,7 @@
       <!-- ── Бейджи ──────────────────────────────────────────────────────
            Тот же набор, что в админке студии: аккаунт один на все игры, и
            разводить две разные панели управления им незачем. -->
-      <h2 style="margin-top:34px">БЕЙДЖИ ИГРОКОВ</h2>
+      <h2 data-sect="badges" data-sect-title="БЕЙДЖИ" style="margin-top:34px">БЕЙДЖИ ИГРОКОВ</h2>
       <p class="dim" style="font-size:14px">
         Бейдж виден справа от ника на обоих сайтах. Код не меняется: сохранение
         с тем же кодом правит существующий бейдж.
@@ -202,6 +202,14 @@
         <input type="text" id="badgeHintEn" maxlength="120" placeholder="For joining the closed test"></div>
       <div class="field"><label for="badgeColor">Цвет</label>
         <input type="color" id="badgeColor" value="#00ffff" style="height:44px;padding:4px"></div>
+      <!-- ── За что выдаётся ─────────────────────────────────────────────
+           Пусто в первом поле — бейдж выдаётся только руками. -->
+      <div class="field"><label for="badgeAutoGame">Выдавать за достижение в игре</label>
+        <select id="badgeAutoGame"><option value="">— только вручную —</option></select></div>
+      <div class="field"><label for="badgeAutoField">Показатель</label>
+        <select id="badgeAutoField"></select></div>
+      <div class="field"><label for="badgeAutoMin">Не меньше</label>
+        <input type="number" id="badgeAutoMin" step="any" min="0" placeholder="100"></div>
       <div class="field"><label for="badgeIcon">Иконка (ужимается до 96×96 PNG)</label>
         <input type="file" id="badgeIcon" accept="image/*"></div>
       <p class="dim" style="font-size:13px;display:flex;gap:18px;flex-wrap:wrap;align-items:center">
@@ -214,6 +222,10 @@
       <button class="btn" id="badgeSave">СОХРАНИТЬ БЕЙДЖ</button>
       <button class="btn" id="badgeClear">ОЧИСТИТЬ ФОРМУ</button>
       <div id="badgeList" style="margin-top:14px"></div>
+      <p style="margin-top:12px">
+        <button class="btn" id="badgeRecheck">ПЕРЕСЧИТАТЬ ДОСТИЖЕНИЯ</button>
+        <span class="dim" style="font-size:13px">выдаст бейджи тем, кто уже выполнил условие</span>
+      </p>
 
       <div class="field" style="margin-top:14px"><label for="badgeNick">Ник игрока</label>
         <input type="text" id="badgeNick" autocomplete="off" placeholder="player"></div>
@@ -225,7 +237,7 @@
 
       <!-- ── Заявки на смену региона ─────────────────────────────────────
            Решение игрок видит у себя в кабинете: письма студия не шлёт. -->
-      <h2 style="margin-top:34px">ЗАЯВКИ НА СМЕНУ РЕГИОНА</h2>
+      <h2 data-sect="moderation" data-sect-title="МОДЕРАЦИЯ" style="margin-top:34px">ЗАЯВКИ НА СМЕНУ РЕГИОНА</h2>
       <p class="dim" style="font-size:14px">
         Игрок объясняет причину, вы решаете. При одобрении регион и валюта
         меняются сразу, а решение с комментарием он увидит в своём кабинете.
@@ -235,7 +247,7 @@
 
       <!-- ── Блокировки ──────────────────────────────────────────────────
            Тот же раздел, что в админке студии: аккаунт один на все игры. -->
-      <h2 style="margin-top:34px">БЛОКИРОВКИ</h2>
+      <h2 data-sect="moderation" style="margin-top:34px">БЛОКИРОВКИ</h2>
       <p class="dim" style="font-size:14px">
         Игрок увидит причину и обратный отсчёт на странице
         <a href="/byte-blaster/banned/">/byte-blaster/banned/</a>.
@@ -262,7 +274,7 @@
       <div class="msg" id="banMsg"></div>
       <div id="banList" style="margin-top:12px"></div>
 
-      <h2 style="margin-top:34px">СБОРКИ И ОБНОВЛЕНИЯ</h2>
+      <h2 data-sect="builds" data-sect-title="СБОРКИ" style="margin-top:34px">СБОРКИ И ОБНОВЛЕНИЯ</h2>
       <p class="dim" style="font-size:14px">
         Файл уходит в закрытое хранилище. Прямых ссылок нет: игрок с лицензией
         получает временную ссылку на 10 минут, каждая выдача записывается.
@@ -306,7 +318,7 @@
       </div>
       <div class="tw"><table id="relTbl"></table></div>
 
-      <h2 style="margin-top:34px">ИГРОКИ И ЛИЦЕНЗИИ</h2>
+      <h2 data-sect="players" data-sect-title="ИГРОКИ" style="margin-top:34px">ИГРОКИ И ЛИЦЕНЗИИ</h2>
       <div class="card" style="margin-bottom:14px">
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
           <div style="flex:1;min-width:220px">
@@ -332,7 +344,7 @@
       </div>
       <div class="tw"><table id="playersTbl"></table></div>
 
-      <h2 style="margin-top:34px">ЗАКАЗЫ</h2>
+      <h2 data-sect="sales" style="margin-top:34px">ЗАКАЗЫ</h2>
       <div class="tw"><table id="ordersTbl"></table></div>
 
       <p style="margin-top:26px">
@@ -585,11 +597,13 @@ import {
   adminDailyStats, adminTotals, humanError,
   postAnnouncement, listAnnouncements, deleteAnnouncement,
   listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
-  adminBadgeHolders, badgeIconFromFile,
+  adminBadgeHolders, badgeIconFromFile, adminRecheckBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/byte-blaster/assets/pixset-auth.js?v=7dac15d8';
-import { paintNickBadges, countryName, countryFlag } from '/byte-blaster/assets/pixset-ui.js?v=7dac15d8';
+} from '/byte-blaster/assets/pixset-auth.js?v=d580e50f';
+import {
+  paintNickBadges, countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
+} from '/byte-blaster/assets/pixset-ui.js?v=d580e50f';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -1098,6 +1112,9 @@ $('badgeClear').onclick = () => {
   $('badgeNickAllowed').checked = true;
   $('badgeNickForced').checked = false;
   $('badgeHideProfile').checked = false;
+  $('badgeAutoGame').value = '';
+  $('badgeAutoMin').value = '';
+  paintBadgeRule();
   badgeIconUrl = null;
   paintBadgePreview();
 };
@@ -1125,6 +1142,9 @@ $('badgeSave').onclick = async () => {
       nick_allowed: $('badgeNickAllowed').checked,
       nick_forced: $('badgeNickForced').checked,
       hide_in_profile: $('badgeHideProfile').checked,
+      auto_game: $('badgeAutoGame').value,
+      auto_field: $('badgeAutoField').value,
+      auto_min: $('badgeAutoMin').value,
     });
     say('Бейдж сохранён.', 'ok');
     $('badgeClear').click();
@@ -1132,6 +1152,55 @@ $('badgeSave').onclick = async () => {
   } catch (err) { say(humanError(err)); }
   finally { btn.disabled = false; }
 };
+
+
+/* ── Правило выдачи ──────────────────────────────────────────────────────
+   Список показателей — общий с публичным профилем (STAT_GROUPS), поэтому
+   условие можно поставить на любое число, которое игра публикует о себе. */
+function fillBadgeStats() {
+  $('badgeAutoField').innerHTML = STAT_GROUPS.map((g) => `<optgroup label="${esc(g.ru)}">${
+    g.fields.map((f) => `<option value="${esc(f.key)}">${esc(f.ru)}</option>`).join('')
+  }</optgroup>`).join('');
+}
+
+/** Правило имеет смысл только вместе с игрой — без неё поля прячем. */
+function paintBadgeRule() {
+  const on = !!$('badgeAutoGame').value;
+  $('badgeAutoField').closest('.field').hidden = !on;
+  $('badgeAutoMin').closest('.field').hidden = !on;
+}
+$('badgeAutoGame').onchange = paintBadgeRule;
+
+/** Человеческое описание правила для списка бейджей. */
+function badgeRuleText(b) {
+  if (!b.auto_game) return '';
+  const label = statLabel(b.auto_field, 'ru');
+  const value = b.auto_field === 'completion'
+    ? Math.round(Number(b.auto_min) * 100) + '%'
+    : Number(b.auto_min).toLocaleString('ru-RU');
+  return `автоматически: ${label} ≥ ${value} (${b.auto_game})`;
+}
+
+$('badgeRecheck').onclick = async () => {
+  const btn = $('badgeRecheck');
+  btn.disabled = true;
+  try {
+    const n = await adminRecheckBadges();
+    badgeSay(n ? `Выдано бейджей: ${n}.` : 'Все, кто заслужил, уже с бейджами.', 'ok');
+    await loadBadges();
+  } catch (err) { badgeSay(humanError(err)); }
+  finally { btn.disabled = false; }
+};
+
+/* Эта админка управляет одной игрой, поэтому список игр в правиле —
+   она сама. Показатели общие с профилем. */
+(function initBadgeRule() {
+  $('badgeAutoGame').innerHTML =
+    '<option value="">— только вручную —</option>'
+    + `<option value="${GAME}">BYTE BLASTER</option>`;
+  fillBadgeStats();
+  paintBadgeRule();
+})();
 
 async function loadBadges() {
   let rows = [];
@@ -1152,6 +1221,7 @@ async function loadBadges() {
             <div class="dim mono" style="font-size:12px">${[
               b.nick_forced ? 'всегда в нике' : (b.nick_allowed ? 'можно в ник' : 'не для ника'),
               b.hide_in_profile ? 'скрыт в профиле' : null,
+              badgeRuleText(b) || null,
             ].filter(Boolean).join(' · ')}</div>
           </div>
           <button class="btn quiet" data-badge-edit="${esc(b.slug)}" style="width:auto">В форму</button>
@@ -1176,6 +1246,10 @@ async function loadBadges() {
       $('badgeNickAllowed').checked = b.nick_allowed !== false;
       $('badgeNickForced').checked = !!b.nick_forced;
       $('badgeHideProfile').checked = !!b.hide_in_profile;
+      $('badgeAutoGame').value = b.auto_game || '';
+      $('badgeAutoField').value = b.auto_field || '';
+      $('badgeAutoMin').value = b.auto_min ?? '';
+      paintBadgeRule();
       badgeIconUrl = b.icon_url || null;
       paintBadgePreview();
       $('badgeSlug').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1403,6 +1477,9 @@ if (!session) {
       'Этот аккаунт не администратор студии.';
   } else {
     $('gaPanel').style.display = 'block';
+    // Панель длинная — режем её на разделы: метки data-sect стоят прямо
+    // на заголовках, см. assets/pixset-ui.js.
+    adminSections($('gaPanel'));
     // Версия модуля на виду: если браузер подсунул старую копию из кэша, это
     // заметно сразу, а не после очередного «не грузится, но ошибок нет».
     const stamp = document.createElement('p');

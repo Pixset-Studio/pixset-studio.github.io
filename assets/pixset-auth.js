@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '7dac15d8';
+export const SDK_VERSION = 'd580e50f';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -919,10 +919,19 @@ export async function adminSaveBadge(badge) {
     nick_allowed: badge.nick_forced ? true : badge.nick_allowed !== false,
     nick_forced: !!badge.nick_forced,
     hide_in_profile: !!badge.hide_in_profile,
+    // Правило выдачи за достижение: игра, показатель и порог. База требует
+    // либо все три поля, либо ни одного — половина условия ничего не выдаёт.
+    auto_game: badge.auto_game || null,
+    auto_field: badge.auto_game ? (badge.auto_field || null) : null,
+    auto_min: badge.auto_game && badge.auto_min !== '' && badge.auto_min != null
+      ? Number(badge.auto_min) : null,
   };
   if (!/^[a-z0-9][a-z0-9-]{1,38}$/.test(row.slug)) throw new Error('bad_badge_slug');
   if (!row.title_ru || !row.title_en) throw new Error('badge_title_required');
   if (row.icon_url && row.icon_url.length > BADGE_ICON_MAX_BYTES) throw new Error('badge_icon_too_big');
+  if (row.auto_game && (!row.auto_field || !Number.isFinite(row.auto_min))) {
+    throw new Error('badge_rule_incomplete');
+  }
 
   // upsert по slug: правка существующего бейджа — то же действие, что создание.
   const { error } = await supabase.from('badges').upsert(row, { onConflict: 'slug' });
@@ -933,6 +942,18 @@ export async function adminSaveBadge(badge) {
 export async function adminDeleteBadge(slug) {
   const { error } = await supabase.from('badges').delete().eq('slug', slug);
   if (error) throw error;
+}
+
+/**
+ * Прогоняет правила по всем игрокам и выдаёт заслуженные бейджи.
+ * Нужен после того, как правило завели: сам по себе бейдж находит хозяина
+ * только при следующей публикации прогресса из игры, а прогресс у многих уже
+ * набран. Возвращает, сколько бейджей выдано.
+ */
+export async function adminRecheckBadges() {
+  const { data, error } = await supabase.rpc('admin_badges_recheck');
+  if (error) throw error;
+  return Number(data) || 0;
 }
 
 export async function adminGrantBadge(nickname, slug) {
@@ -1139,6 +1160,9 @@ const ERROR_RULES = [
   { any: ['badge_title_required'], ru: 'Заполните название бейджа на обоих языках.', en: 'Fill in the badge title in both languages.' },
   { any: ['badge_icon_too_big'], ru: 'Иконку не удалось ужать. Возьмите картинку попроще.', en: 'The icon could not be compressed. Try a simpler picture.' },
   { any: ['badge_not_found'], ru: 'Такого бейджа нет.', en: 'No such badge.' },
+  { any: ['badge_rule_incomplete', 'badges_auto_rule_complete'],
+    ru: 'Правило выдачи заполнено наполовину: нужны игра, показатель и значение.',
+    en: 'The rule is half-filled: pick a game, a stat and a threshold.' },
   // Заявки на смену региона.
   { any: ['reason_too_short'], ru: 'Опишите причину подробнее — не меньше 30 символов.', en: 'Describe the reason in more detail — at least 30 characters.' },
   { any: ['request_pending'], ru: 'Заявка уже отправлена и ждёт решения.', en: 'A request is already waiting for a decision.' },

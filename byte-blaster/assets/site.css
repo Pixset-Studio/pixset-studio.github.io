@@ -134,7 +134,18 @@ header.top {
   background: rgba(4,4,15,.92); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(8px);
 }
-.top .wrap { display: flex; align-items: center; gap: 18px; height: 62px; }
+/* Высота задаётся снизу, а не намертво: в шапке лежит меню из девяти пунктов,
+   ссылка на студию, переключатель языка и кнопка аккаунта с аватаром. На узком
+   окне всё это переносится на вторую строку, и при height: 62px первая строка
+   уезжала за верхний край. Теперь шапка просто становится выше. */
+.top .wrap {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 10px 16px; min-height: 62px; padding-top: 8px; padding-bottom: 8px;
+  /* Шапке позволено быть шире колонки текста: в ней девять пунктов меню,
+     ссылка на студию, языки и кнопка аккаунта — в 1180 px они не помещаются,
+     и меню переезжало на вторую строку даже на широком мониторе. */
+  max-width: min(1360px, 100%);
+}
 .brand {
   font-family: var(--pixel); font-size: 13px; color: var(--cyan);
   text-shadow: 0 0 12px rgba(0,255,255,.5); border: none; white-space: nowrap;
@@ -153,7 +164,7 @@ header.top {
 
 nav.main { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 nav.main a {
-  font-family: var(--pixel); font-size: 9px; padding: 9px 12px; border: 1px solid var(--line);
+  font-family: var(--pixel); font-size: 9px; padding: 8px 9px; border: 1px solid var(--line);
   border-radius: 3px; color: var(--text); background: var(--panel);
 }
 nav.main a:hover, nav.main a[aria-current="page"] { color: var(--cyan); border-color: var(--cyan); }
@@ -705,6 +716,22 @@ select {
   background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
   color: var(--text); font-family: var(--mono); font-size: 14px; padding: 10px 12px;
 }
+
+/* ── Разделы админки ─────────────────────────────────────────────────────
+   Переключатель строит adminSections (assets/pixset-ui.js): панель управления
+   слишком длинная, чтобы жить одной лентой. */
+.sectnav {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 18px 0 24px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+.sectnav button {
+  cursor: pointer; padding: 9px 12px; border-radius: 3px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+  font-family: var(--pixel); font-size: 9px; letter-spacing: 1px;
+}
+.sectnav button:hover { color: var(--cyan); }
+.sectnav button[aria-pressed="true"] { color: var(--cyan); border-color: var(--cyan); background: rgba(0,255,255,.08); }
+.sect > :first-child { margin-top: 0 !important; }
 
 /* ── Кнопка «мой аккаунт» ────────────────────────────────────────────────
    Вошедший игрок видит в шапке себя: аватар, ник и бейджи — ровно как на

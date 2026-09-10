@@ -580,6 +580,23 @@ select {
 
 .empty { color: var(--text-dim); font-family: var(--font-mono); font-size: 13px; padding: 16px 0; }
 
+/* ── Разделы админки ─────────────────────────────────────────────────────
+   Переключатель строит adminSections (assets/pixset-ui.js): панель управления
+   слишком длинная, чтобы жить одной лентой. */
+.sectnav {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 18px 0 24px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+.sectnav button {
+  cursor: pointer; padding: 10px 14px; border-radius: var(--radius);
+  background: var(--bg-2); border: 1px solid var(--line-2); color: var(--text-dim);
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+}
+.sectnav button:hover { color: var(--y); }
+.sectnav button[aria-pressed='true'] { color: var(--y); border-color: var(--y); background: rgba(255,212,0,.08); }
+/* Первый заголовок внутри раздела не отодвигается: он и так под навигацией. */
+.sect > :first-child { margin-top: 0 !important; }
+
 @media (max-width: 640px) {
   section { padding: 52px 0; }
   .hero { padding: 56px 0 44px; }

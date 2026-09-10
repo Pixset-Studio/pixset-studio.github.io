@@ -187,10 +187,10 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 <script type="module">
 import {
   supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
-} from '/assets/pixset-auth.js?v=7dac15d8';
+} from '/assets/pixset-auth.js?v=d580e50f';
 import {
-  badgeRowHtml, paintNickBadges, countryName, countryFlag,
-} from '/assets/pixset-ui.js?v=7dac15d8';
+  badgeRowHtml, paintNickBadges, countryName, countryFlag, STAT_GROUPS,
+} from '/assets/pixset-ui.js?v=d580e50f';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -206,56 +206,10 @@ function say(text, kind = 'err') {
   $('msg').className = `msg show ${kind}`;
 }
 
-/* ── Что показываем и как это называется ─────────────────────────────────
-   Каждая игра публикует свою сводку сама, поэтому набор полей у неё свой.
-   Здесь описано, ЧТО из неё показывать, в каком разделе и КАК подписать —
-   незнакомые поля просто не выводятся, а не ломают карточку. Добавили игре
-   новое число — допишите строку сюда, менять больше ничего не нужно.
-
-   Подписи развёрнутые не для красоты: «Хардкор 103» ни о чём не говорит, а
-   «103 / 110 · уровни в хардкоре» — говорит. */
-const GROUPS = [
-  {
-    ru: 'Прохождение', en: 'Campaign',
-    fields: [
-      { key: 'levels',     ico: '▦',  max: 'levelsMax',   ru: 'Уровни кампании',       en: 'Campaign levels' },
-      { key: 'hardcore',   ico: '💀', max: 'hardcoreMax', ru: 'Уровни в хардкоре',     en: 'Hardcore levels' },
-      { key: 'worlds',     ico: '🌐', max: 'worldsMax',   ru: 'Открыто миров',         en: 'Worlds reached' },
-      { key: 'bosses',     ico: '👹', max: 'bossesMax',   ru: 'Побеждено боссов',      en: 'Bosses defeated' },
-      { key: 'bossesHard', ico: '☠️', max: 'bossesMax',   ru: 'Боссы в хардкоре',      en: 'Bosses on hardcore' },
-      { key: 'stars',      ico: '⭐', max: 'starsMax',    ru: 'Собрано звёзд',         en: 'Stars collected' },
-      { key: 'stars3',     ico: '✨', ru: 'Уровней на три звезды',                     en: 'Levels at three stars' },
-      { key: 'crystals',   ico: '💠', max: 'crystalsMax', ru: 'Кристаллы данных',      en: 'Data crystals' },
-      { key: 'rainbow',    ico: '🌈', max: 'rainbowMax',  ru: 'Радужные осколки',      en: 'Rainbow shards' },
-      { key: 'ach',        ico: '🏆', max: 'achMax',      ru: 'Достижения',            en: 'Achievements' },
-      { key: 'logs',       ico: '📖', max: 'logsMax',     ru: 'Записи сюжетного архива', en: 'Story archive entries' },
-    ],
-  },
-  {
-    ru: 'Рекорды', en: 'Records',
-    fields: [
-      { key: 'score',    ico: '🎯', ru: 'Очков за всё время',      en: 'Score all-time' },
-      { key: 'bestAdv',  ico: '🚩', ru: 'Лучший забег в кампании', en: 'Best campaign run' },
-      { key: 'bestInf',  ico: '♾️', ru: 'Рекорд в бесконечном',    en: 'Best endless run' },
-      { key: 'coins',    ico: '🪙', ru: 'Собрано монет',           en: 'Coins collected' },
-      { key: 'playtime', ico: '⏱️', ru: 'Времени в игре',          en: 'Time played', fmt: 'time' },
-    ],
-  },
-  {
-    ru: 'Боевой почерк', en: 'Combat record',
-    fields: [
-      { key: 'kills',        ico: '💥', ru: 'Побеждено врагов',     en: 'Enemies defeated' },
-      { key: 'stompKills',   ico: '👟', ru: 'Врагов — прыжком',     en: 'Enemies — stomped' },
-      { key: 'blasterKills', ico: '🔫', ru: 'Врагов — из бластера', en: 'Enemies — blasted' },
-      { key: 'burnKills',    ico: '🔥', ru: 'Врагов — огнём',       en: 'Enemies — burned' },
-      { key: 'freezeKills',  ico: '❄️', ru: 'Врагов — льдом',       en: 'Enemies — frozen' },
-      { key: 'perfect',      ico: '💯', ru: 'Идеальных уровней',    en: 'Flawless levels' },
-      { key: 'streak',       ico: '🔗', ru: 'Серия без смертей',    en: 'No-death streak' },
-      { key: 'deaths',       ico: '⚰️', ru: 'Смертей за всё время', en: 'Deaths all-time' },
-      { key: 'jumps',        ico: '🦿', ru: 'Прыжков сделано',      en: 'Jumps made' },
-    ],
-  },
-];
+/* Что показывать и как подписать — в общем модуле (assets/pixset-ui.js):
+   тот же список читает админка, когда предлагает условие выдачи бейджа.
+   Незнакомые поля просто не выводятся, а не ломают карточку. */
+const GROUPS = STAT_GROUPS;
 
 /* Звание Byte Blaster приходит ключом (rank0…rank6) — карточка показывает
    его на языке читателя, а не на языке того, кто играл. */
@@ -295,7 +249,11 @@ function gameCard(g) {
   const d = (g && g.data) || {};
 
   const groups = GROUPS.map((grp) => {
-    const cards = grp.fields.filter((f) => d[f.key] != null).map((f) => statCard(f, d)).join('');
+    // ruleOnly — поля, которые нужны только правилам выдачи бейджей
+    // (общая доля прохождения уже показана строкой выше).
+    const cards = grp.fields
+      .filter((f) => !f.ruleOnly && d[f.key] != null)
+      .map((f) => statCard(f, d)).join('');
     return cards ? `<div class="gsec">${esc(L(grp.ru, grp.en))}</div><div class="gnums">${cards}</div>` : '';
   }).join('');
 
