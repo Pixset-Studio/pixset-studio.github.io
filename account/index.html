@@ -199,39 +199,14 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 
         <div class="msg" id="profMsg"></div>
 
-        <h3><span data-l="ru">Мои игры</span><span data-l="en">My games</span></h3>
-        <div class="rows" id="lib"></div>
+        <!-- Дальше кабинет разрезан на разделы: pageSections() режет ленту по
+             заголовкам с data-sect и рисует переключатель. Всё, что должно
+             быть видно всегда (карточка и сообщения), стоит выше обёртки. -->
+        <div id="acctSections">
 
-        <!-- ── Бейджи ──────────────────────────────────────────────────────
-             Выдаёт студия. Часть из них игрок может показывать рядом с ником
-             на всём сайте, часть висит там всегда, а часть в профиле вовсе не
-             показывается — какая именно, решает бейдж (см. 0008). -->
-        <h3 style="margin-top:26px"><span data-l="ru">Мои бейджи</span><span data-l="en">My badges</span></h3>
-        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
-          Отмеченные видны рядом с ником везде на сайте. В профиле показываются все, кроме скрытых.
-        </p>
-        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
-          The ones you tick appear next to your nickname everywhere on the site. Your profile shows all of them except the hidden ones.
-        </p>
-        <div class="rows" id="myBadges"></div>
-
-        <!-- ── Друзья ──────────────────────────────────────────────────────
-             Заявка идёт по нику: игрок знает ник, а не UUID. Встречная заявка
-             сразу становится дружбой — см. friend_request в миграции 0002. -->
-        <h3 style="margin-top:26px"><span data-l="ru">Друзья</span><span data-l="en">Friends</span></h3>
-        <div class="field" style="max-width:420px">
-          <label for="friendNick"><span data-l="ru">Добавить по нику</span><span data-l="en">Add by nickname</span></label>
-          <div style="display:flex;gap:8px">
-            <input type="text" id="friendNick" data-ph-ru="ник игрока" data-ph-en="player nickname"
-                   placeholder="ник игрока" autocomplete="off" style="flex:1">
-            <button class="btn" id="friendAdd" style="width:auto;padding:9px 18px"><span data-l="ru">Позвать</span><span data-l="en">Invite</span></button>
-          </div>
-        </div>
-        <div class="msg" id="friendMsg"></div>
-        <div class="rows" id="friendSearch" style="margin-bottom:12px"></div>
-        <div class="rows" id="friendList"></div>
-
-        <h3 style="margin-top:26px"><span data-l="ru">Профиль</span><span data-l="en">Profile</span></h3>
+        <h3 data-sect="me" data-sect-title="Профиль" data-sect-title-en="Profile">
+          <span data-l="ru">Ник</span><span data-l="en">Nickname</span>
+        </h3>
         <div class="grantbox" style="margin-bottom:10px">
           <div class="field">
             <label for="newNick"><span data-l="ru">Ник</span><span data-l="en">Nickname</span></label>
@@ -243,6 +218,9 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         </div>
         <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="ru">
           Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.
+        </p>
+        <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="en">
+          Other players see this nickname in multiplayer. It can be changed once a day.
         </p>
 
         <!-- ── О себе ──────────────────────────────────────────────────────
@@ -258,10 +236,67 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         <button class="btn quiet" id="saveBio" style="width:auto;margin-bottom:20px">
           <span data-l="ru">Сохранить описание</span><span data-l="en">Save description</span>
         </button>
-        <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="en">
-          Other players see this nickname in multiplayer. It can be changed once a day.
-        </p>
 
+        <h3 data-sect="games" data-sect-title="Игры" data-sect-title-en="Games">
+          <span data-l="ru">Мои игры</span><span data-l="en">My games</span>
+        </h3>
+        <div class="rows" id="lib"></div>
+
+        <h3 data-sect="games" style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
+        <div class="rows" id="orders"></div>
+
+        <!-- ── Бейджи ──────────────────────────────────────────────────────
+             Выдаёт студия. Часть из них игрок может показывать рядом с ником
+             на всём сайте, часть висит там всегда, а часть в профиле вовсе не
+             показывается — какая именно, решает бейдж (см. 0008). Рядом с
+             ником помещается один бейдж на выбор, порядок задаёт игрок
+             (см. 0014). -->
+        <h3 data-sect="badges" data-sect-title="Бейджи" data-sect-title-en="Badges">
+          <span data-l="ru">Мои бейджи</span><span data-l="en">My badges</span>
+        </h3>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
+          Рядом с ником помещается один бейдж на выбор — отметьте нужный, прежний освободит место.
+          Бейджи студии стоят там всегда. Стрелки задают, кто главнее: чем левее, тем ближе к нику.
+        </p>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
+          One badge of your choice fits next to your nickname — tick it and the previous one steps aside.
+          Studio badges are always there. The arrows set which comes first: the closer to the left, the closer to the nickname.
+        </p>
+        <div class="rows" id="nickPreview" style="margin-bottom:12px"></div>
+        <div class="rows" id="myBadges"></div>
+
+        <!-- ── Друзья ──────────────────────────────────────────────────────
+             Заявка идёт по нику: игрок знает ник, а не UUID. Встречная заявка
+             сразу становится дружбой — см. friend_request в миграции 0002. -->
+        <h3 data-sect="friends" data-sect-title="Друзья" data-sect-title-en="Friends">
+          <span data-l="ru">Друзья</span><span data-l="en">Friends</span>
+        </h3>
+        <div class="field" style="max-width:420px">
+          <label for="friendNick"><span data-l="ru">Добавить по нику</span><span data-l="en">Add by nickname</span></label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="friendNick" data-ph-ru="ник игрока" data-ph-en="player nickname"
+                   placeholder="ник игрока" autocomplete="off" style="flex:1">
+            <button class="btn" id="friendAdd" style="width:auto;padding:9px 18px"><span data-l="ru">Позвать</span><span data-l="en">Invite</span></button>
+          </div>
+        </div>
+        <div class="msg" id="friendMsg"></div>
+        <div class="rows" id="friendSearch" style="margin-bottom:12px"></div>
+        <div class="rows" id="friendList"></div>
+
+        <h3 data-sect="devices" data-sect-title="Устройства" data-sect-title-en="Devices">
+          <span data-l="ru">Устройства</span><span data-l="en">Devices</span>
+        </h3>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
+          Устройства, с которых входили в игру. Отвязка не мешает войти снова.
+        </p>
+        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
+          Devices the game was signed in from. Unlinking one does not stop you signing in again.
+        </p>
+        <div class="rows" id="devices"></div>
+
+        <h3 data-sect="settings" data-sect-title="Настройки" data-sect-title-en="Settings">
+          <span data-l="ru">Почта и пароль</span><span data-l="en">Email and password</span>
+        </h3>
         <div class="grantbox" style="margin-bottom:10px">
           <div class="field">
             <label for="newEmail"><span data-l="ru">Почта для входа</span><span data-l="en">Sign-in email</span></label>
@@ -310,9 +345,12 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 
         <!-- ── Регион ──────────────────────────────────────────────────────
              Регион определяет валюту цен, поэтому меняется не кнопкой, а
-             заявкой: игрок объясняет причину, студия решает и отвечает
-             письмом. Форма и статус живут в одном месте — так видно, на каком
+             заявкой: игрок объясняет причину, студия решает и отвечает прямо
+             здесь же. Форма и статус живут в одном месте — так видно, на каком
              шаге сейчас игрок. -->
+        <h3 data-sect="settings" style="margin-top:26px">
+          <span data-l="ru">Регион и страна</span><span data-l="en">Region and country</span>
+        </h3>
         <div class="rows" style="margin-top:20px">
           <div class="row">
             <div>
@@ -364,19 +402,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
           <div class="rows" id="regionStatus"></div>
         </div>
 
-        <h3 style="margin-top:26px"><span data-l="ru">Устройства</span><span data-l="en">Devices</span></h3>
-        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
-          Устройства, с которых входили в игру. Отвязка не мешает войти снова.
-        </p>
-        <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
-          Devices the game was signed in from. Unlinking one does not stop you signing in again.
-        </p>
-        <div class="rows" id="devices"></div>
-
-        <h3 style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
-        <div class="rows" id="orders"></div>
-
-        <h3 style="margin-top:26px"><span data-l="ru">Внешний вид сайта</span><span data-l="en">Site appearance</span></h3>
+        <h3 data-sect="settings" style="margin-top:26px"><span data-l="ru">Внешний вид сайта</span><span data-l="en">Site appearance</span></h3>
         <p class="dim" style="font-size:14px;margin-bottom:12px" data-l="ru">
           Тема сохраняется в браузере и действует на всех страницах студии.
         </p>
@@ -385,7 +411,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         </p>
         <div class="rows" id="themes"></div>
 
-        <h3 style="margin-top:32px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Deleting the account</span></h3>
+        <h3 data-sect="settings" style="margin-top:32px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Deleting the account</span></h3>
         <div class="rows">
           <div class="row">
             <div>
@@ -400,6 +426,8 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
             <button class="btn quiet" id="deleteAcc"><span data-l="ru">Удалить</span><span data-l="en">Delete</span></button>
           </div>
         </div>
+
+        </div><!-- /acctSections -->
       </div>
     </div>
 
@@ -418,12 +446,12 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js"></script>
+<script src="/assets/pixset-me.js?v=156a4ac1"></script>
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
   verifyEmailCode, resendSignupCode, getMyBan,
-  getMyBadges, pinBadge, setCountryVisibility,
+  getMyBadges, pinBadge, orderBadges, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
@@ -431,10 +459,11 @@ import {
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=0ce568d9';
+} from '/assets/pixset-auth.js?v=156a4ac1';
 import {
-  badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/assets/pixset-ui.js?v=0ce568d9';
+  badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
+  gameIconHtml, pageSections, countryName, countryFlag, countryOptions,
+} from '/assets/pixset-ui.js?v=156a4ac1';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -769,12 +798,41 @@ $('logout').onclick = async () => {
     даёт браузер, поэтому список сразу совпадает с языком страницы. */
 let myCountry = '';
 
+/** Виден ли бейдж рядом с ником: студийные — всегда, свой — по выбору. */
+const inNick = (b) => b.nick_forced || (b.nick_allowed && b.pinned);
+
 async function renderMyBadges() {
   let rows = [];
   try { rows = await getMyBadges(); } catch { rows = []; }
 
+  // Список приходит уже в порядке игрока (nick_order), а видимые в нике идут
+  // первыми: так строка настроек читается так же, как выглядит сам ник.
+  const nickRow = rows.filter(inNick);
+  const rest = rows.filter((b) => !inNick(b));
+
+  // Предпросмотр: ник ровно с теми иконками и в том порядке, что получатся.
+  $('nickPreview').innerHTML = nickRow.length
+    ? `<div class="row" style="display:flex;align-items:center;gap:10px">
+         <span class="dim" style="font-size:13px">${esc(L('У ника:', 'Next to the nickname:'))}</span>
+         <b>${esc(ownNick)}</b><span class="nbdgs">${nickRow.map(badgeChipHtml).join('')}</span>
+       </div>`
+    : '';
+
   $('myBadges').innerHTML = rows.length
-    ? rows.map((b) => {
+    ? [...nickRow, ...rest].map((b) => {
+        const here = inNick(b);
+        const pos = nickRow.findIndex((x) => x.slug === b.slug);
+        // Стрелки — только у тех, кто в нике, и только если двигать есть куда.
+        const move = here && nickRow.length > 1
+          ? `<span style="display:flex;gap:4px">
+               <button class="btn quiet" data-move="${esc(b.slug)}" data-dir="-1"
+                       style="width:auto;padding:6px 10px"${pos === 0 ? ' disabled' : ''}
+                       title="${esc(L('ближе к нику', 'closer to the nickname'))}">←</button>
+               <button class="btn quiet" data-move="${esc(b.slug)}" data-dir="1"
+                       style="width:auto;padding:6px 10px"${pos === nickRow.length - 1 ? ' disabled' : ''}
+                       title="${esc(L('дальше от ника', 'further from the nickname'))}">→</button>
+             </span>`
+          : '';
         // Галочка — только там, где у игрока есть выбор. Бейджи, которые
         // висят в нике всегда или живут лишь в профиле, показываем без неё:
         // подписи-состояния занимали место и ничем не помогали.
@@ -785,7 +843,7 @@ async function renderMyBadges() {
              </label>`
           : '';
         return `<div class="row" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${control}
+          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${move}${control}
         </div>`;
       }).join('')
     : `<div class="row"><span class="dim">${esc(L(
@@ -797,15 +855,37 @@ async function renderMyBadges() {
       box.disabled = true;
       try {
         await pinBadge(box.dataset.pin, box.checked);
-        // Иконки у ника пересобираем сразу — игрок должен видеть результат.
-        delete $('nick').dataset.nickBadges;
-        await paintNickBadges($('profile'));
+        // Слот один: включение освобождает прежний бейдж, поэтому список
+        // пересобираем целиком, а не правим одну строку.
+        await renderMyBadges();
+        await repaintNick();
       } catch (err) {
         box.checked = !box.checked;
         say($('profMsg'), humanError(err));
       } finally { box.disabled = false; }
     };
   });
+
+  $('myBadges').querySelectorAll('[data-move]').forEach((btn) => {
+    btn.onclick = () => busy(btn, async () => {
+      const order = nickRow.map((b) => b.slug);
+      const from = order.indexOf(btn.dataset.move);
+      const to = from + Number(btn.dataset.dir);
+      if (from < 0 || to < 0 || to >= order.length) return;
+      [order[from], order[to]] = [order[to], order[from]];
+      try {
+        await orderBadges(order);
+        await renderMyBadges();
+        await repaintNick();
+      } catch (err) { say($('profMsg'), humanError(err)); }
+    });
+  });
+}
+
+/** Пересобрать иконки у ника: запомненный ответ сервера уже устарел. */
+async function repaintNick() {
+  forgetNickBadges(ownNick);
+  try { await paintNickBadges($('profile')); } catch {}
 }
 
 const VISIBILITY = [
@@ -938,14 +1018,18 @@ async function renderProfile(user) {
     paintVisibilityOptions(profile.country_visibility || 'friends');
   } catch { $('nick').textContent = L('Игрок', 'Player'); }
 
-  renderOrders();
   renderFriends();
   renderMyBadges();
   renderRegion();
   paintNickBadges($('profile')).catch(() => {});
 
+  // Кабинет длинный — режем его на разделы. Повторный вызов ничего не делает.
+  pageSections($('acctSections'));
+
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
+  catalog = byslug;                       // покупкам нужны названия и иконки
+  renderOrders();
 
   // Тема оформления Byte Blaster открывается владельцу лицензии. Сообщаем об
   // этом сразу после входа, иначе она появилась бы в меню тем только на
@@ -958,7 +1042,9 @@ async function renderProfile(user) {
   $('lib').innerHTML = owned.length
     ? owned.map((e) => {
         const g = byslug.get(e.game_slug) || { title: e.game_slug };
-        return `<div class="row"><b>${esc(g.title)}</b>
+        return `<div class="row" style="display:flex;align-items:center;gap:12px">
+          ${gameIconHtml(g.icon_url, g.title)}
+          <b style="flex:1;min-width:0">${esc(g.title)}</b>
           <span class="badge">${esc(L('Лицензия активна', 'Licence active'))}</span></div>`;
       }).join('')
     : `<div class="row"><span class="dim">${esc(L(
@@ -990,6 +1076,9 @@ async function renderDevices() {
   });
 }
 
+/** Каталог игр по слагу: покупки берут отсюда название и иконку. */
+let catalog = new Map();
+
 async function renderOrders() {
   try {
     const orders = await getMyOrders();
@@ -1002,16 +1091,20 @@ async function renderOrders() {
       refunded: L('возврат', 'refunded'),
     };
     $('orders').innerHTML = orders.length
-      ? orders.map((o) => `
-          <div class="row">
-            <div>
-              <b>${esc(o.game_slug)}</b>
+      ? orders.map((o) => {
+          const g = catalog.get(o.game_slug) || { title: o.game_slug };
+          return `
+          <div class="row" style="display:flex;align-items:center;gap:12px">
+            ${gameIconHtml(g.icon_url, g.title)}
+            <div style="flex:1;min-width:0">
+              <b>${esc(g.title)}</b>
               <div class="dim" style="font-size:14px">
                 ${new Date(o.created_at).toLocaleDateString(locale())} · ${money(o.amount, o.currency)}
               </div>
             </div>
             <span class="badge ${o.status === 'paid' ? '' : 'mute'}">${status[o.status] || o.status}</span>
-          </div>`).join('')
+          </div>`;
+        }).join('')
       : `<div class="row"><span class="dim">${esc(L(
            'Покупок пока не было.', 'No purchases yet.'))}</span></div>`;
   } catch {

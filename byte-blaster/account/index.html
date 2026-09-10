@@ -173,6 +173,10 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
             <div class="avaActions">
               <button type="button" id="avaPick"><span data-l="ru">Сменить фото</span><span data-l="en">Change photo</span></button>
               <button type="button" id="avaClear" hidden><span data-l="ru">Убрать</span><span data-l="en">Remove</span></button>
+              <!-- Публичный профиль живёт на сайте студии: он один на все игры. -->
+              <a id="myPublic" href="#" target="_blank" rel="noopener">
+                <span data-l="ru">Мой профиль</span><span data-l="en">My profile</span>
+              </a>
             </div>
           </div>
           <input type="file" id="avaFile" accept="image/*" hidden>
@@ -180,45 +184,23 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
         <div class="msg" id="profMsg"></div>
 
-        <h3><span data-l="ru">Лицензии</span><span data-l="en">Licences</span></h3>
-        <div class="lib" id="lib"></div>
+        <!-- Дальше кабинет разрезан на разделы: pageSections() режет ленту по
+             заголовкам с data-sect и рисует переключатель. Карточка выше
+             остаётся на виду в любом разделе. -->
+        <div id="acctSections">
 
-        <!-- ── Бейджи ──────────────────────────────────────────────────────
-             Выдаёт студия; отмеченные видны рядом с ником на обоих сайтах. -->
-        <h3 style="margin-top:26px"><span data-l="ru">Бейджи</span><span data-l="en">Badges</span></h3>
-        <div class="lib" id="myBadges"></div>
-
-        <!-- ── Друзья ──────────────────────────────────────────────────────
-             То же, что на сайте студии: аккаунт один, список общий. Заявка идёт
-             по нику, встречная заявка сразу становится дружбой (friend_request
-             в миграции 0002). -->
-        <h3 style="margin-top:26px"><span data-l="ru">Друзья</span><span data-l="en">Friends</span></h3>
-        <div class="field" style="max-width:420px">
-          <label for="friendNick"><span data-l="ru">ДОБАВИТЬ ПО НИКУ</span><span data-l="en">ADD BY NICKNAME</span></label>
-          <div style="display:flex;gap:8px">
-            <input type="text" id="friendNick" autocomplete="off" style="flex:1" placeholder="nickname">
-            <button class="btn small" id="friendAdd"><span data-l="ru">ПОЗВАТЬ</span><span data-l="en">INVITE</span></button>
-          </div>
-        </div>
-        <div class="msg" id="friendMsg"></div>
-        <div class="lib" id="friendSearch" style="margin-bottom:12px"></div>
-        <div class="lib" id="friendList"></div>
-
-        <h3 style="margin-top:26px"><span data-l="ru">Устройства</span><span data-l="en">Devices</span></h3>
-        <div class="lib" id="devices"></div>
-
-        <h3 style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
-        <div class="lib" id="orders"></div>
-
-        <!-- Настройки аккаунта: то же, что на сайте студии, чтобы игроку
-             Byte Blaster не приходилось уходить на другой сайт ради ника. -->
-        <h3 style="margin-top:26px"><span data-l="ru">Настройки</span><span data-l="en">Settings</span></h3>
-
+        <h3 data-sect="me" data-sect-title="ПРОФИЛЬ" data-sect-title-en="PROFILE">
+          <span data-l="ru">Ник и описание</span><span data-l="en">Nickname and description</span>
+        </h3>
         <div class="field">
           <label for="newNick"><span data-l="ru">НИК</span><span data-l="en">NICKNAME</span></label>
           <input type="text" id="newNick" minlength="3" maxlength="20" placeholder="3-20, a-z 0-9 _ -">
         </div>
         <button class="btn small" id="saveNick"><span data-l="ru">СОХРАНИТЬ НИК</span><span data-l="en">SAVE NICKNAME</span></button>
+        <p class="note">
+          <span data-l="ru">Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.</span>
+          <span data-l="en">Your nickname is visible to other players online. It can be changed once a day.</span>
+        </p>
 
         <!-- ── О себе ──────────────────────────────────────────────────────
              Показывается в публичном профиле под ником. -->
@@ -231,10 +213,56 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         <button class="btn small" id="saveBio">
           <span data-l="ru">СОХРАНИТЬ ОПИСАНИЕ</span><span data-l="en">SAVE DESCRIPTION</span>
         </button>
+
+        <h3 data-sect="games" data-sect-title="ИГРЫ" data-sect-title-en="GAMES">
+          <span data-l="ru">Лицензии</span><span data-l="en">Licences</span>
+        </h3>
+        <div class="lib" id="lib"></div>
+
+        <h3 data-sect="games" style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
+        <div class="lib" id="orders"></div>
+
+        <!-- ── Бейджи ──────────────────────────────────────────────────────
+             Выдаёт студия; рядом с ником помещается один бейдж на выбор, а
+             порядок задаёт игрок (см. миграцию 0014). -->
+        <h3 data-sect="badges" data-sect-title="БЕЙДЖИ" data-sect-title-en="BADGES">
+          <span data-l="ru">Бейджи</span><span data-l="en">Badges</span>
+        </h3>
         <p class="note">
-          <span data-l="ru">Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.</span>
-          <span data-l="en">Your nickname is visible to other players online. It can be changed once a day.</span>
+          <span data-l="ru">Рядом с ником помещается один бейдж на выбор — отметьте нужный, прежний освободит место. Бейджи студии стоят там всегда. Стрелки задают, кто главнее: чем левее, тем ближе к нику.</span>
+          <span data-l="en">One badge of your choice fits next to your nickname — tick it and the previous one steps aside. Studio badges are always there. The arrows set which comes first: the closer to the left, the closer to the nickname.</span>
         </p>
+        <div class="lib" id="nickPreview" style="margin-bottom:12px"></div>
+        <div class="lib" id="myBadges"></div>
+
+        <!-- ── Друзья ──────────────────────────────────────────────────────
+             То же, что на сайте студии: аккаунт один, список общий. Заявка идёт
+             по нику, встречная заявка сразу становится дружбой (friend_request
+             в миграции 0002). -->
+        <h3 data-sect="friends" data-sect-title="ДРУЗЬЯ" data-sect-title-en="FRIENDS">
+          <span data-l="ru">Друзья</span><span data-l="en">Friends</span>
+        </h3>
+        <div class="field" style="max-width:420px">
+          <label for="friendNick"><span data-l="ru">ДОБАВИТЬ ПО НИКУ</span><span data-l="en">ADD BY NICKNAME</span></label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="friendNick" autocomplete="off" style="flex:1" placeholder="nickname">
+            <button class="btn small" id="friendAdd"><span data-l="ru">ПОЗВАТЬ</span><span data-l="en">INVITE</span></button>
+          </div>
+        </div>
+        <div class="msg" id="friendMsg"></div>
+        <div class="lib" id="friendSearch" style="margin-bottom:12px"></div>
+        <div class="lib" id="friendList"></div>
+
+        <h3 data-sect="devices" data-sect-title="УСТРОЙСТВА" data-sect-title-en="DEVICES">
+          <span data-l="ru">Устройства</span><span data-l="en">Devices</span>
+        </h3>
+        <div class="lib" id="devices"></div>
+
+        <!-- Настройки аккаунта: то же, что на сайте студии, чтобы игроку
+             Byte Blaster не приходилось уходить на другой сайт ради почты. -->
+        <h3 data-sect="settings" data-sect-title="НАСТРОЙКИ" data-sect-title-en="SETTINGS">
+          <span data-l="ru">Почта и пароль</span><span data-l="en">Email and password</span>
+        </h3>
 
         <div class="field" style="margin-top:18px">
           <label for="newEmail"><span data-l="ru">ПОЧТА ДЛЯ ВХОДА</span><span data-l="en">SIGN-IN EMAIL</span></label>
@@ -265,8 +293,11 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         </form>
 
         <!-- ── Регион ──────────────────────────────────────────────────────
-             Меняется заявкой: игрок объясняет причину, студия отвечает
-             письмом. Точно так же, как на сайте студии. -->
+             Меняется заявкой: игрок объясняет причину, студия отвечает прямо
+             здесь же. Точно так же, как на сайте студии. -->
+        <h3 data-sect="settings" style="margin-top:26px">
+          <span data-l="ru">Регион и страна</span><span data-l="en">Region and country</span>
+        </h3>
         <p class="note" style="margin-top:18px">
           <span data-l="ru">Регион и валюта:</span><span data-l="en">Region and currency:</span>
           <b id="regionInfo">—</b>
@@ -309,12 +340,14 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
           <div class="lib" id="regionStatus"></div>
         </div>
 
-        <h3 style="margin-top:26px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Delete account</span></h3>
+        <h3 data-sect="settings" style="margin-top:26px"><span data-l="ru">Удаление аккаунта</span><span data-l="en">Delete account</span></h3>
         <p class="note">
           <span data-l="ru">Вместе с аккаунтом исчезнут лицензии и покупки. Отменить нельзя.</span>
           <span data-l="en">Deleting the account removes your licences and purchases. This cannot be undone.</span>
         </p>
         <button class="btn small danger" id="deleteAcc"><span data-l="ru">УДАЛИТЬ АККАУНТ</span><span data-l="en">DELETE ACCOUNT</span></button>
+
+        </div><!-- /acctSections -->
 
         <p style="margin:24px 0 0;text-align:center">
           <button class="btn small" id="logout"><span data-l="ru">ВЫЙТИ</span><span data-l="en">SIGN OUT</span></button>
@@ -340,7 +373,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=156a4ac1"></script>
 <script type="module">
 // Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
 // сайта студии общая, вход достаточно выполнить один раз.
@@ -352,13 +385,14 @@ import {
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   verifyEmailCode, resendSignupCode, getMyBan,
-  getMyBadges, pinBadge, setCountryVisibility,
+  getMyBadges, pinBadge, orderBadges, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=0ce568d9';
+} from '/byte-blaster/assets/pixset-auth.js?v=156a4ac1';
 import {
-  badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/byte-blaster/assets/pixset-ui.js?v=0ce568d9';
+  badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
+  gameIconHtml, pageSections, countryName, countryFlag, countryOptions,
+} from '/byte-blaster/assets/pixset-ui.js?v=156a4ac1';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -462,12 +496,40 @@ $('confirmBack').onclick = (e) => {
    То же, что в кабинете на сайте студии: аккаунт один, наполнение общее. */
 let myCountry = '';
 
+/** Виден ли бейдж рядом с ником: студийные — всегда, свой — по выбору. */
+const inNick = (b) => b.nick_forced || (b.nick_allowed && b.pinned);
+
 async function renderMyBadges() {
   let rows = [];
   try { rows = await getMyBadges(); } catch { rows = []; }
 
+  // Список приходит в порядке игрока (nick_order), видимые в нике — первыми:
+  // строка настроек читается так же, как выглядит сам ник.
+  const nickRow = rows.filter(inNick);
+  const rest = rows.filter((b) => !inNick(b));
+
+  // Предпросмотр: ник ровно с теми иконками и в том порядке, что получатся.
+  $('nickPreview').innerHTML = nickRow.length
+    ? `<div class="item" style="display:flex;align-items:center;gap:10px">
+         <span class="dim" style="font-size:12px">${bi('У ника:', 'Next to the nickname:')}</span>
+         <b>${esc($('nick').textContent || '')}</b>
+         <span class="nbdgs">${nickRow.map(badgeChipHtml).join('')}</span>
+       </div>`
+    : '';
+
   $('myBadges').innerHTML = rows.length
-    ? rows.map((b) => {
+    ? [...nickRow, ...rest].map((b) => {
+        const here = inNick(b);
+        const pos = nickRow.findIndex((x) => x.slug === b.slug);
+        // Стрелки — только у тех, кто в нике, и только если двигать есть куда.
+        const move = here && nickRow.length > 1
+          ? `<span style="display:flex;gap:4px">
+               <button class="btn small" data-move="${esc(b.slug)}" data-dir="-1"${pos === 0 ? ' disabled' : ''}
+                       title="${esc(txt('ближе к нику', 'closer to the nickname'))}">&#8592;</button>
+               <button class="btn small" data-move="${esc(b.slug)}" data-dir="1"${pos === nickRow.length - 1 ? ' disabled' : ''}
+                       title="${esc(txt('дальше от ника', 'further from the nickname'))}">&#8594;</button>
+             </span>`
+          : '';
         // Галочка — только там, где у игрока есть выбор: свойства бейджа
         // подписями не дублируем.
         const control = (!b.nick_forced && b.nick_allowed)
@@ -477,7 +539,7 @@ async function renderMyBadges() {
              </label>`
           : '';
         return `<div class="item" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${control}
+          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${move}${control}
         </div>`;
       }).join('')
     : `<div class="item"><span class="dim">${bi(
@@ -488,14 +550,37 @@ async function renderMyBadges() {
       box.disabled = true;
       try {
         await pinBadge(box.dataset.pin, box.checked);
-        delete $('nick').dataset.nickBadges;
-        await paintNickBadges($('profile'));
+        // Слот один: включение освобождает прежний бейдж — пересобираем весь
+        // список, а не правим одну строку.
+        await renderMyBadges();
+        await repaintNick();
       } catch (err) {
         box.checked = !box.checked;
         fail($('profMsg'), err);
       } finally { box.disabled = false; }
     };
   });
+
+  $('myBadges').querySelectorAll('[data-move]').forEach((btn) => {
+    btn.onclick = () => busy(btn, async () => {
+      const order = nickRow.map((b) => b.slug);
+      const from = order.indexOf(btn.dataset.move);
+      const to = from + Number(btn.dataset.dir);
+      if (from < 0 || to < 0 || to >= order.length) return;
+      [order[from], order[to]] = [order[to], order[from]];
+      try {
+        await orderBadges(order);
+        await renderMyBadges();
+        await repaintNick();
+      } catch (err) { fail($('profMsg'), err); }
+    });
+  });
+}
+
+/** Пересобрать иконки у ника: запомненный ответ сервера уже устарел. */
+async function repaintNick() {
+  forgetNickBadges($('nick').dataset.nick || $('nick').textContent);
+  try { await paintNickBadges($('profile')); } catch {}
 }
 
 const VISIBILITY = [
@@ -940,6 +1025,8 @@ async function renderProfile(user) {
     const profile = await getProfile(user.id);
     $('nick').textContent = profile.nickname;
     $('nick').dataset.nick = profile.nickname;
+    // Публичный профиль один на все игры и живёт на сайте студии.
+    $('myPublic').href = 'https://pixset-studio.github.io/u/?n=' + encodeURIComponent(profile.nickname);
     paintAvatar(profile.avatar_url, profile.nickname);
     $('newNick').value = profile.nickname || '';
     $('bio').value = profile.bio || '';
@@ -955,13 +1042,18 @@ async function renderProfile(user) {
   renderRegion();
   paintNickBadges($('profile')).catch(() => {});
 
+  // Кабинет длинный — режем его на разделы. Повторный вызов ничего не делает.
+  pageSections($('acctSections'));
+
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
+  catalog = byslug;                       // покупкам нужны названия и иконки
 
   $('lib').innerHTML = owned.length
     ? owned.map((e) => {
         const g = byslug.get(e.game_slug) || { title: e.game_slug };
-        return `<div class="item"><b>${esc(g.title)}</b>
+        return `<div class="item">${gameIconHtml(g.icon_url, g.title)}
+          <b style="flex:1;min-width:0">${esc(g.title)}</b>
           <span class="badge">${bi('ЛИЦЕНЗИЯ АКТИВНА', 'LICENCE ACTIVE')}</span></div>`;
       }).join('')
     : `<div class="item"><span class="dim">${
@@ -973,6 +1065,9 @@ async function renderProfile(user) {
   renderFriends();
   renderOrders();
 }
+
+/** Каталог игр по слагу: покупки берут отсюда название и иконку. */
+let catalog = new Map();
 
 /** История покупок: что заказано, на сколько и чем закончилось. */
 async function renderOrders() {
@@ -994,8 +1089,10 @@ async function renderOrders() {
         const sum = o.currency === 'RUB'
           ? Math.round(o.amount / 100).toLocaleString('ru-RU') + ' ₽'
           : '$' + (Number(o.amount) / 100).toFixed(2);
+        const g = catalog.get(o.game_slug) || { title: o.game_slug };
         return `<div class="item">
-          <b>${sum}</b>
+          ${gameIconHtml(g.icon_url, g.title)}
+          <b style="flex:1;min-width:0">${sum}</b>
           <span class="dim">${new Date(o.created_at).toLocaleDateString()}</span>
           <span class="badge">${bi(s[0], s[1])}</span>
         </div>`;

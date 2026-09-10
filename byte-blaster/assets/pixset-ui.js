@@ -8,7 +8,7 @@
  * Стили классов .bdg/.nbdg — в studio.css (сайт студии) и site.css (Byte
  * Blaster): оформление у сайтов разное, разметка одна.
  */
-import { supabase } from '/byte-blaster/assets/pixset-auth.js?v=0ce568d9';
+import { supabase } from '/byte-blaster/assets/pixset-auth.js?v=156a4ac1';
 
 /** Язык страницы. Обе площадки держат его в одном атрибуте на <html>. */
 export function uiLang() {
@@ -176,10 +176,16 @@ export async function nickBadges(nicknames) {
   const missing = names.filter((n) => !nickCache.has(n));
 
   if (missing.length) {
+    // Порядок задаёт игрок (nick_order): главный бейдж стоит ближе к нику.
+    // Сортировку просим явно — на порядок строк внутри витрины полагаться
+    // нельзя, его сохраняет не всякий запрос.
     const { data, error } = await supabase
       .from('nick_badges')
-      .select('nickname, slug, title_ru, title_en, icon_url, color, nick_forced')
-      .in('nickname', missing);
+      .select('nickname, slug, title_ru, title_en, icon_url, color, nick_forced, nick_order')
+      .in('nickname', missing)
+      .order('nick_order')
+      .order('nick_forced', { ascending: false })
+      .order('granted_at');
     if (!error) {
       // Пустые списки тоже запоминаем: «у этого ника бейджей нет» — такой же
       // ответ, и спрашивать про него второй раз незачем.
@@ -188,6 +194,15 @@ export async function nickBadges(nicknames) {
     }
   }
   return new Map(names.map((n) => [n, nickCache.get(n) || []]));
+}
+
+/**
+ * Забыть запомненные бейджи ника — после того, как игрок сам их поменял:
+ * закрепил другой или переставил порядок. Без ника забывается вся страница.
+ */
+export function forgetNickBadges(nickname) {
+  if (nickname) nickCache.delete(nickname);
+  else nickCache.clear();
 }
 
 /**
@@ -221,10 +236,10 @@ export async function paintNickBadges(root = document) {
 // Язык меняется без перезагрузки — подсказки у иконок тоже.
 document.addEventListener('pixset:lang', () => { paintNickBadges().catch(() => {}); });
 
-/* ── Разделы админки ─────────────────────────────────────────────────────
-   Панель управления росла лентой: игроки, лицензии, бейджи, блокировки,
-   заявки, сборки, заказы — всё подряд на одной странице, и до нужного места
-   приходилось прокручивать пол-экрана.
+/* ── Разделы длинной страницы ────────────────────────────────────────────
+   И панель управления, и личный кабинет росли лентой: игроки, лицензии,
+   бейджи, блокировки, заявки, сборки — всё подряд на одной странице, и до
+   нужного места приходилось прокручивать пол-экрана.
 
    Разметку при этом не переписываем. Заголовок раздела помечен атрибутами
    data-sect="ключ" data-sect-title="Название", а эта функция сама разрезает
@@ -232,9 +247,12 @@ document.addEventListener('pixset:lang', () => { paintNickBadges().catch(() => {
    переключатель. Соседние заголовки с одним ключом попадают в один раздел —
    так «Заказы» и «События оплат» живут вместе, а разметка остаётся плоской.
 
+   Английское название — в data-sect-title-en; без него подпись остаётся
+   одинаковой на обоих языках (админку студия читает только по-русски).
+
    Выбранный раздел живёт в адресе (#players): перезагрузка страницы и
    закладка возвращают туда же, где человек работал. */
-export function adminSections(root) {
+export function pageSections(root) {
   if (!root || root.dataset.sectioned) return;
   const heads = [...root.querySelectorAll('[data-sect]')];
   if (heads.length < 2) return;
@@ -252,6 +270,7 @@ export function adminSections(root) {
       box.className = 'sect';
       box.dataset.sect = key;
       box.dataset.title = head.dataset.sectTitle || key;
+      box.dataset.titleEn = head.dataset.sectTitleEn || head.dataset.sectTitle || key;
       boxes.set(key, box);
       order.push(key);
       head.parentNode.insertBefore(box, head);
@@ -273,10 +292,18 @@ export function adminSections(root) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.go = key;
-    b.textContent = boxes.get(key).dataset.title;
     nav.appendChild(b);
   });
   root.insertBefore(nav, root.firstChild);
+
+  function paintTitles() {
+    nav.querySelectorAll('button[data-go]').forEach((b) => {
+      const box = boxes.get(b.dataset.go);
+      b.textContent = uiLang() === 'en' ? box.dataset.titleEn : box.dataset.title;
+    });
+  }
+  paintTitles();
+  document.addEventListener('pixset:lang', paintTitles);
 
   function show(key) {
     const target = boxes.has(key) ? key : order[0];
@@ -299,4 +326,30 @@ export function adminSections(root) {
 
   show(location.hash.replace('#', ''));
   window.addEventListener('hashchange', () => show(location.hash.replace('#', '')));
+}
+
+/** Прежнее имя: админки обеих площадок зовут функцию так. */
+export const adminSections = pageSections;
+
+/* ── Иконка игры ─────────────────────────────────────────────────────────
+   Списки лицензий («Мои игры», «Игры в аккаунте», лицензии игрока в админке)
+   были рядами текста. Иконка узнаётся быстрее подписи, поэтому она теперь
+   стоит слева от названия везде, где игра упоминается строкой.
+
+   В каталоге лежит ССЫЛКА на логотип (см. миграцию 0015), но data-URL тоже
+   принимается. Ничего другого в src не попадёт: адрес с чужой схемой
+   (javascript:, http:) отбрасывается — картинку рисует чужой для нас
+   каталог, и доверять ему на слово незачем. */
+export function gameIconHtml(url, title, px = 30) {
+  const safe = /^(\/[^/]|https:\/\/|data:image\/(png|jpeg|webp);base64,)/.test(url || '');
+  const box = `width:${px}px;height:${px}px;flex:0 0 ${px}px;border-radius:6px;`
+    + 'overflow:hidden;display:grid;place-items:center;border:1px solid var(--line, rgba(255,255,255,.2));'
+    + `background:rgba(127,127,127,.12);font-size:${Math.round(px * 0.5)}px;line-height:1`;
+  // Картинки может не оказаться на месте (игру перенесли, файл переименовали) —
+  // тогда вместо разбитой рамки остаётся та же заглушка, что и без ссылки.
+  const inner = safe
+    ? `<img alt="" src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;display:block"
+            onerror="this.parentNode.textContent='🎮'">`
+    : '🎮';
+  return `<span class="gico" title="${esc(title || '')}" style="${box}">${inner}</span>`;
 }

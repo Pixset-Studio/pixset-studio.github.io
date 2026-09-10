@@ -600,10 +600,11 @@ import {
   adminBadgeHolders, badgeIconFromFile, adminRecheckBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/byte-blaster/assets/pixset-auth.js?v=0ce568d9';
+} from '/byte-blaster/assets/pixset-auth.js?v=156a4ac1';
 import {
-  paintNickBadges, countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
-} from '/byte-blaster/assets/pixset-ui.js?v=0ce568d9';
+  paintNickBadges, gameIconHtml, countryName, countryFlag, adminSections,
+  STAT_GROUPS, statLabel,
+} from '/byte-blaster/assets/pixset-ui.js?v=156a4ac1';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -889,22 +890,38 @@ async function loadReleases() {
   });
 }
 
+/* Иконка игры из каталога: она же стоит в кабинете и в профиле игрока, чтобы
+   строка «куплено» выглядела везде одинаково. Не ответила база — gameIconHtml
+   нарисует заглушку, таблица от этого не пострадает. */
+let gameIcon = null;
+async function loadGameIcon() {
+  try {
+    const { data } = await supabase.from('games').select('icon_url').eq('slug', GAME).single();
+    gameIcon = data && data.icon_url;
+  } catch { gameIcon = null; }
+}
+
 async function loadPlayers() {
   const rows = await adminListPlayers();
+  const icon = gameIconHtml(gameIcon, 'Byte Blaster', 18);
   $('playersTbl').innerHTML = rows.length
     ? '<tr><th>Регистрация</th><th>Ник</th><th>Почта</th><th>Byte Blaster</th></tr>' +
       rows.map((p) => {
         const owns = (p.games || []).includes(GAME);
-  paintNickBadges($('playersTbl')).catch(() => {});
         return `<tr>
           <td>${day(p.created_at)}</td>
           <td data-nick="${esc(p.nickname)}">${esc(p.nickname)}${
               p.is_admin ? ' <span class="chip warn">админ</span>' : ''}</td>
           <td>${esc(p.email)}</td>
-          <td><span class="chip ${owns ? '' : 'off'}">${owns ? 'куплено' : 'нет'}</span></td>
+          <td><span class="chip ${owns ? '' : 'off'}" style="display:inline-flex;align-items:center;gap:6px">${
+            icon}${owns ? 'куплено' : 'нет'}</span></td>
         </tr>`;
       }).join('')
     : '<tr><td class="dim">Игроков пока нет</td></tr>';
+
+  // Бейджи у ников дорисовываем ПОСЛЕ таблицы: раньше вызов стоял внутри
+  // построения строк — то есть до того, как в таблице появилась хоть одна.
+  paintNickBadges($('playersTbl')).catch(() => {});
 }
 
 async function loadOrders() {
@@ -1452,6 +1469,7 @@ $('banBtn').onclick = async () => {
 };
 
 async function refreshAll() {
+  await loadGameIcon();                    // иконку берёт таблица игроков
   await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders(),
     loadAnnouncements(), loadBadges(), loadRegionRequests(), loadBans()]);
 }

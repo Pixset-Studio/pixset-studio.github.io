@@ -138,8 +138,10 @@
     return Promise.all([
       get('profiles?select=nickname,avatar_url&id=eq.' + encodeURIComponent(s.id)),
       s.nick
+        // Порядок задаёт игрок (nick_order): главный бейдж — ближе к нику.
         ? get('nick_badges?select=slug,title_ru,title_en,icon_url,color&nickname=eq.'
-              + encodeURIComponent(s.nick))
+              + encodeURIComponent(s.nick)
+              + '&order=nick_order.asc,nick_forced.desc,granted_at.asc')
         : Promise.resolve([]),
     ]).then(function (res) {
       var prof = (res[0] && res[0][0]) || null;

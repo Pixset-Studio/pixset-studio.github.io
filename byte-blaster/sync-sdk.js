@@ -26,9 +26,26 @@ if (!fs.existsSync(source)) {
 
 /* ── Версия ────────────────────────────────────────────────────────────── */
 let code = fs.readFileSync(source, 'utf8');
-// Хэш считаем от текста без самой метки, иначе она меняла бы сама себя.
-const bare = code.replace(/export const SDK_VERSION = '[^']*';/, '');
-const stamp = crypto.createHash('sha256').update(bare).digest('hex').slice(0, 8);
+
+// В метку входят ВСЕ общие модули, а не один только SDK. Раньше считался
+// только pixset-auth.js: правка pixset-ui.js метку не двигала, страницы
+// оставались с прежним `?v=`, и браузер честно отдавал им вчерашний модуль из
+// кэша — изменения «не доезжали» без всякой ошибки.
+// Прошлую метку из текста вычищаем: и строку SDK_VERSION, и метку в импорте
+// внутри ui.js. Иначе хэш считался бы от результата прошлого запуска и менялся
+// бы каждый раз, даже когда в коде ничего не изменилось.
+const forget = (text) => text
+  .replace(/export const SDK_VERSION = '[^']*';/, '')
+  .replace(/pixset-auth\.js\?v=[^']*'/g, "pixset-auth.js'");
+
+const shared = ['pixset-auth.js', 'pixset-ui.js', 'pixset-me.js']
+  .map((name) => {
+    const file = path.join(studioSite, 'assets', name);
+    return fs.existsSync(file) ? forget(fs.readFileSync(file, 'utf8')) : '';
+  })
+  .join('\n');
+
+const stamp = crypto.createHash('sha256').update(shared).digest('hex').slice(0, 8);
 
 code = code.replace(/export const SDK_VERSION = '[^']*';/,
   `export const SDK_VERSION = '${stamp}';`);
@@ -59,7 +76,9 @@ if (fs.existsSync(uiSource)) {
 }
 
 // Кнопка «мой аккаунт» в шапке (аватар, ник, бейджи). Обычный скрипт без
-// импортов — копируется как есть, адреса внутри не зависят от сайта.
+// импортов — копируется как есть, адреса внутри не зависят от сайта. Метку в
+// его <script src> страницы получают ниже: кэш браузера одинаково цепко держит
+// и модули, и обычные скрипты.
 const meSource = path.join(studioSite, 'assets', 'pixset-me.js');
 if (fs.existsSync(meSource)) {
   fs.copyFileSync(meSource, path.join(bbSite, 'assets', 'pixset-me.js'));
@@ -85,7 +104,7 @@ for (const dir of [studioSite, bbSite]) {
   for (const file of htmlFiles(dir)) {
     const html = fs.readFileSync(file, 'utf8');
     const next = html.replace(
-      /(['"])((?:\/byte-blaster)?\/assets\/pixset-(?:auth|ui)\.js)(?:\?v=[^'"]*)?\1/g,
+      /(['"])((?:\/byte-blaster)?\/assets\/pixset-(?:auth|ui|me)\.js)(?:\?v=[^'"]*)?\1/g,
       (m, quote, url) => `${quote}${url}?v=${stamp}${quote}`);
     if (next !== html) {
       fs.writeFileSync(file, next, 'utf8');

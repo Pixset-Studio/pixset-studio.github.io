@@ -344,7 +344,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js"></script>
+<script src="/assets/pixset-me.js?v=156a4ac1"></script>
 <script type="module">
 import {
   supabase, getProfile, getGames,
@@ -358,10 +358,11 @@ import {
   adminBadgeHolders, badgeIconFromFile, adminRecheckBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/assets/pixset-auth.js?v=0ce568d9';
+} from '/assets/pixset-auth.js?v=156a4ac1';
 import {
-  paintNickBadges, countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
-} from '/assets/pixset-ui.js?v=0ce568d9';
+  paintNickBadges, gameIconHtml, countryName, countryFlag, adminSections,
+  STAT_GROUPS, statLabel,
+} from '/assets/pixset-ui.js?v=156a4ac1';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -421,7 +422,11 @@ async function loadPlayers() {
             p.is_admin ? ' <span class="badge">админ</span>' : ''}</td>
           <td>${esc(p.email)}</td>
           <td>${p.games && p.games.length
-            ? p.games.map((g) => `<span class="badge">${esc(g)}</span>`).join(' ')
+            ? p.games.map((slug) => {
+                const g = catalog.get(slug) || { title: slug };
+                return `<span class="badge" style="display:inline-flex;align-items:center;gap:6px">${
+                  gameIconHtml(g.icon_url, g.title, 18)}${esc(g.title)}</span>`;
+              }).join(' ')
             : '<span class="badge mute">нет</span>'}</td>
         </tr>`).join('')
     : '<tr><td class="empty">Игроков пока нет</td></tr>';
@@ -1067,11 +1072,15 @@ async function refresh() {
   ]);
 }
 
+/** Каталог игр по слагу: таблица игроков берёт отсюда название и иконку. */
+const catalog = new Map();
+
 async function fillGames() {
   // Берём все игры, включая неопубликованные: лицензию на ещё не вышедшую
   // игру выдать нужно уметь (пресса, тестеры).
-  const { data } = await supabase.from('games').select('slug, title');
+  const { data } = await supabase.from('games').select('slug, title, icon_url');
   const games = data && data.length ? data : await getGames();
+  games.forEach((g) => catalog.set(g.slug, g));
   const options = games
     .map((g) => `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
   $('grantGame').innerHTML = options;

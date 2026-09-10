@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '0ce568d9';
+export const SDK_VERSION = '156a4ac1';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -849,7 +849,7 @@ export async function adminMarkPaid(orderId) {
 export async function getGames() {
   const { data, error } = await supabase
     .from('games')
-    .select('slug, title, tagline, price_rub, price_usd, is_published')
+    .select('slug, title, tagline, icon_url, price_rub, price_usd, is_published')
     .eq('is_published', true)
     .order('created_at');
   if (error) throw error;
@@ -902,14 +902,32 @@ export async function getMyBadges() {
   const { data, error } = await supabase
     .from('my_badges')
     .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, '
-          + 'nick_allowed, nick_forced, hide_in_profile, pinned, granted_at');
+          + 'nick_allowed, nick_forced, hide_in_profile, pinned, nick_order, granted_at')
+    .order('nick_order')
+    .order('nick_forced', { ascending: false })
+    .order('granted_at');
   if (error) throw error;
   return data || [];
 }
 
-/** Закрепить или снять свой бейдж у ника. Только для тех, что это разрешают. */
+/**
+ * Закрепить или снять свой бейдж у ника.
+ *
+ * Слот у ника один: бейджи студии (nick_forced) стоят там всегда, а из
+ * остальных виден ровно один — тот, что игрок выбрал последним. Прежний
+ * освобождает место сам, отдельно снимать его не нужно.
+ */
 export async function pinBadge(slug, pinned) {
   const { error } = await supabase.rpc('badge_pin', { p_slug: slug, p_pinned: !!pinned });
+  if (error) throw error;
+}
+
+/**
+ * Кто из бейджей главнее у ника: первый в списке стоит ближе всех к нику.
+ * Достаточно прислать те, что видны в нике, — остальные уедут в конец.
+ */
+export async function orderBadges(slugs) {
+  const { error } = await supabase.rpc('badge_order', { p_slugs: slugs || [] });
   if (error) throw error;
 }
 
@@ -1177,6 +1195,12 @@ const ERROR_RULES = [
   { any: ['badge_rule_incomplete', 'badges_auto_rule_complete'],
     ru: 'Правило выдачи заполнено наполовину: нужны игра, показатель и значение.',
     en: 'The rule is half-filled: pick a game, a stat and a threshold.' },
+  { any: ['badge_not_granted'], ru: 'Этот бейдж вам не выдан.', en: 'You do not have that badge.' },
+  { any: ['badge_always_pinned'], ru: 'Этот бейдж студия держит у ника всегда.', en: 'The studio keeps this badge next to your nickname at all times.' },
+  { any: ['badge_not_pinnable'], ru: 'Этот бейдж рядом с ником не показывается.', en: 'This badge is not shown next to nicknames.' },
+  { any: ['nick_slot_taken'],
+    ru: 'Рядом с ником помещается только один бейдж на выбор.',
+    en: 'Only one badge of your choice fits next to the nickname.' },
   // Заявки на смену региона.
   { any: ['reason_too_short'], ru: 'Опишите причину подробнее — не меньше 30 символов.', en: 'Describe the reason in more detail — at least 30 characters.' },
   { any: ['request_pending'], ru: 'Заявка уже отправлена и ждёт решения.', en: 'A request is already waiting for a decision.' },
