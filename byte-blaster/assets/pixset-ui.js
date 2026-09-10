@@ -8,7 +8,7 @@
  * Стили классов .bdg/.nbdg — в studio.css (сайт студии) и site.css (Byte
  * Blaster): оформление у сайтов разное, разметка одна.
  */
-import { supabase } from '/byte-blaster/assets/pixset-auth.js?v=156a4ac1';
+import { supabase } from '/byte-blaster/assets/pixset-auth.js?v=56dbaf83';
 
 /** Язык страницы. Обе площадки держат его в одном атрибуте на <html>. */
 export function uiLang() {

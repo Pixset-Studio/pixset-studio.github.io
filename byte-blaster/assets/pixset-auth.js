@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '156a4ac1';
+export const SDK_VERSION = '56dbaf83';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -923,12 +923,31 @@ export async function pinBadge(slug, pinned) {
 }
 
 /**
- * Кто из бейджей главнее у ника: первый в списке стоит ближе всех к нику.
- * Достаточно прислать те, что видны в нике, — остальные уедут в конец.
+ * Кто из бейджей игрока главнее у ника: первый в списке стоит ближе всех к
+ * нику. Достаточно прислать те, что видны в нике, — остальные уедут в конец.
+ *
+ * Порядок задаёт студия, а не игрок: бейдж — её отметка, и какая из отметок
+ * важнее, решает она же. За игроком остаётся выбор, какой из необязательных
+ * бейджей занимает единственный слот (pinBadge).
  */
-export async function orderBadges(slugs) {
-  const { error } = await supabase.rpc('badge_order', { p_slugs: slugs || [] });
+export async function adminOrderBadges(nickname, slugs) {
+  const { error } = await supabase.rpc('admin_badge_order', {
+    p_nickname: nickname, p_slugs: slugs || [],
+  });
   if (error) throw error;
+}
+
+/** Бейджи игрока, которые видны рядом с ником, — в текущем порядке. */
+export async function getNickBadges(nickname) {
+  const { data, error } = await supabase
+    .from('nick_badges')
+    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, nick_forced, nick_order')
+    .eq('nickname', nickname)
+    .order('nick_order')
+    .order('nick_forced', { ascending: false })
+    .order('granted_at');
+  if (error) throw error;
+  return data || [];
 }
 
 /** Кому видна страна в профиле: 'public' | 'friends' | 'none'. */

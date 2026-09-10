@@ -256,11 +256,11 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         </h3>
         <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="ru">
           Рядом с ником помещается один бейдж на выбор — отметьте нужный, прежний освободит место.
-          Бейджи студии стоят там всегда. Стрелки задают, кто главнее: чем левее, тем ближе к нику.
+          Бейджи студии стоят там всегда, и порядок иконок тоже задаёт студия.
         </p>
         <p class="dim" style="font-size:13px;margin-bottom:12px" data-l="en">
           One badge of your choice fits next to your nickname — tick it and the previous one steps aside.
-          Studio badges are always there. The arrows set which comes first: the closer to the left, the closer to the nickname.
+          Studio badges are always there, and the studio also sets the order of the icons.
         </p>
         <div class="rows" id="nickPreview" style="margin-bottom:12px"></div>
         <div class="rows" id="myBadges"></div>
@@ -446,12 +446,12 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=156a4ac1"></script>
+<script src="/assets/pixset-me.js?v=56dbaf83"></script>
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
   verifyEmailCode, resendSignupCode, getMyBan,
-  getMyBadges, pinBadge, orderBadges, setCountryVisibility,
+  getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
@@ -459,11 +459,11 @@ import {
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=156a4ac1';
+} from '/assets/pixset-auth.js?v=56dbaf83';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
   gameIconHtml, pageSections, countryName, countryFlag, countryOptions,
-} from '/assets/pixset-ui.js?v=156a4ac1';
+} from '/assets/pixset-ui.js?v=56dbaf83';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -820,22 +820,10 @@ async function renderMyBadges() {
 
   $('myBadges').innerHTML = rows.length
     ? [...nickRow, ...rest].map((b) => {
-        const here = inNick(b);
-        const pos = nickRow.findIndex((x) => x.slug === b.slug);
-        // Стрелки — только у тех, кто в нике, и только если двигать есть куда.
-        const move = here && nickRow.length > 1
-          ? `<span style="display:flex;gap:4px">
-               <button class="btn quiet" data-move="${esc(b.slug)}" data-dir="-1"
-                       style="width:auto;padding:6px 10px"${pos === 0 ? ' disabled' : ''}
-                       title="${esc(L('ближе к нику', 'closer to the nickname'))}">←</button>
-               <button class="btn quiet" data-move="${esc(b.slug)}" data-dir="1"
-                       style="width:auto;padding:6px 10px"${pos === nickRow.length - 1 ? ' disabled' : ''}
-                       title="${esc(L('дальше от ника', 'further from the nickname'))}">→</button>
-             </span>`
-          : '';
         // Галочка — только там, где у игрока есть выбор. Бейджи, которые
         // висят в нике всегда или живут лишь в профиле, показываем без неё:
-        // подписи-состояния занимали место и ничем не помогали.
+        // подписи-состояния занимали место и ничем не помогали. Порядок иконок
+        // у ника игрок не трогает — его задаёт студия из админки.
         const control = (!b.nick_forced && b.nick_allowed)
           ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
                <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
@@ -843,7 +831,7 @@ async function renderMyBadges() {
              </label>`
           : '';
         return `<div class="row" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${move}${control}
+          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${control}
         </div>`;
       }).join('')
     : `<div class="row"><span class="dim">${esc(L(
@@ -866,20 +854,6 @@ async function renderMyBadges() {
     };
   });
 
-  $('myBadges').querySelectorAll('[data-move]').forEach((btn) => {
-    btn.onclick = () => busy(btn, async () => {
-      const order = nickRow.map((b) => b.slug);
-      const from = order.indexOf(btn.dataset.move);
-      const to = from + Number(btn.dataset.dir);
-      if (from < 0 || to < 0 || to >= order.length) return;
-      [order[from], order[to]] = [order[to], order[from]];
-      try {
-        await orderBadges(order);
-        await renderMyBadges();
-        await repaintNick();
-      } catch (err) { say($('profMsg'), humanError(err)); }
-    });
-  });
 }
 
 /** Пересобрать иконки у ника: запомненный ответ сервера уже устарел. */
