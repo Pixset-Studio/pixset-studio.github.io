@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'd580e50f';
+export const SDK_VERSION = '0ce568d9';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -119,7 +119,7 @@ export async function resetPassword(email) {
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('nickname, avatar_url, created_at, is_admin, country, currency, country_visibility')
+    .select('nickname, avatar_url, created_at, is_admin, country, currency, country_visibility, bio')
     .eq('id', userId)
     .single();
   if (error) throw error;
@@ -133,6 +133,20 @@ export async function updateNickname(nickname) {
   const { data, error } = await supabase.rpc('update_nickname', { p_nickname: nickname });
   if (error) throw error;
   return data;
+}
+
+/** Пара слов о себе для публичного профиля. Пустая строка убирает описание. */
+export const BIO_MAX = 300;
+
+export async function updateBio(text) {
+  const bio = String(text || '').trim().slice(0, BIO_MAX);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_authenticated');
+
+  const { error } = await supabase.from('profiles')
+    .update({ bio: bio || null }).eq('id', user.id);
+  if (error) throw error;
+  return bio;
 }
 
 /* ── Аватар ────────────────────────────────────────────────────────────────

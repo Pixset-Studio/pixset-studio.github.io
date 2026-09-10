@@ -358,10 +358,10 @@ import {
   adminBadgeHolders, badgeIconFromFile, adminRecheckBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/assets/pixset-auth.js?v=d580e50f';
+} from '/assets/pixset-auth.js?v=0ce568d9';
 import {
   paintNickBadges, countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
-} from '/assets/pixset-ui.js?v=d580e50f';
+} from '/assets/pixset-ui.js?v=0ce568d9';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -417,13 +417,15 @@ async function loadPlayers() {
       rows.map((p) => `
         <tr>
           <td>${day(p.created_at)}</td>
-          <td>${esc(p.nickname)}${p.is_admin ? ' <span class="badge">админ</span>' : ''}</td>
+          <td data-nick="${esc(p.nickname)}">${esc(p.nickname)}${
+            p.is_admin ? ' <span class="badge">админ</span>' : ''}</td>
           <td>${esc(p.email)}</td>
           <td>${p.games && p.games.length
             ? p.games.map((g) => `<span class="badge">${esc(g)}</span>`).join(' ')
             : '<span class="badge mute">нет</span>'}</td>
         </tr>`).join('')
     : '<tr><td class="empty">Игроков пока нет</td></tr>';
+  paintNickBadges($('playersTbl')).catch(() => {});
 }
 
 async function loadEvents() {

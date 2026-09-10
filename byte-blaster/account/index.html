@@ -219,6 +219,18 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
           <input type="text" id="newNick" minlength="3" maxlength="20" placeholder="3-20, a-z 0-9 _ -">
         </div>
         <button class="btn small" id="saveNick"><span data-l="ru">СОХРАНИТЬ НИК</span><span data-l="en">SAVE NICKNAME</span></button>
+
+        <!-- ── О себе ──────────────────────────────────────────────────────
+             Показывается в публичном профиле под ником. -->
+        <div class="field" style="margin-top:18px">
+          <label for="bio"><span data-l="ru">О СЕБЕ</span><span data-l="en">ABOUT ME</span></label>
+          <textarea id="bio" rows="3" maxlength="300"
+                    placeholder="Пара слов — их увидят в вашем профиле"></textarea>
+          <div class="dim" style="font-size:12px;margin-top:6px" id="bioCount">0 / 300</div>
+        </div>
+        <button class="btn small" id="saveBio">
+          <span data-l="ru">СОХРАНИТЬ ОПИСАНИЕ</span><span data-l="en">SAVE DESCRIPTION</span>
+        </button>
         <p class="note">
           <span data-l="ru">Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.</span>
           <span data-l="en">Your nickname is visible to other players online. It can be changed once a day.</span>
@@ -234,17 +246,23 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
           <span data-l="en">We'll email the new address. Until you confirm it, the old one keeps working.</span>
         </p>
 
-        <div class="field" style="margin-top:18px">
-          <label for="newPass2"><span data-l="ru">НОВЫЙ ПАРОЛЬ</span><span data-l="en">NEW PASSWORD</span></label>
-          <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
-        </div>
-        <!-- Код появляется после первого нажатия: сначала письмо, потом смена. -->
-        <div class="field" id="passCodeBox" hidden>
-          <label for="passCode"><span data-l="ru">КОД С ПОЧТЫ</span><span data-l="en">CODE FROM THE EMAIL</span></label>
-          <input type="text" id="passCode" inputmode="numeric" autocomplete="one-time-code"
-                 maxlength="8" placeholder="000000">
-        </div>
-        <button class="btn small" id="savePass"><span data-l="ru">СМЕНИТЬ ПАРОЛЬ</span><span data-l="en">CHANGE PASSWORD</span></button>
+        <!-- Поля пароля живут в форме со скрытым полем адреса: без этого
+             браузер ругается в консоли, а менеджеры паролей не понимают, что
+             здесь меняют пароль, и не предлагают сохранить новый. -->
+        <form id="formPass" autocomplete="on" onsubmit="return false">
+          <input type="email" id="passUser" autocomplete="username" hidden>
+          <div class="field" style="margin-top:18px">
+            <label for="newPass2"><span data-l="ru">НОВЫЙ ПАРОЛЬ</span><span data-l="en">NEW PASSWORD</span></label>
+            <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
+          </div>
+          <!-- Код появляется после первого нажатия: сначала письмо, потом смена. -->
+          <div class="field" id="passCodeBox" hidden>
+            <label for="passCode"><span data-l="ru">КОД С ПОЧТЫ</span><span data-l="en">CODE FROM THE EMAIL</span></label>
+            <input type="text" id="passCode" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="8" placeholder="000000">
+          </div>
+          <button type="submit" class="btn small" id="savePass"><span data-l="ru">СМЕНИТЬ ПАРОЛЬ</span><span data-l="en">CHANGE PASSWORD</span></button>
+        </form>
 
         <!-- ── Регион ──────────────────────────────────────────────────────
              Меняется заявкой: игрок объясняет причину, студия отвечает
@@ -329,7 +347,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 import {
   supabase, register, login, logout, resetPassword,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
-  updateNickname, changeEmail, changePassword, requestPasswordCode,
+  updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
   deleteAccount, getMyOrders,
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
@@ -337,10 +355,10 @@ import {
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=d580e50f';
+} from '/byte-blaster/assets/pixset-auth.js?v=0ce568d9';
 import {
   badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/byte-blaster/assets/pixset-ui.js?v=d580e50f';
+} from '/byte-blaster/assets/pixset-ui.js?v=0ce568d9';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -450,14 +468,14 @@ async function renderMyBadges() {
 
   $('myBadges').innerHTML = rows.length
     ? rows.map((b) => {
-        const control = b.nick_forced
-          ? `<span class="badge">${bi('ВСЕГДА В НИКЕ', 'ALWAYS ON NICKNAME')}</span>`
-          : b.nick_allowed
-            ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
-                 <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
-                 <span class="dim" style="font-size:12px">${bi('рядом с ником', 'next to nickname')}</span>
-               </label>`
-            : `<span class="badge">${bi('ТОЛЬКО В ПРОФИЛЕ', 'PROFILE ONLY')}</span>`;
+        // Галочка — только там, где у игрока есть выбор: свойства бейджа
+        // подписями не дублируем.
+        const control = (!b.nick_forced && b.nick_allowed)
+          ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+               <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
+               <span class="dim" style="font-size:12px">${bi('рядом с ником', 'next to nickname')}</span>
+             </label>`
+          : '';
         return `<div class="item" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${control}
         </div>`;
@@ -748,7 +766,7 @@ $('friendNick').addEventListener('input', () => {
     try { found = await searchPlayers(q); } catch { found = []; }
     $('friendSearch').innerHTML = found.map((p) =>
       `<div class="item">${avaHtml(p.avatar_url, p.nickname)}
-         <b style="flex:1;min-width:0">${esc(p.nickname)}</b>
+         <b style="flex:1;min-width:0" data-nick="${esc(p.nickname)}">${esc(p.nickname)}</b>
          <button class="btn small" data-add="${esc(p.nickname)}">${bi('ПОЗВАТЬ', 'INVITE')}</button>
        </div>`).join('');
     $('friendSearch').querySelectorAll('[data-add]').forEach((b) => {
@@ -848,6 +866,23 @@ $('saveEmail').onclick = (e) => busy(e.currentTarget, async () => {
 
 /* Смена пароля в два шага: письмо с кодом, потом сама смена. Открытой
    вкладки для такого мало — за компьютер садятся не только владельцы. */
+
+/* ── О себе ──────────────────────────────────────────────────────────────
+   Короткое описание в публичном профиле. */
+function countBio() {
+  $('bioCount').textContent = `${$('bio').value.trim().length} / ${BIO_MAX}`;
+}
+$('bio').oninput = countBio;
+
+$('saveBio').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('profMsg'));
+  try {
+    await updateBio($('bio').value);
+    countBio();
+    say($('profMsg'), 'Описание сохранено.', 'Description saved.', 'ok');
+  } catch (err) { fail($('profMsg'), err); }
+});
+
 $('savePass').onclick = (e) => busy(e.currentTarget, async () => {
   clear($('profMsg'));
   const pass = $('newPass2').value;
@@ -899,6 +934,7 @@ $('deleteAcc').onclick = (e) => {
 // ── Профиль ─────────────────────────────────────────────────────────────
 async function renderProfile(user) {
   $('mail').textContent = user.email;
+  $('passUser').value = user.email || '';   // для менеджера паролей
 
   try {
     const profile = await getProfile(user.id);
@@ -906,6 +942,8 @@ async function renderProfile(user) {
     $('nick').dataset.nick = profile.nickname;
     paintAvatar(profile.avatar_url, profile.nickname);
     $('newNick').value = profile.nickname || '';
+    $('bio').value = profile.bio || '';
+    countBio();
     myCountry = (profile.country || '').toUpperCase();
     $('regionInfo').textContent = `${countryFlag(myCountry)} ${
       countryName(myCountry) || txt('регион не указан', 'region not set')} · ${

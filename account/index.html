@@ -175,7 +175,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
     <!-- ── Профиль ───────────────────────────────────────────────────── -->
     <div id="profile" hidden>
       <p class="kicker"><span data-l="ru">Мой аккаунт</span><span data-l="en">My account</span></p>
-      <h2 id="hello"><span data-l="ru">Профиль</span><span data-l="en">Profile</span></h2>
+      <h2 id="hello" data-nick=""><span data-l="ru">Профиль</span><span data-l="en">Profile</span></h2>
 
       <div class="panel wide">
         <div class="who">
@@ -244,6 +244,20 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="ru">
           Ник виден другим игрокам в мультиплеере. Менять можно раз в сутки.
         </p>
+
+        <!-- ── О себе ──────────────────────────────────────────────────────
+             Показывается в публичном профиле под ником. -->
+        <div class="field">
+          <label for="bio"><span data-l="ru">О себе</span><span data-l="en">About me</span></label>
+          <textarea id="bio" rows="3" maxlength="300"
+                    data-ph-ru="Пара слов — их увидят в вашем профиле"
+                    data-ph-en="A couple of lines — they show in your public profile"
+                    placeholder="Пара слов — их увидят в вашем профиле"></textarea>
+          <div class="dim mono" style="font-size:12px;margin-top:6px" id="bioCount">0 / 300</div>
+        </div>
+        <button class="btn quiet" id="saveBio" style="width:auto;margin-bottom:20px">
+          <span data-l="ru">Сохранить описание</span><span data-l="en">Save description</span>
+        </button>
         <p class="dim" style="font-size:13px;margin-bottom:20px" data-l="en">
           Other players see this nickname in multiplayer. It can be changed once a day.
         </p>
@@ -276,7 +290,11 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
           We will email a code to the new address. Until you enter it, you keep signing in with the old one.
         </p>
 
-        <div class="grantbox" style="margin-bottom:10px">
+        <!-- Поля пароля живут в форме со скрытым полем адреса: без этого
+             браузер ругается в консоли, а менеджеры паролей не понимают, что
+             здесь меняют пароль, и не предлагают сохранить новый. -->
+        <form id="formPass" class="grantbox" style="margin-bottom:10px" autocomplete="on" onsubmit="return false">
+          <input type="email" id="passUser" autocomplete="username" hidden>
           <div class="field">
             <label for="newPass2"><span data-l="ru">Новый пароль</span><span data-l="en">New password</span></label>
             <input type="password" id="newPass2" minlength="6" autocomplete="new-password">
@@ -287,8 +305,8 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
             <input type="text" id="passCode" inputmode="numeric" autocomplete="one-time-code"
                    maxlength="8" placeholder="000000">
           </div>
-          <button class="btn quiet" id="savePass" style="width:auto"><span data-l="ru">Сменить</span><span data-l="en">Change</span></button>
-        </div>
+          <button type="submit" class="btn quiet" id="savePass" style="width:auto"><span data-l="ru">Сменить</span><span data-l="en">Change</span></button>
+        </form>
 
         <!-- ── Регион ──────────────────────────────────────────────────────
              Регион определяет валюту цен, поэтому меняется не кнопкой, а
@@ -408,15 +426,15 @@ import {
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
-  updateNickname, changeEmail, changePassword, requestPasswordCode,
+  updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
   deleteAccount, getMyOrders,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=d580e50f';
+} from '/assets/pixset-auth.js?v=0ce568d9';
 import {
   badgeRowHtml, paintNickBadges, countryName, countryFlag, countryOptions,
-} from '/assets/pixset-ui.js?v=d580e50f';
+} from '/assets/pixset-ui.js?v=0ce568d9';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -757,20 +775,17 @@ async function renderMyBadges() {
 
   $('myBadges').innerHTML = rows.length
     ? rows.map((b) => {
-        // Закрепить можно только то, что бейдж разрешает; «всегда в нике»
-        // снять нельзя — об этом и пишем вместо переключателя.
-        const control = b.nick_forced
-          ? `<span class="badge">${esc(L('всегда в нике', 'always on the nickname'))}</span>`
-          : b.nick_allowed
-            ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
-                 <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
-                 <span class="dim" style="font-size:13px">${esc(L('рядом с ником', 'next to nickname'))}</span>
-               </label>`
-            : `<span class="badge mute">${esc(L('только в профиле', 'profile only'))}</span>`;
-        const hidden = b.hide_in_profile
-          ? `<span class="badge mute">${esc(L('скрыт в профиле', 'hidden in profile'))}</span>` : '';
+        // Галочка — только там, где у игрока есть выбор. Бейджи, которые
+        // висят в нике всегда или живут лишь в профиле, показываем без неё:
+        // подписи-состояния занимали место и ничем не помогали.
+        const control = (!b.nick_forced && b.nick_allowed)
+          ? `<label style="display:flex;align-items:center;gap:8px;white-space:nowrap">
+               <input type="checkbox" data-pin="${esc(b.slug)}"${b.pinned ? ' checked' : ''}>
+               <span class="dim" style="font-size:13px">${esc(L('рядом с ником', 'next to nickname'))}</span>
+             </label>`
+          : '';
         return `<div class="row" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${hidden}${control}
+          <div style="flex:1;min-width:180px">${badgeRowHtml(b)}</div>${control}
         </div>`;
       }).join('')
     : `<div class="row"><span class="dim">${esc(L(
@@ -902,13 +917,17 @@ async function renderProfile(user) {
   currentUser = user;
   $('mail').textContent = user.email;
   $('newEmail').value = user.email;
+  $('passUser').value = user.email;   // для менеджера паролей
 
   try {
     const profile = await getProfile(user.id);
     $('nick').textContent = profile.nickname;
     paintOwnAvatar(profile.avatar_url, profile.nickname);
     $('hello').textContent = profile.nickname;
+    $('hello').dataset.nick = profile.nickname;
     $('newNick').value = profile.nickname;
+    $('bio').value = profile.bio || '';
+    countBio();
     myCountry = (profile.country || '').toUpperCase();
     $('nick').dataset.nick = profile.nickname;
     $('regionInfo').textContent = `${countryFlag(myCountry)} ${
@@ -1066,6 +1085,23 @@ $('emailCodeBtn').onclick = () => busy($('emailCodeBtn'), async () => {
 
 /* Смена пароля в два шага: письмо с кодом, потом сама смена. Открытой
    вкладки для такого мало — за компьютер садятся не только владельцы. */
+
+/* ── О себе ──────────────────────────────────────────────────────────────
+   Короткое описание в публичном профиле. Счётчик рядом с полем — чтобы предел
+   в 300 символов не встречал игрока сообщением об ошибке. */
+function countBio() {
+  $('bioCount').textContent = `${$('bio').value.trim().length} / ${BIO_MAX}`;
+}
+$('bio').oninput = countBio;
+
+$('saveBio').onclick = () => busy($('saveBio'), async () => {
+  try {
+    await updateBio($('bio').value);
+    countBio();
+    say($('profMsg'), L('Описание сохранено.', 'Description saved.'), 'ok');
+  } catch (err) { say($('profMsg'), humanError(err)); }
+});
+
 $('savePass').onclick = () => busy($('savePass'), async () => {
   const pass = $('newPass2').value;
   if (pass.length < 6) {

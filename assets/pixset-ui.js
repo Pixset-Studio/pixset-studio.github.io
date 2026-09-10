@@ -8,7 +8,7 @@
  * Стили классов .bdg/.nbdg — в studio.css (сайт студии) и site.css (Byte
  * Blaster): оформление у сайтов разное, разметка одна.
  */
-import { supabase } from './pixset-auth.js';
+import { supabase } from './pixset-auth.js?v=0ce568d9';
 
 /** Язык страницы. Обе площадки держат его в одном атрибуте на <html>. */
 export function uiLang() {
@@ -165,21 +165,29 @@ export function badgeRowHtml(b) {
   </div>`;
 }
 
+/* Ответ сервера держим в памяти страницы: ники на ней повторяются (свой в
+   шапке, в карточке и в заголовке; чужие — в списке друзей и в поиске), а
+   перерисовывать их приходится часто. */
+const nickCache = new Map();
+
 /** Бейджи «у ника» сразу для списка игроков — один запрос на всю страницу. */
 export async function nickBadges(nicknames) {
   const names = [...new Set((nicknames || []).filter(Boolean))];
-  if (!names.length) return new Map();
-  const { data, error } = await supabase
-    .from('nick_badges')
-    .select('nickname, slug, title_ru, title_en, icon_url, color, nick_forced')
-    .in('nickname', names);
-  if (error) return new Map();
-  const map = new Map();
-  (data || []).forEach((row) => {
-    if (!map.has(row.nickname)) map.set(row.nickname, []);
-    map.get(row.nickname).push(row);
-  });
-  return map;
+  const missing = names.filter((n) => !nickCache.has(n));
+
+  if (missing.length) {
+    const { data, error } = await supabase
+      .from('nick_badges')
+      .select('nickname, slug, title_ru, title_en, icon_url, color, nick_forced')
+      .in('nickname', missing);
+    if (!error) {
+      // Пустые списки тоже запоминаем: «у этого ника бейджей нет» — такой же
+      // ответ, и спрашивать про него второй раз незачем.
+      missing.forEach((n) => nickCache.set(n, []));
+      (data || []).forEach((row) => { (nickCache.get(row.nickname) || []).push(row); });
+    }
+  }
+  return new Map(names.map((n) => [n, nickCache.get(n) || []]));
 }
 
 /**
@@ -188,29 +196,30 @@ export async function nickBadges(nicknames) {
  * Разметка помечает ник атрибутом data-nick="ник" — и всё; дальше эта функция
  * сама сходит в базу и добавит иконки. Так «бейдж виден везде» не требует
  * править каждый список по отдельности: списки друзей, поиск, таблицы, шапка.
+ *
+ * Рисуем от фактического состояния узла, а не от отметки «этот ник уже
+ * обработан». Отметка подводила: страницы переписывают ник через textContent
+ * (после смены ника, при повторной отрисовке профиля), вставленные иконки при
+ * этом стираются, а отметка остаётся — и бейджи больше не возвращались.
+ * Повторный вызов ничего не стоит: данные берутся из кэша.
  */
 export async function paintNickBadges(root = document) {
-  const nodes = [...root.querySelectorAll('[data-nick]')]
-    .filter((n) => n.dataset.nickBadges !== n.dataset.nick);
+  const nodes = [...root.querySelectorAll('[data-nick]')].filter((n) => n.dataset.nick);
   if (!nodes.length) return;
 
   const map = await nickBadges(nodes.map((n) => n.dataset.nick));
   nodes.forEach((node) => {
-    node.dataset.nickBadges = node.dataset.nick;   // отметка: этот ник уже обработан
-    const old = node.querySelector(':scope > .nbdgs');
-    if (old) old.remove();
     const list = map.get(node.dataset.nick) || [];
-    if (!list.length) return;
-    node.insertAdjacentHTML('beforeend',
-      `<span class="nbdgs">${list.map(badgeChipHtml).join('')}</span>`);
+    const html = list.length ? `<span class="nbdgs">${list.map(badgeChipHtml).join('')}</span>` : '';
+    const old = node.querySelector(':scope > .nbdgs');
+    if (old && old.outerHTML === html) return;      // уже нарисовано верно
+    if (old) old.remove();
+    if (html) node.insertAdjacentHTML('beforeend', html);
   });
 }
 
 // Язык меняется без перезагрузки — подсказки у иконок тоже.
-document.addEventListener('pixset:lang', () => {
-  document.querySelectorAll('[data-nick]').forEach((n) => { delete n.dataset.nickBadges; });
-  paintNickBadges().catch(() => {});
-});
+document.addEventListener('pixset:lang', () => { paintNickBadges().catch(() => {}); });
 
 /* ── Разделы админки ─────────────────────────────────────────────────────
    Панель управления росла лентой: игроки, лицензии, бейджи, блокировки,

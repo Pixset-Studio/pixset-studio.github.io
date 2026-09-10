@@ -102,12 +102,25 @@
       var text;
       if (isRussia() && g.price_rub != null) {
         text = (g.price_rub / 100).toLocaleString('ru-RU') + ' ₽ · навсегда, на все устройства';
+        show(text);
       } else if (g.price_usd != null) {
         text = '$' + (g.price_usd / 100).toFixed(2) + ' · forever, on every device';
-      } else {
-        return;
+        // Доллары мало что говорят тому, кто считает в тенге или злотых —
+        // рядом ставим примерную сумму по сегодняшнему курсу (pixset-rates.js).
+        var rates = window.PixsetRates;
+        if (!rates) { show(text); return; }
+        var country = rates.guessCountry();
+        rates.prime().then(function () {
+          var local = rates.hint(g.price_usd, country,
+            document.documentElement.getAttribute('data-site-lang') || 'ru');
+          show(local ? '$' + (g.price_usd / 100).toFixed(2) + ' (' + local + ')'
+                     + ' · forever, on every device' : text);
+        });
       }
-      for (var i = 0; i < slots.length; i++) slots[i].textContent = text;
+
+      function show(value) {
+        for (var i = 0; i < slots.length; i++) slots[i].textContent = value;
+      }
     })
     .catch(function () { /* оставляем текст из разметки */ });
 })();

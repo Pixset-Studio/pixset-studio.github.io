@@ -148,12 +148,13 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
+<script src="/assets/pixset-rates.js"></script>
 <script src="/assets/pixset-me.js"></script>
 <script type="module">
 import {
   supabase, getGames, getEntitlements, getProfile, getSettings,
   detectCountry, formatPrice, humanError,
-} from '/assets/pixset-auth.js?v=d580e50f';
+} from '/assets/pixset-auth.js?v=0ce568d9';
 
 const $ = (id) => document.getElementById(id);
 
@@ -180,6 +181,10 @@ const TAGLINES = { 'byte-blaster': 'Hack the GRID network' };
 const L = (ru, en) => (window.PixsetLang ? window.PixsetLang.L(ru, en) : ru);
 
 let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
+/* Страна нужна только для подсказки «во сколько это в местных деньгах».
+   У вошедшего берём её из профиля, у гостя — из языка браузера: ошибиться тут
+   не страшно, платит он всё равно в валюте аккаунта. */
+let country = detectCountry();
 let session = null;
 let settings = { payments_enabled: false, support_email: 'pixset.studio.offical@gmail.com' };
 
@@ -193,6 +198,11 @@ function say(text, kind = 'err') {
 
 function tile(game, owned, isHero) {
   const price = formatPrice(game, currency);
+  // Долларовая цена мало что говорит тому, кто считает в тенге или злотых —
+  // рядом ставим примерную сумму по сегодняшнему курсу. Для рублей не нужно:
+  // там цена и так своя.
+  const local = (currency === 'USD' && window.PixsetRates)
+    ? window.PixsetRates.hint(game.price_usd, country, L('ru', 'en')) : '';
   const feats = (FEATURES[game.slug] || []).map((f) => `<li>${esc(L(f[0], f[1]))}</li>`).join('');
   const cover = COVERS[game.slug];
   const href = OWN_PAGES[game.slug] || '#';
@@ -211,7 +221,8 @@ function tile(game, owned, isHero) {
         ${owned
           ? `<span class="badge solid">${esc(L('Куплено', 'Owned'))}</span>
              <a class="btn quiet" href="/byte-blaster/game/full/">${esc(L('Играть', 'Play'))}</a>`
-          : `<span class="price">${price || '—'}</span>
+          : `<span class="price">${price || '—'}${
+               local ? ` <small class="dim" style="font-size:13px">(${esc(local)})</small>` : ''}</span>
              <a class="btn solid" href="${esc(href)}">${esc(L('Купить', 'Buy'))}</a>`}
       </div>
       ${!owned && !settings.payments_enabled ? offlineNote() : ''}
@@ -271,7 +282,14 @@ if (session) {
   try {
     const profile = await getProfile(session.user.id);
     if (profile.currency) currency = profile.currency;
+    if (profile.country) country = profile.country;
   } catch { /* цена останется предварительной */ }
+}
+
+// Курс подгружаем до первой отрисовки: он лежит в localStorage сутки, так что
+// обычно это мгновенно и без запроса.
+if (currency === 'USD' && window.PixsetRates) {
+  try { await window.PixsetRates.prime(); } catch { /* без подсказки обойдёмся */ }
 }
 
 try { await render(); }

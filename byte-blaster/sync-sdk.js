@@ -42,10 +42,20 @@ fs.writeFileSync(copy, code, 'utf8');
 // наполнены одинаково. Копия получает ту же метку версии, что и SDK.
 const uiSource = path.join(studioSite, 'assets', 'pixset-ui.js');
 if (fs.existsSync(uiSource)) {
-  const ui = fs.readFileSync(uiSource, 'utf8')
-    // В копии для сайта игры импорт SDK ведёт в её собственную папку.
-    .replace("from './pixset-auth.js'", "from '/byte-blaster/assets/pixset-auth.js'");
-  fs.writeFileSync(path.join(bbSite, 'assets', 'pixset-ui.js'), ui, 'utf8');
+  // Метка версии нужна и здесь. Браузер считает разными модулями любые два
+  // адреса, отличающиеся хоть строкой запроса: страница берёт
+  // `/assets/pixset-auth.js?v=…`, а этот модуль — тот же файл без метки, и в
+  // памяти оказывались ДВЕ копии SDK. Отсюда предупреждение «Multiple
+  // GoTrueClient instances detected» и два клиента на одном хранилище.
+  let ui = fs.readFileSync(uiSource, 'utf8')
+    .replace(/from '\.\/pixset-auth\.js(?:\?v=[^']*)?'/,
+      `from './pixset-auth.js?v=${stamp}'`);
+  fs.writeFileSync(uiSource, ui, 'utf8');
+
+  // В копии для сайта игры импорт SDK ведёт в её собственную папку.
+  fs.writeFileSync(path.join(bbSite, 'assets', 'pixset-ui.js'),
+    ui.replace(/from '\.\/pixset-auth\.js(\?v=[^']*)?'/,
+      `from '/byte-blaster/assets/pixset-auth.js?v=${stamp}'`), 'utf8');
 }
 
 // Кнопка «мой аккаунт» в шапке (аватар, ник, бейджи). Обычный скрипт без

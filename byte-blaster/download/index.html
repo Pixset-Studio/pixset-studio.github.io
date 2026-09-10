@@ -226,13 +226,14 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
 <script src="/byte-blaster/assets/pixset-me.js"></script>
+<script src="/byte-blaster/assets/pixset-rates.js"></script>
 <script src="/byte-blaster/assets/price.js"></script>
 <script type="module">
 // Кнопка скачивания установщика. Файл лежит в закрытом хранилище: ссылка
 // выдаётся на десять минут и только владельцу лицензии, поэтому здесь мы
 // сначала выясняем, что вообще показать этому посетителю.
 import { supabase, getCurrentReleases, downloadRelease, getEntitlements, getSettings }
-  from '/byte-blaster/assets/pixset-auth.js?v=d580e50f';
+  from '/byte-blaster/assets/pixset-auth.js?v=0ce568d9';
 
 // Способы получить игру включаются и выключаются в админке студии: например,
 // .exe можно временно снять с раздачи, оставив браузерную версию.
