@@ -174,6 +174,13 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
         Бейдж показывается справа от ника в публичном профиле. Код менять нельзя:
         по нему бейдж и находится — сохранение с тем же кодом правит существующий.
       </p>
+      <!-- Порядок списка — он же порядок у ника (badges.sort_order, см. 0017):
+           важность у бейджа одна на всех, поэтому и задаётся один раз здесь, а
+           не отдельно каждому игроку. -->
+      <p class="dim" style="font-size:14px">
+        Порядок в списке = порядок у ника: чем выше бейдж, тем ближе он к нику
+        у всех, кому выдан. Переставить — потянуть строку за <b>⠿</b>.
+      </p>
       <div class="grantbox" style="margin-bottom:12px">
         <div class="field">
           <label for="badgeSlug">Код</label>
@@ -263,14 +270,8 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
         </div>
         <button class="btn solid" id="badgeGrant">Выдать</button>
         <button class="btn quiet" id="badgeRevoke">Забрать</button>
-        <button class="btn quiet" id="badgeOrderShow">Порядок в нике</button>
       </div>
       <div class="msg" id="badgeMsg"></div>
-      <!-- ── Порядок иконок у ника ────────────────────────────────────────
-           Какой бейдж стоит ближе к нику, решает студия: бейдж — её отметка.
-           Игрок в кабинете выбирает лишь то, какой из необязательных бейджей
-           занимает единственный слот. -->
-      <div class="rows" id="badgeOrder" style="margin-top:10px"></div>
       <div class="rows" id="badgeHolders" style="margin-top:10px"></div>
 
       <!-- ── Заявки на смену региона ─────────────────────────────────────
@@ -350,7 +351,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=56dbaf83"></script>
+<script src="/assets/pixset-me.js?v=b961f548"></script>
 <script type="module">
 import {
   supabase, getProfile, getGames,
@@ -362,14 +363,14 @@ import {
   postAnnouncement, listAnnouncements, deleteAnnouncement,
   listBadges, adminSaveBadge, adminDeleteBadge, adminGrantBadge, adminRevokeBadge,
   adminBadgeHolders, badgeIconFromFile, adminRecheckBadges,
-  adminOrderBadges, getNickBadges,
+  adminOrderBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/assets/pixset-auth.js?v=56dbaf83';
+} from '/assets/pixset-auth.js?v=b961f548';
 import {
-  paintNickBadges, forgetNickBadges, badgeRowHtml, gameIconHtml,
+  paintNickBadges, forgetNickBadges, gameIconHtml, sortableRows,
   countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
-} from '/assets/pixset-ui.js?v=56dbaf83';
+} from '/assets/pixset-ui.js?v=b961f548';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -830,11 +831,14 @@ async function loadBadges() {
   catch (err) { $('badgeList').innerHTML = `<p class="dim">${esc(humanError(err))}</p>`; return; }
 
   $('badgeList').innerHTML = rows.length
-    ? rows.map((b) => {
+    ? rows.map((b, i) => {
         const icon = /^data:image\//.test(b.icon_url || '')
           ? `<img alt="" src="${esc(b.icon_url)}" style="width:22px;height:22px;object-fit:contain">`
           : `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(b.color || '#ffd400')}"></span>`;
-        return `<div class="row" style="display:flex;gap:12px;align-items:center">
+        return `<div class="row" data-sort-key="${esc(b.slug)}" style="display:flex;gap:12px;align-items:center">
+          <span data-drag class="dim" title="Перетащить: чем выше, тем ближе к нику"
+                style="font-size:18px;line-height:1">⠿</span>
+          <span data-sort-num class="dim mono" style="width:18px;text-align:right;font-size:12px">${i + 1}</span>
           ${icon}
           <div style="flex:1;min-width:0">
             <b>${esc(b.title_ru)}</b> <span class="dim">/ ${esc(b.title_en)}</span>
@@ -889,6 +893,24 @@ async function loadBadges() {
       catch (err) { say(humanError(err)); btn.disabled = false; }
     };
   });
+
+  /* ── Порядок каталога ──────────────────────────────────────────────────
+     Он же порядок у ника: первый в списке стоит ближе всех к нику у КАЖДОГО,
+     кому бейдж выдан. Поэтому после перестановки список перечитывается из
+     базы — на экране должно остаться то, что действительно сохранилось. */
+  sortableRows($('badgeList'), async (slugs) => {
+    try {
+      await adminOrderBadges(slugs);
+      badgeSay('Порядок бейджей сохранён.', 'ok');
+    } catch (err) {
+      badgeSay(humanError(err));
+    }
+    // Иконки у ников держатся в памяти страницы; порядок общий, поэтому
+    // забываем всю страницу, а не один ник.
+    forgetNickBadges();
+    await loadBadges();
+    await paintNickBadges($('panel'));
+  });
 }
 
 function badgeSay(text, kind = 'err') {
@@ -926,65 +948,6 @@ async function withBadge(fn, okText) {
 
 $('badgeGrant').onclick  = () => withBadge(adminGrantBadge,  'Бейдж выдан.');
 $('badgeRevoke').onclick = () => withBadge(adminRevokeBadge, 'Бейдж забран.');
-
-/* ── Порядок иконок у ника ───────────────────────────────────────────────
-   Первый в списке стоит ближе всех к нику. Решает студия: бейдж — её отметка,
-   и какая из отметок важнее, игрок за неё не выбирает. В кабинете за игроком
-   остаётся только выбор, какой из необязательных бейджей займёт слот. */
-let orderNick = '';
-let orderRows = [];
-
-async function showBadgeOrder(nick) {
-  orderNick = nick;
-  try { orderRows = await getNickBadges(nick); }
-  catch (err) { badgeSay(humanError(err)); return; }
-  paintBadgeOrder();
-}
-
-function paintBadgeOrder() {
-  const box = $('badgeOrder');
-  if (!orderNick) { box.innerHTML = ''; return; }
-
-  box.innerHTML = orderRows.length
-    ? `<div class="dim" style="margin:6px 0">Рядом с ником «${esc(orderNick)}» — первый стоит ближе всех:</div>`
-      + orderRows.map((b, i) => `
-        <div class="row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <span class="dim mono" style="width:20px">${i + 1}</span>
-          <div style="flex:1;min-width:160px">${badgeRowHtml(b)}</div>
-          <button class="btn quiet" data-mv="${i}" data-dir="-1" style="width:auto;padding:6px 12px"${
-            i === 0 ? ' disabled' : ''} title="ближе к нику">←</button>
-          <button class="btn quiet" data-mv="${i}" data-dir="1" style="width:auto;padding:6px 12px"${
-            i === orderRows.length - 1 ? ' disabled' : ''} title="дальше от ника">→</button>
-        </div>`).join('')
-    : `<p class="dim">У «${esc(orderNick)}» рядом с ником сейчас ничего нет.</p>`;
-
-  box.querySelectorAll('[data-mv]').forEach((btn) => {
-    btn.onclick = async () => {
-      const from = Number(btn.dataset.mv);
-      const to = from + Number(btn.dataset.dir);
-      if (to < 0 || to >= orderRows.length) return;
-      [orderRows[from], orderRows[to]] = [orderRows[to], orderRows[from]];
-      paintBadgeOrder();                    // сразу показываем новый порядок
-      try {
-        await adminOrderBadges(orderNick, orderRows.map((b) => b.slug));
-        badgeSay(`Порядок бейджей у «${orderNick}» сохранён.`, 'ok');
-        // Иконки у ников на самой странице держатся в памяти — сбрасываем,
-        // иначе таблица игроков осталась бы с прежним порядком.
-        forgetNickBadges(orderNick);
-        await paintNickBadges($('panel'));
-      } catch (err) {
-        badgeSay(humanError(err));
-        await showBadgeOrder(orderNick);    // не сохранилось — вернём как в базе
-      }
-    };
-  });
-}
-
-$('badgeOrderShow').onclick = () => {
-  const nick = $('badgeNick').value.trim();
-  if (!nick) { badgeSay('Укажите ник игрока.'); return; }
-  showBadgeOrder(nick);
-};
 
 /* ── Заявки на смену региона ─────────────────────────────────────────────
    Решение сохраняется в базе; игрок читает его в своём кабинете. */

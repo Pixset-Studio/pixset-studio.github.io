@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = '56dbaf83';
+export const SDK_VERSION = 'b961f548';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -886,12 +886,19 @@ export async function revokeDevice(id) {
 
 export const BADGE_ICON_MAX_BYTES = 48 * 1024;
 
-/** Весь каталог — нужен и админке, и странице, где бейджи объясняются. */
+/**
+ * Весь каталог — нужен и админке, и странице, где бейджи объясняются.
+ *
+ * Порядок каталога — он же порядок у ника: чем выше бейдж в списке, тем ближе
+ * он стоит к нику (badges.sort_order, см. 0017). Поэтому список отдаётся уже
+ * отсортированным, а не по дате создания.
+ */
 export async function listBadges() {
   const { data, error } = await supabase
     .from('badges')
     .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, '
-          + 'nick_allowed, nick_forced, hide_in_profile, created_at')
+          + 'nick_allowed, nick_forced, hide_in_profile, sort_order, created_at')
+    .order('sort_order')
     .order('created_at');
   if (error) throw error;
   return data || [];
@@ -902,8 +909,8 @@ export async function getMyBadges() {
   const { data, error } = await supabase
     .from('my_badges')
     .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, '
-          + 'nick_allowed, nick_forced, hide_in_profile, pinned, nick_order, granted_at')
-    .order('nick_order')
+          + 'nick_allowed, nick_forced, hide_in_profile, pinned, sort_order, granted_at')
+    .order('sort_order')
     .order('nick_forced', { ascending: false })
     .order('granted_at');
   if (error) throw error;
@@ -923,31 +930,18 @@ export async function pinBadge(slug, pinned) {
 }
 
 /**
- * Кто из бейджей игрока главнее у ника: первый в списке стоит ближе всех к
- * нику. Достаточно прислать те, что видны в нике, — остальные уедут в конец.
+ * Переставить каталог: слаги приходят в том порядке, в каком лежат в списке
+ * админки, первый — главный. Это же и порядок у ника: чем выше бейдж в
+ * каталоге, тем ближе он к нику у КАЖДОГО, кому выдан.
  *
- * Порядок задаёт студия, а не игрок: бейдж — её отметка, и какая из отметок
- * важнее, решает она же. За игроком остаётся выбор, какой из необязательных
- * бейджей занимает единственный слот (pinBadge).
+ * Важность у бейджа одна на всех, поэтому и хранится она один раз, у самого
+ * бейджа (badges.sort_order, см. 0017), а не отдельно у каждого игрока. За
+ * игроком остаётся только выбор, какой из необязательных бейджей занимает
+ * единственный слот у ника (pinBadge).
  */
-export async function adminOrderBadges(nickname, slugs) {
-  const { error } = await supabase.rpc('admin_badge_order', {
-    p_nickname: nickname, p_slugs: slugs || [],
-  });
+export async function adminOrderBadges(slugs) {
+  const { error } = await supabase.rpc('admin_badges_order', { p_slugs: slugs || [] });
   if (error) throw error;
-}
-
-/** Бейджи игрока, которые видны рядом с ником, — в текущем порядке. */
-export async function getNickBadges(nickname) {
-  const { data, error } = await supabase
-    .from('nick_badges')
-    .select('slug, title_ru, title_en, hint_ru, hint_en, icon_url, color, nick_forced, nick_order')
-    .eq('nickname', nickname)
-    .order('nick_order')
-    .order('nick_forced', { ascending: false })
-    .order('granted_at');
-  if (error) throw error;
-  return data || [];
 }
 
 /** Кому видна страна в профиле: 'public' | 'friends' | 'none'. */

@@ -373,7 +373,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js?v=56dbaf83"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=b961f548"></script>
 <script type="module">
 // Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
 // сайта студии общая, вход достаточно выполнить один раз.
@@ -388,11 +388,11 @@ import {
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=56dbaf83';
+} from '/byte-blaster/assets/pixset-auth.js?v=b961f548';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
   gameIconHtml, pageSections, countryName, countryFlag, countryOptions,
-} from '/byte-blaster/assets/pixset-ui.js?v=56dbaf83';
+} from '/byte-blaster/assets/pixset-ui.js?v=b961f548';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -503,8 +503,9 @@ async function renderMyBadges() {
   let rows = [];
   try { rows = await getMyBadges(); } catch { rows = []; }
 
-  // Список приходит в порядке игрока (nick_order), видимые в нике — первыми:
-  // строка настроек читается так же, как выглядит сам ник.
+  // Список приходит в порядке каталога (badges.sort_order — его задаёт
+  // студия), видимые в нике — первыми: строка настроек читается так же, как
+  // выглядит сам ник.
   const nickRow = rows.filter(inNick);
   const rest = rows.filter((b) => !inNick(b));
 

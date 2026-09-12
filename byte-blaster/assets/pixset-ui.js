@@ -8,7 +8,7 @@
  * Стили классов .bdg/.nbdg — в studio.css (сайт студии) и site.css (Byte
  * Blaster): оформление у сайтов разное, разметка одна.
  */
-import { supabase } from '/byte-blaster/assets/pixset-auth.js?v=56dbaf83';
+import { supabase } from '/byte-blaster/assets/pixset-auth.js?v=b961f548';
 
 /** Язык страницы. Обе площадки держат его в одном атрибуте на <html>. */
 export function uiLang() {
@@ -176,14 +176,14 @@ export async function nickBadges(nicknames) {
   const missing = names.filter((n) => !nickCache.has(n));
 
   if (missing.length) {
-    // Порядок задаёт игрок (nick_order): главный бейдж стоит ближе к нику.
-    // Сортировку просим явно — на порядок строк внутри витрины полагаться
-    // нельзя, его сохраняет не всякий запрос.
+    // Порядок задаёт каталог (badges.sort_order): чем выше бейдж в списке
+    // админки, тем ближе он к нику. Сортировку просим явно — на порядок строк
+    // внутри витрины полагаться нельзя, его сохраняет не всякий запрос.
     const { data, error } = await supabase
       .from('nick_badges')
-      .select('nickname, slug, title_ru, title_en, icon_url, color, nick_forced, nick_order')
+      .select('nickname, slug, title_ru, title_en, icon_url, color, nick_forced, sort_order')
       .in('nickname', missing)
-      .order('nick_order')
+      .order('sort_order')
       .order('nick_forced', { ascending: false })
       .order('granted_at');
     if (!error) {
@@ -197,8 +197,10 @@ export async function nickBadges(nicknames) {
 }
 
 /**
- * Забыть запомненные бейджи ника — после того, как игрок сам их поменял:
- * закрепил другой или переставил порядок. Без ника забывается вся страница.
+ * Забыть запомненные бейджи ника — после того, как их состав поменялся: игрок
+ * закрепил другой, студия выдала или забрала. Без ника забывается вся
+ * страница — так сбрасывают кэш после перестановки каталога: порядок общий, и
+ * задет он сразу у всех ников на странице.
  */
 export function forgetNickBadges(nickname) {
   if (nickname) nickCache.delete(nickname);
@@ -330,6 +332,79 @@ export function pageSections(root) {
 
 /** Прежнее имя: админки обеих площадок зовут функцию так. */
 export const adminSections = pageSections;
+
+/* ── Список, который можно переставить ───────────────────────────────────
+   Порядок строк в списке иногда и есть сама настройка: каталог бейджей
+   выстроен от главного к второстепенному, и то же самое видно у ника. Такой
+   порядок задают перетаскиванием: кнопки «выше/ниже» заставляют щёлкать по
+   разу на каждый шаг и не показывают, куда строка в итоге встанет.
+
+   Тянем на Pointer Events, а не на HTML5 drag-and-drop: тот не работает
+   пальцем — на телефоне админка осталась бы без перестановки вовсе.
+
+   Разметка от вызывающего нужна такая:
+     <div data-sort-key="код строки">      — сама строка, прямой ребёнок box
+       <span data-drag>⠿</span>            — за что тянуть
+       <span data-sort-num>1</span>        — номер, если он показан
+   Порядок строк в DOM меняем сразу, чтобы было видно, куда попадёт строка;
+   onOrder зовём один раз в конце — с кодами строк в новом порядке. */
+export function sortableRows(box, onOrder) {
+  if (!box) return;
+  const rows = () => [...box.children].filter((el) => el.dataset && el.dataset.sortKey);
+  const keys = () => rows().map((el) => el.dataset.sortKey);
+  const renumber = () => rows().forEach((el, i) => {
+    const n = el.querySelector('[data-sort-num]');
+    if (n) n.textContent = String(i + 1);
+  });
+
+  let moving = null;    // строка, которую тянут
+  let before = [];      // порядок до захвата — чтобы не дёргать сервер зря
+
+  box.querySelectorAll('[data-drag]').forEach((handle) => {
+    // Палец должен тащить строку, а не листать страницу.
+    handle.style.touchAction = 'none';
+    handle.style.cursor = 'grab';
+    handle.style.userSelect = 'none';
+
+    handle.onpointerdown = (ev) => {
+      const row = handle.closest('[data-sort-key]');
+      if (!row || row.parentNode !== box) return;
+      moving = row;
+      before = keys();
+      row.style.opacity = '0.55';
+      handle.style.cursor = 'grabbing';
+      // Захват указателя: иначе достаточно чуть обогнать курсором строку, и
+      // события уходят соседу — перетаскивание обрывается на полпути.
+      try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* не поддержано */ }
+      ev.preventDefault();
+    };
+
+    handle.onpointermove = (ev) => {
+      if (!moving) return;
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      const over = under && under.closest ? under.closest('[data-sort-key]') : null;
+      if (!over || over === moving || over.parentNode !== box) return;
+      const rect = over.getBoundingClientRect();
+      // Ниже середины соседа — встаём после него, выше — перед.
+      box.insertBefore(moving, ev.clientY > rect.top + rect.height / 2 ? over.nextSibling : over);
+      renumber();
+    };
+
+    const drop = () => {
+      if (!moving) return;
+      moving.style.opacity = '';
+      handle.style.cursor = 'grab';
+      moving = null;
+      renumber();
+      const now = keys();
+      if (now.join(' ') !== before.join(' ')) onOrder(now);
+    };
+    handle.onpointerup = drop;
+    handle.onpointercancel = drop;
+  });
+
+  renumber();
+}
 
 /* ── Иконка игры ─────────────────────────────────────────────────────────
    Списки лицензий («Мои игры», «Игры в аккаунте», лицензии игрока в админке)
