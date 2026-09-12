@@ -51,6 +51,8 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
   <div class="wrap">
     <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
     <nav class="main">
+      <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
       <a href="/store">Магазин</a>
       <a href="/account">Аккаунт</a>
       <a href="/admin/" aria-current="page">Админка</a>
@@ -262,7 +264,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <div class="grantbox" style="margin-top:14px">
         <div class="field">
           <label for="badgeNick">Ник игрока</label>
-          <input type="text" id="badgeNick" placeholder="player" autocomplete="off">
+          <input type="text" id="badgeNick" data-nick-input placeholder="player" autocomplete="off">
         </div>
         <div class="field">
           <label for="badgePick">Бейдж</label>
@@ -297,7 +299,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       </p>
       <div class="field">
         <label for="banNick">Ник игрока</label>
-        <input type="text" id="banNick" autocomplete="off" placeholder="player">
+        <input type="text" id="banNick" data-nick-input autocomplete="off" placeholder="player">
       </div>
       <div class="field">
         <label for="banTerm">Срок</label>
@@ -351,7 +353,7 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=b961f548"></script>
+<script src="/assets/pixset-me.js?v=feef56bc"></script>
 <script type="module">
 import {
   supabase, getProfile, getGames,
@@ -366,11 +368,11 @@ import {
   adminOrderBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/assets/pixset-auth.js?v=b961f548';
+} from '/assets/pixset-auth.js?v=feef56bc';
 import {
-  paintNickBadges, forgetNickBadges, gameIconHtml, sortableRows,
+  paintNickBadges, forgetNickBadges, gameIconHtml, sortableRows, nickSuggestAll,
   countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
-} from '/assets/pixset-ui.js?v=b961f548';
+} from '/assets/pixset-ui.js?v=feef56bc';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -1152,6 +1154,9 @@ if (!session) {
     // Панель длинная — режем её на разделы: метки data-sect стоят прямо
     // на заголовках, см. assets/pixset-ui.js.
     adminSections($('panel'));
+    // Подсказки ника — всем полям сразу: выдача бейджа, блокировка и всё,
+    // что появится в админке потом (нужен только атрибут data-nick-input).
+    nickSuggestAll($('panel'));
     // Версия модуля видна сразу: если браузер подсунул старую копию из кэша,
     // это заметно до того, как «ничего не работает без ошибок».
     $('me').textContent = profile.nickname + ' · ' + session.user.email

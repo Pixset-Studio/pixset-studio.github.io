@@ -42,6 +42,8 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
     <nav class="main">
       <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
       <a href="/byte-blaster/wiki/"><span data-l="ru">ВИКИ</span><span data-l="en">WIKI</span></a>
+      <a href="/byte-blaster/leaderboard/"><span data-l="ru">РЕКОРДЫ</span><span data-l="en">RECORDS</span></a>
+      <a href="/byte-blaster/players/"><span data-l="ru">ИГРОКИ</span><span data-l="en">PLAYERS</span></a>
       <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
       <a href="/byte-blaster/updates/"><span data-l="ru">ОБНОВЛЕНИЯ</span><span data-l="en">UPDATES</span></a>
       <a href="/byte-blaster/about/"><span data-l="ru">О ПРОЕКТЕ</span><span data-l="en">ABOUT</span></a>
@@ -245,7 +247,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         <div class="field" style="max-width:420px">
           <label for="friendNick"><span data-l="ru">ДОБАВИТЬ ПО НИКУ</span><span data-l="en">ADD BY NICKNAME</span></label>
           <div style="display:flex;gap:8px">
-            <input type="text" id="friendNick" autocomplete="off" style="flex:1" placeholder="nickname">
+            <input type="text" id="friendNick" data-nick-input autocomplete="off" style="flex:1" placeholder="nickname">
             <button class="btn small" id="friendAdd"><span data-l="ru">ПОЗВАТЬ</span><span data-l="en">INVITE</span></button>
           </div>
         </div>
@@ -373,7 +375,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js?v=b961f548"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=feef56bc"></script>
 <script type="module">
 // Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
 // сайта студии общая, вход достаточно выполнить один раз.
@@ -388,11 +390,11 @@ import {
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=b961f548';
+} from '/byte-blaster/assets/pixset-auth.js?v=feef56bc';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
-  gameIconHtml, pageSections, countryName, countryFlag, countryOptions,
-} from '/byte-blaster/assets/pixset-ui.js?v=b961f548';
+  gameIconHtml, pageSections, countryName, countryFlag, countryOptions, nickSuggestAll,
+} from '/byte-blaster/assets/pixset-ui.js?v=feef56bc';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -763,7 +765,12 @@ async function renderFriends() {
     const buttons = f.kind === 'incoming'
       ? `<button class="btn small" data-accept="${esc(f.id)}">${bi('ПРИНЯТЬ', 'ACCEPT')}</button>
          <button class="btn small" data-remove="${esc(f.id)}">${bi('ОТКЛОНИТЬ', 'DECLINE')}</button>`
-      : `<button class="btn small" data-remove="${esc(f.id)}">${
+      // У друга — ещё и сравнение: чаще всего меряются как раз с ними. Ведёт на
+      // его профиль на сайте студии, где таблица раскрывается сразу.
+      : `${f.kind === 'friend' ? `<a class="btn small" style="width:auto"
+             href="https://pixset-studio.github.io/u/?n=${encodeURIComponent(f.nickname)}&compare=1"
+             target="_blank" rel="noopener">${bi('СРАВНИТЬ', 'COMPARE')}</a>` : ''}
+         <button class="btn small" data-remove="${esc(f.id)}">${
            f.kind === 'outgoing' ? bi('ОТМЕНИТЬ', 'CANCEL') : bi('УДАЛИТЬ', 'REMOVE')}</button>`;
     return `<div class="item">${avaHtml(f.avatar_url, f.nickname)}
       <b style="flex:1;min-width:0">${link}</b>${buttons}</div>`;
@@ -1020,6 +1027,7 @@ async function renderProfile(user) {
 
   // Кабинет длинный — режем его на разделы. Повторный вызов ничего не делает.
   pageSections($('acctSections'));
+  nickSuggestAll(document);   // поле «добавить друга» и всё, где вводится ник
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru"
+      data-title-ru="Состояние серверов — BYTE BLASTER"
+      data-title-en="Server status — BYTE BLASTER"
+      data-desc-ru="Работают ли сервер комнат и аккаунты Byte Blaster — проверка прямо из вашего браузера."
+      data-desc-en="Whether the Byte Blaster room server and accounts are up — checked from your own browser.">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Состояние серверов — BYTE BLASTER</title>
+<meta name="description" content="Работают ли сервер комнат и аккаунты Byte Blaster — проверка из вашего браузера.">
+<meta name="theme-color" content="#04040f">
+<link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/byte-blaster/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/byte-blaster/assets/site.css">
+<style>
+  .srow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .srow .dot { width: 12px; height: 12px; border-radius: 50%; background: #556; flex: 0 0 12px; }
+  .srow .dot.ok { background: #0f8; box-shadow: 0 0 10px #0f8; }
+  .srow .dot.bad { background: #f55; box-shadow: 0 0 10px #f55; }
+  .srow .dot.wait { background: #fb0; }
+  .srow .st { margin-left: auto; font-family: 'Share Tech Mono', monospace; color: #8ac; }
+</style>
+<script>
+(function(){try{var s=localStorage.getItem('bbSiteLang')||localStorage.getItem('pixsetSiteLang');if(s!=='ru'&&s!=='en'){
+var L=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+s=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(L)?'ru':'en';}
+document.documentElement.setAttribute('data-site-lang',s);
+document.documentElement.setAttribute('lang',s);}catch(e){
+document.documentElement.setAttribute('data-site-lang','ru');}})();
+</script>
+<!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
+<link rel="canonical" href="https://pixset-studio.github.io/byte-blaster/status/">
+<!-- /поиск -->
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/byte-blaster/"><img class="brand-ico" src="/byte-blaster/assets/logo.png" alt="">BYTE BLASTER</a>
+    <a class="tostudio" href="/" title="Pixset Studio"><img src="/byte-blaster/assets/pixset-mark.png" alt="" width="18" height="18"><span data-l="ru">СТУДИЯ</span><span data-l="en">STUDIO</span></a>
+    <nav class="main">
+      <a href="/byte-blaster/"><span data-l="ru">ГЛАВНАЯ</span><span data-l="en">HOME</span></a>
+      <a href="/byte-blaster/leaderboard/"><span data-l="ru">РЕКОРДЫ</span><span data-l="en">RECORDS</span></a>
+      <a href="/byte-blaster/players/"><span data-l="ru">ИГРОКИ</span><span data-l="en">PLAYERS</span></a>
+      <a href="/byte-blaster/status/" aria-current="page"><span data-l="ru">СЕРВЕРЫ</span><span data-l="en">STATUS</span></a>
+      <a href="/byte-blaster/download/"><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></a>
+      <a href="/byte-blaster/account/"><span data-l="ru">АККАУНТ</span><span data-l="en">ACCOUNT</span></a>
+      <span class="langsw">
+        <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section>
+  <div class="wrap">
+    <h1><span data-l="ru">СОСТОЯНИЕ СЕРВЕРОВ</span><span data-l="en">SERVER STATUS</span></h1>
+    <p class="lead dim" style="max-width:640px">
+      <span data-l="ru">Проверка идёт из вашего браузера, а не из студии: важно, доступны ли
+        серверы именно вам. Если у вас включён VPN, результат будет про него.</span>
+      <span data-l="en">The check runs from your browser, not from the studio: what matters is
+        whether the servers are reachable for you. With a VPN on, the result is about the VPN.</span>
+    </p>
+
+    <div class="item" style="margin-top:16px">
+      <div class="srow">
+        <span class="dot wait" id="d-relay"></span>
+        <b><span data-l="ru">Сервер комнат</span><span data-l="en">Room server</span></b>
+        <span class="st" id="s-relay">…</span>
+      </div>
+      <p class="dim" style="font-size:13px;margin:8px 0 0">
+        <span data-l="ru">Через него работают комнаты мультиплеера.</span>
+        <span data-l="en">Multiplayer rooms go through it.</span>
+      </p>
+    </div>
+
+    <div class="item">
+      <div class="srow">
+        <span class="dot wait" id="d-api"></span>
+        <b><span data-l="ru">Аккаунты, рекорды и уровень дня</span><span data-l="en">Accounts, records and the daily level</span></b>
+        <span class="st" id="s-api">…</span>
+      </div>
+      <p class="dim" style="font-size:13px;margin:8px 0 0">
+        <span data-l="ru">Вход, лицензии, таблицы и облачные сохранения.</span>
+        <span data-l="en">Sign-in, licences, tables and cloud saves.</span>
+      </p>
+    </div>
+
+    <div class="item">
+      <div class="srow">
+        <span class="dot wait" id="d-site"></span>
+        <b><span data-l="ru">Сборки и файлы</span><span data-l="en">Builds and files</span></b>
+        <span class="st" id="s-site">…</span>
+      </div>
+      <p class="dim" style="font-size:13px;margin:8px 0 0">
+        <span data-l="ru">Хранилище, откуда скачиваются установщики.</span>
+        <span data-l="en">The storage installers are downloaded from.</span>
+      </p>
+    </div>
+
+    <p class="note" id="hint" hidden style="margin-top:18px">
+      <span data-l="ru">Сервер комнат вам недоступен. Одиночная игра, аккаунт и рекорды при
+        этом работают — не отвечает только мультиплеер.</span>
+      <span data-l="en">The room server is unreachable for you. Single-player, your account and
+        the record tables still work — only multiplayer is affected.</span>
+    </p>
+
+    <p style="margin-top:18px">
+      <button class="btn" id="again" style="width:auto"><span data-l="ru">ПРОВЕРИТЬ СНОВА</span><span data-l="en">CHECK AGAIN</span></button>
+    </p>
+    <p class="dim mono" id="stamp"></p>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>© 2022–2026 <a href="/">Pixset Studio</a> · BYTE BLASTER</div>
+    <div>
+      <a href="/byte-blaster/wiki/"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a> ·
+      <a href="/byte-blaster/leaderboard/"><span data-l="ru">Рекорды</span><span data-l="en">Records</span></a>
+    </div>
+  </div>
+</footer>
+
+<script src="/byte-blaster/assets/config.js"></script>
+<script src="/byte-blaster/assets/site.js"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=feef56bc"></script>
+<script>
+(function () {
+  var isEn = function () { return document.documentElement.getAttribute('data-site-lang') === 'en'; };
+  var L = function (ru, en) { return isEn() ? en : ru; };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RELAY = window.BB_STATS_API || 'https://byte-blaster-server-production.up.railway.app';
+  var API = 'https://zyjhvuhovimorpokiwty.supabase.co';
+  var KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
+
+  // Каждая проверка — обычный запрос с таймаутом. Заблокированный адрес обычно
+  // не отвечает вовсе, поэтому «не дождались» и «отказал» показываем одинаково:
+  // для игрока разницы нет, ему просто туда не попасть.
+  function probe(name, url, opts) {
+    var dot = $('d-' + name), st = $('s-' + name);
+    dot.className = 'dot wait';
+    st.textContent = L('проверяем…', 'checking…');
+    var stop = new AbortController();
+    var timer = setTimeout(function () { stop.abort(); }, 8000);
+    var t0 = performance.now();
+    return fetch(url, Object.assign({ signal: stop.signal, cache: 'no-store' }, opts || {}))
+      .then(function (res) {
+        var ms = Math.round(performance.now() - t0);
+        clearTimeout(timer);
+        var ok = res.ok || res.status === 401 || res.status === 404;   // ответил — значит жив
+        dot.className = 'dot ' + (ok ? 'ok' : 'bad');
+        st.textContent = ok ? L('работает · ', 'up · ') + ms + ' ' + L('мс', 'ms')
+                            : L('отвечает с ошибкой', 'answers with an error');
+        return ok;
+      })
+      .catch(function () {
+        clearTimeout(timer);
+        dot.className = 'dot bad';
+        st.textContent = L('не отвечает', 'no answer');
+        return false;
+      });
+  }
+
+  function run() {
+    $('hint').hidden = true;
+    Promise.all([
+      probe('relay', RELAY + '/'),
+      probe('api', API + '/rest/v1/games?select=slug&limit=1', { headers: { apikey: KEY } }),
+      // Хранилищу задаём самый безобидный вопрос — «ты вообще там?». Список
+      // файлов спрашивать нельзя: бакет закрытый, и отказ в доступе выглядел
+      // бы поломкой, хотя означает ровно обратное.
+      probe('site', API + '/storage/v1/version', { headers: { apikey: KEY } }),
+    ]).then(function (r) {
+      $('hint').hidden = !(r[0] === false && r[1] === true);
+      $('stamp').textContent = L('Проверено ', 'Checked ') + new Date().toLocaleTimeString();
+    });
+  }
+
+  $('again').onclick = run;
+  document.addEventListener('pixset:lang', run);
+  run();
+})();
+</script>
+</body>
+</html>

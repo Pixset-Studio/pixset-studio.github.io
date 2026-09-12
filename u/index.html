@@ -105,6 +105,8 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
       <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
       <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
       <a href="/byte-blaster/">Byte Blaster</a>
+      <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
       <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
       <a href="/account"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
     </nav>
@@ -115,6 +117,8 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
   <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
   <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
   <a href="/byte-blaster/">Byte Blaster</a>
+  <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+  <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
   <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
   <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
 </div>
@@ -140,10 +144,28 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
             <!-- Пара слов о себе; пусто — строки нет вовсе. -->
             <p id="bio" style="margin:10px 0 0;white-space:pre-wrap;word-break:break-word"></p>
           </div>
-          <button class="btn" id="addBtn" hidden style="width:auto;padding:11px 20px">
-            <span data-l="ru">В друзья</span><span data-l="en">Add friend</span>
-          </button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Сравнение живёт здесь, а не отдельной страницей: смотреть чужой
+                 профиль и сравнивать себя с ним — одно и то же движение. Из
+                 списка друзей сюда ведёт ссылка с ?compare=1. -->
+            <button class="btn quiet" id="cmpBtn" hidden style="width:auto;padding:11px 20px">
+              <span data-l="ru">Сравнить со мной</span><span data-l="en">Compare with me</span>
+            </button>
+            <button class="btn" id="addBtn" hidden style="width:auto;padding:11px 20px">
+              <span data-l="ru">В друзья</span><span data-l="en">Add friend</span>
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- ── Сравнение ───────────────────────────────────────────────────
+           Показывается по кнопке: без неё это была бы лишняя таблица на
+           странице, куда чаще заходят просто посмотреть игрока. -->
+      <div id="cmpBox" hidden>
+        <h2 style="margin-top:32px">
+          <span data-l="ru">Сравнение</span><span data-l="en">Comparison</span>
+        </h2>
+        <div class="panel wide" id="cmpTable"></div>
       </div>
 
       <!-- Блокировка. Без этой строки непонятно, почему у игрока всё замерло. -->
@@ -194,14 +216,15 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=b961f548"></script>
+<script src="/assets/pixset-me.js?v=feef56bc"></script>
 <script type="module">
 import {
   supabase, getPublicProfile, sendFriendRequest, getFriends, humanError,
-} from '/assets/pixset-auth.js?v=b961f548';
+} from '/assets/pixset-auth.js?v=feef56bc';
 import {
   badgeRowHtml, paintNickBadges, gameIconHtml, countryName, countryFlag, STAT_GROUPS,
-} from '/assets/pixset-ui.js?v=b961f548';
+  compareTableHtml,
+} from '/assets/pixset-ui.js?v=feef56bc';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -369,6 +392,10 @@ async function render() {
   // Кнопка «в друзья» — только вошедшему и только если он ещё не в связи.
   const { data: { session } } = await supabase.auth.getSession();
   if (!session || session.user.id === profile.id) return;
+
+  // Сравнение доступно любому вошедшему: дружба для этого не нужна, оба
+  // профиля и так публичны.
+  setupCompare(session.user.id);
   let linked = false;
   try { linked = (await getFriends()).some((f) => f.id === profile.id); } catch { linked = false; }
   if (linked) return;
@@ -386,6 +413,54 @@ async function render() {
     } catch (err) { say(humanError(err)); btn.disabled = false; }
   };
 }
+
+/* ── Сравнение двух профилей ──────────────────────────────────────────────
+   Свой профиль берётся тем же публичным запросом, что и чужой: то, что видно
+   всем, и сравнивается — иначе таблица показывала бы одному игроку больше,
+   чем другому. Таблицу собирает общий модуль (compareTableHtml), поэтому на
+   сайте игры она будет ровно такой же. */
+let myProfile = null;
+
+async function setupCompare(myId) {
+  const btn = $('cmpBtn');
+  btn.hidden = false;
+  btn.onclick = () => showCompare();
+  // Ссылка из списка друзей ведёт сразу к сравнению.
+  if (new URLSearchParams(location.search).get('compare')) showCompare();
+}
+
+async function showCompare() {
+  const box = $('cmpBox');
+  box.hidden = false;
+  $('cmpTable').innerHTML = `<p class="dim">${esc(L('Загружаем…', 'Loading…'))}</p>`;
+  if (!myProfile) {
+    // Свой ник знает кнопка аккаунта в шапке (pixset-me.js) — она уже сходила
+    // за профилем, второй раз спрашивать сервер незачем.
+    const me = window.PixsetMe && window.PixsetMe.get ? window.PixsetMe.get() : null;
+    const myNick = me && me.nick;
+    if (!myNick) {
+      $('cmpTable').innerHTML = `<p class="dim">${esc(L('Войдите в аккаунт, чтобы сравнить профили.',
+        'Sign in to compare profiles.'))}</p>`;
+      return;
+    }
+    try { myProfile = await getPublicProfile(myNick); }
+    catch (err) { $('cmpTable').innerHTML = `<p class="dim">${esc(humanError(err))}</p>`; return; }
+  }
+  paintCompare();
+}
+
+function paintCompare() {
+  if (!myProfile || !loaded) return;
+  // Сравниваем по игре, которая есть у обоих; если общей нет — по первой из
+  // моих, чтобы таблица не была пустой без объяснения.
+  const mineGames = (myProfile.games || []).map((g) => g.game_slug);
+  const theirs = (loaded.games || []).map((g) => g.game_slug);
+  const common = mineGames.filter((s) => theirs.indexOf(s) >= 0)[0] || mineGames[0] || theirs[0];
+  $('cmpTable').innerHTML = compareTableHtml(myProfile, loaded, common);
+}
+
+// Язык меняется без перезагрузки — таблицу пересобираем на месте.
+document.addEventListener('pixset:lang', () => { if (!$('cmpBox').hidden) paintCompare(); });
 
 render();
 </script>

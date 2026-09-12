@@ -8,7 +8,7 @@
  * Стили классов .bdg/.nbdg — в studio.css (сайт студии) и site.css (Byte
  * Blaster): оформление у сайтов разное, разметка одна.
  */
-import { supabase } from './pixset-auth.js?v=b961f548';
+import { supabase, searchPlayers } from './pixset-auth.js?v=feef56bc';
 
 /** Язык страницы. Обе площадки держат его в одном атрибуте на <html>. */
 export function uiLang() {
@@ -332,6 +332,151 @@ export function pageSections(root) {
 
 /** Прежнее имя: админки обеих площадок зовут функцию так. */
 export const adminSections = pageSections;
+
+/* ── Подсказки ника ──────────────────────────────────────────────────────
+   Одно поведение на все поля, куда вводится ник: поиск игроков, друзья,
+   сравнение, а в админке — выдача лицензии, бейджа и блокировка. Раньше
+   подсказки были только у друзей, и в остальных местах ник приходилось
+   вспоминать по буквам — включая точный регистр.
+
+   Запрос уходит не на каждую букву: пауза в 220 мс склеивает быструю печать в
+   один поход на сервер. Ответ на устаревший запрос отбрасывается — иначе
+   список «догоняет» уже стёртый текст.
+
+   Разметка не нужна: список создаётся сам и позиционируется под полем. */
+export function attachNickSuggest(input, onPick) {
+  if (!input || input.dataset.nickSuggest) return;
+  input.dataset.nickSuggest = '1';
+  input.setAttribute('autocomplete', 'off');
+
+  const box = document.createElement('div');
+  box.className = 'nick-suggest';
+  box.style.cssText = 'position:absolute;z-index:60;display:none;max-height:240px;overflow-y:auto;'
+    + 'background:var(--bg-2, #14141b);border:1px solid var(--line, rgba(255,255,255,.2));'
+    + 'border-radius:8px;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.35)';
+  document.body.appendChild(box);
+
+  let seq = 0, items = [], active = -1;
+
+  const place = () => {
+    const r = input.getBoundingClientRect();
+    box.style.left = (r.left + window.scrollX) + 'px';
+    box.style.top = (r.bottom + window.scrollY + 4) + 'px';
+    box.style.width = r.width + 'px';
+  };
+  const close = () => { box.style.display = 'none'; active = -1; };
+
+  const paint = () => {
+    if (!items.length) { close(); return; }
+    box.innerHTML = items.map((p, i) => `
+      <div data-i="${i}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;${
+        i === active ? 'background:rgba(127,127,127,.18);' : ''}">
+        ${/^data:image\//.test(p.avatar_url || '')
+          ? `<img alt="" src="${esc(p.avatar_url)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover">`
+          : `<span style="width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+               background:rgba(127,127,127,.2);font-size:12px">${esc((p.nickname || '?').charAt(0).toUpperCase())}</span>`}
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nickname)}</span>
+      </div>`).join('');
+    place();
+    box.style.display = 'block';
+    box.querySelectorAll('[data-i]').forEach((el) => {
+      el.onmousedown = (ev) => {            // mousedown, а не click: blur успел бы закрыть список
+        ev.preventDefault();
+        choose(Number(el.dataset.i));
+      };
+    });
+  };
+
+  const choose = (i) => {
+    const p = items[i];
+    if (!p) return;
+    input.value = p.nickname;
+    close();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (typeof onPick === 'function') onPick(p);
+  };
+
+  const look = async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { items = []; close(); return; }
+    const mine = ++seq;
+    let rows = [];
+    // Импорт статический, вверху файла: динамический `import()` пришлось бы
+    // писать с меткой версии внутри строки, а её проставляет sync-sdk.js — и
+    // адрес с другой меткой браузер считает вторым модулем, то есть ВТОРОЙ
+    // копией SDK на странице.
+    try { rows = await searchPlayers(q, 8); } catch (err) { rows = []; }
+    if (mine !== seq) return;               // пришёл ответ на старый запрос
+    items = rows; active = -1; paint();
+  };
+
+  let timer = 0;
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(look, 220); });
+  input.addEventListener('focus', () => { if (items.length) paint(); });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('keydown', (ev) => {
+    if (box.style.display === 'none') return;
+    if (ev.key === 'ArrowDown') { active = Math.min(active + 1, items.length - 1); paint(); ev.preventDefault(); }
+    else if (ev.key === 'ArrowUp') { active = Math.max(active - 1, 0); paint(); ev.preventDefault(); }
+    else if (ev.key === 'Enter' && active >= 0) { choose(active); ev.preventDefault(); }
+    else if (ev.key === 'Escape') close();
+  });
+  window.addEventListener('resize', place);
+  window.addEventListener('scroll', () => { if (box.style.display !== 'none') place(); }, true);
+}
+
+/** Подсказки сразу всем полям с ником на странице. */
+export function nickSuggestAll(root = document) {
+  root.querySelectorAll('[data-nick-input]').forEach((el) => attachNickSuggest(el));
+}
+
+/* ── Сравнение двух игроков ──────────────────────────────────────────────
+   Строит таблицу «показатель — я — он» по тем же полям, что показывает
+   публичный профиль (STAT_GROUPS). Сравниваются только те строки, которые
+   есть хотя бы у одного: пустая половина таблицы ничего не говорит. */
+export function compareTableHtml(mine, theirs, gameSlug) {
+  const pick = (prof) => {
+    const games = (prof && Array.isArray(prof.games)) ? prof.games : [];
+    const g = gameSlug ? games.filter((x) => x.game_slug === gameSlug)[0] : games[0];
+    return (g && g.data) || {};
+  };
+  const a = pick(mine), b = pick(theirs);
+  const fmt = (f, v) => (v == null ? '—'
+    : f.fmt === 'time' ? Math.round(v / 3600) + ' ' + L('ч', 'h')
+    : Number(v).toLocaleString(uiLang() === 'en' ? 'en-US' : 'ru-RU'));
+
+  const rows = [];
+  STAT_GROUPS.forEach((grp) => {
+    grp.fields.forEach((f) => {
+      if (f.ruleOnly) return;
+      const va = a[f.key], vb = b[f.key];
+      if (va == null && vb == null) return;
+      const na = Number(va || 0), nb = Number(vb || 0);
+      // Победа подсвечивается только там, где числа разные: две одинаковые
+      // зелёные строки читаются как «оба выиграли», а это не так.
+      const win = na === nb ? '' : (na > nb ? 'a' : 'b');
+      rows.push(`<tr>
+        <td style="text-align:left;padding:6px 10px;${win === 'a' ? 'color:var(--y,#7fdc7f)' : ''}">${esc(fmt(f, va))}</td>
+        <th style="font-weight:400;padding:6px 10px;white-space:nowrap"><span class="dim">${
+          esc(uiLang() === 'en' ? f.en : f.ru)}</span></th>
+        <td style="text-align:right;padding:6px 10px;${win === 'b' ? 'color:var(--y,#7fdc7f)' : ''}">${esc(fmt(f, vb))}</td>
+      </tr>`);
+    });
+  });
+
+  if (!rows.length) {
+    return `<p class="dim">${esc(L('Сравнивать пока нечего: ни у кого нет опубликованного прогресса.',
+      'Nothing to compare yet: neither player has published progress.'))}</p>`;
+  }
+  return `<table style="width:100%;border-collapse:collapse;font-size:14px">
+    <thead><tr>
+      <th style="text-align:left;padding:6px 10px">${esc((mine && mine.nickname) || '—')}</th>
+      <th style="padding:6px 10px"></th>
+      <th style="text-align:right;padding:6px 10px">${esc((theirs && theirs.nickname) || '—')}</th>
+    </tr></thead>
+    <tbody>${rows.join('')}</tbody>
+  </table>`;
+}
 
 /* ── Список, который можно переставить ───────────────────────────────────
    Порядок строк в списке иногда и есть сама настройка: каталог бейджей

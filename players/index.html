@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru"
+      data-title-ru="Игроки — Pixset Studio"
+      data-title-en="Players — Pixset Studio"
+      data-desc-ru="Поиск игроков Pixset Studio по нику: профили, прогресс и бейджи."
+      data-desc-en="Find Pixset Studio players by nickname: profiles, progress and badges.">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Игроки — Pixset Studio</title>
+<meta name="description" content="Поиск игроков Pixset Studio по нику: профили, прогресс и бейджи.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
+<style>
+  /* Строка игрока: аватар, ник с бейджами, ссылка в профиль. */
+  .prow { display: flex; align-items: center; gap: 14px; }
+  .prow .ava { width: 44px; height: 44px; flex: 0 0 44px; border: 1px solid var(--line);
+               border-radius: var(--radius); overflow: hidden; display: grid; place-items: center;
+               background: rgba(127,127,127,.12); font-family: var(--font-head); color: var(--y); }
+  .prow .ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .prow b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+<script>
+/* Тема и язык — до первой отрисовки, иначе страница мигнёт чужим оформлением. */
+(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('pixsetTheme');
+var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
+if(t==='byteblaster'&&!own)t='industrial';
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
+d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial');}
+try{var l=localStorage.getItem('pixsetSiteLang')||localStorage.getItem('bbSiteLang');
+if(l!=='ru'&&l!=='en'){var b=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+l=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(b)?'ru':'en';}
+d.setAttribute('data-site-lang',l);d.setAttribute('lang',l);}
+catch(e){d.setAttribute('data-site-lang','ru');}})();
+</script>
+<!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
+<link rel="canonical" href="https://pixset-studio.github.io/players/">
+<!-- /поиск -->
+</head>
+<body>
+
+<div class="hazard"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+    <nav class="main">
+      <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+      <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+      <a href="/byte-blaster/">Byte Blaster</a>
+      <a href="/players/" aria-current="page"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/account"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
+    </nav>
+  </div>
+</header>
+
+<div id="mobileNav">
+  <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+  <a href="/byte-blaster/">Byte Blaster</a>
+  <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+  <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+  <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
+</div>
+
+<main>
+<section>
+  <div class="wrap">
+    <p class="kicker"><span data-l="ru">Кто играет</span><span data-l="en">Who plays</span></p>
+    <h2><span data-l="ru">Игроки</span><span data-l="en">Players</span></h2>
+    <p class="dim" style="max-width:640px">
+      <span data-l="ru">Найдите игрока по нику — не только среди своих друзей. Профиль
+        покажет прогресс, бейджи и игры в аккаунте.</span>
+      <span data-l="en">Find a player by nickname — not just among your friends. Their profile
+        shows progress, badges and the games on the account.</span>
+    </p>
+
+    <!-- Подсказки к этому полю ставит общий модуль (attachNickSuggest): такие же
+         работают в друзьях, в сравнении и в админке. -->
+    <div class="field" style="max-width:420px">
+      <label for="q"><span data-l="ru">Ник игрока</span><span data-l="en">Player nickname</span></label>
+      <input type="text" id="q" data-nick-input placeholder="nekoSan" autocomplete="off">
+    </div>
+
+    <div class="msg" id="msg"></div>
+    <div class="rows" id="list"></div>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="row">
+      <div>© 2022–2026 Pixset Studio</div>
+      <div>
+        <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+        <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/studio.js"></script>
+<script src="/assets/pixset-me.js?v=feef56bc"></script>
+<script type="module">
+import { searchPlayers, humanError } from '/assets/pixset-auth.js?v=feef56bc';
+import { attachNickSuggest, paintNickBadges } from '/assets/pixset-ui.js?v=feef56bc';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const L = (ru, en) => (window.PixsetLang ? window.PixsetLang.L(ru, en) : ru);
+
+function say(text, kind = 'err') {
+  $('msg').textContent = text;
+  $('msg').className = text ? `msg show ${kind}` : 'msg';
+}
+
+function row(p) {
+  const ava = /^data:image\//.test(p.avatar_url || '')
+    ? `<span class="ava"><img alt="" src="${esc(p.avatar_url)}"></span>`
+    : `<span class="ava">${esc((p.nickname || '?').charAt(0).toUpperCase())}</span>`;
+  return `<div class="row">
+    <div class="prow">
+      ${ava}
+      <b data-nick="${esc(p.nickname)}" style="flex:1">${esc(p.nickname)}</b>
+      <a class="btn quiet" style="width:auto;padding:9px 16px"
+         href="/u/?n=${encodeURIComponent(p.nickname)}">${esc(L('Профиль', 'Profile'))}</a>
+    </div>
+  </div>`;
+}
+
+let seq = 0;
+
+async function look() {
+  const q = $('q').value.trim();
+  const mine = ++seq;
+  if (q.length < 2) {
+    $('list').innerHTML = '';
+    say(q ? L('Введите хотя бы два символа.', 'Type at least two characters.') : '', 'ok');
+    return;
+  }
+  say('');
+  let rows = [];
+  try { rows = await searchPlayers(q, 25); }
+  catch (err) { say(humanError(err)); return; }
+  if (mine !== seq) return;              // ответ на устаревший запрос
+  $('list').innerHTML = rows.length
+    ? rows.map(row).join('')
+    : `<p class="dim">${esc(L('Никого с таким ником не нашлось.', 'No player with that nickname.'))}</p>`;
+  // Бейджи приклеиваются к никам сами — так же, как везде на сайте.
+  paintNickBadges($('list')).catch(() => {});
+}
+
+attachNickSuggest($('q'), () => look());
+let timer = 0;
+$('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(look, 260); });
+$('q').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') look(); });
+
+// Ник можно передать ссылкой: /players/?q=neko — так на страницу удобно вести
+// из других мест сайта.
+const preset = new URLSearchParams(location.search).get('q');
+if (preset) { $('q').value = preset; look(); }
+</script>
+</body>
+</html>

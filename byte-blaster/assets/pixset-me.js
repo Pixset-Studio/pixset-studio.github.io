@@ -181,5 +181,11 @@
     if (e.key === SESSION_KEY) refresh();
   });
 
-  window.PixsetMe = { refresh: refresh, paint: paint, forget: forget };
+  // get() отдаёт то, что кнопка аккаунта уже знает о вошедшем: {id, nick,
+  // avatar, badges}. Нужен страницам, которым иначе пришлось бы второй раз
+  // спрашивать сервер про самого себя — например, сравнению профилей.
+  window.PixsetMe = {
+    refresh: refresh, paint: paint, forget: forget,
+    get: function () { return cached() || session(); },
+  };
 })();

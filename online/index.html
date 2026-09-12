@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru"
+      data-title-ru="Онлайн сейчас — Pixset Studio"
+      data-title-en="Online now — Pixset Studio"
+      data-desc-ru="Сколько человек играет в игры Pixset Studio прямо сейчас."
+      data-desc-en="How many people are playing Pixset Studio games right now.">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Онлайн сейчас — Pixset Studio</title>
+<meta name="description" content="Сколько человек играет в игры Pixset Studio прямо сейчас.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
+<style>
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .tile { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; background: var(--bg-2); }
+  .tile .cap { font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+               text-transform: uppercase; color: var(--text-dim); }
+  .tile .num { font-family: var(--font-head); font-weight: var(--head-weight);
+               font-size: 30px; color: var(--y); line-height: 1.2; margin-top: 4px; }
+  .tile .sub { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+</style>
+<script>
+(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('pixsetTheme');
+var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
+if(t==='byteblaster'&&!own)t='industrial';
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
+d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial');}
+try{var l=localStorage.getItem('pixsetSiteLang')||localStorage.getItem('bbSiteLang');
+if(l!=='ru'&&l!=='en'){var b=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+l=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(b)?'ru':'en';}
+d.setAttribute('data-site-lang',l);d.setAttribute('lang',l);}
+catch(e){d.setAttribute('data-site-lang','ru');}})();
+</script>
+<!-- поиск: этот блок дописывает seo.js, править вручную незачем -->
+<link rel="canonical" href="https://pixset-studio.github.io/online/">
+<!-- /поиск -->
+</head>
+<body>
+
+<div class="hazard"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+    <nav class="main">
+      <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+      <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+      <a href="/byte-blaster/">Byte Blaster</a>
+      <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      <a href="/online/" aria-current="page"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
+      <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/account"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
+    </nav>
+  </div>
+</header>
+
+<div id="mobileNav">
+  <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+  <a href="/byte-blaster/">Byte Blaster</a>
+  <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+  <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
+  <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+  <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
+</div>
+
+<main>
+<section>
+  <div class="wrap">
+    <p class="kicker"><span data-l="ru">Прямо сейчас</span><span data-l="en">Right now</span></p>
+    <h2>Byte Blaster</h2>
+
+    <div class="tiles" id="tiles">
+      <div class="tile">
+        <div class="cap"><span data-l="ru">Сейчас играют</span><span data-l="en">Playing now</span></div>
+        <div class="num" id="nOnline">—</div>
+        <div class="sub"><span data-l="ru">игроков с аккаунтом</span><span data-l="en">signed-in players</span></div>
+      </div>
+      <div class="tile">
+        <div class="cap"><span data-l="ru">За сутки</span><span data-l="en">Last 24 hours</span></div>
+        <div class="num" id="nDay">—</div>
+        <div class="sub"><span data-l="ru">заходили в игру</span><span data-l="en">opened the game</span></div>
+      </div>
+      <div class="tile">
+        <div class="cap"><span data-l="ru">Комнат открыто</span><span data-l="en">Open rooms</span></div>
+        <div class="num" id="nRooms">—</div>
+        <div class="sub" id="relayNote"><span data-l="ru">на сервере комнат</span><span data-l="en">on the room server</span></div>
+      </div>
+      <div class="tile">
+        <div class="cap"><span data-l="ru">В комнатах</span><span data-l="en">In rooms</span></div>
+        <div class="num" id="nRoomPlayers">—</div>
+        <div class="sub"><span data-l="ru">включая гостей без аккаунта</span><span data-l="en">including guests without an account</span></div>
+      </div>
+    </div>
+
+    <!-- Честная сноска: два источника считают разное, и делать вид, что это
+         одно число, было бы враньём. -->
+    <p class="note" style="margin-top:20px">
+      <span data-l="ru">«Сейчас играют» — те, кто вошёл в аккаунт: игра отмечается раз
+        в полминуты. Комнаты считает сервер мультиплеера; из некоторых стран он
+        недоступен без VPN, и тогда эти две плитки остаются пустыми.</span>
+      <span data-l="en">“Playing now” counts signed-in players: the game checks in every
+        30 seconds. Rooms are counted by the multiplayer server; in some countries it
+        is unreachable without a VPN, and then those two tiles stay empty.</span>
+    </p>
+
+    <p class="dim mono" id="stamp" style="margin-top:14px"></p>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="row">
+      <div>© 2022–2026 Pixset Studio</div>
+      <div>
+        <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a> ·
+        <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/studio.js"></script>
+<script src="/assets/pixset-me.js?v=feef56bc"></script>
+<script type="module">
+import { presenceCount } from '/assets/pixset-auth.js?v=feef56bc';
+
+const $ = (id) => document.getElementById(id);
+const L = (ru, en) => (window.PixsetLang ? window.PixsetLang.L(ru, en) : ru);
+const RELAY = 'https://byte-blaster-server-production.up.railway.app';
+
+/** Присутствие: живёт в базе студии, поэтому доступно всем и всегда. */
+async function loadPresence() {
+  try {
+    const p = await presenceCount('byte-blaster');
+    $('nOnline').textContent = p.online ?? 0;
+    $('nDay').textContent = p.day ?? 0;
+  } catch (err) {
+    $('nOnline').textContent = '—';
+    $('nDay').textContent = '—';
+  }
+}
+
+/** Комнаты: их знает только сам сервер мультиплеера. Ответа может не быть —
+    из России он закрыт без VPN, и это нормальное состояние страницы. */
+async function loadRooms() {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 6000);
+  try {
+    const res = await fetch(RELAY + '/', { signal: stop.signal });
+    const data = await res.json();
+    $('nRooms').textContent = data.rooms ?? 0;
+    $('nRoomPlayers').textContent = data.players ?? 0;
+    $('relayNote').textContent = L('на сервере комнат', 'on the room server');
+  } catch (err) {
+    $('nRooms').textContent = '—';
+    $('nRoomPlayers').textContent = '—';
+    $('relayNote').textContent = L('сервер комнат не ответил', 'room server did not answer');
+  } finally { clearTimeout(timer); }
+}
+
+async function refresh() {
+  await Promise.all([loadPresence(), loadRooms()]);
+  $('stamp').textContent = L('Обновлено ', 'Updated ') + new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, 30000);
+document.addEventListener('pixset:lang', () => { $('stamp').textContent = ''; refresh(); });
+</script>
+</body>
+</html>

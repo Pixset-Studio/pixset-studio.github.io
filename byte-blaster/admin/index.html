@@ -235,7 +235,7 @@
       </p>
 
       <div class="field" style="margin-top:14px"><label for="badgeNick">Ник игрока</label>
-        <input type="text" id="badgeNick" autocomplete="off" placeholder="player"></div>
+        <input type="text" id="badgeNick" data-nick-input autocomplete="off" placeholder="player"></div>
       <div class="field"><label for="badgePick">Бейдж</label><select id="badgePick"></select></div>
       <button class="btn" id="badgeGrant">ВЫДАТЬ</button>
       <button class="btn" id="badgeRevoke">ЗАБРАТЬ</button>
@@ -261,7 +261,7 @@
         Причина обязательна — читать её будет он сам.
       </p>
       <div class="field"><label for="banNick">Ник игрока</label>
-        <input type="text" id="banNick" autocomplete="off" placeholder="player"></div>
+        <input type="text" id="banNick" data-nick-input autocomplete="off" placeholder="player"></div>
       <div class="field"><label for="banTerm">Срок</label>
         <select id="banTerm">
           <option value="1">1 день</option>
@@ -608,11 +608,11 @@ import {
   adminOrderBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/byte-blaster/assets/pixset-auth.js?v=b961f548';
+} from '/byte-blaster/assets/pixset-auth.js?v=feef56bc';
 import {
   paintNickBadges, forgetNickBadges, gameIconHtml, sortableRows,
-  countryName, countryFlag, adminSections, STAT_GROUPS, statLabel,
-} from '/byte-blaster/assets/pixset-ui.js?v=b961f548';
+  countryName, countryFlag, adminSections, STAT_GROUPS, statLabel, nickSuggestAll,
+} from '/byte-blaster/assets/pixset-ui.js?v=feef56bc';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -1529,6 +1529,8 @@ if (!session) {
     // Панель длинная — режем её на разделы: метки data-sect стоят прямо
     // на заголовках, см. assets/pixset-ui.js.
     adminSections($('gaPanel'));
+    // Подсказки ника — всем полям с data-nick-input сразу.
+    nickSuggestAll($('gaPanel'));
     // Версия модуля на виду: если браузер подсунул старую копию из кэша, это
     // заметно сразу, а не после очередного «не грузится, но ошибок нет».
     const stamp = document.createElement('p');

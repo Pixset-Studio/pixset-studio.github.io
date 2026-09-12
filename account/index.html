@@ -47,6 +47,8 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
     <nav class="main">
       <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
       <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+      <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
       <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
       <a href="/account" aria-current="page"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
     </nav>
@@ -56,6 +58,8 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 <div id="mobileNav">
   <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
   <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+  <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+  <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
   <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
   <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
 </div>
@@ -274,7 +278,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         <div class="field" style="max-width:420px">
           <label for="friendNick"><span data-l="ru">Добавить по нику</span><span data-l="en">Add by nickname</span></label>
           <div style="display:flex;gap:8px">
-            <input type="text" id="friendNick" data-ph-ru="ник игрока" data-ph-en="player nickname"
+            <input type="text" id="friendNick" data-nick-input data-ph-ru="ник игрока" data-ph-en="player nickname"
                    placeholder="ник игрока" autocomplete="off" style="flex:1">
             <button class="btn" id="friendAdd" style="width:auto;padding:9px 18px"><span data-l="ru">Позвать</span><span data-l="en">Invite</span></button>
           </div>
@@ -446,7 +450,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=b961f548"></script>
+<script src="/assets/pixset-me.js?v=feef56bc"></script>
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
@@ -459,11 +463,11 @@ import {
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=b961f548';
+} from '/assets/pixset-auth.js?v=feef56bc';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
-  gameIconHtml, pageSections, countryName, countryFlag, countryOptions,
-} from '/assets/pixset-ui.js?v=b961f548';
+  gameIconHtml, pageSections, countryName, countryFlag, countryOptions, nickSuggestAll,
+} from '/assets/pixset-ui.js?v=feef56bc';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -576,7 +580,11 @@ async function renderFriends() {
          <button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Отклонить', 'Decline'))}</button>`
       : f.kind === 'outgoing'
         ? `<button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Отменить', 'Cancel'))}</button>`
-        : `<button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Удалить', 'Remove'))}</button>`;
+        // У друга — ещё и сравнение: чаще всего меряются как раз с ними.
+        // Ведёт на его профиль, где таблица раскрывается сразу.
+        : `<a class="btn small quiet" style="width:auto"
+              href="/u/?n=${encodeURIComponent(f.nickname)}&compare=1">${esc(L('Сравнить', 'Compare'))}</a>
+           <button class="btn small quiet" data-remove="${esc(f.id)}">${esc(L('Удалить', 'Remove'))}</button>`;
     return `<div class="row" style="display:flex;align-items:center;gap:12px">
       ${avaHtml(f.avatar_url, f.nickname)}
       <b style="flex:1;min-width:0">${link}</b>${buttons}</div>`;
@@ -1000,6 +1008,7 @@ async function renderProfile(user) {
 
   // Кабинет длинный — режем его на разделы. Повторный вызов ничего не делает.
   pageSections($('acctSections'));
+  nickSuggestAll(document);   // поле «добавить друга» и всё, где вводится ник
 
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));

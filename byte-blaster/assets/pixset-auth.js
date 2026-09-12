@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'b961f548';
+export const SDK_VERSION = 'feef56bc';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -225,11 +225,17 @@ export function avatarFromFile(file, size = 160) {
    становится дружбой. Клиент об этом не думает — он зовёт по нику и получает
    плоский список из представления my_friends. */
 
-/** Поиск игроков по началу ника. Пустой запрос ничего не ищет. */
-export async function searchPlayers(query) {
+/**
+ * Поиск игроков по нику. Пустой запрос ничего не ищет.
+ *
+ * Одна функция на все места: друзья, страница «Игроки», подсказки в полях с
+ * ником (см. attachNickSuggest) и админка. Ник — публичное имя, поэтому поиск
+ * работает и без входа.
+ */
+export async function searchPlayers(query, limit = 10) {
   const q = String(query || '').trim();
   if (q.length < 2) return [];
-  const { data, error } = await supabase.rpc('search_players', { p_query: q });
+  const { data, error } = await supabase.rpc('search_players', { p_query: q, p_limit: limit });
   if (error) throw error;
   return data || [];
 }
@@ -877,6 +883,53 @@ export async function getDevices() {
 export async function revokeDevice(id) {
   const { error } = await supabase.from('devices').delete().eq('id', id);
   if (error) throw error;
+}
+
+/* ── Кто сейчас в игре ───────────────────────────────────────────────────
+   Игра отмечается в таблице присутствия раз в полминуты (см. telemetry.js в
+   репозитории игры). Считаются только вошедшие: анонимную отметку может
+   прислать кто угодно сколько угодно раз. */
+export async function presenceCount(gameSlug = 'byte-blaster') {
+  const { data, error } = await supabase.rpc('presence_count', { p_game_slug: gameSlug });
+  if (error) throw error;
+  return (data && data[0]) || { online: 0, day: 0 };
+}
+
+/* ── Таблицы рекордов ────────────────────────────────────────────────────
+   Те же функции, что зовёт сама игра. Охват: 'world' | 'country' | 'friends';
+   последние два имеют смысл только для вошедшего — гостю страна и друзья
+   неоткуда взяться, и сервер вернёт пусто. */
+
+export async function topScores(mode, { scope = 'world', limit = 25, gameSlug = 'byte-blaster' } = {}) {
+  const { data, error } = await supabase.rpc('top_scores', {
+    p_game_slug: gameSlug, p_mode: mode, p_limit: limit, p_scope: scope,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function topStats(field, { scope = 'world', limit = 25, gameSlug = 'byte-blaster' } = {}) {
+  const { data, error } = await supabase.rpc('top_stats', {
+    p_game_slug: gameSlug, p_field: field, p_limit: limit, p_scope: scope,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Верхушка слота уровня дня за сегодня (день считается по UTC — см. 0018). */
+export async function dailyTop(slot, { scope = 'world', limit = 25, gameSlug = 'byte-blaster' } = {}) {
+  const { data, error } = await supabase.rpc('daily_top', {
+    p_game_slug: gameSlug, p_slot: slot, p_limit: limit, p_scope: scope,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+/** Сколько человек сегодня сыграло каждый слот. */
+export async function dailyCounts(gameSlug = 'byte-blaster') {
+  const { data, error } = await supabase.rpc('daily_counts', { p_game_slug: gameSlug });
+  if (error) throw error;
+  return data || [];
 }
 
 /* ── Бейджи ──────────────────────────────────────────────────────────────
