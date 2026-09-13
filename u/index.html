@@ -103,11 +103,24 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
     <button class="burger" id="burger" aria-label="Меню">☰</button>
     <nav class="main">
       <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
-      <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+      <a href="/#about"><span data-l="ru">О нас</span><span data-l="en">About us</span></a>
+      <span class="has-sub">
+        <a href="/wikipedia"><span data-l="ru">Вики ▾</span><span data-l="en">Wiki ▾</span></a>
+        <span class="sub">
+          <a href="/wikipedia/madness-fight-alpha">Madness Fight [Alpha]</a>
+          <a href="/wikipedia/madness-fight-beta">Madness Fight [Beta]</a>
+          <a href="/wikipedia/first-games"><span data-l="ru">Первые игры Pixset</span><span data-l="en">The first Pixset games</span></a>
+          <a href="/wikipedia/the-castle">The Castle</a>
+          <a href="/wikipedia/the-castle/characters"><span data-l="ru">— Персонажи</span><span data-l="en">— Characters</span></a>
+          <a href="/wikipedia/pirate-event">Pirate Event</a>
+          <a href="/wikipedia/cybersport"><span data-l="ru">Кибер-спорт</span><span data-l="en">Esports</span></a>
+          <a href="/wikipedia/collaboration">Pixset Studio × ORS</a>
+        </span>
+      </span>
       <a href="/byte-blaster/">Byte Blaster</a>
       <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
       <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
-      <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/store" class="cta"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
       <a href="/account"><span data-account-label><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></span></a>
     </nav>
   </div>
@@ -115,6 +128,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 
 <div id="mobileNav">
   <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/#about"><span data-l="ru">О нас</span><span data-l="en">About us</span></a>
   <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
   <a href="/byte-blaster/">Byte Blaster</a>
   <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
@@ -389,9 +403,16 @@ async function render() {
   paintProfile();
   $('card').hidden = false;
 
-  // Кнопка «в друзья» — только вошедшему и только если он ещё не в связи.
+  // Кнопки «в друзья» и «сравнить» — только вошедшему и только на ЧУЖОМ
+  // профиле. Проверяем и по идентификатору, и по нику: сравнивать себя с собой
+  // или слать себе заявку в друзья бессмысленно, и один промах здесь выглядит
+  // как поломка. Ник берём из кнопки аккаунта в шапке — она его уже знает.
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session || session.user.id === profile.id) return;
+  if (!session) return;
+  const me = window.PixsetMe && window.PixsetMe.get ? window.PixsetMe.get() : null;
+  const myNick = String((me && me.nick) || '').toLowerCase();
+  const thisNick = String(profile.nickname || '').toLowerCase();
+  if (session.user.id === profile.id || (myNick && myNick === thisNick)) return;
 
   // Сравнение доступно любому вошедшему: дружба для этого не нужна, оба
   // профиля и так публичны.

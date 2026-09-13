@@ -168,6 +168,12 @@
           merged.controls = { ...defaultSettings.controls, ...(settings.controls || {}) };
           // Merge gfx the same way so any missing parameter keeps a sane default.
           merged.gfx = { ...defaultSettings.gfx, ...(settings.gfx || {}) };
+          // Свечение когда-то доходило до 200%, и на таких значениях картинку
+          // просто заливает. Потолок теперь 100%, и у тех, у кого стояло больше,
+          // значение опускается само — молча, без разговора с игроком.
+          const glowMax = (typeof window.GLOW_MAX === 'number') ? window.GLOW_MAX : 1;
+          if (!(merged.gfx.glow >= 0)) merged.gfx.glow = glowMax;
+          if (merged.gfx.glow > glowMax) merged.gfx.glow = glowMax;
           // Clamp volumes to 0..100. 0 is allowed (the player may fully mute a bus);
           // only a missing/invalid value falls back to 100.
           ['masterVolume', 'musicVolume', 'sfxVolume'].forEach(k => {
@@ -1098,7 +1104,9 @@
           </div>
           <div style="margin-bottom: 12px;">
             <label data-i18n="gfxGlow" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Glow / Bloom:</label>
-            <input type="range" id="gfxGlowSlider" min="0" max="200" value="100" style="width: 100%; cursor: pointer;">
+            <!-- Потолок ровно 100%: выше свечение перестаёт быть свечением и
+                 заливает картинку — уровень читается хуже, чем без него. -->
+            <input type="range" id="gfxGlowSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;">
             <div style="text-align: center; color: #fff; font-size: calc(10px * var(--bbText, 1)); margin-top: 3px;"><span id="gfxGlowVal">100</span>%</div>
           </div>
           <div style="margin-bottom: 12px;">

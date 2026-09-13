@@ -474,6 +474,7 @@
   "netReload": "↻ ОБНОВИТЬ",
   "netConnecting": "подключение к серверу…",
   "netConnectingShort": "подключение…",
+  "netLookElsewhere": "ищем комнату на другом сервере…",
   "netConnected": "подключено ✓",
   "netDisconnected": "соединение потеряно — переподключение…",
   "netConnError": "ошибка соединения",

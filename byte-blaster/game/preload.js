@@ -56,6 +56,19 @@ contextBridge.exposeInMainWorld('saveAPI', {
   path: () => ipcRenderer.invoke('save:path'),
 });
 
+// Хранилище входа рядом с сохранениями. Нужно потому, что localStorage живёт
+// внутри профиля Chromium, а тот пропадает вместе со старой версией при
+// обновлении — и игрока разлогинивало. Читаем синхронно (вход нужен до первого
+// кадра), пишем без ответа: запись частая, ждать её незачем.
+contextBridge.exposeInMainWorld('loginStore', {
+  all: () => {
+    try { return ipcRenderer.sendSync('login:readSync') || {}; } catch (e) { return {}; }
+  },
+  save: (obj) => {
+    try { ipcRenderer.send('login:write', obj); } catch (e) { /* окно уже закрывается */ }
+  },
+});
+
 // Expose the localisation folder so the i18n loader can auto-discover languages.
 // Returns a list of language codes (file names without ".json") found in the
 // "assets/localisation/" folder — so adding a new file is all it takes.

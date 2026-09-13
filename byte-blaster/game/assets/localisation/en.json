@@ -474,6 +474,7 @@
   "netReload": "↻ RELOAD",
   "netConnecting": "connecting to server…",
   "netConnectingShort": "connecting…",
+  "netLookElsewhere": "looking for the room on another server…",
   "netConnected": "connected ✓",
   "netDisconnected": "disconnected — reconnecting…",
   "netConnError": "connection error",

@@ -26,6 +26,9 @@
   const K_CLOCK   = 'pixset.clock';
   const K_DEVICE  = 'pixset.device';
   const K_AVATAR  = 'pixset.avatar';
+  // Сколько раз подряд сервер отказался обновлять сессию. Одного отказа мало,
+  // чтобы выкидывать игрока, — см. _doRefresh.
+  const K_AUTHFAIL = 'pixset.authfail';
 
   const dec = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
@@ -137,6 +140,7 @@
       data.expires_at = Math.floor(Date.now() / 1000) + life;
     }
     store.set(K_SESSION, JSON.stringify(data));
+    store.remove(K_AUTHFAIL);   // обновились — прошлый отказ больше не в счёт
     return data;
   }
 
@@ -201,7 +205,23 @@
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      if (_tokenRejected(res.status, data)) { store.remove(K_SESSION); return null; }
+      if (_tokenRejected(res.status, data)) {
+        /* Отказ бывает и по нашей вине. Токен обновления одноразовый: если игру
+           закрыли ровно между «получили новый» и «записали на диск» (а именно
+           так закрывает игру установщик обновления), то на диске остаётся уже
+           потраченный — и сервер честно его не признаёт. Выходить из аккаунта с
+           первого раза за это слишком жестоко: даём вторую попытку в следующий
+           запуск и только после неё забываем вход. */
+        const strikes = (parseInt(store.get(K_AUTHFAIL) || '0', 10) || 0) + 1;
+        if (strikes < 2) {
+          store.set(K_AUTHFAIL, String(strikes));
+          lastError = 'auth_retry';
+          return null;
+        }
+        store.remove(K_AUTHFAIL);
+        store.remove(K_SESSION);
+        return null;
+      }
       // Временная беда — вход сохраняем и попробуем в следующий раз.
       lastError = 'auth_' + res.status;
       const now = session();

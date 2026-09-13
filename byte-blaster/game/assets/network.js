@@ -12,18 +12,21 @@
 // и без обновления у игроков. Пустое значение, отсутствующая строка, недоступный
 // Supabase, мусор вместо адреса — всё это молча оставляет встроенные.
 //
-// Первым идёт НЕ сервер на Railway, а сам Supabase (supabase:// — не настоящий
-// WebSocket-адрес, а метка для assets/relay-supabase.js, который подменяет
-// сокет). Причина: подсеть Railway в России режут на уровне пакетов, переезд
-// на свой домен не помог — фильтр смотрит на адрес, а не на имя. Сервер при
-// этом жив и за пределами России работает, но встречаться игрокам нужно в
-// ОДНОМ месте: если половина сидит на Railway, а половина на Supabase, коды
-// комнат друг у друга перестают что-либо значить. Поэтому точка встречи одна и
-// доступна отовсюду, а Railway остаётся запасным выходом.
-const SERVER_URL_SUPABASE = 'supabase://zyjhvuhovimorpokiwty.supabase.co';
+// Порядок: сначала свой сервер, потом канал через Supabase (supabase:// — не
+// настоящий WebSocket-адрес, а метка для assets/relay-supabase.js, который
+// подменяет сокет), потом прежнее имя сервера.
+//
+// Сервер идёт первым там, где он открывается: он быстрее и ничего не стоит.
+// Канал через Supabase нужен для стран, где подсеть Railway режут на уровне
+// пакетов (переезд на свой домен не помог — фильтр смотрит на адрес, а не на
+// имя). Плата за такой порядок — игроки расходятся по двум источникам, и
+// комнаты одного не видны в списке другого. Чтобы код комнаты всё-таки
+// работал между ними, вход по коду при ответе «нет такой комнаты» повторяется
+// на следующем адресе — см. _tryJoinElsewhere().
 const SERVER_URL_BUILTIN = 'wss://ws.byte-blaster-server.run.place';
+const SERVER_URL_SUPABASE = 'supabase://zyjhvuhovimorpokiwty.supabase.co';
 const SERVER_URL_FALLBACK = 'wss://byte-blaster-server-production.up.railway.app';
-let SERVER_URL = SERVER_URL_SUPABASE;
+let SERVER_URL = SERVER_URL_BUILTIN;
 
 /* ── Список адресов, а не один ───────────────────────────────────────────────
    У одного адреса нет запасного выхода: в России домен *.up.railway.app
@@ -35,7 +38,7 @@ let SERVER_URL = SERVER_URL_SUPABASE;
    ответил, и в следующий раз начинает с него. Список можно менять из базы
    (app_config, ключи bb_relay_url и bb_relay_urls) — то есть переезд на новое
    имя доезжает до уже установленных сборок без обновления. */
-let RELAY_LIST = [SERVER_URL_SUPABASE, SERVER_URL_BUILTIN, SERVER_URL_FALLBACK];
+let RELAY_LIST = [SERVER_URL_BUILTIN, SERVER_URL_SUPABASE, SERVER_URL_FALLBACK];
 let _relayIdx = 0;
 const _RELAY_OK_KEY = 'bb_relay_ok';       // последний адрес, который отвечал
 const _RELAY_TRY_MS = 5000;                // сколько ждём открытия сокета
@@ -61,7 +64,7 @@ function _setRelayList(list){
   const seen = {}, out = [];
   // Встроенные адреса всегда в хвосте: даже с пустой или испорченной настройкой
   // в базе игроку остаётся куда подключиться.
-  list.concat([SERVER_URL_SUPABASE, SERVER_URL_BUILTIN, SERVER_URL_FALLBACK]).forEach((raw) => {
+  list.concat([SERVER_URL_BUILTIN, SERVER_URL_SUPABASE, SERVER_URL_FALLBACK]).forEach((raw) => {
     const v = String(raw || '').trim().replace(/\/+$/, '');
     if(!_relayValid(v) || seen[v]) return;
     seen[v] = true; out.push(v);
@@ -71,13 +74,12 @@ function _setRelayList(list){
   SERVER_URL = RELAY_LIST[0];
 }
 
-// Прошлый рабочий адрес поднимаем повыше, чтобы не ждать таймаута на мёртвом,
-// но НЕ выше точки встречи: комнаты в разных источниках друг друга не видят, и
-// игрок, у которого прошлый раз ответил Railway, иначе оказался бы в комнате,
-// куда его друзьям не попасть.
+// Прошлый рабочий адрес идёт первым: если игрок уже нашёл живой путь, незачем
+// заставлять его каждый запуск ждать таймаута на мёртвом. Там, где сервер
+// закрыт, это экономит пять секунд на каждом входе в «Онлайн».
 try{
   const ok = localStorage.getItem(_RELAY_OK_KEY);
-  if(_relayValid(ok)) _setRelayList([SERVER_URL_SUPABASE, ok]);
+  if(_relayValid(ok)) _setRelayList([ok]);
 }catch(e){ /* приватный режим — просто начнём со встроенного */ }
 
 const _CFG_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
@@ -458,7 +460,53 @@ function hideConnLost(){
 }
 
 function wsSend(obj){
+  // Запоминаем последний вход по коду: если этого кода на текущем сервере нет,
+  // поищем комнату на остальных (см. _tryJoinElsewhere).
+  if(obj && obj.type === 'join_room' && obj.code){
+    if(!_lastJoin || _lastJoin.code !== obj.code) _lastJoin = { code: obj.code, tried: [] };
+    const url = activeUrl();
+    if(_lastJoin.tried.indexOf(url) < 0) _lastJoin.tried.push(url);
+    _lastJoin.at = Date.now();
+  }
   if(ws && ws.readyState===1) ws.send(JSON.stringify(obj));
+}
+
+/* ── Комната может жить на другом адресе ─────────────────────────────────────
+   Игроки расходятся по источникам: у кого открывается свой сервер — идут туда,
+   остальные попадают на канал через Supabase. Комнаты одного источника не
+   видны в списке другого, и шесть символов кода сами по себе ничего не значат.
+
+   Поэтому «нет такой комнаты» — не окончательный ответ: пробуем те адреса, где
+   ещё не искали. Для игрока это выглядит как чуть более долгий вход, зато код
+   друга срабатывает независимо от того, кому какой сервер доступен. */
+let _lastJoin = null;
+
+function _tryJoinElsewhere(){
+  if(_lobbyMode === 'lan') return false;                 // локальная сеть — искать негде
+  if(!_lastJoin || Date.now() - _lastJoin.at > 20000) return false;
+  const next = RELAY_LIST.find(u => _lastJoin.tried.indexOf(u) < 0);
+  if(!next) return false;
+
+  _lastJoin.tried.push(next);
+  _relayIdx = RELAY_LIST.indexOf(next);
+  SERVER_URL = next;
+  setRoomStatus(T('netLookElsewhere'));
+  $connStatus.textContent = T('netLookElsewhere');
+  $connStatus.classList.remove('net-error');
+
+  _manualClose = false;
+  if(ws){ try{ ws.close(); }catch(e){} }
+  connect();
+
+  const code = _lastJoin.code;
+  let tries = 0;
+  const t = setInterval(() => {
+    if(ws && ws.readyState === 1){
+      clearInterval(t);
+      wsSend({type:'join_room', code, nickname:myNick, color:myColor});
+    } else if(++tries > 40) clearInterval(t);
+  }, 250);
+  return true;
 }
 
 // ── Ping ─────────────────────────────────────────────────────────────────────
@@ -887,6 +935,9 @@ function handleError(reason, max){
   // rejoining); it does not mean the socket is down, so never surface it as a
   // connection error.
   if(reason === 'not_in_room') return;
+  // Кода нет ЗДЕСЬ — возможно, комната на другом источнике. Ошибку покажем
+  // только когда обойдём все адреса.
+  if(reason === 'room_not_found' && _tryJoinElsewhere()) return;
   const map = {
     room_not_found: 'netErrRoomNotFound',
     room_full:      'netErrRoomFull',

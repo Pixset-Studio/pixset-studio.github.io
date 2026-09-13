@@ -253,15 +253,33 @@ nav.main a[aria-current] { color: var(--y); border-color: var(--line-2); }
 nav.main a.cta { color: var(--ink); background: var(--y); border-color: var(--y); font-weight: 700; }
 nav.main a.cta:hover { background: var(--y-soft); border-color: var(--y-soft); color: var(--ink); }
 
-/* Выпадающее меню вики */
+/* ── Выпадающее меню вики ────────────────────────────────────────────────────
+   Список ускользал: между кнопкой и списком шесть пикселей пустоты, курсор
+   пересекал их — наведение слетало, и меню закрывалось раньше, чем до него
+   доводили мышь. Лечится двумя вещами сразу:
+
+     • «мостик» — невидимая полоса, закрывающая зазор, так что курсор ни на
+       мгновение не оказывается вне меню;
+     • задержка закрытия — уводя мышь по диагонали (а так ведут её все), можно
+       на четверть секунды промахнуться мимо, и меню это простит.
+
+   Скрываем через visibility, а не display: только так работает задержка. */
 .has-sub { position: relative; }
 .sub {
-  display: none; position: absolute; top: calc(100% + 6px); left: 0;
+  position: absolute; top: calc(100% + 6px); left: 0;
   min-width: 230px; padding: 6px 0;
   background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius);
   box-shadow: 0 18px 36px rgba(0,0,0,.6);
+  visibility: hidden; opacity: 0; pointer-events: none;
+  transition: opacity .12s ease, visibility 0s linear .25s;
 }
-.has-sub:hover .sub { display: block; }
+/* Мостик через зазор. Ширина по всему списку — уходить вбок он не мешает. */
+.sub::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+.has-sub:hover .sub,
+.has-sub:focus-within .sub {
+  visibility: visible; opacity: 1; pointer-events: auto;
+  transition-delay: 0s;
+}
 .sub a { display: block; border: none; padding: 7px 16px; font-size: 11px; }
 .sub a:hover { background: rgba(255,212,0,.07); border: none; }
 
@@ -314,8 +332,16 @@ nav.main a.cta:hover { background: var(--y-soft); border-color: var(--y-soft); c
 :root[data-theme='arcade'] .hero .lead { margin: 0 auto; }
 :root[data-theme='arcade'] .hero .btns { justify-content: center; }
 
+/* Черта под заголовком. В каждой теме она своя: ровная полоса — деталь
+   индустриального стиля, и в пиксельной «аркаде» она выглядела чужой, будто
+   её забыли перекрасить. Там же, где линия тоньше волоса, — минимализм. */
 .rule { width: 46px; height: 3px; background: var(--y); margin: 22px 0; }
 :root[data-theme='minimal'] .rule { height: 1px; width: 64px; }
+:root[data-theme='arcade'] .rule,
+:root[data-theme='byteblaster'] .rule {
+  height: 4px; width: 48px;
+  background: repeating-linear-gradient(90deg, var(--y) 0 4px, transparent 4px 8px);
+}
 
 /* ── Карточки ────────────────────────────────────────────────────────────── */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }

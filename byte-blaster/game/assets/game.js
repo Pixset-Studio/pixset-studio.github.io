@@ -237,14 +237,21 @@ const AchTrack={
 // size (cheap, softer on big screens), high tiers render crisp HiDPI. The wide
 // spread of the effect multipliers makes the Graphics Quality setting clearly
 // change how the game looks.
+// Свечение выше 100% не делается ни одним пресетом и не даётся ползунком:
+// начиная примерно с этого значения оно перестаёт подсвечивать объекты и
+// просто заливает кадр — уровень читается хуже, чем вообще без свечения.
+// Поэтому у старших пресетов растут частицы, детализация и разрешение, а
+// glow упирается в потолок. См. GLOW_MAX ниже.
+const GLOW_MAX = 1.00;
 const GFX_TIERS = {
   verylow:  {glow:0.00, particleMul:0.20, bgDetail:0.30, trails:0.15, bossFx:0.15, decorMul:0.25, renderScale:1.00},
   low:      {glow:0.30, particleMul:0.45, bgDetail:0.55, trails:0.45, bossFx:0.40, decorMul:0.50, renderScale:1.25},
   medium:   {glow:0.65, particleMul:0.75, bgDetail:0.80, trails:0.75, bossFx:0.70, decorMul:0.75, renderScale:1.50},
   high:     {glow:1.00, particleMul:1.00, bgDetail:1.00, trails:1.00, bossFx:1.00, decorMul:1.00, renderScale:2.00},
-  veryhigh: {glow:1.30, particleMul:1.35, bgDetail:1.25, trails:1.30, bossFx:1.30, decorMul:1.20, renderScale:2.00},
-  ultra:    {glow:1.65, particleMul:1.80, bgDetail:1.55, trails:1.70, bossFx:1.65, decorMul:1.40, renderScale:2.50},
+  veryhigh: {glow:1.00, particleMul:1.35, bgDetail:1.25, trails:1.30, bossFx:1.30, decorMul:1.20, renderScale:2.00},
+  ultra:    {glow:1.00, particleMul:1.80, bgDetail:1.55, trails:1.70, bossFx:1.65, decorMul:1.40, renderScale:2.50},
 };
+window.GLOW_MAX = GLOW_MAX;
 let GFX = GFX_TIERS.high;
 window.GFX_TIERS = GFX_TIERS;   // exposed so the settings UI can use tiers as templates
 // Apply an arbitrary set of graphics values (each a multiplier). Missing keys
@@ -255,7 +262,10 @@ window.applyGfxValues = function(g){
   const b = GFX_TIERS.high;
   const pick = (k)=> (g[k]!=null && !isNaN(+g[k])) ? +g[k] : b[k];
   GFX = {
-    glow:        pick('glow'),
+    // Потолок на свечении держим здесь, а не только в настройках: сюда
+    // приходят и сохранённые раньше значения (у кого стояло 165%), и то, что
+    // подставит адаптивное качество.
+    glow:        Math.min(GLOW_MAX, pick('glow')),
     particleMul: pick('particleMul'),
     bgDetail:    pick('bgDetail'),
     trails:      pick('trails'),
