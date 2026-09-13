@@ -1670,7 +1670,21 @@ function updateRemotePlayer(msg){
 
 // Called once per render frame: ease each ghost toward its last known target and
 // keep its motion trail fresh. Large gaps snap (teleport / respawn), small gaps lerp.
+/* Сглаживание считалось «на кадр»: 30% пути к цели за отрисовку. На частом
+   экране кадров втрое больше, и чужой робот дёргался к цели почти мгновенно —
+   вместо плавного хода получался телепорт с рывками. Доля пересчитывается по
+   времени: за одну шестидесятую секунды она по-прежнему 30%, а за более
+   короткий кадр — соответственно меньше. */
+let _lerpLastT = performance.now();
+function _lerpShare(perFrame){
+  const now = performance.now();
+  const k = Math.min(4, Math.max(0, (now - _lerpLastT) / (1000 / 60)));
+  _lerpLastT = now;
+  return 1 - Math.pow(1 - perFrame, k);
+}
+
 function interpolateGhosts(){
+  const share = _lerpShare(0.30);
   for(const [, entry] of window.netPlayers){
     const p = entry.playerObj;
     if(!p || entry.tx === undefined) continue;
@@ -1678,8 +1692,8 @@ function interpolateGhosts(){
     if(Math.abs(dx) > 220 || Math.abs(dy) > 220){
       p.x = entry.tx; p.y = entry.ty;          // teleport: snap
     } else {
-      p.x += dx * 0.30;                         // smooth follow
-      p.y += dy * 0.30;
+      p.x += dx * share;                        // smooth follow
+      p.y += dy * share;
       if(Math.abs(dx) < 0.4) p.x = entry.tx;
       if(Math.abs(dy) < 0.4) p.y = entry.ty;
     }

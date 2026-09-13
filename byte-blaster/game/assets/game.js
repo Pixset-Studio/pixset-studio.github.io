@@ -2880,8 +2880,19 @@ function drawDecors(){
       dc = _decorCache[layerIdx];
     }
 
-    // One blit per layer — this is the entire per-frame cost now.
-    ctx.drawImage(dc.canvas, dc.originX - viewWorldX, 0);
+    /* Блит по слою — и только той частью кэша, что реально попадает на экран.
+       Кэш втрое шире окна (W + запас с обеих сторон, см. _decorCacheRebuild), и
+       раньше он гнался целиком: за кадр это лишние пара миллионов пикселей на
+       каждый из двух слоёв. Видно ровно столько же, работы — втрое меньше. */
+    const dx = dc.originX - viewWorldX;          // где левый край кэша на экране
+    // Из кэша вырезаем ЦЕЛЫЕ пиксели, а дробную часть смещения оставляем цели:
+    // с дробным началом выборки браузер интерполирует иначе, чем при обычном
+    // блите, и картинка чуть-чуть, но отличалась бы от прежней.
+    const skip = dx < 0 ? -dx : 0;
+    const sx = Math.floor(skip);
+    const dstX = (dx > 0 ? dx : 0) - (skip - sx);
+    const sw = Math.min(dc.w - sx, Math.ceil(W - dstX) + 1);
+    if (sw > 0) ctx.drawImage(dc.canvas, sx, 0, sw, H, dstX, 0, sw, H);
   }
 }
 
@@ -6893,7 +6904,7 @@ function drawCheckpoints(){
       ctx.globalAlpha=1;
     }else{
       // ── Active: glowing holo-core + rotating energy rings + floating particles ──
-      cp.anim++;
+      cp.anim+=_animK;
       const a=cp.anim;
       const bob=Math.sin(a*.06)*2;        // gentle vertical float
       const coreY=poleTop+2+bob;
@@ -8223,7 +8234,7 @@ function drawCoins(){
   for(const c of coins){
     if(c.got)continue;
     if(c.x<vLeft||c.x>vRight)continue;
-    c.a+=.07;
+    c.a+=.07*_animK;
     const cy=c.y+Math.sin(c.a)*3;
     ctx.drawImage(prism?_getPrismCoinSprite(14,coinStep(c)):spr,c.x,cy,c.w,c.w);
   }
@@ -8236,7 +8247,7 @@ function drawJumpPads(){
   const prism=prismWorld();
   for(const jp of jumpPads){
     if(jp.x+jp.w<vLeft||jp.x>vRight)continue;
-    jp.anim+=0.08;
+    jp.anim+=0.08*_animK;
     const pulse=0.8+0.2*Math.sin(jp.anim);
     const hue=(jp.x*0.5+prismFlow()*0.9)%360;
     const glow=prism?`hsl(${hue},100%,65%)`:'#00ffff';
@@ -11170,6 +11181,7 @@ function loop(){
   // main.js) so draw() runs at the display rate (~60 Hz) instead of unbounded.
   // We may run 0..N update() steps per rendered frame.
   _advanceLogic(250);
+  _stepAnimClock();   // сколько времени прошло с прошлой отрисовки — см. _animK
   // Guard render: a single bad frame (e.g. a non-finite canvas value) must never
   // tear down the rAF chain — that would freeze the game outright, and on a network
   // host it freezes the entire room. Log and keep the loop alive.
@@ -11180,6 +11192,28 @@ function loop(){
 // Fixed-timestep state for loop() above.
 let _lastLoopT=performance.now(),_logicAcc=0;
 const LOGIC_STEP=1000/60;
+
+/* ── Скорость анимаций, которые живут в отрисовке ───────────────────────────
+   Логика игры давно идёт фиксированными шагами по 1/60 секунды и от частоты
+   кадров не зависит. А вот несколько мелких анимаций — покачивание монет,
+   пульс пружин, свечение чекпоинта — двигались прямо в draw(), на каждый
+   нарисованный кадр. На мониторе 165 Гц они шли в два с половиной раза
+   быстрее положенного.
+
+   Переносить их в логику нельзя без потери вида: анимируются только те
+   объекты, что сейчас на экране, и появившийся из-за края предмет должен
+   входить со «своей» фазой, а не в общем строю. Поэтому шаг не убран, а
+   измерен: _animK — сколько шестидесятых долей секунды прошло с прошлой
+   отрисовки. При 60 кадрах это ровно 1, и всё выглядит как раньше. */
+let _animK=1,_lastDrawT=performance.now();
+function _stepAnimClock(){
+  const now=performance.now();
+  // Потолок в четыре шага: после сворачивания окна или загрузки уровня пауза
+  // может быть в секунды, и без ограничителя анимация прыгнула бы вперёд.
+  _animK=Math.min(4,Math.max(0,(now-_lastDrawT)/LOGIC_STEP));
+  _lastDrawT=now;
+}
+window.BB_animK=()=>_animK;
 
 // ════════════════════════════════════════════════
 //  BACKGROUND TICKER (anti-freeze for network host)

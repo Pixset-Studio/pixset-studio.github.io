@@ -231,6 +231,11 @@
     ov.style.display = 'block';
 
     var beats = def.beats, bi = 0, bf = 0, t = 0, raf = 0, done = false;
+    /* Длительности сцен (beat.dur) заданы в кадрах, и счётчики росли на единицу
+       за отрисовку. На мониторе 165 Гц вся катсцена пролетала в два с половиной
+       раза быстрее — реплики не успевали читаться. Считаем время: csK — сколько
+       шестидесятых долей секунды прошло с прошлого кадра, при 60 Гц это ровно 1. */
+    var _lastCsT = performance.now(), csK = 1;
     function finish() {
       if (done) return; done = true; cancelAnimationFrame(raf);
       ov.style.display = 'none';
@@ -243,7 +248,11 @@
     function onKey(e) { if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') { e.preventDefault(); if (e.code === 'Escape') finish(); else advance(); } }
 
     function frame() {
-      t++; bf++;
+      var _now = performance.now();
+      // Потолок — на случай сворачивания окна: иначе сцена перескочит вперёд.
+      csK = Math.min(4, Math.max(0, (_now - _lastCsT) / (1000 / 60)));
+      _lastCsT = _now;
+      t += csK; bf += csK;
       var beat = beats[bi]; var p = Math.min(bf / beat.dur, 1);
       // resolve actor positions
       var ep = easeIO(p);

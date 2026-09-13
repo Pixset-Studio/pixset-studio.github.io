@@ -238,7 +238,7 @@ function tile(game, owned, isHero) {
       <div class="buyline">
         ${owned
           ? `<span class="badge solid">${esc(L('Куплено', 'Owned'))}</span>
-             <a class="btn quiet" href="/byte-blaster/game/full/">${esc(L('Играть', 'Play'))}</a>`
+             <a class="btn quiet" href="/byte-blaster/game/">${esc(L('Играть', 'Play'))}</a>`
           : `<span class="price">${price || '—'}${
                local ? ` <small class="dim" style="font-size:13px">(${esc(local)})</small>` : ''}</span>
              <a class="btn solid" href="${esc(href)}">${esc(L('Купить', 'Buy'))}</a>`}

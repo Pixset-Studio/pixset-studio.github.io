@@ -1493,6 +1493,21 @@
 
   let animationFrame;
 
+  /* Карта жила «по кадрам»: время прибавлялось на 0.016 за отрисовку, а робот
+     шагал на единицу. Формулы верны ровно для 60 кадров в секунду — на
+     мониторе 165 Гц карта дышала и робот бежал в два с половиной раза быстрее.
+     Теперь шаг измеряется временем: animK — сколько шестидесятых долей секунды
+     прошло с прошлого кадра. При 60 Гц это единица, и всё как было. */
+  let _lastMapT = performance.now();
+  let animK = 1;
+  function stepMapClock() {
+    const now = performance.now();
+    // Потолок нужен после сворачивания окна: иначе накопленный простой
+    // швырнул бы робота через полкарты одним прыжком.
+    animK = Math.min(4, Math.max(0, (now - _lastMapT) / (1000 / 60)));
+    _lastMapT = now;
+  }
+
   function update() {
     // Honor the shared FPS limiter/counter (settings.js). Without this the map
     // ran at full refresh rate doing a heavy full redraw every frame, ignoring
@@ -1503,7 +1518,8 @@
     }
     if (typeof window._fpsTick === 'function') window._fpsTick();
 
-    MAP_STATE.time += 0.016;
+    stepMapClock();
+    MAP_STATE.time += 0.016 * animK;
     stepWalk();
     render();
     updateDOM();
@@ -1514,7 +1530,7 @@
   function stepWalk() {
     const wk = MAP_STATE.walk;
     if (!wk) return;
-    wk.t++;
+    wk.t += animK;
     const u = Math.min(wk.t / wk.dur, 1);
     // Ease in/out for a natural start & stop.
     const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
@@ -1530,7 +1546,7 @@
       MAP_STATE.playerY = a.y + (b.y - a.y) * f;
       if (Math.abs(b.x - a.x) > 0.5) MAP_STATE.faceDir = (b.x - a.x) >= 0 ? 1 : -1;
     }
-    MAP_STATE.walkPhase++;
+    MAP_STATE.walkPhase += animK;
     if (u >= 1) MAP_STATE.walk = null;
   }
 
