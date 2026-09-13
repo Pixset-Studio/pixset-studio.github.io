@@ -11,4 +11,4 @@
  * Leave it as an empty string to switch the counters off entirely: the site
  * keeps working, the admin panel simply reports that the server is unreachable.
  */
-window.BB_STATS_API = 'https://byte-blaster-server-production.up.railway.app';
+window.BB_STATS_API = 'https://ws.byte-blaster-server.run.place';

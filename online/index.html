@@ -106,11 +106,11 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
          одно число, было бы враньём. -->
     <p class="note" style="margin-top:20px">
       <span data-l="ru">«Сейчас играют» — те, кто вошёл в аккаунт: игра отмечается раз
-        в полминуты. Комнаты считает сервер мультиплеера; из некоторых стран он
-        недоступен без VPN, и тогда эти две плитки остаются пустыми.</span>
+        в полминуты. Комнаты считаются отдельно и включают гостей без аккаунта;
+        комната пропадает из счёта через полминуты после того, как её закрыли.</span>
       <span data-l="en">“Playing now” counts signed-in players: the game checks in every
-        30 seconds. Rooms are counted by the multiplayer server; in some countries it
-        is unreachable without a VPN, and then those two tiles stay empty.</span>
+        30 seconds. Rooms are counted separately and include guests without an account;
+        a room drops out of the count half a minute after it closes.</span>
     </p>
 
     <p class="dim mono" id="stamp" style="margin-top:14px"></p>
@@ -131,13 +131,13 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=feef56bc"></script>
+<script src="/assets/pixset-me.js?v=df325895"></script>
 <script type="module">
-import { presenceCount } from '/assets/pixset-auth.js?v=feef56bc';
+import { presenceCount, roomsStats } from '/assets/pixset-auth.js?v=df325895';
 
 const $ = (id) => document.getElementById(id);
 const L = (ru, en) => (window.PixsetLang ? window.PixsetLang.L(ru, en) : ru);
-const RELAY = 'https://byte-blaster-server-production.up.railway.app';
+const RELAY = 'https://ws.byte-blaster-server.run.place';
 
 /** Присутствие: живёт в базе студии, поэтому доступно всем и всегда. */
 async function loadPresence() {
@@ -151,22 +151,34 @@ async function loadPresence() {
   }
 }
 
-/** Комнаты: их знает только сам сервер мультиплеера. Ответа может не быть —
-    из России он закрыт без VPN, и это нормальное состояние страницы. */
+/** Комнаты. Основной счёт берём из базы: комнаты отмечаются в ней сами, и
+    число есть даже у тех, кому прежний сервер мультиплеера недоступен. К нему
+    всё же стучимся: там, где он открывается, на нём тоже могут играть, и его
+    комнаты надо прибавить. Не ответил — это штатно, просто нечего прибавлять. */
 async function loadRooms() {
+  let rooms = 0, players = 0, any = false;
+
+  try {
+    const s = await roomsStats();
+    rooms += s.rooms ?? 0;
+    players += s.players ?? 0;
+    any = true;
+  } catch (err) { /* база молчит — останется прочерк */ }
+
   const stop = new AbortController();
   const timer = setTimeout(() => stop.abort(), 6000);
   try {
     const res = await fetch(RELAY + '/', { signal: stop.signal });
     const data = await res.json();
-    $('nRooms').textContent = data.rooms ?? 0;
-    $('nRoomPlayers').textContent = data.players ?? 0;
-    $('relayNote').textContent = L('на сервере комнат', 'on the room server');
-  } catch (err) {
-    $('nRooms').textContent = '—';
-    $('nRoomPlayers').textContent = '—';
-    $('relayNote').textContent = L('сервер комнат не ответил', 'room server did not answer');
-  } finally { clearTimeout(timer); }
+    rooms += data.rooms ?? 0;
+    players += data.players ?? 0;
+    any = true;
+  } catch (err) { /* запасной сервер недоступен — обычное дело */ }
+  finally { clearTimeout(timer); }
+
+  $('nRooms').textContent = any ? rooms : '—';
+  $('nRoomPlayers').textContent = any ? players : '—';
+  $('relayNote').textContent = L('открытых прямо сейчас', 'open right now');
 }
 
 async function refresh() {

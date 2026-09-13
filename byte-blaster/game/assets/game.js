@@ -352,10 +352,11 @@ function prismFilter(hue,sat,bright){
 // на телефоне, где GPU слабее, а экран плотнее.
 //
 // Настройка «Радужный мир → Преломление» (вкладка «Графика») оставляет выбор
-// игроку: 'on' — как задумано, 'off' — кирпичи, шипы и враги в своих обычных
-// цветах, 'auto' — выключено там, где не потянет. Всё остальное (спектральное
-// небо, призма, платформы, декор) работает в любом случае: оно рисуется
-// градиентами и кэшируется, фильтров там нет.
+// игроку: 'on' — как задумано, 'off' — шипы и враги в своих обычных цветах,
+// 'auto' — выключено там, где не потянет. Всё остальное (спектральное небо,
+// призма, платформы, кирпичи, монеты, пружины, декор) работает в любом случае:
+// эти вещи не красятся фильтром поверх старого цвета, а сразу собираются из
+// спектра — градиентами и кэшированными спрайтами.
 const _prismIsTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 function prismFxOn(){
   const s=window.gameSettings;
@@ -367,17 +368,10 @@ function prismFxOn(){
   return !((g.glow!=null&&g.glow<0.6)||(g.bgDetail!=null&&g.bgDetail<0.6));
 }
 window.prismFxOn=prismFxOn;
-// Дешёвая замена преломлению для КИРПИЧЕЙ. Блок — непрозрачный прямоугольник,
-// поэтому подкрасить его можно обычным fillRect поверх: фон вокруг не задет,
-// а мир не выглядит так, будто кирпичи привезли из соседнего уровня. Для шипов
-// и врагов такой приём не годится — они не прямоугольные, и заливка испачкала
-// бы фон внутри их габаритов (ровно поэтому здесь и появился фильтр).
-function prismTintRect(x,y,w,h,hue){
-  ctx.globalAlpha=0.42;
-  ctx.fillStyle='hsl('+hue+',85%,55%)';
-  ctx.fillRect(x,y,w,h);
-  ctx.globalAlpha=1;
-}
+// Подкраски кирпича поверх его коричневого здесь больше нет: полупрозрачная
+// заливка ОСТАВЛЯЛА старый цвет под собой, и блок выходил бурым с радужным
+// налётом — не тем цветом, каким светятся платформы рядом. Кирпич в этом мире
+// рисуется из спектра сразу (см. drawPrismBlock), и фильтр ему не нужен вовсе.
 // transition wipe in every world whose main colour is shorthand.
 // This expands shorthand first, so the result is always a valid 8-digit hex.
 function withAlpha(col,aa){
@@ -1094,6 +1088,19 @@ let _coinsHpStep=0;     // last HP threshold reached (for 100/200/300… +1 HP t
 let advProg={max:1,done:[]};
 let hardMode=false;                          // Hardcore difficulty active
 let advProgHard={max:1,done:[]};             // Separate hard-mode progress
+
+/* ── Уровень дня ────────────────────────────────────────────────────────────
+   Отдельный режим рядом с кампанией и бесконечным: уровень собирается из даты
+   и слота (см. assets/daily.js), у всех получается одинаковым, а результат
+   идёт в суточную таблицу. Кампании он не касается совсем — ни прогресс, ни
+   звёзды, ни катсцены здесь не трогаются, поэтому нужен свой флаг, а не
+   попытка выдать день за advMode. */
+let dailyMode=false;      // идёт забег уровня дня
+let dailySlot=null;       // 'easy' | 'normal' | 'hard' | 'random' | 'mutator'
+// Архетип и мутаторы уровня дня задаёт сид дня, а не номер уровня. Генератор
+// спрашивает их через pickArchetype/pickModifiers, поэтому подменяем ответ, а
+// не переписываем сам генератор.
+let dailyForce=null;      // {arch:'classic', mods:{...}} пока строится уровень дня
 var _csFired={};                             // Tracks fired cutscenes (early decl for showBossIntro)
 var _csShownWorlds={};                       // Tracks which world-intro cutscenes have played (early decl, see loadCsFired)
 // Persisted per save-slot (see SaveSlots' CANON map above) so switching slots
@@ -2024,6 +2031,7 @@ const ARCHETYPES = ['classic', 'speedrun', 'stealth'];
 
 // Pick level archetype based on level number (deterministic)
 function pickArchetype(advN) {
+  if (dailyForce) return dailyForce.arch;      // уровень дня: решает сид дня
   if (!advN) return 'classic'; // infinite mode = classic only
   if (advN % 10 === 0) return 'classic'; // boss levels = classic
   if (advN < 3) return 'classic'; // first levels = classic
@@ -2040,6 +2048,7 @@ function pickArchetype(advN) {
 
 // Pick level modifiers (deterministic)
 function pickModifiers(advN, archetype) {
+  if (dailyForce) return dailyForce.mods;      // уровень дня: решает сид дня
   if (!advN || advN < 5) return {}; // first levels without mods
   if (advN % 10 === 0) return {}; // boss levels without mods
   if (archetype === 'stealth') return {}; // stealth archetype has its own mechanics
@@ -4447,7 +4456,10 @@ const $map=document.getElementById('mapOv');
 const $diff=document.getElementById('diffOv');
 function hideAll(){
   [$main,$pause,$mode,$map,$diff].forEach(e=>e&&(e.style.display='none'));
-  ['playTypeOv','netTypeOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  ['playTypeOv','netTypeOv','netRoomsOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  // Экран уровня дня живёт своим оверлеем (assets/daily.js) — гасим и его,
+  // иначе он остался бы поверх запущенного уровня.
+  if(window.Daily&&typeof window.Daily.hide==='function'){try{window.Daily.hide();}catch(e){}}
   document.getElementById('ui').style.display='none';
   if(typeof hideModBanner==='function')hideModBanner();
   // The world map lives in its own overlay built by worldmap.js, so it is not in
@@ -4644,6 +4656,7 @@ function startMenuBot(){ if(!_menuBotRAF)_menuBotRAF=requestAnimationFrame(_menu
 function showMain(sc=''){
   if(raf){cancelAnimationFrame(raf);raf=0;}
   if(_goNextTimer){clearTimeout(_goNextTimer);_goNextTimer=0;}
+  dailyMode=false;dailySlot=null;   // в меню — значит забег дня уже закончен
   hideAll();navScr='main';
   // Restore the title/subtitle/button that game-over & win screens overwrite
   const h1=$main.querySelector('h1'),sub=$main.querySelector('.ovSub'),btn=document.getElementById('mainBtn');
@@ -4854,6 +4867,12 @@ function showNetType(){
   hideAll();navScr='netType';
   document.getElementById('netTypeOv').style.display='flex';
 }
+// Экран комнат: то, что раньше было первым шагом «Онлайна».
+function showNetRooms(){
+  hideAll();navScr='netRooms';
+  document.getElementById('netRoomsOv').style.display='flex';
+}
+window.showNetRooms=showNetRooms;
 
 // Карточки Play Type
 document.getElementById('soloCard').onclick=()=>{
@@ -4867,7 +4886,15 @@ document.getElementById('onlineCard').onclick=function(){
 };
 document.getElementById('playTypeBackBtn').onclick=()=>{SFX.back();showMain();};
 
-// Карточки Net Type: Создать / Найти комнату
+// Карточки «Онлайна»: уровень дня или мультиплеер
+document.getElementById('dailyCard').onclick=function(){
+  if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}
+  SFX.menu();
+  if(window.Daily&&window.Daily.open)window.Daily.open();
+};
+document.getElementById('multiplayerCard').onclick=()=>{SFX.menu();showNetRooms();};
+
+// Карточки комнат: Создать / Найти
 document.getElementById('createRoomCard').onclick=()=>{
   SFX.menu();
   if(window.NetPlay) window.NetPlay.open('create');
@@ -4877,6 +4904,7 @@ document.getElementById('findRoomCard').onclick=()=>{
   if(window.NetPlay) window.NetPlay.open('find');
 };
 document.getElementById('netTypeBackBtn').onclick=()=>{SFX.back();showPlayType();};
+document.getElementById('netRoomsBackBtn').onclick=()=>{SFX.back();showNetType();};
 
 // PLAY теперь ведёт на экран выбора Solo/Online
 document.getElementById('mainBtn').onclick=()=>{SFX.menu();showPlayType();};
@@ -5031,8 +5059,65 @@ function hideModBanner(){
 
 // Expose startAdv for WorldMap. `hard` selects Hardcore so the same map can drive both modes.
 window.startAdventureLevel = function(levelNum, hard) {
+  dailyMode = false; dailySlot = null;
   hardMode = !!hard;
   startAdv(levelNum, true);
+};
+
+/* ── Запуск уровня дня ──────────────────────────────────────────────────────
+   Всё, что делает день днём — какой мир, какая сложность, какой мутатор, —
+   приходит готовым из assets/daily.js: там это считается из даты и слота, и
+   там же лежит экран с таблицами. Здесь только сборка уровня.
+
+   Кампанию режим не трогает: advMode остаётся выключенным, поэтому ни прогресс,
+   ни звёзды, ни катсцены отсюда не записываются. Босса тоже не будет — номер
+   уровня для генератора выбран не кратным десяти (см. daily.js).
+
+   cfg: { slot, seed, world, diff, arch, mods, advN }
+   fresh: новая попытка (счёт и жизни с нуля). Повтор после смерти приходит с
+   fresh=false — это та же попытка, просто с потерянной жизнью, и счёт за неё
+   продолжает копиться, как в кампании.
+*/
+window.startDailyLevel = function(cfg, fresh) {
+  if (!cfg) return;
+  dailyMode = true; dailySlot = cfg.slot || null;
+  hardMode = false; advMode = false; twoPlayer = false;
+  if (window.netActive) return;              // из сетевой комнаты день не запускается
+
+  if (_darkCtx) _darkCtx.clearRect(0, 0, W, H);
+  if (fresh !== false) {
+    lives = infiniteLives ? 99 : 3;
+    score = 0; coinsTotal = 0; _coinsHpStep = 0;
+  }
+  cpSave = null;
+  _levelDied = false;
+
+  CT = THEMES[Math.max(0, Math.min(9, cfg.world | 0))];
+  level = 1;                                  // подпись уровня в HUD: день — один уровень
+  player = mkPlayer();
+
+  dailyForce = { arch: cfg.arch || 'classic', mods: cfg.mods || {} };
+  try {
+    genLevel(Math.max(1, Math.min(14, cfg.diff | 0)), mkRNG(cfg.seed >>> 0), cfg.advN | 0);
+  } finally {
+    dailyForce = null;                        // дальше генератор снова работает как обычно
+  }
+  fixDrones();
+  player.x = spawnX; player.y = spawnY;
+  player.lastGndX = spawnX; player.lastGndY = spawnY;
+  initP2();
+  if (window.Ghost) window.Ghost.begin({ kind: 'daily', slot: cfg.slot });
+
+  timeLeft = Math.round(lvlTime(Math.max(1, cfg.advN | 0)));
+  timMax = timeLeft;
+  hideAll(); gState = 'playing'; navScr = 'game'; tick = 0;
+  document.getElementById('ui').style.display = 'flex';
+  _resetCanvasState();
+  updModeLabel();
+  showModBanner();
+  startGameMusic();
+  if (raf) cancelAnimationFrame(raf);
+  loop();
 };
 
 // ════════════════════════════════════════════════
@@ -5557,6 +5642,14 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     if(hardMode&&advMode)hardWorldLives=lives;  // запас переходит на следующий уровень мира
     cpSave=null;             // level cleared — checkpoint no longer needed
 
+    // Уровень дня: результат уходит в суточную таблицу сразу по флагу, не
+    // дожидаясь, пока игрок нажмёт «дальше» на экране итогов. Закроет игру на
+    // этом экране — результат всё равно засчитан.
+    if(dailyMode&&window.Daily&&window.Daily.finish)window.Daily.finish(score);
+    // Путь забега: на устройство — всегда, на сервер — только пройденный
+    // уровень и только если это рекорд (проверяет сама база).
+    if(window.Ghost)window.Ghost.finish(score,true);
+
     // ── Network co-op: WAIT for every player to reach the flag ────────────
     // We deliberately do NOT enter the single-player 'levelclear'/exit animation:
     // that halts the host's enemy/boss simulation for players still in the level.
@@ -5581,6 +5674,13 @@ function doFlagComplete(_p1Touch,_p1FY,_p2Touch,_p2FY){
     const _goNext=()=>{
       _goNextTimer=0;
       if(gState!=='levelclear')return; // aborted by death/pause/menu
+      // День — один уровень, следующего за ним нет: возвращаемся к слотам и
+      // таблице, где уже виден свежий результат.
+      if(dailyMode){
+        stopMusic();gState='menu';
+        if(window.Daily&&window.Daily.open)window.Daily.open();else showMain();
+        return;
+      }
       if(advMode){
         _persistAdvProgress();
         const nextN=advLevel+1;
@@ -5644,7 +5744,8 @@ function _showLevelResults(goNext){
     total=totalScore(hardMode)-levelScore(advLevel,hardMode)+banked;
   }
   const data={
-    levelNum:lvNum,
+    levelNum:dailyMode?null:lvNum,
+    title:dailyMode?T('dailyCleared'):'',
     accent:exitBonusCol||tierCols[exitBonusTier]||'#0ff',
     tier:exitBonusTier,
     flagBonus:exitBonus,
@@ -5660,7 +5761,8 @@ function _showLevelResults(goNext){
   const leave=()=>{
     stopMusic();
     gState='menu';
-    if(advMode){
+    if(dailyMode){ if(window.Daily&&window.Daily.open)window.Daily.open(); else showMain(); }
+    else if(advMode){
       const open=hardMode?showMapH:showMap;
       if(typeof open==='function')open(); else showMain();
     }
@@ -5670,8 +5772,11 @@ function _showLevelResults(goNext){
     // Если состояние почему-то уже не 'levelclear', goNext() молча ничего не
     // сделает и игрок остался бы перед пустым экраном — уводим его на карту.
     next:()=>{ if(gState==='levelclear')goNext(); else leave(); },
-    retry:()=>{ if(advMode)startAdv(advLevel,false); else startInf(false); },
-    leaveLabel:advMode?T('map'):T('menu'),
+    // «Ещё раз» в дне — новая попытка того же слота: попыток сколько угодно, в
+    // таблицу идёт лучшая.
+    retry:()=>{ if(dailyMode){ if(window.Daily&&window.Daily.replay)window.Daily.replay(true); }
+                else if(advMode)startAdv(advLevel,false); else startInf(false); },
+    leaveLabel:dailyMode?T('dailyTitle'):advMode?T('map'):T('menu'),
     leave:leave,
   };
   window.Results.showLevel(data,actions);
@@ -6038,7 +6143,13 @@ function doHurtPlayer(fromFall=false){
   // Смерть в обучении обязана возвращать в обучение: раньше retry звал
   // startAdv(advLevel) и игрока выбрасывало в первый уровень кампании.
   const _inTut=!!(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive());
+    // Уровень дня: жизни кончились — попытка закрыта, и её счёт идёт в таблицу.
+    // Умереть здесь не значит «ноль»: пройденная половина уровня всё равно
+    // чего-то стоит, а следующая попытка перекроет результат, если выйдет лучше.
+    if(dailyMode&&window.Daily&&window.Daily.finish)window.Daily.finish(score);
+    if(window.Ghost)window.Ghost.finish(score,false);   // свой путь сохраняем и после смерти
     const retry=_inTut?()=>{SFX.menu();window.Tutorial.start();}
+                :dailyMode?()=>{SFX.menu();if(window.Daily&&window.Daily.replay)window.Daily.replay(true);}
                 :advMode?()=>{SFX.menu();score=Math.max(0,score-200);_outOfLives();}
                        :()=>{SFX.menu();startInf(true);};
     setTimeout(()=>{showGameover(retry);},400);
@@ -6065,6 +6176,9 @@ function doHurtPlayer(fromFall=false){
     gState='gameover';
     const _inTut2=!!(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive());
     const retry=_inTut2?()=>{SFX.menu();window.Tutorial.start();}
+                // Жизнь потеряна, но попытка та же: уровень дня перезапускается
+                // с накопленным счётом, как уровень кампании.
+                :dailyMode?()=>{SFX.menu();if(window.Daily&&window.Daily.replay)window.Daily.replay(false);}
                 :advMode?()=>{SFX.menu();startAdv(advLevel,false);}
                        :()=>{SFX.menu();startInf(false);};
     setTimeout(()=>{showGameover(retry,T('gameOver'),T('livesLeft',lives));},450);
@@ -6214,9 +6328,11 @@ function _menuExtras(show){
 function showGameover(retry,titleTxt,subTxt){
   // Game over ENDS an infinite run. Keeping the save would let the player
   // continue past death, which is the one thing an endless mode cannot allow.
-  if(window.InfSave&&!advMode)window.InfSave.clear();
+  if(window.InfSave&&!advMode&&!dailyMode)window.InfSave.clear();
   if(raf){cancelAnimationFrame(raf);raf=0;}
-  recordScore(advMode?'adventure':'infinite',score);   // рекорд банкуем в любом случае
+  // Рекорд забега банкуем в кампанию или в бесконечный — но не в день: у него
+  // своя суточная таблица, и подмешивать его в общий рекорд нельзя.
+  if(!dailyMode)recordScore(advMode?'adventure':'infinite',score);
   // Экран итогов вместо главного меню с перекрашенным заголовком: видно, чем
   // кончилась попытка, и есть куда уйти кроме «Заново» — раньше выхода на карту
   // и в меню отсюда не было вовсе.
@@ -6232,21 +6348,22 @@ function showGameover(retry,titleTxt,subTxt){
     const _tutNow=!!(window.Tutorial&&window.Tutorial.isActive&&window.Tutorial.isActive());
     window.Results.showGameOver({
       title:titleTxt||T('gameOver'),
-      sub:(subTxt!=null)?subTxt:(_tutNow?T('prologueFailed'):advMode?T('levelFailed',advLevel):T('betterLuck')),
-      levelNum:_tutNow?0:(advMode?advLevel:level),
+      sub:(subTxt!=null)?subTxt:(_tutNow?T('prologueFailed'):dailyMode?T('dailyFailed'):advMode?T('levelFailed',advLevel):T('betterLuck')),
+      levelNum:(_tutNow||dailyMode)?0:(advMode?advLevel:level),
       coins:coinsTotal|0,
       score:score,
-      best:bestRecords[advMode?'adventure':'infinite']|0,
+      best:dailyMode?0:(bestRecords[advMode?'adventure':'infinite']|0),
     },{
       retry:retry,
-      leaveLabel:advMode?T('map'):T('menu'),
+      leaveLabel:dailyMode?T('dailyTitle'):advMode?T('map'):T('menu'),
       leave:()=>{
-        if(advMode){
+        if(dailyMode){ if(window.Daily&&window.Daily.open)window.Daily.open(); else showMain(); }
+        else if(advMode){
           const open=hardMode?showMapH:showMap;
           if(typeof open==='function')open(); else showMain();
         } else showMain();
       },
-      menu:advMode?(()=>showMain()):null,
+      menu:(advMode||dailyMode)?(()=>showMain()):null,
     });
     return;
   }
@@ -7884,10 +8001,45 @@ function drawMoneyBlock(x,y,w,h){
   ctx.fillStyle='#ffe680';ctx.beginPath();ctx.arc(x+w/2-1,y+h/2-1,w*.18,0,Math.PI*2);ctx.fill();
   drawGlyph('$',[x+w/2,y+h/2+1],Math.floor(w*.35),'#b8860b');
 }
+/**
+ * Кирпич Призма-аномалии.
+ *
+ * Раньше здесь рисовался обычный коричневый кирпич, а сверху накладывался
+ * фильтр (или полупрозрачная подкраска). И то и другое ОСТАВЛЯЕТ старый цвет
+ * в кадре: фильтр сохраняет светотень коричневого, подкраска — сам коричневый,
+ * и блок выходил тёмно-бурым с радужным налётом — не тем цветом, каким светятся
+ * платформы рядом. В мире света у предмета не должно быть «прошлого цвета»:
+ * блок сразу собирается из спектра, теми же формулами, что и платформа.
+ *
+ * Заодно это дешевле: ctx.filter — самый дорогой вызов в кадре (см. prismFxOn),
+ * а здесь его нет вовсе.
+ */
+function drawPrismBlock(b,dim){
+  const hue=(b.x*0.5+tick*0.9)%360;
+  const hq=(hue/18|0)*18;                       // квантование: меньше градиентов на кадр
+  if(b._pbH!==hq||b._pbX!==b.x||b._pbW!==b.w){
+    const g=ctx.createLinearGradient(b.x,0,b.x+b.w,0);
+    for(let k=0;k<=3;k++)g.addColorStop(k/3,`hsl(${(hq+k*40)%360},85%,46%)`);
+    b._pbGrad=g;b._pbH=hq;b._pbX=b.x;b._pbW=b.w;
+  }
+  ctx.globalAlpha=dim?0.45:1;
+  ctx.fillStyle=b._pbGrad;ctx.fillRect(b.x,b.y,b.w,b.h);
+  if(!b._pbShade||b._pbShadeY!==b.y||b._pbShadeH!==b.h){
+    const gv=ctx.createLinearGradient(0,b.y,0,b.y+b.h);
+    gv.addColorStop(0,'rgba(255,255,255,0.20)');
+    gv.addColorStop(0.5,'rgba(0,0,0,0)');
+    gv.addColorStop(1,'rgba(0,0,0,0.55)');
+    b._pbShade=gv;b._pbShadeY=b.y;b._pbShadeH=b.h;
+  }
+  ctx.fillStyle=b._pbShade;ctx.fillRect(b.x,b.y,b.w,b.h);
+  ctx.strokeStyle=`hsl(${hue},100%,80%)`;ctx.lineWidth=2;ctx.shadowBlur=0;
+  ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
+  ctx.globalAlpha=1;
+}
+
 function drawBlocks(){
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismWorld=(CT.id===10);
-  const _prismBlocks=_prismWorld&&prismFxOn();
+  const _prismWorld=prismWorld();
   for(const b of blocks){
     if(b.x+b.w<vLeft||b.x>vRight)continue;
     // Скрытый и ещё не найденный блок не рисуется вовсе — в этом весь смысл.
@@ -7904,11 +8056,34 @@ function drawBlocks(){
       ctx.globalAlpha=Math.min(1,t*1.6);
       ctx.translate(cx,cy);ctx.scale(sc*t+(1-t)*0.2,sc*t+(1-t)*0.2);ctx.translate(-cx,-cy);
     }
-    // Prism Anomaly: bricks and gold blocks are the same brown/amber in every
-    // world, which left them looking imported here. Refracted per block so they
-    // keep their shape, lighting and readability.
-    const _bHue=_prismWorld?(((b.x*0.7+tick*0.8)%360)/20|0)*20:0;
-    if(_prismBlocks)ctx.filter=prismFilter(_bHue,6.5,1.3);
+    // Prism Anomaly: кирпич собирается из спектра, а не красится поверх своего
+    // коричневого (см. drawPrismBlock). Что за блок — по-прежнему видно: знак
+    // «?» и «$» рисуются поверх плиты, пустой блок гаснет.
+    if(_prismWorld){
+      const used=(b.type==='q'&&b.used)||(b.type==='c'&&b.used)
+              ||(b.type!=='b'&&b.type!=='q'&&b.type!=='c');
+      drawPrismBlock(b,used);
+      if(b.type==='q'&&!b.used){
+        const p=.8+.2*Math.sin(tick*.1);
+        ctx.shadowColor='#fff';ctx.shadowBlur=8*p;
+        drawGlyph('?',[b.x+b.w/2,b.y+b.h/2+1],Math.floor(b.w*.55),'#fff');
+        ctx.shadowBlur=0;
+      } else if(b.type==='c'&&!b.used){
+        const p=.7+.3*Math.sin(tick*.08);
+        ctx.shadowColor='#fff';ctx.shadowBlur=10*p;
+        ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w*.24,0,Math.PI*2);ctx.fill();
+        ctx.shadowBlur=0;
+        drawGlyph('$',[b.x+b.w/2,b.y+b.h/2+1],Math.floor(b.w*.35),`hsl(${(b.x*0.5+tick*0.9)%360},80%,25%)`);
+      } else if(b.type==='q'&&b.used&&b.regenT>0&&b.regenT<150){
+        // Зарядка «?»-блока: та же подсказка, что и в остальных мирах.
+        const charge=1-b.regenT/150,pul=0.5+0.5*Math.sin(tick*.3);
+        ctx.globalAlpha=charge*pul*0.7;
+        ctx.fillStyle='#fff';ctx.fillRect(b.x+2,b.y+2,b.w-4,b.h-4);
+        ctx.globalAlpha=1;
+      }
+      ctx.restore();
+      continue;
+    }
     if(b.type==='b'){
       ctx.fillStyle='#3a180a';ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='#7a3816';ctx.lineWidth=1.5;ctx.strokeRect(b.x+1,b.y+1,b.w-2,b.h-2);
       ctx.strokeStyle='#261006';ctx.lineWidth=1;
@@ -7944,9 +8119,6 @@ function drawBlocks(){
         ctx.globalAlpha=1;ctx.shadowBlur=0;
       }
     }
-    // Преломление выключено, но мир радужный — подкрашиваем блок дёшево,
-    // чтобы кирпичи не остались единственным коричневым пятном в мире света.
-    if(_prismWorld&&!_prismBlocks)prismTintRect(b.x,b.y,b.w,b.h,_bHue);
     ctx.restore();
   }
 }
@@ -7959,30 +8131,63 @@ function drawBlocks(){
 // than the entire rest of draw() combined). Now the coin face is rasterised
 // once into an offscreen canvas and each coin is a single drawImage.
 let _coinSprite=null,_coinSpriteW=0;
-function _getCoinSprite(w){
-  if(_coinSprite&&_coinSpriteW===w)return _coinSprite;
+function _paintCoin(c,w,face,shine,ink){
+  const r=w/2;
+  c.fillStyle=face;c.beginPath();c.arc(r,r,r,0,Math.PI*2);c.fill();
+  c.fillStyle=shine;c.beginPath();c.arc(r-2,r-2,r-3,0,Math.PI*2);c.fill();
+  c.fillStyle=ink;c.font='bold 7px monospace';c.textAlign='center';c.textBaseline='middle';
+  c.fillText('$',r,r);
+}
+function _coinCanvas(w){
   const dpr=Math.min(2,(window.devicePixelRatio||1));
   const cv=document.createElement('canvas');
   cv.width=Math.ceil(w*dpr);cv.height=Math.ceil(w*dpr);
-  const c=cv.getContext('2d');
-  c.scale(dpr,dpr);
-  const r=w/2;
-  c.fillStyle='#ffd700';c.beginPath();c.arc(r,r,r,0,Math.PI*2);c.fill();
-  c.fillStyle='#ffe880';c.beginPath();c.arc(r-2,r-2,r-3,0,Math.PI*2);c.fill();
-  c.fillStyle='#7a5000';c.font='bold 7px monospace';c.textAlign='center';c.textBaseline='middle';
-  c.fillText('$',r,r);
+  cv.getContext('2d').scale(dpr,dpr);
+  return cv;
+}
+function _getCoinSprite(w){
+  if(_coinSprite&&_coinSpriteW===w)return _coinSprite;
+  const cv=_coinCanvas(w);
+  _paintCoin(cv.getContext('2d'),w,'#ffd700','#ffe880','#7a5000');
   _coinSprite=cv;_coinSpriteW=w;
   return cv;
 }
+// ── Монета Призма-аномалии ──────────────────────────────────────────────────
+// Золотая монета была там единственным предметом с «прошлым цветом»: мир
+// светится всем спектром, а по нему рассыпаны одинаковые жёлтые кружки. Красить
+// их фильтром нельзя — монет в уровне под две сотни, а ctx.filter на объект
+// стоит дороже всего остального кадра. Поэтому монета заранее нарисована в
+// двенадцати цветах (шаг 30°), и в кадре это по-прежнему один drawImage:
+// какой из спрайтов взять, решает положение монеты и время.
+const _PRISM_COIN_STEPS=12;
+let _prismCoins=null,_prismCoinsW=0;
+function _getPrismCoinSprite(w,i){
+  if(!_prismCoins||_prismCoinsW!==w){
+    _prismCoins=[];_prismCoinsW=w;
+    for(let k=0;k<_PRISM_COIN_STEPS;k++){
+      const h=k*(360/_PRISM_COIN_STEPS);
+      const cv=_coinCanvas(w);
+      _paintCoin(cv.getContext('2d'),w,
+        `hsl(${h},95%,58%)`,`hsl(${h},100%,78%)`,`hsl(${h},85%,20%)`);
+      _prismCoins.push(cv);
+    }
+  }
+  return _prismCoins[((i%_PRISM_COIN_STEPS)+_PRISM_COIN_STEPS)%_PRISM_COIN_STEPS];
+}
 function drawCoins(){
   const vLeft=camX-30,vRight=camX+W+30;
+  const prism=prismWorld();
+  // Оттенок монеты: то же «по месту и времени», что у платформ и кирпичей, —
+  // соседние предметы попадают в соседние цвета спектра, а не вразнобой.
+  const coinStep=(c)=>Math.floor(((c.x*0.5+tick*0.9)%360+360)%360/(360/_PRISM_COIN_STEPS));
   // Cheap additive bloom pass behind coins (medium+ quality).
   if(GFX.glow>0){
     ctx.save();ctx.globalCompositeOperation='lighter';
     for(const c of coins){
       if(c.got||c.x<vLeft||c.x>vRight)continue;
       const cx=c.x+c.w/2,cy=c.y+c.h/2+Math.sin(c.a)*3;
-      bloom(cx,cy,c.w*1.3,'#ffd700',0.5);
+      bloom(cx,cy,c.w*1.3,
+        prism?`hsl(${coinStep(c)*(360/_PRISM_COIN_STEPS)},95%,60%)`:'#ffd700',0.5);
     }
     ctx.restore();
   }
@@ -7992,31 +8197,37 @@ function drawCoins(){
     if(c.x<vLeft||c.x>vRight)continue;
     c.a+=.07;
     const cy=c.y+Math.sin(c.a)*3;
-    ctx.drawImage(spr,c.x,cy,c.w,c.w);
+    ctx.drawImage(prism?_getPrismCoinSprite(14,coinStep(c)):spr,c.x,cy,c.w,c.w);
   }
 }
 function drawJumpPads(){
   const vLeft=camX-40,vRight=camX+W+40;
+  // В Призма-аномалии светится всё, и циановая пружина выделялась цветом «из
+  // другого мира». Здесь она берёт свой оттенок из спектра — по месту и
+  // времени, как платформы рядом. Форма не меняется: узнают её по ней.
+  const prism=prismWorld();
   for(const jp of jumpPads){
     if(jp.x+jp.w<vLeft||jp.x>vRight)continue;
     jp.anim+=0.08;
     const pulse=0.8+0.2*Math.sin(jp.anim);
+    const hue=(jp.x*0.5+tick*0.9)%360;
+    const glow=prism?`hsl(${hue},100%,65%)`:'#00ffff';
     ctx.save();
 
     // Metallic base with gradient
     const baseGrad=ctx.createLinearGradient(jp.x,jp.y,jp.x,jp.y+jp.h);
-    baseGrad.addColorStop(0,'#1a3a4a');
-    baseGrad.addColorStop(1,'#0a1a2a');
+    baseGrad.addColorStop(0,prism?`hsl(${hue},60%,24%)`:'#1a3a4a');
+    baseGrad.addColorStop(1,prism?`hsl(${hue},60%,10%)`:'#0a1a2a');
     ctx.fillStyle=baseGrad;
     ctx.fillRect(jp.x,jp.y,jp.w,jp.h);
 
     // Glowing energy strips
-    ctx.shadowColor='#00ffff';
+    ctx.shadowColor=glow;
     ctx.shadowBlur=8*pulse;
     const stripeCount=5;
     for(let i=0;i<stripeCount;i++){
       const offset=(tick*3+i*12)%(jp.w+12);
-      ctx.fillStyle='#00ffff';
+      ctx.fillStyle=prism?`hsl(${(hue+i*24)%360},100%,65%)`:'#00ffff';
       ctx.globalAlpha=0.6*pulse;
       ctx.fillRect(jp.x+offset-6,jp.y+2,4,jp.h-4);
     }
@@ -8024,14 +8235,14 @@ function drawJumpPads(){
     ctx.shadowBlur=0;
 
     // Border
-    ctx.strokeStyle='#00ffff';
+    ctx.strokeStyle=glow;
     ctx.lineWidth=1;
     ctx.strokeRect(jp.x,jp.y,jp.w,jp.h);
 
     // Animated arrow up
-    ctx.fillStyle='#00ffff';
+    ctx.fillStyle=glow;
     ctx.globalAlpha=pulse;
-    ctx.shadowColor='#00ffff';
+    ctx.shadowColor=glow;
     ctx.shadowBlur=10*pulse;
     const arrowY=jp.y-8-Math.sin(jp.anim*2)*4;
     ctx.beginPath();
@@ -8063,16 +8274,25 @@ function drawHazards(){
     ctx.restore();
   }
   const vLeft=camX-40,vRight=camX+W+40;
-  const _prismHz=(CT.id===10)&&prismFxOn();
+  const _prism=prismWorld();
+  // Шипы в Призма-аномалии красятся не фильтром, а сразу спектром (см. ниже):
+  // фильтр стоит дорого и оставляет в кадре светотень старого серого. Прочим
+  // опасностям (лава, кислота, пила) форму так просто не перекрасишь — им
+  // по-прежнему нужен фильтр, и он включается настройкой «Преломление».
+  const _prismHz=_prism&&prismFxOn();
   for(const hz of hazards){
     if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
+    const _spikePrism=_prism&&hz.type==='spikes';
     ctx.save();
-    // Spikes are drawn in flat greys, and hue-rotate does nothing to a grey —
-    // they stayed the only monochrome thing in a world made of light.
-    if(_prismHz)ctx.filter=prismFilter((((hz.x*0.6+tick*0.5)%360)/20|0)*20,6.5,1.25);
+    if(_prismHz&&!_spikePrism)ctx.filter=prismFilter((((hz.x*0.6+tick*0.5)%360)/20|0)*20,6.5,1.25);
     if(hz.type==='spikes'){
+      // Шип светится собственным цветом из спектра — оттенок берётся по месту и
+      // времени, теми же формулами, что у платформы под ним. Серый металл
+      // остался бы единственной бесцветной вещью в мире света.
+      const hue=_spikePrism?(((hz.x*0.6+tick*0.9)%360+360)%360):0;
+      const hq=_spikePrism?(hue/18|0)*18:0;
       // Metallic base
-      ctx.fillStyle='#2a2a2a';
+      ctx.fillStyle=_spikePrism?`hsl(${hq},70%,16%)`:'#2a2a2a';
       ctx.fillRect(hz.x,hz.y+hz.h-3,hz.w,3);
 
       // Sharp dangerous spikes with gradient
@@ -8080,7 +8300,11 @@ function drawHazards(){
       const spikeW=hz.w/spikeCount;
       // Spikes are static, so cache their (position-dependent) gradients on the
       // hazard and reuse across frames. Invalidate only if the hazard moves.
-      if(!hz._spikeGrads||hz._spikeGX!==hz.x){hz._spikeGrads=[];hz._spikeGX=hz.x;}
+      // В радужном мире цвет ещё и ползёт по времени, поэтому кэш держится за
+      // квантованный оттенок: пересобираем градиенты раз в 18°, а не каждый кадр.
+      if(!hz._spikeGrads||hz._spikeGX!==hz.x||hz._spikeGH!==hq){
+        hz._spikeGrads=[];hz._spikeGX=hz.x;hz._spikeGH=hq;
+      }
       for(let i=0;i<spikeCount;i++){
         const sx=hz.x+i*spikeW;
 
@@ -8088,9 +8312,15 @@ function drawHazards(){
         let grad=hz._spikeGrads[i];
         if(!grad){
           grad=ctx.createLinearGradient(sx,hz.y+hz.h,sx+spikeW/2,hz.y);
-          grad.addColorStop(0,'#4a4a4a');
-          grad.addColorStop(0.5,'#888888');
-          grad.addColorStop(1,'#cccccc');
+          if(_spikePrism){
+            grad.addColorStop(0,`hsl(${hq},85%,28%)`);
+            grad.addColorStop(0.5,`hsl(${(hq+30)%360},95%,55%)`);
+            grad.addColorStop(1,`hsl(${(hq+60)%360},100%,78%)`);
+          } else {
+            grad.addColorStop(0,'#4a4a4a');
+            grad.addColorStop(0.5,'#888888');
+            grad.addColorStop(1,'#cccccc');
+          }
           hz._spikeGrads[i]=grad;
         }
         ctx.fillStyle=grad;
@@ -8121,10 +8351,11 @@ function drawHazards(){
         ctx.stroke();
       }
 
-      // Warning glow
-      ctx.shadowColor='#ff4444';
+      // Warning glow. В радужном мире оно белое: красная искра была бы там
+      // единственным «чужим» цветом, а предупредить достаточно и светом.
+      ctx.shadowColor=_spikePrism?'#ffffff':'#ff4444';
       ctx.shadowBlur=6;
-      ctx.strokeStyle='#ff4444';
+      ctx.strokeStyle=_spikePrism?'#ffffff':'#ff4444';
       ctx.globalAlpha=0.3+0.2*Math.sin(tick*0.1);
       ctx.lineWidth=2;
       for(let i=0;i<spikeCount;i++){
@@ -8268,7 +8499,9 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
     const _advN=lvl||0;
     const _worldIdx=Math.floor((_advN-1)/10);
     const _levelInWorld=_advN-_worldIdx*10;
-    if(_advN>0&&_worldIdx>=0&&_worldIdx<RAINBOW_LEVEL_IN_WORLD.length
+    // В уровне дня осколка нет: он открывает секретный мир, и добывать его в
+    // режиме, который каждый день собирается заново, было бы обходом кампании.
+    if(!dailyMode&&_advN>0&&_worldIdx>=0&&_worldIdx<RAINBOW_LEVEL_IN_WORLD.length
        &&_levelInWorld===RAINBOW_LEVEL_IN_WORLD[_worldIdx]&&!rainbowCollected[_worldIdx]){
       // Reuse a leftover shard spot if one's free, otherwise float it above a
       // random ground node — either way it never overlaps the 3 regular shards.
@@ -10780,6 +11013,9 @@ function draw(){
   ctx.save();ctx.translate(-camX+sx,sy+camYOffset);
   drawSpotlights();drawPlatforms();drawBlocks();drawCoins();drawJumpPads();drawHazards();drawDataShards();drawRainbowItem();drawMazeKeys();drawDoors();drawPUs();drawCheckpoints();drawExitBuilding();drawFlag();drawBossApproach();
   drawBoss();
+  // Призрак рисуется ПОД живыми: он справочный, и перекрывать им игрока или
+  // врага нельзя — по ним принимают решения, по нему нет.
+  if(window.Ghost)window.Ghost.draw(ctx);
   drawEnemies();drawFireIceBalls();drawBullets();drawPlayer();drawParticles();
   if(window.Juice)window.Juice.drawWorld(ctx);
   if(window.Status){for(const q of activePlayers())Status.drawOnPlayer(ctx,q);}
@@ -10819,6 +11055,8 @@ function update(){
   if(window.Juice)window.Juice.update();
   if(gState==='playing'){
     updatePlatforms();updateSpotlights();updateMazeKeys();updateHazards();updatePlayer();updatePlayer2();updateBoss();updateEnemies();updateBullets();updateFireIceBalls();updatePUs();updateParticles();updateDataShards();updateRainbowItem();updateTimer();updateExit();
+    // Призрак: пишем свой путь и продвигаем чужой. Ни на что в мире не влияет.
+    if(window.Ghost){window.Ghost.record(player);window.Ghost.step();}
     // Camera tracks average of alive players — runs in the main loop so it keeps
     // Network: each client tracks only their own player.
     // Local: camera tracks average of all active players.
@@ -10977,6 +11215,7 @@ function initP2(){
 }
 function patchedStartInf(fresh=true){
   if(fresh){score=0;lives=3;level=1;coinsTotal=0;_coinsHpStep=0;}
+  dailyMode=false;dailySlot=null;   // бесконечный режим — не день
   advMode=false;CT=THEMES[Math.min(Math.floor((level-1)/10),9)];
   _levelDied=false;
   AchTrack.infinite(level);AchTrack.score(score);
@@ -12973,6 +13212,7 @@ function _doRunLevel(n,freshLives){
   // never drop the player into content the demo doesn't ship.
   if(window.Demo&&window.Demo.beyond(n)){window.Demo.showEnd();return;}
   if(freshLives===undefined)freshLives=false;
+  dailyMode=false;dailySlot=null;   // из дня в кампанию — режим закрыт
   if(_darkCtx) _darkCtx.clearRect(0,0,W,H); // fresh mask for the new level's darkness modifier
   if(freshLives){lives=hardMode?2:3;cpSave=null;} // fresh entry → no carried checkpoint
   if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
@@ -13019,6 +13259,7 @@ function _doRunLevel(n,freshLives){
     }
   }
   initP2();
+  if(window.Ghost)window.Ghost.begin({kind:'level',level:n,hardcore:!!hardMode});
   timeLeft=Math.round(lvlTime(n)*(hardMode?0.7:1));timMax=timeLeft; // whole seconds — the HUD formats mm:ss
   hideAll();gState='playing';navScr='game';tick=0;
   document.getElementById('ui').style.display='flex';
@@ -13149,6 +13390,11 @@ startAdv=function(n,f){
 //   'blue'              — original P1 blue
 //   'red'               — original P2 red
 //   { h, s, l }         — arbitrary HSL (network players)
+// Стекло у всех роботов одно и то же — голубое, как у ЮНИТ-7. Раньше цвет
+// визора и антенны выводился из цвета корпуса (оттенок + 160°), и у каждого
+// робота стекло получалось своё: у синего оранжевое, у жёлтого голубое, у
+// зелёного розовое. Корпус — это краска, выбранная игроком, а стекло — часть
+// самого робота, и меняться вместе с краской ему незачем.
 window.robotPalette=function(scheme){
   if(scheme&&typeof scheme==='object'){
     const {h,s,l}=scheme;
@@ -13158,9 +13404,9 @@ window.robotPalette=function(scheme){
       mid:     `hsl(${h},${s}%,${Math.max(l-15,8)}%)`,
       body:    `hsl(${h},${s}%,${l}%)`,
       bright:  `hsl(${h},${Math.min(s+10,100)}%,${Math.min(l+18,88)}%)`,
-      visor:   `hsl(${(h+160)%360},90%,${Math.min(l+25,88)}%)`,
-      glint:   `hsl(${(h+160)%360},60%,${Math.min(l+40,92)}%)`,
-      antenna: `hsl(${(h+160)%360},90%,${Math.min(l+25,85)}%)`,
+      visor:   '#00ccee',
+      glint:   '#bfeeff',
+      antenna: '#00ccee',
     };
   }
   if(scheme==='red') return {

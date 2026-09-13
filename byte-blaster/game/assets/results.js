@@ -247,7 +247,9 @@
     ];
     open({
       accent: data.accent || '#0ff',
-      title: T('resCleared', data.levelNum),
+      // Свой заголовок нужен уровню дня: «УРОВЕНЬ 1 ПРОЙДЕН» там было бы враньём —
+      // номера у него нет, есть слот и дата.
+      title: data.title || T('resCleared', data.levelNum),
       sub: data.subtitle || '',
       stars: data.stars != null ? data.stars : null,
       starsNew: !!data.starsNew,

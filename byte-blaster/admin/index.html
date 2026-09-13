@@ -402,7 +402,7 @@
   // server without the page having captured the old value already.
   function api() {
     return (typeof window.BB_STATS_API === 'string' && window.BB_STATS_API) ||
-           'https://byte-blaster-server-production.up.railway.app';
+           'https://ws.byte-blaster-server.run.place';
   }
   var KEY = 'bbAdminToken';
   var token = null;
@@ -608,11 +608,11 @@ import {
   adminOrderBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/byte-blaster/assets/pixset-auth.js?v=feef56bc';
+} from '/byte-blaster/assets/pixset-auth.js?v=df325895';
 import {
   paintNickBadges, forgetNickBadges, gameIconHtml, sortableRows,
   countryName, countryFlag, adminSections, STAT_GROUPS, statLabel, nickSuggestAll,
-} from '/byte-blaster/assets/pixset-ui.js?v=feef56bc';
+} from '/byte-blaster/assets/pixset-ui.js?v=df325895';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);

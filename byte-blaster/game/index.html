@@ -253,8 +253,29 @@
     <button class="mBack" id="playTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
   </div>
 
-  <!-- Online type: Local (LAN) vs Server -->
+  <!-- Онлайн: уровень дня или мультиплеер.
+       Раньше здесь сразу спрашивали «создать или найти комнату». Уровень дня —
+       такая же онлайновая вещь (общий уровень и общая таблица), поэтому выбор
+       теперь делается на шаг раньше, а комнаты уехали в netRoomsOv ниже. -->
   <div id="netTypeOv" class="fov" style="background:#04040fee;gap:16px;display:none">
+    <h2 data-i18n="netOnline" style="font-size:calc(12px * var(--bbText, 1));color:#f0f;text-shadow:0 0 14px #f0f;letter-spacing:3px;margin:0">🌐 ONLINE</h2>
+    <div style="display:flex;gap:18px">
+      <div class="mCard" id="dailyCard" style="cursor:pointer;border-color:#ffd24a55">
+        <div class="mIcon">📅</div>
+        <div class="mTitle" data-i18n="dailyTitle" style="color:#ffd24a">DAILY LEVEL</div>
+        <div class="mDesc" data-i18n-html="dailyCardDesc">five challenges<br>same for everyone<br>table resets daily</div>
+      </div>
+      <div class="mCard" id="multiplayerCard" style="cursor:pointer;border-color:#f0f4">
+        <div class="mIcon">🌐</div>
+        <div class="mTitle" data-i18n="netMultiplayer" style="color:#f0f">MULTIPLAYER</div>
+        <div class="mDesc" data-i18n-html="netOnlineDesc">up to 5 players<br>local or global<br>room codes</div>
+      </div>
+    </div>
+    <button class="mBack" id="netTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
+  </div>
+
+  <!-- Комнаты: создать или найти -->
+  <div id="netRoomsOv" class="fov" style="background:#04040fee;gap:16px;display:none">
     <h2 data-i18n="netMultiplayer" style="font-size:calc(12px * var(--bbText, 1));color:#f0f;text-shadow:0 0 14px #f0f;letter-spacing:3px;margin:0">🌐 ONLINE MULTIPLAYER</h2>
     <div style="display:flex;gap:18px">
       <div class="mCard" id="createRoomCard" style="cursor:pointer;border-color:#0f84">
@@ -268,7 +289,7 @@
         <div class="mDesc" data-i18n-html="netFindRoomDesc">browse rooms<br>local or server<br>join by code</div>
       </div>
     </div>
-    <button class="mBack" id="netTypeBackBtn" data-i18n="netBack">← BACK [ESC]</button>
+    <button class="mBack" id="netRoomsBackBtn" data-i18n="netBack">← BACK [ESC]</button>
   </div>
 
   <!-- Pause -->
@@ -371,6 +392,8 @@
 <script>window.__chk('after music-data.js');</script>
 <script src="assets/audiofiles.js"></script>
 <script>window.__chk('after audiofiles.js');</script>
+<!-- Десятка цветов роботов: один список на лобби и на аватары профиля. -->
+<script src="assets/robots.js"></script>
 <script src="assets/game.js"></script>
 <script>window.__chk('after game.js');</script>
 <script src="assets/i18n-new.js"></script>
@@ -378,6 +401,11 @@
 <script src="assets/settings.js"></script>
 <script src="assets/whatsnew.js"></script>
 <script src="assets/leaderboard.js"></script>
+<!-- Уровень дня. После game.js: зовёт startDailyLevel оттуда, а game.js зовёт
+     Daily.finish в ответ — связь двусторонняя, и порядок здесь не важен. -->
+<script src="assets/daily.js"></script>
+<!-- Призрак лучшего забега. Знает про Daily (день) и про уровни кампании. -->
+<script src="assets/ghost.js"></script>
 <script src="assets/dlbar.js"></script>
 <script src="assets/tutorial.js"></script>
 <script>window.__chk('after settings.js');</script>
@@ -413,7 +441,7 @@
 
 <!-- ══════════════════════════════════════════════════════════════
      BYTE BLASTER — NETWORK MULTIPLAYER MODULE
-     Relay server: wss://byte-blaster-server-production.up.railway.app
+     Relay server: wss://ws.byte-blaster-server.run.place
      ══════════════════════════════════════════════════════════════ -->
 <link rel="stylesheet" href="assets/network.css">
 
@@ -604,6 +632,9 @@
   <button class="net-btn danger" id="netSpecLeave" style="font-size:calc(8px * var(--bbFix, 1));padding:calc(7px * var(--bbFix, 1)) calc(12px * var(--bbFix, 1));min-height:calc(32px * var(--bbFix, 1))" data-i18n="netSpecLeave">✕ LEAVE ROOM</button>
 </div>
 
+<!-- Запасной канал мультиплеера через Supabase. Строго ДО network.js: тот при
+     загрузке проверяет адреса релея и должен уже знать про подменный сокет. -->
+<script src="assets/relay-supabase.js"></script>
 <script src="assets/network.js"></script>
 <script>window.__chk('after network.js');</script>
 

@@ -7,28 +7,102 @@
 (function(){
 'use strict';
 
-// Адрес релея. Встроенный — запасной: если студия задаст свой в Supabase
-// (таблица app_config, ключ bb_relay_url), игра переедет на него без пересборки
+// Адреса релея. Встроенные — запасные: если студия задаст свои в Supabase
+// (таблица app_config, ключ bb_relay_urls), игра переедет на них без пересборки
 // и без обновления у игроков. Пустое значение, отсутствующая строка, недоступный
-// Supabase, мусор вместо адреса — всё это молча оставляет встроенный.
-const SERVER_URL_BUILTIN = 'wss://byte-blaster-server-production.up.railway.app';
-let SERVER_URL = SERVER_URL_BUILTIN;
+// Supabase, мусор вместо адреса — всё это молча оставляет встроенные.
+//
+// Первым идёт НЕ сервер на Railway, а сам Supabase (supabase:// — не настоящий
+// WebSocket-адрес, а метка для assets/relay-supabase.js, который подменяет
+// сокет). Причина: подсеть Railway в России режут на уровне пакетов, переезд
+// на свой домен не помог — фильтр смотрит на адрес, а не на имя. Сервер при
+// этом жив и за пределами России работает, но встречаться игрокам нужно в
+// ОДНОМ месте: если половина сидит на Railway, а половина на Supabase, коды
+// комнат друг у друга перестают что-либо значить. Поэтому точка встречи одна и
+// доступна отовсюду, а Railway остаётся запасным выходом.
+const SERVER_URL_SUPABASE = 'supabase://zyjhvuhovimorpokiwty.supabase.co';
+const SERVER_URL_BUILTIN = 'wss://ws.byte-blaster-server.run.place';
+const SERVER_URL_FALLBACK = 'wss://byte-blaster-server-production.up.railway.app';
+let SERVER_URL = SERVER_URL_SUPABASE;
+
+/* ── Список адресов, а не один ───────────────────────────────────────────────
+   У одного адреса нет запасного выхода: в России домен *.up.railway.app
+   блокируется на уровне TLS-приветствия — TCP до сервера доходит, а соединение
+   рвётся, как только клиент называет имя. Игрок при этом видит просто
+   «нет связи», и сделать ничего не может: адрес зашит в его .exe.
+
+   Поэтому адресов несколько. Игра пробует их по очереди, запоминает тот, что
+   ответил, и в следующий раз начинает с него. Список можно менять из базы
+   (app_config, ключи bb_relay_url и bb_relay_urls) — то есть переезд на новое
+   имя доезжает до уже установленных сборок без обновления. */
+let RELAY_LIST = [SERVER_URL_SUPABASE, SERVER_URL_BUILTIN, SERVER_URL_FALLBACK];
+let _relayIdx = 0;
+const _RELAY_OK_KEY = 'bb_relay_ok';       // последний адрес, который отвечал
+const _RELAY_TRY_MS = 5000;                // сколько ждём открытия сокета
+
+function _relayValid(v){
+  if(typeof v !== 'string') return false;
+  const s = v.trim();
+  // Канал через Supabase записывается не как ws://, а особой меткой: за ней
+  // стоит не сервер, а подменный сокет из assets/relay-supabase.js.
+  if(window.BBSupabaseRelay && window.BBSupabaseRelay.matches(s)) return true;
+  return /^wss?:\/\/[^\s]+$/i.test(s);
+}
+
+// Открыть соединение по адресу: обычный сокет или подменный — через Supabase.
+function _openSocket(url){
+  if(window.BBSupabaseRelay && window.BBSupabaseRelay.matches(url)){
+    return window.BBSupabaseRelay.open(url);
+  }
+  return new WebSocket(url);
+}
+
+function _setRelayList(list){
+  const seen = {}, out = [];
+  // Встроенные адреса всегда в хвосте: даже с пустой или испорченной настройкой
+  // в базе игроку остаётся куда подключиться.
+  list.concat([SERVER_URL_SUPABASE, SERVER_URL_BUILTIN, SERVER_URL_FALLBACK]).forEach((raw) => {
+    const v = String(raw || '').trim().replace(/\/+$/, '');
+    if(!_relayValid(v) || seen[v]) return;
+    seen[v] = true; out.push(v);
+  });
+  RELAY_LIST = out.length ? out : [SERVER_URL_BUILTIN];
+  _relayIdx = 0;
+  SERVER_URL = RELAY_LIST[0];
+}
+
+// Прошлый рабочий адрес поднимаем повыше, чтобы не ждать таймаута на мёртвом,
+// но НЕ выше точки встречи: комнаты в разных источниках друг друга не видят, и
+// игрок, у которого прошлый раз ответил Railway, иначе оказался бы в комнате,
+// куда его друзьям не попасть.
+try{
+  const ok = localStorage.getItem(_RELAY_OK_KEY);
+  if(_relayValid(ok)) _setRelayList([SERVER_URL_SUPABASE, ok]);
+}catch(e){ /* приватный режим — просто начнём со встроенного */ }
+
 const _CFG_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
 const _CFG_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
 (async function loadRelayFromConfig(){
   try{
     const res = await fetch(
-      _CFG_URL + '/rest/v1/app_config?key=eq.bb_relay_url&select=value',
+      _CFG_URL + '/rest/v1/app_config?key=in.(bb_relay_url,bb_relay_urls)&select=key,value',
       { headers: { apikey: _CFG_KEY, Authorization: 'Bearer ' + _CFG_KEY } });
     if(!res.ok) return;
     const rows = await res.json();
-    const v = rows && rows[0] && String(rows[0].value || '').trim();
-    // Принимаем только настоящий WebSocket-адрес: опечатка в панели не должна
+    const byKey = {};
+    (rows || []).forEach((r) => { byKey[r.key] = String(r.value || '').trim(); });
+    // bb_relay_urls — несколько адресов через запятую или перевод строки:
+    // основной и запасные. bb_relay_url оставлен ради старых записей.
+    const list = (byKey.bb_relay_urls || '').split(/[\s,]+/).filter(Boolean);
+    if(byKey.bb_relay_url) list.unshift(byKey.bb_relay_url);
+    // Принимаем только настоящие WebSocket-адреса: опечатка в панели не должна
     // отправлять всех игроков в никуда.
-    if(!v || !/^wss?:\/\/[^\s]+$/i.test(v)) return;
-    if(v === SERVER_URL) return;
-    SERVER_URL = v;
-    // Подключение могло уже подняться на встроенном адресе. Переезжаем сразу,
+    const good = list.filter(_relayValid);
+    if(!good.length) return;
+    const before = RELAY_LIST.join('|');
+    _setRelayList(good);
+    if(RELAY_LIST.join('|') === before) return;
+    // Подключение могло уже подняться на прежнем адресе. Переезжаем сразу,
     // но только вне игры — рвать живую комнату из-за настройки нельзя.
     if(!window.netActive && _connectedUrl && _connectedUrl !== activeUrl()){
       try{ if(ws) ws.close(); }catch(e){}
@@ -38,19 +112,16 @@ const _CFG_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
 })();
 const MAX_NET_PLAYERS = 5;
 
-// ── Colour presets (10 popular rainbow hues, fixed s/l for good contrast) ───────────────────
-const COLOR_PRESETS = [
-  {h:0,  s:90,l:52},  // red (default)
-  {h:28, s:95,l:52},  // orange
-  {h:50, s:95,l:50},  // yellow
-  {h:135,s:78,l:45},  // green
-  {h:180,s:85,l:45},  // cyan / teal
-  {h:202,s:90,l:52},  // sky blue
-  {h:222,s:90,l:56},  // blue
-  {h:255,s:80,l:60},  // indigo
-  {h:282,s:80,l:58},  // violet / purple
-  {h:322,s:85,l:56},  // pink / magenta
-];
+// ── Colour presets ───────────────────────────────────────────────────────────
+// Десятка цветов живёт в assets/robots.js — ОДНА на лобби и на аватары профиля.
+// Раньше здесь был свой список, а в профиле свой: игрок выбирал робота в
+// профиле и не узнавал его в комнате. Запасной набор нужен только на случай,
+// когда robots.js не подключён (отдельные тестовые страницы игры).
+const COLOR_PRESETS = (window.BB_ROBOTS || []).map(r => r.hsl).length
+  ? window.BB_ROBOTS.map(r => r.hsl)
+  : [{h:0,s:88,l:52},{h:26,s:95,l:52},{h:48,s:95,l:52},{h:128,s:72,l:44},
+     {h:190,s:88,l:48},{h:218,s:88,l:52},{h:272,s:72,l:56},{h:330,s:85,l:62},
+     {h:220,s:12,l:30},{h:24,s:48,l:36}];
 
 // ── State ────────────────────────────────────────────────────────────────────
 let ws        = null;
@@ -248,6 +319,15 @@ function buildColorPicker(){
       _myColorIdx = i;
       myColor = COLOR_PRESETS[i];
       saveProfile();
+      // Аватар в профиле — тот же робот, что и в комнате: меняем заодно, но
+      // только если игрок не выбрал себе портрет (Лейлу, АРХОН, ПРИЗМУ).
+      try{
+        const list = window.BB_ROBOTS;
+        const cur  = localStorage.getItem('bb_avatar') || '';
+        if(list && list[i] && (!cur || cur.slice(0,2) === 'r_')){
+          localStorage.setItem('bb_avatar', 'r_' + list[i].id);
+        }
+      }catch(e){ /* localStorage закрыт — цвет всё равно сохранён */ }
       // Apply immediately to local player if in-game
       if(typeof player !== 'undefined' && player) player.colorScheme = myColor;
       // Update my own avatar in the player list
@@ -277,15 +357,37 @@ function connect(){
   const url = activeUrl();
   _connectedUrl = url;
   try{
-    sock = ws = new WebSocket(url);
+    sock = ws = _openSocket(url);
   }catch(e){
     scheduleReconnect();
     return;
   }
 
+  /* Заблокированный по имени адрес НЕ отказывает — он молчит: TCP открылся,
+     а TLS-приветствие дальше не пропускают, и сокет висит до системного
+     таймаута (это минуты). Поэтому ждём сами: не открылось за пять секунд —
+     закрываем и берём следующий адрес из списка. */
+  let _tryTimer = 0;
+  if(_lobbyMode !== 'lan' && RELAY_LIST.length > 1){
+    _tryTimer = setTimeout(() => {
+      if(ws !== sock || sock.readyState === 1) return;
+      _relayIdx = (_relayIdx + 1) % RELAY_LIST.length;
+      SERVER_URL = RELAY_LIST[_relayIdx];
+      try{ sock.close(); }catch(e){}
+      // Следующая попытка — уже на новом адресе, без задержки: игрок и так ждёт.
+      if(!_manualClose) connect();
+    }, _RELAY_TRY_MS);
+  }
+
   ws.onopen = () => {
     if(ws !== sock) return; // a newer socket superseded this one
+    if(_tryTimer){ clearTimeout(_tryTimer); _tryTimer = 0; }
     _reconnectTries = 0;
+    // Рабочий адрес запоминаем: со следующего запуска начинаем с него, а не с
+    // того, который в этой стране всё равно не откроется.
+    if(_lobbyMode !== 'lan'){
+      try{ localStorage.setItem(_RELAY_OK_KEY, url); }catch(e){}
+    }
     $connStatus.textContent = T('netConnected');
     $connStatus.classList.remove('net-error');
     hideConnLost();
@@ -301,6 +403,7 @@ function connect(){
 
   ws.onclose = () => {
     if(ws !== sock) return; // stale socket closing — don't touch the live one's UI/state
+    if(_tryTimer){ clearTimeout(_tryTimer); _tryTimer = 0; }  // адрес уже отвалился сам
     stopPing();
     if(_manualClose) return;
     // Mid-game drop: can't silently rejoin a relay room — surface it. Also

@@ -8,7 +8,7 @@
      tells the game's relay server that it was opened. Nothing personal is sent:
      the path, the interface language, and that's it. Failures are ignored —
      a counter must never break the page. */
-  var STATS_API = window.BB_STATS_API || 'https://byte-blaster-server-production.up.railway.app';
+  var STATS_API = window.BB_STATS_API || 'https://ws.byte-blaster-server.run.place';
   try {
     // One hit per tab per page, so a language switch or a re-render doesn't
     // inflate the number.

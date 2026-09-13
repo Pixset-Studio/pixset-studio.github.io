@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'feef56bc';
+export const SDK_VERSION = 'df325895';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -893,6 +893,17 @@ export async function presenceCount(gameSlug = 'byte-blaster') {
   const { data, error } = await supabase.rpc('presence_count', { p_game_slug: gameSlug });
   if (error) throw error;
   return (data && data[0]) || { online: 0, day: 0 };
+}
+
+/* ── Комнаты мультиплеера ────────────────────────────────────────────────
+   Считаются те, что отметились за последние 45 секунд. Раньше эти числа
+   приходилось спрашивать у самого сервера комнат, и у всех, кому он
+   недоступен, на месте счётчика стоял прочерк. Теперь комнаты отмечаются
+   в базе студии, и число есть всегда. */
+export async function roomsStats() {
+  const { data, error } = await supabase.rpc('bb_rooms_stats');
+  if (error) throw error;
+  return (data && data[0]) || { rooms: 0, players: 0 };
 }
 
 /* ── Таблицы рекордов ────────────────────────────────────────────────────

@@ -367,11 +367,72 @@
     if (/Android/i.test(ua)) return 'android';
     return 'web';
   }
+  /**
+   * Как устройство называется в списке «Устройства» на сайте.
+   *
+   * «PC (Windows)» ни о чём не говорит, когда таких строк несколько: непонятно,
+   * какую отвязывать. Поэтому пишем то, что реально отличает устройства друг от
+   * друга — модель телефона, название браузера, версию системы.
+   */
   function label() {
+    const ua = navigator.userAgent || '';
     const p = platform();
-    if (p === 'android') return 'Android';
-    if (p === 'windows') return 'PC (Windows)';
+
+    if (p === 'android') {
+      // Строка вида «Linux; Android 13; SM-A536E Build/…» — из неё берём
+      // версию системы и модель. Модель у Xiaomi/Samsung уникальна, этого
+      // достаточно, чтобы узнать свой телефон в списке.
+      const ver = (/Android\s+([\d.]+)/.exec(ua) || [])[1];
+      let model = (/Android[^;)]*;\s*([^;)]+?)(?:\s+Build\/|\)|;)/.exec(ua) || [])[1] || '';
+      model = model.replace(/\s*(wv|Mobile|Tablet)\s*$/i, '').trim();
+      const parts = [model || 'Android'];
+      if (ver) parts.push('Android ' + ver);
+      return parts.join(' · ');
+    }
+
+    if (p === 'windows') {
+      // Наша сборка для ПК. Версию Windows из userAgent не узнать (там всегда
+      // «Windows NT 10.0» и для 10, и для 11), поэтому не выдумываем.
+      const arch = /WOW64|Win64|x64/i.test(ua) ? '64-бит' : '';
+      return ['Приложение · Windows', arch].filter(Boolean).join(' · ');
+    }
+
+    return browserName(ua) + ' · ' + osName(ua);
+  }
+
+  /** Название и версия браузера. Порядок важен: все они притворяются Chrome. */
+  function browserName(ua) {
+    const rules = [
+      [/YaBrowser\/([\d.]+)/, 'Яндекс.Браузер'],
+      [/Edg(?:A|iOS)?\/([\d.]+)/, 'Edge'],
+      [/OPR\/([\d.]+)/, 'Opera'],
+      [/SamsungBrowser\/([\d.]+)/, 'Samsung Internet'],
+      [/Vivaldi\/([\d.]+)/, 'Vivaldi'],
+      [/Firefox\/([\d.]+)/, 'Firefox'],
+      [/CriOS\/([\d.]+)/, 'Chrome'],
+      [/Chrome\/([\d.]+)/, 'Chrome'],
+      [/Version\/([\d.]+).*Safari/, 'Safari'],
+    ];
+    for (const [re, name] of rules) {
+      const m = re.exec(ua);
+      if (m) return name + ' ' + String(m[1]).split('.')[0];
+    }
     return 'Браузер';
+  }
+
+  /** Система, на которой открыт браузер. */
+  function osName(ua) {
+    if (/Windows NT 10/.test(ua)) return 'Windows 10/11';
+    if (/Windows NT/.test(ua)) return 'Windows';
+    if (/Android\s+([\d.]+)/.test(ua)) return 'Android ' + RegExp.$1;
+    if (/(iPhone|iPad|iPod)/.test(ua)) {
+      const v = (/OS (\d+)[._]/.exec(ua) || [])[1];
+      return (/iPad/.test(ua) ? 'iPad' : 'iPhone') + (v ? ' · iOS ' + v : '');
+    }
+    if (/Mac OS X/.test(ua)) return 'macOS';
+    if (/CrOS/.test(ua)) return 'ChromeOS';
+    if (/Linux/.test(ua)) return 'Linux';
+    return 'неизвестная система';
   }
   /** Анонимный отпечаток. Никаких аппаратных идентификаторов. */
   function deviceId() {

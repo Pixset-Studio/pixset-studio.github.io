@@ -104,6 +104,15 @@
     // после потери всех жизней, поэтому длинный уровень не приходится
     // переигрывать с начала. На сложность врагов не влияет.
     gameMode: 'normal',      // 'normal' | 'easy'
+    // Призрак лучшего забега. Выключен по умолчанию: это режим для тех, кто
+    // хочет гонки, а не общая деталь оформления — рядом бегущий силуэт мешает
+    // тем, кто просто проходит уровень.
+    //   'off'         — никого
+    //   'mine'        — свой рекорд на этом уровне (хранится на устройстве)
+    //   'dailyLeader' — лидер уровня дня (только там)
+    //   'anyLeader'   — лидер любого уровня: кампания и хардкор считаются
+    //                   отдельно, у дня — свой на каждый слот
+    ghost: 'off',
     shakeIntensity: 100,     // 0-150% multiplier on screen shake strength
     particles: true,
     combatText: true,        // floating damage/pickup text
@@ -1078,7 +1087,7 @@
               <option value="on" data-i18n="prismFxFull">🌈 Full</option>
               <option value="off" data-i18n="prismFxNone">⚡ Off (fastest)</option>
             </select>
-            <div style="margin-top:5px;color:#888;font-size: calc(8px * var(--bbText, 1));" data-i18n="prismFxNote">* Secret 11th world only. Off gives a big FPS boost; the sky, prism and platforms stay rainbow either way.</div>
+            <div style="margin-top:5px;color:#888;font-size: calc(8px * var(--bbText, 1));" data-i18n="prismFxNote">* Secret 11th world only. Affects enemies and some hazards only: the sky, prism, platforms, bricks, coins, springs and spikes stay rainbow either way. Off gives a big FPS boost.</div>
           </div>
 
           <!-- Individually tunable graphics parameters -->
@@ -1145,6 +1154,19 @@
             <span data-i18n="showGameOverScreen">Defeat Screen</span>
           </label>
           <div style="margin-bottom: 12px; color: #888; font-size: calc(8px * var(--bbText, 1));" data-i18n="resultScreensNote">* Turn off to go straight on without the summary</div>
+
+          <!-- Призрак забега. Выключен по умолчанию — см. gameSettings.ghost. -->
+          <div style="margin-bottom: 18px;">
+            <label data-i18n="ghostSetting" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Best-run Ghost:</label>
+            <select id="ghostSelect" style="width: 100%; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: calc(10px * var(--bbText, 1)); background: #0a0a20; color: #fff; border: 2px solid #4af; border-radius: 4px; cursor: pointer;">
+              <option value="off" data-i18n="ghostOff">🚫 Off</option>
+              <option value="mine" data-i18n="ghostMineOpt">👤 My own record</option>
+              <option value="dailyLeader" data-i18n="ghostDailyOpt">📅 Daily leader</option>
+              <option value="anyLeader" data-i18n="ghostAnyOpt">🏆 Leader of any level</option>
+            </select>
+            <div style="margin-top:5px;color:#888;font-size: calc(8px * var(--bbText, 1));" data-i18n="ghostNote">* A translucent robot replays a past run. It cannot touch you or the level.</div>
+          </div>
+
           <div style="margin-bottom: 18px;">
             <label data-i18n="shakeIntensity" style="color: #4af; font-size: calc(11px * var(--bbText, 1)); display: block; margin-bottom: 6px;">Shake Intensity:</label>
             <input type="range" id="shakeIntensitySlider" min="0" max="150" value="100" style="width: 100%; cursor: pointer;">
@@ -1740,6 +1762,8 @@
     const gameOverScreenCheck = document.getElementById('gameOverScreenCheckbox');
     if (winScreenCheck) winScreenCheck.checked = window.gameSettings.showWinScreen !== false;
     if (gameOverScreenCheck) gameOverScreenCheck.checked = window.gameSettings.showGameOverScreen !== false;
+    const ghostSelect = document.getElementById('ghostSelect');
+    if (ghostSelect) ghostSelect.value = window.gameSettings.ghost || 'off';
     const particlesCheck = document.getElementById('particlesCheckbox');
     const autoSaveCheck = document.getElementById('autoSaveCheckbox');
     const combatTextCheck = document.getElementById('combatTextCheckbox');
@@ -2070,6 +2094,7 @@
       if (hitStopCheck) window.gameSettings.hitStop = hitStopCheck.checked;
       if (winScreenCheck) window.gameSettings.showWinScreen = winScreenCheck.checked;
       if (gameOverScreenCheck) window.gameSettings.showGameOverScreen = gameOverScreenCheck.checked;
+      if (ghostSelect) window.gameSettings.ghost = ghostSelect.value;
       if (adaptiveCheck) window.gameSettings.adaptiveQuality = adaptiveCheck.checked ? 'on' : 'off';
       if (particlesCheck) window.gameSettings.particles = particlesCheck.checked;
       if (autoSaveCheck) window.gameSettings.autoSave = autoSaveCheck.checked;

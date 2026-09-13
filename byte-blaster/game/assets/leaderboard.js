@@ -83,14 +83,29 @@
     } catch (e) { return false; }
   }
 
-  const top      = (mode, limit) => rpc('top_scores', { p_game_slug: GAME, p_mode: mode, p_limit: limit || 50 });
-  const topStats = (field, limit) => rpc('top_stats', { p_game_slug: GAME, p_field: field, p_limit: limit || 50 });
+  /* ── Охват ───────────────────────────────────────────────────────────────
+     Одна и та же доска отвечает на три разных вопроса: «кто лучший в мире»,
+     «кто лучший в моей стране» и «кто лучший из моих друзей». Последний обычно
+     и есть тот, ради которого в таблицу заглядывают.
+
+     Страна берётся из профиля и участвует, только если игрок показывает её
+     всем: страновая доска публична, и тащить в неё скрытую страну нельзя
+     (см. scope_users в миграции 0018). */
+  const SCOPES = [
+    { id: 'world',   key: 'scopeWorld',   def: 'МИР',    auth: false },
+    { id: 'country', key: 'scopeCountry', def: 'СТРАНА', auth: true },
+    { id: 'friends', key: 'scopeFriends', def: 'ДРУЗЬЯ', auth: true },
+  ];
+  let scope = 'world';
+
+  const top      = (mode, limit) => rpc('top_scores', { p_game_slug: GAME, p_mode: mode, p_limit: limit || 50, p_scope: scope });
+  const topStats = (field, limit) => rpc('top_stats', { p_game_slug: GAME, p_field: field, p_limit: limit || 50, p_scope: scope });
   async function myRank(mode) {
-    const rows = await rpc('my_rank', { p_game_slug: GAME, p_mode: mode }, true);
+    const rows = await rpc('my_rank', { p_game_slug: GAME, p_mode: mode, p_scope: scope }, true);
     return (rows && rows[0]) || null;
   }
   async function myStatRank(field) {
-    const rows = await rpc('my_stat_rank', { p_game_slug: GAME, p_field: field }, true);
+    const rows = await rpc('my_stat_rank', { p_game_slug: GAME, p_field: field, p_scope: scope }, true);
     return (rows && rows[0]) || null;
   }
 
@@ -185,12 +200,39 @@
       '<h2>' + T('lbTitle', 'ТАБЛИЦА РЕКОРДОВ') + '</h2>' +
       '<div id="bbLbTabsMode" class="bbLbGroup"></div>' +
       '<div id="bbLbTabsStat" class="bbLbGroup"></div>' +
+      '<div id="bbLbScopes" class="bbLbGroup"></div>' +
       '<div id="bbLbBody"></div>' +
       '<div id="bbLbMine"></div>' +
       '<button id="bbLbBack">' + T('back', 'НАЗАД') + '</button>';
     document.body.appendChild(ov);
     ov.querySelector('#bbLbBack').onclick = close;
     renderTabs();
+    renderScopes();
+  }
+
+  /** Кнопки охвата. Гостю доступен только мир: страну и друзей взять неоткуда. */
+  function renderScopes() {
+    const host = ov.querySelector('#bbLbScopes');
+    if (!host) return;
+    const authed = !!(root.License && root.License.loggedIn && root.License.loggedIn());
+    if (!authed && scope !== 'world') scope = 'world';
+    host.innerHTML = '<span class="cap">' + T('lbScope', 'ОХВАТ') + '</span>';
+    SCOPES.forEach((sc) => {
+      const el = document.createElement('button');
+      el.className = 'bbLbTab' + (sc.id === scope ? ' sel' : '');
+      el.textContent = T(sc.key, sc.def);
+      if (sc.auth && !authed) {
+        el.style.opacity = '0.4';
+        el.title = T('lbNeedLogin', 'Войдите в аккаунт, чтобы попасть в таблицу.');
+        el.onclick = () => { if (root.SFX && root.SFX.back) root.SFX.back(); };
+      } else {
+        el.onclick = () => {
+          if (root.SFX && root.SFX.menu) root.SFX.menu();
+          scope = sc.id; renderScopes(); load();
+        };
+      }
+      host.appendChild(el);
+    });
   }
 
   function renderTabs() {
@@ -261,7 +303,11 @@
       busy = false; return;
     }
     if (!rows || !rows.length) {
-      note(T('lbEmpty', 'Пока никто не отметился. Будьте первым.'));
+      // Пустая доска друзей и пустая доска мира — разные новости: в первом
+      // случае дело не в том, что никто не играл.
+      note(scope === 'friends' ? T('lbEmptyFriends', 'Никто из друзей сюда ещё не попал.')
+         : scope === 'country' ? T('lbEmptyCountry', 'Из вашей страны здесь пока никого.')
+         : T('lbEmpty', 'Пока никто не отметился. Будьте первым.'));
       busy = false; return;
     }
 
@@ -295,7 +341,11 @@
         const r = board.kind === 'mode' ? await myRank(board.id) : await myStatRank(board.id);
         mine.textContent = r
           ? T('lbYourPlace', 'Ваше место: {0}').replace('{0}', r.rank + ' / ' + r.total)
-          : T('lbNotRanked', 'Вас пока нет в таблице');
+          // В страновой доске «вас тут нет» чаще всего значит «страна скрыта в
+          // профиле», а не «результата нет» — так и пишем, иначе непонятно.
+          : (scope === 'country' ? T('scopeCountryHint',
+              'Страна берётся из профиля. Если она скрыта, вас в этой таблице не будет.')
+            : T('lbNotRanked', 'Вас пока нет в таблице'));
       } catch (e) { /* своё место — не главное, молчим */ }
     }
     busy = false;
@@ -305,6 +355,7 @@
     if (!ov) build();
     ov.style.display = 'flex';
     renderTabs();
+    renderScopes();
     load();
   }
   function close() {

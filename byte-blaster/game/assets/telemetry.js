@@ -14,7 +14,7 @@
   'use strict';
   var API = (typeof window.BB_STATS_API === 'string')
     ? window.BB_STATS_API
-    : 'https://byte-blaster-server-production.up.railway.app';
+    : 'https://ws.byte-blaster-server.run.place';
   if (!API) return;
 
   function platform() {
@@ -52,4 +52,40 @@
   // count players who never saw the game.
   if (document.readyState === 'complete') setTimeout(report, 2500);
   else window.addEventListener('load', function () { setTimeout(report, 2500); });
+
+  /* ── «Сейчас играют» ─────────────────────────────────────────────────────
+     Отметка раз в полминуты в таблицу presence (миграция 0018); сайты читают
+     из неё счётчик. Считаются только вошедшие: анонимную отметку может прислать
+     кто угодно сколько угодно раз, и число перестало бы что-то значить.
+
+     Почему не через релей, который и так знает своих игроков: он живёт на
+     Railway, а тот из России не открывается без VPN — счётчик на сайте был бы
+     пустым ровно для основной аудитории. Supabase доступен, комнаты возьмём с
+     релея отдельно, когда он ответит. */
+  var SUPABASE_URL = 'https://zyjhvuhovimorpokiwty.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
+
+  function mode() {
+    if (window.netActive) return 'multiplayer';
+    if (window.dailyMode) return 'daily';
+    if (typeof gState !== 'undefined' && gState === 'playing') return 'playing';
+    return 'menu';
+  }
+
+  function ping() {
+    if (document.hidden) return;                  // свёрнутую игру не считаем
+    if (!(window.License && window.License.loggedIn && window.License.loggedIn())) return;
+    var tk = window.License.accessToken ? window.License.accessToken() : null;
+    Promise.resolve(tk).then(function (t) {
+      if (!t) return;
+      return fetch(SUPABASE_URL + '/rest/v1/rpc/presence_ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: 'Bearer ' + t },
+        body: JSON.stringify({ p_game_slug: 'byte-blaster', p_mode: mode() }),
+      });
+    }).catch(function () { /* нет сети — счётчик не то, ради чего стоит шуметь */ });
+  }
+
+  setTimeout(ping, 4000);
+  setInterval(ping, 30000);
 })();

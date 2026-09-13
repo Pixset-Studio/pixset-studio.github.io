@@ -35,26 +35,36 @@
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ── Avatars ───────────────────────────────────────────────────────────────
-  // Robot colour schemes mirror the multiplayer presets so the avatar and the
-  // in-game/lobby robot are the same character.
-  const ROBOT_SCHEMES = [
-    { id: 'unit7',  name: 'unit7',  hsl: null },              // canonical blue
-    { id: 'r_red',  name: 'custom', hsl: { h: 0,   s: 85, l: 45 } },
-    { id: 'r_grn',  name: 'custom', hsl: { h: 130, s: 75, l: 42 } },
-    { id: 'r_amb',  name: 'custom', hsl: { h: 35,  s: 90, l: 50 } },
-    { id: 'r_mag',  name: 'custom', hsl: { h: 300, s: 80, l: 55 } },
-    { id: 'r_cyn',  name: 'custom', hsl: { h: 180, s: 85, l: 50 } },
-    { id: 'r_vio',  name: 'custom', hsl: { h: 265, s: 75, l: 55 } },
-    { id: 'r_wht',  name: 'custom', hsl: { h: 210, s: 15, l: 72 } },
-  ];
+  // Роботов ровно десять, и это тот же список, что в лобби мультиплеера
+  // (assets/robots.js). Раньше здесь стояла своя восьмёрка оттенков, и робот,
+  // выбранный аватаром, в комнате выглядел другим — теперь набор один.
+  // Идентификатор аватара — 'r_' + id цвета, так что 'r_blue' и цвет №6 в
+  // лобби это один и тот же робот.
+  const ROBOT_LIST = window.BB_ROBOTS || [];
+  const ROBOT_SCHEMES = ROBOT_LIST.map(r => ({ id: 'r_' + r.id, hsl: r.hsl }));
   const PORTRAITS = ['leila', 'archon', 'prism'];
 
+  // Старые идентификаторы аватаров из прежнего набора. Без этой таблицы у
+  // игрока, выбравшего когда-то белого или пурпурного робота, аватар молча
+  // сбросился бы на первого в списке.
+  const LEGACY_AVATARS = {
+    unit7: 'r_blue',   r_red: 'r_red',   r_grn: 'r_green',
+    r_amb: 'r_orange', r_mag: 'r_pink',  r_cyn: 'r_cyan',
+    r_vio: 'r_violet', r_wht: 'r_black',
+  };
+
+  /** Подпись под аватаром: «ЮНИТ-7» у синего (он и есть герой игры), у
+      остальных — номер по порядку: «ЮНИТ-02»… «ЮНИТ-10». Номер, а не название
+      цвета: цвет и так виден, а слово пришлось бы переводить на все девяносто
+      языков игры. */
   function avatarLabel(id) {
-    if (id === 'unit7') return T('avUnit7');
     if (id === 'leila') return T('avLeila');
     if (id === 'archon') return T('avArchon');
     if (id === 'prism') return T('avPrism');
-    return T('avUnitVariant');
+    if (id === 'r_blue') return T('avUnit7');
+    const i = ROBOT_SCHEMES.findIndex(s => s.id === id);
+    return i >= 0 ? T('avUnitVariant') + '-' + String(i + 1).padStart(2, '0')
+                  : T('avUnitVariant');
   }
   function isPortrait(id) { return PORTRAITS.indexOf(id) >= 0; }
   function schemeFor(id) {
@@ -104,8 +114,21 @@
     if (inp) inp.value = clean;
     return true;
   }
-  function avatar() { return LS.get('bb_avatar', 'unit7'); }
-  function setAvatar(id) { LS.set('bb_avatar', id); }
+  /** Выбранный аватар. Значение из прежнего набора переводим на новый — и
+      сразу записываем, чтобы перевод случился один раз. */
+  function avatar() {
+    const id = LS.get('bb_avatar', 'r_blue');
+    if (LEGACY_AVATARS[id]) { LS.set('bb_avatar', LEGACY_AVATARS[id]); return LEGACY_AVATARS[id]; }
+    return id;
+  }
+  /** Выбор аватара-робота задаёт и цвет в мультиплеере: набор один, значит и
+      робот один. Портреты (Лейла, АРХОН, ПРИЗМА) цвет в лобби не трогают —
+      играть за них нельзя. Лобби перечитывает ключ при каждом открытии. */
+  function setAvatar(id) {
+    LS.set('bb_avatar', id);
+    const i = ROBOT_SCHEMES.findIndex(s => s.id === id);
+    if (i >= 0) LS.set('bb_net_color', String(i));
+  }
 
   function stat(k) {
     try { return (window.Achievements && window.Achievements.getStat) ? (window.Achievements.getStat(k) || 0) : 0; }

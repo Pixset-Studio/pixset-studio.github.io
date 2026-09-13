@@ -1,6 +1,6 @@
-# Byte Blaster (HTML Version)
+# Byte Blaster Dev (HTML Version)
 
-This is the web/HTML version of Byte Blaster.
+This is the web/HTML version of Byte Blaster Dev.
 
 ## How to run:
 1. Open index.html in a modern web browser

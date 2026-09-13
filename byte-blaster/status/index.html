@@ -71,13 +71,15 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 
     <div class="item" style="margin-top:16px">
       <div class="srow">
-        <span class="dot wait" id="d-relay"></span>
-        <b><span data-l="ru">Сервер комнат</span><span data-l="en">Room server</span></b>
-        <span class="st" id="s-relay">…</span>
+        <span class="dot wait" id="d-mp"></span>
+        <b><span data-l="ru">Мультиплеер</span><span data-l="en">Multiplayer</span></b>
+        <span class="st" id="s-mp">…</span>
       </div>
       <p class="dim" style="font-size:13px;margin:8px 0 0">
-        <span data-l="ru">Через него работают комнаты мультиплеера.</span>
-        <span data-l="en">Multiplayer rooms go through it.</span>
+        <span data-l="ru">Основной канал комнат. Работает поверх той же связи, что аккаунты
+          и рекорды, поэтому доступен там же, где и они.</span>
+        <span data-l="en">The main channel for rooms. It runs over the same connection as accounts
+          and records, so it is reachable wherever they are.</span>
       </p>
     </div>
 
@@ -105,11 +107,27 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       </p>
     </div>
 
+    <div class="item">
+      <div class="srow">
+        <span class="dot wait" id="d-relay"></span>
+        <b><span data-l="ru">Запасной сервер комнат</span><span data-l="en">Backup room server</span></b>
+        <span class="st" id="s-relay">…</span>
+      </div>
+      <p class="dim" style="font-size:13px;margin:8px 0 0">
+        <span data-l="ru">Прежний сервер мультиплеера. Игра переходит на него, только если
+          основной канал не открылся. В России он недоступен без VPN, и это
+          нормально — комнаты работают через основной канал.</span>
+        <span data-l="en">The former multiplayer server. The game falls back to it only if the main
+          channel fails to open. In some countries it is unreachable without a VPN, and
+          that is fine — rooms work over the main channel.</span>
+      </p>
+    </div>
+
     <p class="note" id="hint" hidden style="margin-top:18px">
-      <span data-l="ru">Сервер комнат вам недоступен. Одиночная игра, аккаунт и рекорды при
-        этом работают — не отвечает только мультиплеер.</span>
-      <span data-l="en">The room server is unreachable for you. Single-player, your account and
-        the record tables still work — only multiplayer is affected.</span>
+      <span data-l="ru">Мультиплеер вам недоступен. Одиночная игра, аккаунт и рекорды при
+        этом работают — не отвечают только комнаты.</span>
+      <span data-l="en">Multiplayer is unreachable for you. Single-player, your account and
+        the record tables still work — only rooms are affected.</span>
     </p>
 
     <p style="margin-top:18px">
@@ -132,14 +150,14 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js?v=feef56bc"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=df325895"></script>
 <script>
 (function () {
   var isEn = function () { return document.documentElement.getAttribute('data-site-lang') === 'en'; };
   var L = function (ru, en) { return isEn() ? en : ru; };
   var $ = function (id) { return document.getElementById(id); };
 
-  var RELAY = window.BB_STATS_API || 'https://byte-blaster-server-production.up.railway.app';
+  var RELAY = window.BB_STATS_API || 'https://ws.byte-blaster-server.run.place';
   var API = 'https://zyjhvuhovimorpokiwty.supabase.co';
   var KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
 
@@ -171,16 +189,48 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       });
   }
 
+  // Мультиплеер живёт на постоянном соединении, а не на обычных запросах,
+  // поэтому и проверяем его так же — пробуем открыть само соединение. Обычный
+  // запрос сюда ответил бы «нет», даже когда всё в порядке.
+  function probeSocket(name, url) {
+    var dot = $('d-' + name), st = $('s-' + name);
+    dot.className = 'dot wait';
+    st.textContent = L('проверяем…', 'checking…');
+    return new Promise(function (resolve) {
+      var done = false, t0 = performance.now(), ws = null;
+      function finish(ok) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        var ms = Math.round(performance.now() - t0);
+        dot.className = 'dot ' + (ok ? 'ok' : 'bad');
+        st.textContent = ok ? L('работает · ', 'up · ') + ms + ' ' + L('мс', 'ms')
+                            : L('не отвечает', 'no answer');
+        try { if (ws) ws.close(); } catch (e) {}
+        resolve(ok);
+      }
+      var timer = setTimeout(function () { finish(false); }, 8000);
+      try { ws = new WebSocket(url); } catch (e) { finish(false); return; }
+      ws.onopen  = function () { finish(true); };
+      ws.onerror = function () { finish(false); };
+      ws.onclose = function () { finish(false); };
+    });
+  }
+
   function run() {
     $('hint').hidden = true;
     Promise.all([
-      probe('relay', RELAY + '/'),
+      probeSocket('mp', API.replace(/^https/, 'wss')
+        + '/realtime/v1/websocket?apikey=' + encodeURIComponent(KEY) + '&vsn=1.0.0'),
       probe('api', API + '/rest/v1/games?select=slug&limit=1', { headers: { apikey: KEY } }),
       // Хранилищу задаём самый безобидный вопрос — «ты вообще там?». Список
       // файлов спрашивать нельзя: бакет закрытый, и отказ в доступе выглядел
       // бы поломкой, хотя означает ровно обратное.
       probe('site', API + '/storage/v1/version', { headers: { apikey: KEY } }),
+      probe('relay', RELAY + '/'),
     ]).then(function (r) {
+      // Подсказку показываем только когда недоступен ОСНОВНОЙ канал: молчащий
+      // запасной сервер — штатное состояние, пугать им незачем.
       $('hint').hidden = !(r[0] === false && r[1] === true);
       $('stamp').textContent = L('Проверено ', 'Checked ') + new Date().toLocaleTimeString();
     });
