@@ -644,7 +644,8 @@
   
   // FPS Counter and Limiter
   let fpsCounter = null;
-  let lastFrameTime = performance.now();
+  let lastFrameTime = performance.now();   // начало текущего окна измерения
+  let lastFrameAt = performance.now();     // когда был предыдущий кадр
   let frameCount = 0;
   let fps = 0;
   let lastLimitTime = performance.now();
@@ -654,24 +655,28 @@
     
     fpsCounter = document.createElement('div');
     fpsCounter.id = 'fpsCounter';
+    // Ни рамки, ни подложки: счётчик висит поверх игры и своей коробкой
+    // закрывал то, что под ним. Читаемость держим обводкой текста — она
+    // работает и на светлом фоне, и на тёмном, ничего не перекрывая.
     fpsCounter.style.cssText = `
       position: fixed;
-      top: 10px;
+      top: 8px;
       left: 10px;
-      background: rgba(0, 0, 0, 0.7);
       color: #0f0;
-      padding: 8px 12px;
       font-family: 'Courier New', monospace;
-      font-size: calc(16px * var(--bbText, 1));
+      font-size: calc(14px * var(--bbText, 1));
       font-weight: bold;
-      border: 2px solid #0f0;
-      border-radius: 4px;
+      line-height: 1;
       z-index: 10000;
       pointer-events: none;
-      text-shadow: 0 0 5px #0f0;
+      text-shadow: 0 0 4px #000, 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
     `;
-    fpsCounter.textContent = 'FPS: 60';
+    fpsCounter.textContent = '';
     document.body.appendChild(fpsCounter);
+    // Счётчик включают на ходу, и до этого момента кадры никто не считал.
+    // Без сброса первое измерение брало интервал «с запуска игры» и выдавало
+    // что-нибудь вроде 2 — с этого и начиналось недоверие к цифре.
+    resetFpsWindow();
   }
 
   function removeFPSCounter() {
@@ -681,35 +686,50 @@
     }
   }
 
+  /** Начать счёт заново — при включении счётчика и после долгих пауз. */
+  function resetFpsWindow() {
+    frameCount = 0;
+    lastFrameTime = performance.now();
+    lastFrameAt = lastFrameTime;
+  }
+
+  /* Считаем по короткому окну (полсекунды), а не по целой секунде: цифра
+     успевает за происходящим, и просадку видно там, где она случилась, а не
+     через секунду после. Само измерение честное — кадры, дошедшие до отрисовки:
+     пропущенные ограничителем сюда не попадают, их отсекает _fpsShouldSkip в
+     игровом цикле. */
+  const FPS_WINDOW_MS = 500;
+
   function updateFPS() {
     if (!window.gameSettings.showFPS) return;
-    
-    frameCount++;
+
     const now = performance.now();
+    // Между двумя кадрами прошло больше половины секунды — игра стояла
+    // (свернули окно, открыли меню, система придержала вкладку). Такой провал
+    // ничего не говорит о скорости игры, поэтому окно начинаем заново, иначе
+    // одна пауза роняет показания до однозначных чисел.
+    if (now - lastFrameAt > 500) { frameCount = 0; lastFrameTime = now; }
+    lastFrameAt = now;
+
+    frameCount++;
     const elapsed = now - lastFrameTime;
-    
-    if (elapsed >= 1000) {
-      fps = Math.round((frameCount * 1000) / elapsed);
-      if (fpsCounter) {
-        const limit = (typeof window.gameSettings.fpsLimit === 'number') ? window.gameSettings.fpsLimit : 0;
-        const displayText = limit > 0 ? `FPS: ${fps} / ${limit}` : `FPS: ${fps}`;
-        fpsCounter.textContent = displayText;
-        
-        // Color based on FPS
-        if (fps >= 55) {
-          fpsCounter.style.color = '#0f0';
-          fpsCounter.style.borderColor = '#0f0';
-        } else if (fps >= 30) {
-          fpsCounter.style.color = '#ff0';
-          fpsCounter.style.borderColor = '#ff0';
-        } else {
-          fpsCounter.style.color = '#f00';
-          fpsCounter.style.borderColor = '#f00';
-        }
-      }
-      frameCount = 0;
-      lastFrameTime = now;
+    if (elapsed < FPS_WINDOW_MS) return;
+
+    fps = Math.round((frameCount * 1000) / elapsed);
+    if (fpsCounter) {
+      const limit = (typeof window.gameSettings.fpsLimit === 'number') ? window.gameSettings.fpsLimit : 0;
+      // Рядом с частотой — время кадра: по нему видно рывки, которые среднее
+      // за полсекунды сглаживает.
+      const ms = (elapsed / frameCount).toFixed(1);
+      fpsCounter.textContent = (limit > 0 ? `${fps} / ${limit} FPS` : `${fps} FPS`) + `  ·  ${ms} ms`;
+      // Порог зелёного — не жёсткие 55, а то, к чему игра стремится: на экране
+      // 30 Гц шестьдесят кадров взять неоткуда, и вечный красный там врал бы.
+      const good = limit > 0 ? limit - 5 : 55;
+      const meh = limit > 0 ? limit * 0.6 : 30;
+      fpsCounter.style.color = fps >= good ? '#0f0' : (fps >= meh ? '#ff0' : '#f00');
     }
+    frameCount = 0;
+    lastFrameTime = now;
   }
 
   // FPS Limiter

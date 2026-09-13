@@ -398,7 +398,19 @@ footer.site a:hover { color: var(--y); }
    сайта Byte Blaster, различается только оформление. */
 .nickline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-.nbdgs { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }
+/* Отступ от ника даёт пробел в разметке (его ставит paintNickBadges), а не
+   margin: пробел схлопывается при переносе строки, и не влезшие иконки встают
+   ровно под ником, а не с уступом вправо. */
+.nbdgs { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+
+/* Там, где ник — отдельная строка (профиль, кабинет), иконки выравниваем
+   средствами flex: так они всегда по одной линии с текстом, а перенос не
+   ломает отступы. Ячейки таблиц и строки списков сюда не попадают — им
+   достаточно обычного пробела. */
+h2[data-nick], h1[data-nick], .nick[data-nick] {
+  display: flex; flex-wrap: wrap; align-items: center;
+  column-gap: 10px; row-gap: 4px;
+}
 .nbdg {
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; flex: 0 0 20px;

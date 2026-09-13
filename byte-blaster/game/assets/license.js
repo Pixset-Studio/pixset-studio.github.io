@@ -144,10 +144,21 @@
     return data;
   }
 
-  async function login(email, password) {
-    const res = await authFetch('/auth/v1/token?grant_type=password', { email, password });
-    const data = await res.json();
-    if (!res.ok) {
+  /* Вход по почте ИЛИ по нику.
+     Почту многие заводят «для регистрации» и назавтра не помнят, а ник виден в
+     игре каждый день. Ник в почту меняет серверная функция login-nick: отдавать
+     наружу пару «ник → почта» нельзя — список ников публичный, и это раздавало
+     бы чужие адреса. Сюда возвращается уже готовая сессия. */
+  async function login(login, password) {
+    const id = String(login || '').trim();
+    const path = id.includes('@')
+      ? '/auth/v1/token?grant_type=password'
+      : '/functions/v1/login-nick';
+    const body = id.includes('@') ? { email: id, password } : { login: id, password };
+
+    const res = await authFetch(path, body);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.access_token) {
       const e = new Error(data.error_description || data.msg || data.message || 'login_failed');
       e.code = data.error_code || data.error;
       throw e;

@@ -754,7 +754,16 @@ select {
 
      .nbdg — иконка у ника где угодно: название уезжает в подсказку;
      .bdg  — строка в профиле: иконка, название и объяснение. */
-.nbdgs { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }
+/* Отступ от ника даёт пробел в разметке (его ставит paintNickBadges), а не
+   margin: пробел схлопывается при переносе строки, и не влезшие иконки встают
+   ровно под ником, а не с уступом вправо. */
+.nbdgs { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+/* Там, где ник — отдельная строка (профиль, кабинет), выравниваем средствами
+   flex. Ячейки таблиц сюда не попадают: им хватает пробела. */
+h1[data-nick], h2[data-nick], .nick[data-nick] {
+  display: flex; flex-wrap: wrap; align-items: center;
+  column-gap: 10px; row-gap: 4px;
+}
 .nbdg { display: inline-flex; align-items: center; justify-content: center;
         width: 20px; height: 20px; flex: 0 0 20px; }
 .nbdg img { width: 100%; height: 100%; object-fit: contain; display: block; }

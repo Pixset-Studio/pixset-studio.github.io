@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'df325895';
+export const SDK_VERSION = 'e9aea1bf';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -88,8 +88,41 @@ export async function resendSignupCode(email) {
   if (error) throw error;
 }
 
+/* ── Вход ──────────────────────────────────────────────────────────────────
+   Пускаем и по почте, и по нику. Почта у многих заведена «для регистрации» и
+   к следующему дню забыта, а ник игрок помнит всегда — он же виден в игре.
+
+   Ник в почту превращает серверная функция login-nick: отдавать наружу
+   сопоставление «ник → почта» нельзя, список ников публичный (есть поиск
+   игроков), и такой ответ раздавал бы чужие адреса всем желающим. Параметр
+   по-прежнему зовётся email — так его передают все страницы. */
 export async function login({ email, password }) {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const id = String(email || '').trim();
+
+  if (id.includes('@')) {
+    const { error } = await supabase.auth.signInWithPassword({ email: id, password });
+    if (error) throw error;
+    return;
+  }
+
+  const res = await fetch(SUPABASE_URL + '/functions/v1/login-nick', {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ login: id, password }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || !data.access_token) {
+    // Тот же текст, что у Supabase на неверную пару почта-пароль: страницы уже
+    // умеют показывать его по-человечески (см. humanError).
+    const err = new Error('Invalid login credentials');
+    err.code = 'invalid_credentials';
+    throw err;
+  }
+
+  const { error } = await supabase.auth.setSession({
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+  });
   if (error) throw error;
 }
 

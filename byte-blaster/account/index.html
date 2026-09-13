@@ -87,8 +87,10 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
         <form id="formLogin">
           <div class="field">
-            <label for="loginEmail"><span data-l="ru">ПОЧТА</span><span data-l="en">EMAIL</span></label>
-            <input type="email" id="loginEmail" autocomplete="email" required>
+            <label for="loginEmail"><span data-l="ru">ПОЧТА ИЛИ НИК</span><span data-l="en">EMAIL OR NICKNAME</span></label>
+            <!-- Именно text, а не email: с типом email браузер сам отказывался
+                 отправлять форму, стоило вписать ник вместо адреса. -->
+            <input type="text" id="loginEmail" autocomplete="username" required>
           </div>
           <div class="field">
             <label for="loginPass"><span data-l="ru">ПАРОЛЬ</span><span data-l="en">PASSWORD</span></label>
@@ -378,7 +380,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js?v=df325895"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=e9aea1bf"></script>
 <script type="module">
 // Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
 // сайта студии общая, вход достаточно выполнить один раз.
@@ -393,11 +395,11 @@ import {
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=df325895';
+} from '/byte-blaster/assets/pixset-auth.js?v=e9aea1bf';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
   gameIconHtml, pageSections, countryName, countryFlag, countryOptions, nickSuggestAll,
-} from '/byte-blaster/assets/pixset-ui.js?v=df325895';
+} from '/byte-blaster/assets/pixset-ui.js?v=e9aea1bf';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };

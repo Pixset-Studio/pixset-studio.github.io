@@ -102,7 +102,9 @@
     ov.innerHTML =
       '<div class="acTitle" id="acTitle"></div>' +
       '<div class="acSub" id="acSub"></div>' +
-      '<input type="email" id="acEmail" autocomplete="email" placeholder="email">' +
+      // Тип text, а не email: сюда можно вписать и ник, а с типом email
+      // браузер такой ввод просто не принимал.
+      '<input type="text" id="acEmail" autocomplete="username" placeholder="email">' +
       '<input type="password" id="acPass" autocomplete="current-password" placeholder="password">' +
       '<div class="acMsg" id="acMsg"></div>' +
       '<div class="acRow">' +
@@ -303,6 +305,8 @@
     ov.querySelector('#acSub').textContent = owns ? T('accSubOwned')
                                           : inAcc ? T('accSubNoLicense')
                                                   : T('accSubGuest');
+    // Подсказка в поле — на языке игры: войти можно и по нику.
+    ov.querySelector('#acEmail').placeholder = T('accLoginPh');
     ov.querySelector('#acLoginBtn').textContent = T('accLogin');
     ov.querySelector('#acBuyBtn').textContent = T('accBuy');
     ov.querySelector('#acCloseBtn').textContent = T('accClose');

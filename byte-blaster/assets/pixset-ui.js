@@ -8,7 +8,7 @@
  * Стили классов .bdg/.nbdg — в studio.css (сайт студии) и site.css (Byte
  * Blaster): оформление у сайтов разное, разметка одна.
  */
-import { supabase, searchPlayers } from '/byte-blaster/assets/pixset-auth.js?v=df325895';
+import { supabase, searchPlayers } from '/byte-blaster/assets/pixset-auth.js?v=e9aea1bf';
 
 /** Язык страницы. Обе площадки держат его в одном атрибуте на <html>. */
 export function uiLang() {
@@ -231,7 +231,10 @@ export async function paintNickBadges(root = document) {
     const old = node.querySelector(':scope > .nbdgs');
     if (old && old.outerHTML === html) return;      // уже нарисовано верно
     if (old) old.remove();
-    if (html) node.insertAdjacentHTML('beforeend', html);
+    // Пробел, а не отступ в стилях: при переносе строки он схлопывается, и
+    // иконки встают ровно под ником. С margin-left они уезжали вправо на
+    // восемь пикселей — ник длинный, бейджи не влезли, и строка «поехала».
+    if (html) node.insertAdjacentHTML('beforeend', ' ' + html);
   });
 }
 

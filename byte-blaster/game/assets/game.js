@@ -378,6 +378,24 @@ function prismFxOn(){
   return !((g.glow!=null&&g.glow<0.6)||(g.bgDetail!=null&&g.bgDetail<0.6));
 }
 window.prismFxOn=prismFxOn;
+
+/* Ход радужного перелива.
+ *
+ * Оттенок всего в одиннадцатом мире складывается из места и времени:
+ * hue=(x*k + tick*k). Время и даёт то самое переливание. Когда игрок включил
+ * оптимизацию (Преломление → Выключено), время из формулы уходит — мир
+ * остаётся радужным (оттенок по-прежнему разный вдоль уровня), но перестаёт
+ * мерцать. Это не косметика: с постоянным оттенком перестают пересчитываться
+ * градиенты и спрайты, которые иначе собираются заново каждый кадр.
+ *
+ * Значение кэшируется на кадр: prismFxOn() читает настройки, а зовут его из
+ * циклов по платформам, блокам и шипам. */
+let _pfTick=-1,_pfVal=0;
+function prismFlow(){
+  if(_pfTick!==tick){ _pfTick=tick; _pfVal=prismFxOn()?tick:0; }
+  return _pfVal;
+}
+window.prismFlow=prismFlow;
 // Подкраски кирпича поверх его коричневого здесь больше нет: полупрозрачная
 // заливка ОСТАВЛЯЛА старый цвет под собой, и блок выходил бурым с радужным
 // налётом — не тем цветом, каким светятся платформы рядом. Кирпич в этом мире
@@ -7805,7 +7823,7 @@ function drawPlatforms(){
         // edge. The fill used to be a saturated hsl(…,85%,32%) sweep, which put
         // a full-brightness rainbow under the player's feet and made the whole
         // world read as a broken test pattern rather than a place.
-        const hueA=(pl.x*0.35+tick*0.6)%360;
+        const hueA=(pl.x*0.35+prismFlow()*0.6)%360;
         // Spectral along the length of the slab, dark toward the bottom. A
         // single flat hue made the world read as "the green level" one moment
         // and "the purple level" the next; a full-brightness rainbow fill made
@@ -7864,7 +7882,7 @@ function drawPlatforms(){
       // deliberately dark — a bright rainbow fill made the platforms disappear
       // into the background instead of standing out from it.
       const typeOffset=pl.type==='moving'?120:pl.type==='crumble'?240:0;
-      const hue=(pl.x*0.5+tick*0.9+typeOffset)%360;
+      const hue=(pl.x*0.5+prismFlow()*0.9+typeOffset)%360;
       // Each platform is its own little prism: the hue sweeps across its width,
       // offset per type so normal/moving/crumble stay tellable apart.
       const hq2=(hue/18|0)*18;
@@ -8025,7 +8043,7 @@ function drawMoneyBlock(x,y,w,h){
  * а здесь его нет вовсе.
  */
 function drawPrismBlock(b,dim){
-  const hue=(b.x*0.5+tick*0.9)%360;
+  const hue=(b.x*0.5+prismFlow()*0.9)%360;
   const hq=(hue/18|0)*18;                       // квантование: меньше градиентов на кадр
   if(b._pbH!==hq||b._pbX!==b.x||b._pbW!==b.w){
     const g=ctx.createLinearGradient(b.x,0,b.x+b.w,0);
@@ -8220,7 +8238,7 @@ function drawJumpPads(){
     if(jp.x+jp.w<vLeft||jp.x>vRight)continue;
     jp.anim+=0.08;
     const pulse=0.8+0.2*Math.sin(jp.anim);
-    const hue=(jp.x*0.5+tick*0.9)%360;
+    const hue=(jp.x*0.5+prismFlow()*0.9)%360;
     const glow=prism?`hsl(${hue},100%,65%)`:'#00ffff';
     ctx.save();
 
@@ -8294,12 +8312,12 @@ function drawHazards(){
     if(hz.x+hz.w<vLeft||hz.x>vRight)continue;
     const _spikePrism=_prism&&hz.type==='spikes';
     ctx.save();
-    if(_prismHz&&!_spikePrism)ctx.filter=prismFilter((((hz.x*0.6+tick*0.5)%360)/20|0)*20,6.5,1.25);
+    if(_prismHz&&!_spikePrism)ctx.filter=prismFilter((((hz.x*0.6+prismFlow()*0.5)%360)/20|0)*20,6.5,1.25);
     if(hz.type==='spikes'){
       // Шип светится собственным цветом из спектра — оттенок берётся по месту и
       // времени, теми же формулами, что у платформы под ним. Серый металл
       // остался бы единственной бесцветной вещью в мире света.
-      const hue=_spikePrism?(((hz.x*0.6+tick*0.9)%360+360)%360):0;
+      const hue=_spikePrism?(((hz.x*0.6+prismFlow()*0.9)%360+360)%360):0;
       const hq=_spikePrism?(hue/18|0)*18:0;
       // Metallic base
       ctx.fillStyle=_spikePrism?`hsl(${hq},70%,16%)`:'#2a2a2a';
