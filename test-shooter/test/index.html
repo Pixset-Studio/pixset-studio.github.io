@@ -1,1 +1,35 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Offline 3D Shooter</title><link rel="stylesheet" href="style.css"></head><body><canvas id="gl"></canvas><div id="hud"><div class="top"><span id="hp">HP 100</span><span id="ammo">AMMO 30 / 120</span><span id="wave">WAVE 1</span></div><div id="cross">+</div><div id="msg"></div></div><div id="mobile"><div id="joy"><div id="knob"></div></div><div id="look"></div><button id="fire">●</button><button id="reload">↻</button></div><div id="start"><h1>OFFLINE 3D SHOOTER</h1><p>WASD — движение<br>Мышь — обзор<br>ЛКМ — огонь, R — перезарядка</p><button id="startBtn">ИГРАТЬ</button></div><script src="game.js"></script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Offline 3D Shooter</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div class="top">
+    <span id="hp">HP 100</span>
+    <span id="ammo">AMMO 30 / 120</span>
+    <span id="wave">WAVE 1</span>
+  </div>
+  <div id="cross">+</div>
+  <div id="msg"></div>
+</div>
+<div id="mobile">
+  <div id="joy"><div id="knob"></div></div>
+  <div id="look"></div>
+  <button id="fire" aria-label="Огонь">●</button>
+  <button id="reload" aria-label="Перезарядка">↻</button>
+</div>
+<div id="start">
+  <div class="panel">
+    <h1>OFFLINE 3D SHOOTER</h1>
+    <p>Одиночный офлайн-шутер.<br>WASD — движение · мышь — обзор · ЛКМ — огонь · R — перезарядка</p>
+    <button id="startBtn">ИГРАТЬ</button>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
