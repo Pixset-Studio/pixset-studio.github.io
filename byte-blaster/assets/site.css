@@ -327,6 +327,18 @@ ul.clean li:last-child { border-bottom: none; }
 footer.site { border-top: 1px solid var(--line); padding: 34px 0; color: var(--dim); font-size: 14px; }
 footer.site .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 
+/* Ссылки на документы студии. Раскладывает по страницам sync-legal.mjs —
+   правится там, а не тут. Документы общие для обоих сайтов и живут в корне
+   домена, поэтому строка стоит отдельно от навигации по самой игре. */
+.legal-line {
+  max-width: var(--maxw); margin: 20px auto 0; padding: 15px 22px 0;
+  border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 4px 18px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .5px;
+}
+.legal-line a { color: var(--dim); }
+.legal-line a:hover { color: var(--cyan); }
+
 /* ── Mobile ──────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
   .wiki { grid-template-columns: 1fr; gap: 20px; }

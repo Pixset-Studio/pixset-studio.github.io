@@ -150,6 +150,47 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
   </div>
 </section>
 
+<!-- Как покупатель получает цифровой товар: посылки нет, ключа нет, и это
+     нужно объяснить до оплаты. -->
+<section>
+  <div class="wrap">
+    <h2><span data-l="ru">Как проходит покупка</span><span data-l="en">How a purchase works</span></h2>
+    <div class="rule"></div>
+    <div class="grid">
+      <div class="card">
+        <div class="ico">🔑</div>
+        <h3><span data-l="ru">Сначала аккаунт</span><span data-l="en">An account first</span></h3>
+        <p data-l="ru">Лицензия ложится на аккаунт студии, а не на устройство, — поэтому войти нужно до оплаты. Вход по почте или по нику.</p>
+        <p data-l="en">The licence belongs to your studio account, not to a device — so you sign in before paying. By email or nickname.</p>
+      </div>
+      <div class="card">
+        <div class="ico">💳</div>
+        <h3><span data-l="ru">Оплата на стороне ЮKassa</span><span data-l="en">Payment on YooKassa</span></h3>
+        <p data-l="ru">Цена окончательная, в рублях. Данные карты вводятся на защищённой странице платёжного сервиса — студия их не видит.</p>
+        <p data-l="en">The price is final, in roubles. Card details are entered on the payment provider's secure page — the studio never sees them.</p>
+      </div>
+      <div class="card">
+        <div class="ico">⚡</div>
+        <h3><span data-l="ru">Доступ сразу</span><span data-l="en">Instant access</span></h3>
+        <p data-l="ru">Игра открывается автоматически за несколько секунд после оплаты. Ключ вводить не нужно, чек приходит на почту.</p>
+        <p data-l="en">The game unlocks automatically within seconds of payment. No key to enter; the receipt arrives by email.</p>
+      </div>
+      <div class="card">
+        <div class="ico">♾️</div>
+        <h3><span data-l="ru">Навсегда и везде</span><span data-l="en">Forever, everywhere</span></h3>
+        <p data-l="ru">Без подписок и без ограничения на число устройств. Приложения для Windows и Android скачиваются бесплатно.</p>
+        <p data-l="en">No subscriptions, no device limit. The Windows and Android apps are free to download.</p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:22px">
+      <span data-l="ru">Условия покупки и возврата денег — в <a href="/legal/offer/">публичной оферте</a>.
+        Вопросы по оплате: <a href="mailto:pixset.studio.offical@gmail.com">pixset.studio.offical@gmail.com</a>.</span>
+      <span data-l="en">Purchase and refund terms are set out in the <a href="/legal/offer/">public offer</a>.
+        Payment questions: <a href="mailto:pixset.studio.offical@gmail.com">pixset.studio.offical@gmail.com</a>.</span>
+    </p>
+  </div>
+</section>
+
 </main>
 
 <footer class="site">
@@ -163,6 +204,14 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
       </div>
     </div>
   </div>
+  <!-- legal -->
+    <div class="legal-line">
+      <a href="/legal/offer/"><span data-l="ru">Оферта</span><span data-l="en">Offer</span></a>
+      <a href="/legal/terms/"><span data-l="ru">Соглашение</span><span data-l="en">Terms</span></a>
+      <a href="/legal/privacy/"><span data-l="ru">Конфиденциальность</span><span data-l="en">Privacy</span></a>
+      <a href="/legal/contacts/"><span data-l="ru">Контакты и реквизиты</span><span data-l="en">Contacts</span></a>
+    </div>
+  <!-- /legal -->
 </footer>
 
 <script src="/assets/studio.js"></script>
@@ -247,15 +296,15 @@ function tile(game, owned, isHero) {
     </div>`;
 }
 
-/** Пока оплата на сайте не работает, лицензию выдаёт студия вручную. */
+/** Пока оплата картой подключается, заказ оформляется письмом. */
 function offlineNote() {
   const mail = esc(settings.support_email);
   return `<div class="note" style="margin-top:4px;font-size:14px">
-      ${esc(L('Оплата на сайте временно недоступна. Напишите на',
-              'Payments on the site are temporarily unavailable. Write to'))}
+      ${esc(L('Оплата картой на сайте сейчас подключается. Пока заказ оформляется письмом:',
+              'Card payments on the site are being connected. For now orders go by email:'))}
       <a href="mailto:${mail}">${mail}</a> —
-      ${esc(L('мы выдадим лицензию на ваш аккаунт.',
-              'and we will grant the licence to your account.'))}
+      ${esc(L('откроем полную версию на вашем аккаунте в тот же день.',
+              'we will unlock the full version on your account the same day.'))}
     </div>`;
 }
 

@@ -133,6 +133,54 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
   </div>
 </section>
 
+<!-- Как покупатель получает цифровой товар. Раздел обязателен для приёма
+     платежей: у игры нет посылки и нет ключа, и это надо объяснить до оплаты,
+     а не после. -->
+<section>
+  <div class="wrap">
+    <h2><span data-l="ru">КАК ВЫ ПОЛУЧИТЕ ИГРУ</span><span data-l="en">HOW YOU GET THE GAME</span></h2>
+    <p class="dim" style="max-width:720px">
+      <span data-l="ru">Ничего не пересылается почтой и не приходит ключом в письме. Лицензия ложится на ваш аккаунт Pixset Studio — поэтому аккаунт нужен до оплаты.</span>
+      <span data-l="en">Nothing is shipped and no key arrives by email. The licence is attached to your Pixset Studio account — which is why you need one before paying.</span>
+    </p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card">
+        <div class="ico">1️⃣</div>
+        <h3><span data-l="ru">Вход в аккаунт</span><span data-l="en">Sign in</span></h3>
+        <p data-l="ru">Заведите аккаунт студии или войдите в существующий — по почте или по нику.</p>
+        <p data-l="en">Create a studio account or sign in to an existing one — by email or nickname.</p>
+      </div>
+      <div class="card">
+        <div class="ico">2️⃣</div>
+        <h3><span data-l="ru">Оплата</span><span data-l="en">Payment</span></h3>
+        <p data-l="ru">Оплата проходит на защищённой странице ЮKassa. Данные карты студия не видит и не хранит.</p>
+        <p data-l="en">Payment happens on YooKassa's secure page. The studio never sees or stores your card details.</p>
+      </div>
+      <div class="card">
+        <div class="ico">3️⃣</div>
+        <h3><span data-l="ru">Доступ за секунды</span><span data-l="en">Access in seconds</span></h3>
+        <p data-l="ru">Сразу после оплаты полная версия открывается автоматически. Чек приходит на почту, указанную при оплате.</p>
+        <p data-l="en">The full version unlocks automatically right after payment. The receipt is emailed to the address you entered.</p>
+      </div>
+      <div class="card">
+        <div class="ico">4️⃣</div>
+        <h3><span data-l="ru">Играйте где угодно</span><span data-l="en">Play anywhere</span></h3>
+        <p data-l="ru">В браузере сразу, а приложения для Windows и Android <a href="/byte-blaster/download/">скачиваются бесплатно</a>. Устройств сколько угодно.</p>
+        <p data-l="en">In the browser right away; the Windows and Android apps are a <a href="/byte-blaster/download/">free download</a>. Any number of devices.</p>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:24px">
+      <span data-l="ru"><b>Что-то пошло не так?</b> Если деньги списались, а игра не открылась, напишите на
+        <a href="mailto:pixset.studio.offical@gmail.com">pixset.studio.offical@gmail.com</a> — откроем вручную
+        или вернём деньги. Условия — в <a href="/legal/offer/">оферте</a>.</span>
+      <span data-l="en"><b>Something went wrong?</b> If you were charged but the game did not unlock, write to
+        <a href="mailto:pixset.studio.offical@gmail.com">pixset.studio.offical@gmail.com</a> — we will unlock it
+        manually or refund you. See the <a href="/legal/offer/">offer</a> for terms.</span>
+    </div>
+  </div>
+</section>
+
 </main>
 
 <footer class="site">
@@ -144,6 +192,14 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
       <a href="/byte-blaster/download/"><span data-l="ru">Скачать</span><span data-l="en">Download</span></a>
     </div>
   </div>
+  <!-- legal -->
+    <div class="legal-line">
+      <a href="/legal/offer/"><span data-l="ru">Оферта</span><span data-l="en">Offer</span></a>
+      <a href="/legal/terms/"><span data-l="ru">Соглашение</span><span data-l="en">Terms</span></a>
+      <a href="/legal/privacy/"><span data-l="ru">Конфиденциальность</span><span data-l="en">Privacy</span></a>
+      <a href="/legal/contacts/"><span data-l="ru">Контакты и реквизиты</span><span data-l="en">Contacts</span></a>
+    </div>
+  <!-- /legal -->
 </footer>
 
 <script src="/byte-blaster/assets/config.js"></script>
@@ -203,19 +259,19 @@ async function render() {
         encodeURIComponent('Byte Blaster — покупка лицензии')
       }">${bi('НАПИСАТЬ НАМ', 'EMAIL US')}</a>`;
     $('hint').innerHTML = bi(
-      'Оплата на сайте временно недоступна. Напишите на <b>' + safe +
-        '</b> — мы выдадим лицензию на ваш аккаунт.',
-      'Payments on the site are temporarily unavailable. Email <b>' + safe +
-        '</b> and we will add the licence to your account.');
+      'Оплата картой на сайте сейчас подключается. Пока заказ оформляется письмом: ' +
+        'напишите на <b>' + safe + '</b> — откроем полную версию на вашем аккаунте в тот же день.',
+      'Card payments on the site are being connected. For now orders go by email: ' +
+        'write to <b>' + safe + '</b> and we will unlock the full version on your account the same day.');
 
     $('mailBtn').addEventListener('click', () => {
       copy(mail).then((ok) => {
         if (ok) {
-          say('Адрес скопирован: ' + mail + ' — напишите нам, и мы выдадим лицензию.',
-              'Address copied: ' + mail + ' — write to us and we will add the licence.', 'ok');
+          say('Адрес скопирован: ' + mail + ' — напишите нам, и мы откроем полную версию.',
+              'Address copied: ' + mail + ' — write to us and we will unlock the full version.', 'ok');
         } else {
-          say('Напишите нам на ' + mail + ' — мы выдадим лицензию на ваш аккаунт.',
-              'Write to ' + mail + ' — we will add the licence to your account.', 'ok');
+          say('Напишите нам на ' + mail + ' — откроем полную версию на вашем аккаунте.',
+              'Write to ' + mail + ' — we will unlock the full version on your account.', 'ok');
         }
       });
     });

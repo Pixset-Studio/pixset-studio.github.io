@@ -651,3 +651,46 @@ select {
 .grantbox { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 .grantbox > .field { flex: 1; min-width: 200px; margin-bottom: 0; }
 .grantbox .btn { width: auto; padding: 12px 20px; }
+
+/* Документы: оферта, соглашение, политика. Длинный текст с нумерацией — тут
+   важна читаемость абзаца, а не плотность, поэтому строка уже основной. */
+.doc { max-width: 760px; font-size: 15px; line-height: 1.75; color: var(--text-dim); }
+.doc h3 {
+  margin: 34px 0 12px; color: #fff;
+  font-family: var(--font-head); font-weight: var(--head-weight);
+  font-size: clamp(17px, 2vw, 21px); letter-spacing: var(--head-spacing);
+}
+.doc h3:first-child { margin-top: 0; }
+.doc h4 { margin: 22px 0 8px; color: var(--text); font-size: 16px; }
+.doc p { margin: 0 0 12px; }
+.doc ul, .doc ol { margin: 0 0 14px; padding-left: 22px; }
+.doc li { margin-bottom: 7px; }
+.doc b, .doc strong { color: var(--text); }
+.doc a { color: var(--y); }
+/* Дата вступления в силу и номер версии — служебная строка под заголовком. */
+.doc .stamp {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text-dim); margin-bottom: 26px;
+}
+
+/* Строка со ссылками на документы. Живёт в подвале каждой страницы, поэтому
+   не опирается на .wrap: подвалы у сайта и у вики свёрстаны по-разному. */
+.legal-line {
+  max-width: 1120px; margin: 20px auto 0; padding: 15px 22px 0;
+  border-top: 1px solid var(--line, rgba(255,255,255,.1));
+  display: flex; flex-wrap: wrap; gap: 4px 18px;
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: .5px;
+}
+.legal-line a { color: var(--text-dim, #9aa); }
+.legal-line a:hover { color: var(--y, #ffd400); }
+
+/* Реквизиты: пары «название — значение», на узком экране в одну колонку. */
+.req { display: grid; grid-template-columns: 210px 1fr; gap: 10px 18px; margin: 0 0 8px; }
+.req dt { font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+          text-transform: uppercase; color: var(--text-dim); padding-top: 3px; }
+.req dd { margin: 0; color: var(--text); }
+.req dd .sel { font-family: var(--font-mono); user-select: all; }
+@media (max-width: 620px) {
+  .req { grid-template-columns: 1fr; gap: 2px 0; }
+  .req dd { margin-bottom: 12px; }
+}
