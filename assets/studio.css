@@ -547,6 +547,28 @@ body.langswap { animation: langFade .34s ease; }
 :root[data-theme='byteblaster'] .field input,
 :root[data-theme='byteblaster'] .field textarea { font-size: 14px; }
 
+/* ── Строка промокода ─────────────────────────────────────────────────────
+   Поле и кнопка в одну линию; на узком экране кнопка уходит под поле, а не
+   ужимается до нечитаемой. */
+.promo-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.promo-row input {
+  flex: 1 1 200px; min-width: 0; box-sizing: border-box;
+  padding: 12px 13px; border-radius: var(--radius);
+  background: var(--bg); border: 1px solid var(--line-2); color: var(--text);
+  font-family: var(--font-mono); font-size: 15px;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.promo-row input::placeholder { color: var(--text-dim); opacity: .8; letter-spacing: 1px; }
+.promo-row input:focus {
+  outline: none; border-color: var(--y); box-shadow: 0 0 0 1px rgba(255,212,0,.25);
+}
+.promo-row select {
+  flex: 0 1 auto; padding: 12px 13px; border-radius: var(--radius);
+  background: var(--bg); border: 1px solid var(--line-2); color: var(--text);
+  font-family: var(--font-body); font-size: 15px;
+}
+.promo-row .btn { flex: 0 0 auto; width: auto; white-space: nowrap; }
+
 form .btn, .panel > .btn { width: 100%; }
 
 .tabs { display: flex; gap: 6px; margin-bottom: 20px; }

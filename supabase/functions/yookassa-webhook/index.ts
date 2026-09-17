@@ -65,17 +65,20 @@ Deno.serve(async (req) => {
   const refunded = status === 'canceled' || Number(payment?.refunded_amount?.value ?? 0) > 0;
 
   // Заказ ищем по metadata, которую сами положили при создании платежа.
-  let order: { id: string; user_id: string; game_slug: string; amount: number } | null = null;
+  let order:
+    | { id: string; user_id: string; game_slug: string; amount: number; promo_code: string | null }
+    | null = null;
   const orderId = payment?.metadata?.order_id ? String(payment.metadata.order_id) : null;
+  const ORDER_FIELDS = 'id, user_id, game_slug, amount, promo_code';
 
   if (orderId) {
     const { data } = await supabase
-      .from('orders').select('id, user_id, game_slug, amount').eq('id', orderId).maybeSingle();
+      .from('orders').select(ORDER_FIELDS).eq('id', orderId).maybeSingle();
     order = data ?? null;
   }
   if (!order) {
     const { data } = await supabase
-      .from('orders').select('id, user_id, game_slug, amount')
+      .from('orders').select(ORDER_FIELDS)
       .eq('provider_ref', paymentId).maybeSingle();
     order = data ?? null;
   }
@@ -105,13 +108,26 @@ Deno.serve(async (req) => {
 
     // Повторная доставка того же уведомления не должна ломать выдачу —
     // отсюда onConflict: лицензия просто остаётся активной.
+    //
+    // expires_at сбрасывается намеренно: покупка даёт игру навсегда, и если у
+    // игрока была временная лицензия по промокоду, оплата должна снять срок,
+    // а не оставить купленное истекающим.
     await supabase.from('licenses').upsert({
       user_id: order.user_id,
       game_slug: order.game_slug,
       order_id: order.id,
       source: 'purchase',
       revoked_at: null,
+      expires_at: null,
     }, { onConflict: 'user_id,game_slug' });
+
+    // Промокод засчитываем только теперь: до оплаты он был лишь обещанием
+    // скидки, и брошенные заказы не должны съедать лимит использований.
+    // Функция сама молчит, если кода не было или его уже засчитали.
+    if (order.promo_code) {
+      const { error: promoErr } = await supabase.rpc('promo_mark_used', { p_order_id: order.id });
+      if (promoErr) console.error('promo_mark_used failed', order.id, promoErr.message);
+    }
 
     return OK({ ok: true, granted: true });
   }

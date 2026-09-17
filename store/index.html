@@ -182,7 +182,15 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         <p data-l="en">No subscriptions, no device limit. The Windows and Android apps are free to download.</p>
       </div>
     </div>
+    <!-- Промокоды вводятся не здесь: витрина только ведёт на страницу игры.
+         Но игрок с кодом в руках должен понимать, куда идти. -->
     <p class="note" style="margin-top:22px">
+      <span data-l="ru"><b>Есть промокод?</b> Код со скидкой вводится на странице покупки игры, до оплаты.
+        Код, который открывает саму игру, активируется в <a href="/account">личном кабинете</a>.</span>
+      <span data-l="en"><b>Got a promo code?</b> A discount code goes in on the game's purchase page, before payment.
+        A code that unlocks the game itself is redeemed in your <a href="/account">account</a>.</span>
+    </p>
+    <p class="note" style="margin-top:12px">
       <span data-l="ru">Условия покупки и возврата денег — в <a href="/legal/offer/">публичной оферте</a>.
         Вопросы по оплате: <a href="mailto:pixset.studio.offical@gmail.com">pixset.studio.offical@gmail.com</a>.</span>
       <span data-l="en">Purchase and refund terms are set out in the <a href="/legal/offer/">public offer</a>.
@@ -216,12 +224,12 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 
 <script src="/assets/studio.js"></script>
 <script src="/assets/pixset-rates.js"></script>
-<script src="/assets/pixset-me.js?v=e9aea1bf"></script>
+<script src="/assets/pixset-me.js?v=822f1690"></script>
 <script type="module">
 import {
   supabase, getGames, getEntitlements, getProfile, getSettings,
   detectCountry, formatPrice, humanError,
-} from '/assets/pixset-auth.js?v=e9aea1bf';
+} from '/assets/pixset-auth.js?v=822f1690';
 
 const $ = (id) => document.getElementById(id);
 

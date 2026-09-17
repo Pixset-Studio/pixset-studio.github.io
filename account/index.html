@@ -264,6 +264,27 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         </h3>
         <div class="rows" id="lib"></div>
 
+        <!-- ── Промокод ────────────────────────────────────────────────────
+             Здесь активируются коды, которые дают саму игру — насовсем или на
+             срок. Коды со скидкой сюда не годятся: они работают при оплате, и
+             об этом сказано прямо, чтобы игрок не решил, что код сломался. -->
+        <h3 data-sect="games" style="margin-top:26px">
+          <span data-l="ru">Промокод</span><span data-l="en">Promo code</span>
+        </h3>
+        <p class="dim" style="font-size:13px;margin-bottom:12px">
+          <span data-l="ru">Код, открывающий игру, активируется здесь. Код со скидкой вводится при оплате — на странице покупки.</span>
+          <span data-l="en">A code that unlocks a game is redeemed here. A discount code goes in at checkout, on the purchase page.</span>
+        </p>
+        <div class="promo-row">
+          <select id="promoGame" hidden aria-label="Игра"></select>
+          <input id="promoInput" type="text" maxlength="32" autocomplete="off"
+                 spellcheck="false" placeholder="PROMOCODE" aria-label="Промокод">
+          <button class="btn" id="promoBtn">
+            <span data-l="ru">Активировать</span><span data-l="en">Redeem</span>
+          </button>
+        </div>
+        <div class="msg" id="promoMsg"></div>
+
         <h3 data-sect="games" style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
         <div class="rows" id="orders"></div>
 
@@ -476,7 +497,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 </footer>
 
 <script src="/assets/studio.js"></script>
-<script src="/assets/pixset-me.js?v=e9aea1bf"></script>
+<script src="/assets/pixset-me.js?v=822f1690"></script>
 <script type="module">
 import {
   supabase, register, login, logout, resetPassword,
@@ -485,15 +506,15 @@ import {
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
-  deleteAccount, getMyOrders,
+  deleteAccount, getMyOrders, promoPreview, promoRedeem,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
-} from '/assets/pixset-auth.js?v=e9aea1bf';
+} from '/assets/pixset-auth.js?v=822f1690';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
   gameIconHtml, pageSections, countryName, countryFlag, countryOptions, nickSuggestAll,
-} from '/assets/pixset-ui.js?v=e9aea1bf';
+} from '/assets/pixset-ui.js?v=822f1690';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -1036,6 +1057,13 @@ async function renderProfile(user) {
   pageSections($('acctSections'));
   nickSuggestAll(document);   // поле «добавить друга» и всё, где вводится ник
 
+  await renderLibrary();
+  renderDevices();
+  renderThemes();
+}
+
+/** Список игр на аккаунте, покупки и выбор игры для промокода. */
+async function renderLibrary() {
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
   catalog = byslug;                       // покупкам нужны названия и иконки
@@ -1052,19 +1080,106 @@ async function renderProfile(user) {
   $('lib').innerHTML = owned.length
     ? owned.map((e) => {
         const g = byslug.get(e.game_slug) || { title: e.game_slug };
+        // Временный доступ по промокоду подписан датой: игрок должен видеть,
+        // что игра открыта не навсегда, ещё до того, как доступ пропадёт.
+        const till = e.expires_at
+          ? new Date(e.expires_at).toLocaleDateString(locale(),
+              { day: 'numeric', month: 'long', year: 'numeric' })
+          : null;
         return `<div class="row" style="display:flex;align-items:center;gap:12px">
           ${gameIconHtml(g.icon_url, g.title)}
           <b style="flex:1;min-width:0">${esc(g.title)}</b>
-          <span class="badge">${esc(L('Лицензия активна', 'Licence active'))}</span></div>`;
+          <span class="badge">${esc(till
+            ? L('Доступ до ', 'Access until ') + till
+            : L('Лицензия активна', 'Licence active'))}</span></div>`;
       }).join('')
     : `<div class="row"><span class="dim">${esc(L(
          'Пока пусто — первый мир Byte Blaster открыт бесплатно.',
          'Nothing yet — the first world of Byte Blaster is free.'))}</span>
        <a class="btn" href="/store">${esc(L('В магазин', 'To the store'))}</a></div>`;
 
-  renderDevices();
-  renderThemes();
+  fillPromoGames(games);
 }
+
+/* ── Промокод ─────────────────────────────────────────────────────────────
+   Активируются только коды, дающие игру. Скидочные проверяются тем же
+   promo_preview, но применить их здесь нельзя — о них сообщаем словами и
+   отправляем на страницу покупки. */
+
+const PROMO_REASONS = {
+  not_found:     ['Такого промокода нет', 'No such promo code'],
+  inactive:      ['Промокод отключён', 'This code is switched off'],
+  not_started:   ['Промокод ещё не действует', 'This code is not active yet'],
+  expired:       ['Срок действия промокода истёк', 'This code has expired'],
+  used_up:       ['Промокод уже разобрали', 'This code has run out'],
+  already_used:  ['Вы уже пользовались этим промокодом', 'You have already used this code'],
+  wrong_game:    ['Промокод для другой игры', 'This code is for another game'],
+  already_owned: ['Эта игра уже открыта на вашем аккаунте',
+                  'This game is already on your account'],
+};
+
+/** Выбор игры нужен, только когда игр больше одной. */
+function fillPromoGames(games) {
+  const sel = $('promoGame');
+  sel.innerHTML = games.map((g) =>
+    `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
+  sel.hidden = games.length < 2;
+}
+
+async function redeemPromo() {
+  const code = $('promoInput').value.trim().toUpperCase();
+  const game = $('promoGame').value;
+  if (!code) { say($('promoMsg'), L('Введите промокод.', 'Enter a promo code.')); return; }
+  if (!game) {
+    say($('promoMsg'), L('Каталог игр ещё не загрузился — повторите через секунду.',
+                         'The game catalogue is still loading — try again in a second.'));
+    return;
+  }
+
+  const res = await promoPreview(code, game);
+  if (!res || !res.ok) {
+    const r = PROMO_REASONS[res?.reason];
+    say($('promoMsg'), r ? L(r[0], r[1]) : L('Промокод не подошёл', 'This code did not work'));
+    return;
+  }
+
+  if (res.kind !== 'license') {
+    say($('promoMsg'), L(
+      'Это код со скидкой — его надо ввести при оплате, на странице покупки.',
+      'This is a discount code — enter it at checkout, on the purchase page.'));
+    return;
+  }
+
+  const done = await promoRedeem(code, game);
+  if (!done || !done.ok) {
+    const r = PROMO_REASONS[done?.reason];
+    say($('promoMsg'), r ? L(r[0], r[1]) : L('Промокод не подошёл', 'This code did not work'));
+    return;
+  }
+
+  const till = done.expires_at
+    ? new Date(done.expires_at).toLocaleDateString(locale(),
+        { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+  say($('promoMsg'), till
+    ? L('Готово — доступ открыт до ' + till, 'Done — access is open until ' + till)
+    : L('Готово — игра открыта на вашем аккаунте навсегда.',
+        'Done — the game is on your account forever.'), 'ok');
+  $('promoInput').value = '';
+
+  // Лицензия появилась — перерисовываем библиотеку. Заодно обновится кэш прав
+  // и список тем: тема Byte Blaster открывается вместе с игрой.
+  await renderLibrary();
+}
+
+$('promoBtn').onclick = () => busy($('promoBtn'), async () => {
+  clear($('promoMsg'));
+  try { await redeemPromo(); }
+  catch (err) { say($('promoMsg'), humanError(err)); }
+});
+$('promoInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('promoBtn').click(); }
+});
 
 async function renderDevices() {
   const devices = await getDevices();

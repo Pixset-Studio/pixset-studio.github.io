@@ -364,6 +364,70 @@
       </div>
       <div class="tw"><table id="playersTbl"></table></div>
 
+      <!-- ── Промокоды ───────────────────────────────────────────────────
+           Два разных зверя под одной вывеской. «Скидка» живёт до оплаты: базa
+           пересчитывает сумму заказа и засчитывает код только после успешного
+           платежа — брошенная корзина лимит не съедает. «Игра» выдаёт лицензию
+           сразу, без денег: навсегда или на срок. Набор тот же, что в админке
+           студии: коды общие на все игры. -->
+      <h2 data-sect="sales" style="margin-top:34px">ПРОМОКОДЫ</h2>
+      <p class="dim" style="font-size:14px">
+        Код со скидкой игрок вводит на странице покупки, код на игру — в своём
+        кабинете. Сохранение существующего кода переписывает его условия;
+        те, кто уже воспользовался, ничего не теряют.
+      </p>
+      <div class="field">
+        <label for="pcCode">Код</label>
+        <input type="text" id="pcCode" maxlength="32" placeholder="SUMMER26">
+      </div>
+      <div class="field">
+        <label for="pcKind">Что даёт</label>
+        <select id="pcKind">
+          <option value="discount">Скидку на покупку</option>
+          <option value="license">Саму игру</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pcGame">Игра</label>
+        <select id="pcGame"></select>
+      </div>
+      <div class="field" data-pk="discount">
+        <label for="pcPercent">Скидка, %</label>
+        <input type="number" id="pcPercent" min="1" max="100" placeholder="20">
+      </div>
+      <div class="field" data-pk="discount">
+        <label for="pcAmount">…или скидка суммой, ₽</label>
+        <input type="number" id="pcAmount" min="1" placeholder="100">
+      </div>
+      <div class="field" data-pk="license">
+        <label for="pcDays">Дней доступа</label>
+        <input type="number" id="pcDays" min="1" placeholder="пусто — навсегда">
+      </div>
+      <div class="field">
+        <label for="pcMax">Всего использований</label>
+        <input type="number" id="pcMax" min="1" placeholder="без ограничения">
+      </div>
+      <div class="field">
+        <label for="pcPer">На одного игрока</label>
+        <input type="number" id="pcPer" min="1" value="1">
+      </div>
+      <div class="field">
+        <label for="pcStart">Действует с</label>
+        <input type="date" id="pcStart">
+      </div>
+      <div class="field">
+        <label for="pcEnd">Действует по</label>
+        <input type="date" id="pcEnd">
+      </div>
+      <div class="field">
+        <label for="pcNote">Заметка для себя</label>
+        <input type="text" id="pcNote" maxlength="120" placeholder="например: код для блогера">
+      </div>
+      <button class="btn" id="pcSave">СОХРАНИТЬ КОД</button>
+      <button class="btn ghost" id="pcReset">ОЧИСТИТЬ ФОРМУ</button>
+      <div class="msg" id="pcMsg"></div>
+      <div id="pcList" style="margin-top:14px"></div>
+
       <h2 data-sect="sales" style="margin-top:34px">ЗАКАЗЫ</h2>
       <div class="tw"><table id="ordersTbl"></table></div>
 
@@ -629,11 +693,12 @@ import {
   adminOrderBadges,
   adminListRegionRequests, adminDecideRegionRequest,
   adminBan, adminUnban, adminListBans,
-} from '/byte-blaster/assets/pixset-auth.js?v=e9aea1bf';
+  adminPromoList, adminPromoSave, adminPromoDelete, adminPromoUses, getGames,
+} from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
 import {
   paintNickBadges, forgetNickBadges, gameIconHtml, sortableRows,
   countryName, countryFlag, adminSections, STAT_GROUPS, statLabel, nickSuggestAll,
-} from '/byte-blaster/assets/pixset-ui.js?v=e9aea1bf';
+} from '/byte-blaster/assets/pixset-ui.js?v=822f1690';
 
 const GAME = 'byte-blaster';
 const $ = (id) => document.getElementById(id);
@@ -1518,10 +1583,231 @@ $('banBtn').onclick = async () => {
   finally { $('banBtn').disabled = false; }
 };
 
+/* ── Промокоды ───────────────────────────────────────────────────────────
+   Скидка считается базой при создании заказа и засчитывается только после
+   оплаты. Код на игру выдаёт лицензию сразу. Всё, что здесь делает панель, —
+   заполняет карточку кода: проверки живут в базе. */
+
+/** Лишние поля прячем: у скидки нет «дней», у кода на игру — процентов. */
+function paintPromoKind() {
+  const kind = $('pcKind').value;
+  document.querySelectorAll('[data-pk]').forEach((el) => {
+    el.hidden = el.dataset.pk !== kind;
+  });
+}
+
+/** Дата из поля — в момент времени. Начало дня для старта, конец для финала. */
+function dayEdge(value, end) {
+  if (!value) return null;
+  const d = new Date(value + (end ? 'T23:59:59' : 'T00:00:00'));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function promoSay(text, kind = 'err') {
+  const box = $('pcMsg');
+  box.textContent = text;
+  box.className = `msg show ${kind}`;
+  if (kind === 'ok') setTimeout(() => { box.className = 'msg'; }, 4000);
+}
+
+function clearPromoForm() {
+  ['pcCode', 'pcPercent', 'pcAmount', 'pcDays', 'pcMax', 'pcNote', 'pcStart', 'pcEnd']
+    .forEach((id) => { $(id).value = ''; });
+  $('pcPer').value = '1';
+  $('pcKind').value = 'discount';
+  $('pcGame').selectedIndex = 0;
+  paintPromoKind();
+}
+
+/** Что именно даёт код — одной строкой для списка. */
+function promoGives(p) {
+  if (p.kind === 'license') {
+    return p.license_days ? `игра на ${p.license_days} дн.` : 'игра навсегда';
+  }
+  if (p.percent_off) return `скидка ${p.percent_off}%`;
+  return `скидка ${(p.amount_off / 100).toLocaleString('ru-RU')} ₽`;
+}
+
+async function fillPromoGames() {
+  // Коды общие на все игры студии, поэтому список полный, а не одна эта игра.
+  const { data } = await supabase.from('games').select('slug, title');
+  const games = data && data.length ? data : await getGames();
+  promoTitles = new Map(games.map((g) => [g.slug, g.title]));
+  $('pcGame').innerHTML = '<option value="">— любая игра —</option>' +
+    games.map((g) => `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
+  paintPromoKind();
+}
+
+let promoTitles = new Map();
+
+async function loadPromos() {
+  let rows = [];
+  try { rows = await adminPromoList(); }
+  catch (err) {
+    $('pcList').innerHTML = `<div class="card"><span class="dim">${
+      esc(humanError(err))}</span></div>`;
+    return;
+  }
+
+  if (!rows.length) {
+    $('pcList').innerHTML = '<div class="card"><span class="dim">Кодов пока нет</span></div>';
+    return;
+  }
+
+  $('pcList').innerHTML = rows.map((p) => {
+    const g = p.game_slug ? (promoTitles.get(p.game_slug) || p.game_slug) : 'все игры';
+    const limit = p.max_uses ? `${p.uses} / ${p.max_uses}` : `${p.uses} / ∞`;
+    const from = p.starts_at ? ' · с ' + day(p.starts_at) : '';
+    const till = p.expires_at ? ' · до ' + day(p.expires_at) : '';
+    return `
+      <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <b style="min-width:140px">${esc(p.code)}</b>
+        <span${p.active ? '' : ' class="dim"'}>${esc(promoGives(p))}</span>
+        <span class="dim" style="flex:1;min-width:0;font-size:13px">${
+          esc(g + from + till)} · ${esc(limit)}${
+          p.note ? ' · ' + esc(p.note) : ''}${p.active ? '' : ' · выключен'}</span>
+        <button class="btn ghost" data-pc-edit="${esc(p.code)}">В ФОРМУ</button>
+        <button class="btn ghost" data-pc-toggle="${esc(p.code)}">${
+          p.active ? 'ВЫКЛЮЧИТЬ' : 'ВКЛЮЧИТЬ'}</button>
+        <button class="btn ghost" data-pc-uses="${esc(p.code)}">КТО БРАЛ</button>
+        <button class="btn ghost" data-pc-del="${esc(p.code)}">УДАЛИТЬ</button>
+      </div>
+      <div data-pc-holders="${esc(p.code)}" hidden style="margin:0 0 10px 12px"></div>`;
+  }).join('');
+
+  const byCode = new Map(rows.map((p) => [p.code, p]));
+
+  // Переписать код целиком нельзя без его условий — поэтому «В форму»
+  // подставляет всё как есть, а «Сохранить» кладёт поверх.
+  $('pcList').querySelectorAll('[data-pc-edit]').forEach((btn) => {
+    btn.onclick = () => {
+      const p = byCode.get(btn.dataset.pcEdit);
+      if (!p) return;
+      $('pcCode').value = p.code;
+      $('pcKind').value = p.kind;
+      $('pcGame').value = p.game_slug || '';
+      $('pcPercent').value = p.percent_off ?? '';
+      $('pcAmount').value = p.amount_off ? p.amount_off / 100 : '';
+      $('pcDays').value = p.license_days ?? '';
+      $('pcMax').value = p.max_uses ?? '';
+      $('pcPer').value = p.per_user_limit ?? 1;
+      $('pcStart').value = p.starts_at ? p.starts_at.slice(0, 10) : '';
+      $('pcEnd').value = p.expires_at ? p.expires_at.slice(0, 10) : '';
+      $('pcNote').value = p.note || '';
+      paintPromoKind();
+      $('pcCode').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+  });
+
+  $('pcList').querySelectorAll('[data-pc-toggle]').forEach((btn) => {
+    btn.onclick = async () => {
+      const p = byCode.get(btn.dataset.pcToggle);
+      if (!p) return;
+      btn.disabled = true;
+      try {
+        await adminPromoSave({
+          code: p.code, kind: p.kind, gameSlug: p.game_slug,
+          percentOff: p.percent_off, amountOff: p.amount_off,
+          licenseDays: p.license_days, maxUses: p.max_uses,
+          perUserLimit: p.per_user_limit, startsAt: p.starts_at,
+          expiresAt: p.expires_at, active: !p.active, note: p.note,
+        });
+        await loadPromos();
+      } catch (err) { promoSay(humanError(err)); btn.disabled = false; }
+    };
+  });
+
+  $('pcList').querySelectorAll('[data-pc-uses]').forEach((btn) => {
+    btn.onclick = async () => {
+      const code = btn.dataset.pcUses;
+      const box = $('pcList').querySelector(`[data-pc-holders="${CSS.escape(code)}"]`);
+      if (!box) return;
+      if (!box.hidden) { box.hidden = true; return; }
+      box.hidden = false;
+      box.innerHTML = '<div class="dim">Загружаем…</div>';
+      try {
+        const uses = await adminPromoUses(code);
+        box.innerHTML = uses.length
+          ? uses.map((u) => `<div style="display:flex;gap:10px;padding:4px 0">
+               <span>${esc(u.nickname || '—')}</span>
+               <span class="dim">${esc(day(u.redeemed_at))} · ${
+                 u.kind === 'license' ? 'лицензия' : 'скидка'}</span></div>`).join('')
+          : '<div class="dim">Кодом ещё не пользовались</div>';
+      } catch (err) {
+        box.innerHTML = `<div class="dim">${esc(humanError(err))}</div>`;
+      }
+    };
+  });
+
+  $('pcList').querySelectorAll('[data-pc-del]').forEach((btn) => {
+    btn.onclick = async () => {
+      const code = btn.dataset.pcDel;
+      if (!confirm(`Удалить код ${code}? История использований сохранится.`)) return;
+      btn.disabled = true;
+      try { await adminPromoDelete(code); await loadPromos(); }
+      catch (err) { promoSay(humanError(err)); btn.disabled = false; }
+    };
+  });
+}
+
+$('pcKind').onchange = paintPromoKind;
+$('pcReset').onclick = clearPromoForm;
+
+$('pcSave').onclick = async () => {
+  const code = $('pcCode').value.trim().toUpperCase();
+  const kind = $('pcKind').value;
+  if (!code) { promoSay('Укажите код.'); return; }
+
+  const num = (id) => {
+    const v = $(id).value.trim();
+    return v === '' ? null : Number(v);
+  };
+
+  const percent = kind === 'discount' ? num('pcPercent') : null;
+  const amount  = kind === 'discount' ? num('pcAmount') : null;
+
+  // База требует ровно один способ задать скидку. Проверяем здесь же, чтобы
+  // вместо «нарушено ограничение» показать понятную фразу.
+  if (kind === 'discount') {
+    if (percent == null && amount == null) {
+      promoSay('Для скидки укажите проценты или сумму.'); return;
+    }
+    if (percent != null && amount != null) {
+      promoSay('Скидка задаётся чем-то одним: процентами или суммой.'); return;
+    }
+    if (percent != null && (percent < 1 || percent > 100)) {
+      promoSay('Проценты — от 1 до 100.'); return;
+    }
+  }
+
+  $('pcSave').disabled = true;
+  try {
+    await adminPromoSave({
+      code,
+      kind,
+      gameSlug: $('pcGame').value || null,
+      percentOff: percent,
+      amountOff: amount == null ? null : Math.round(amount * 100),
+      licenseDays: kind === 'license' ? num('pcDays') : null,
+      maxUses: num('pcMax'),
+      perUserLimit: num('pcPer') || 1,
+      startsAt: dayEdge($('pcStart').value, false),
+      expiresAt: dayEdge($('pcEnd').value, true),
+      active: true,
+      note: $('pcNote').value.trim() || null,
+    });
+    promoSay('Код сохранён.', 'ok');
+    clearPromoForm();
+    await loadPromos();
+  } catch (err) { promoSay(humanError(err)); }
+  finally { $('pcSave').disabled = false; }
+};
+
 async function refreshAll() {
   await loadGameIcon();                    // иконку берёт таблица игроков
+  await fillPromoGames();                  // названия игр нужны списку кодов
   await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders(),
-    loadAnnouncements(), loadBadges(), loadRegionRequests(), loadBans()]);
+    loadAnnouncements(), loadBadges(), loadRegionRequests(), loadBans(), loadPromos()]);
 }
 
 // График подстраивается под ширину окна — перерисовываем без перезапроса.

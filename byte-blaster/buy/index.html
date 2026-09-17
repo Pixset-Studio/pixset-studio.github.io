@@ -82,6 +82,22 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
   <div class="msg" id="msg" style="max-width:520px;margin:0 auto 18px"></div>
 
+  <!-- Промокод. Живёт отдельно от оплаты: код на доступ открывает игру и
+       тогда, когда приём карт ещё не включён. -->
+  <div class="promo" id="promoBox" hidden>
+    <button type="button" class="promo-toggle" id="promoToggle">
+      <span data-l="ru">У меня есть промокод</span><span data-l="en">I have a promo code</span>
+    </button>
+    <div class="promo-form" id="promoForm" hidden>
+      <input id="promoInput" type="text" maxlength="32" autocomplete="off"
+             spellcheck="false" placeholder="PROMOCODE" aria-label="Промокод">
+      <button type="button" class="btn" id="promoApply">
+        <span data-l="ru">ПРИМЕНИТЬ</span><span data-l="en">APPLY</span>
+      </button>
+    </div>
+    <div class="promo-res" id="promoRes"></div>
+  </div>
+
   <div class="btns">
     <button class="btn primary" id="buyBtn"><span data-l="ru">КУПИТЬ</span><span data-l="en">BUY NOW</span></button>
     <a class="btn" href="/byte-blaster/game/">
@@ -204,12 +220,12 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js?v=e9aea1bf"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=822f1690"></script>
 <script type="module">
 import {
   supabase, getGames, getEntitlements, getProfile, startPayment, getSettings,
-  detectCountry, formatPrice, humanError,
-} from '/byte-blaster/assets/pixset-auth.js?v=e9aea1bf';
+  detectCountry, formatPrice, humanError, promoPreview, promoRedeem,
+} from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
 
 const $ = (id) => document.getElementById(id);
 const GAME = 'byte-blaster';
@@ -228,6 +244,10 @@ function say(ru, en, kind = 'err') {
 let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
 let session = null;
 let settings = { payments_enabled: false, support_email: 'pixset.studio.offical@gmail.com' };
+
+// Код, который уже проверила база и признала скидкой. Сама скидка живёт на
+// сервере — здесь только строка, которую надо приложить к оплате.
+let appliedPromo = null;
 
 function setBuyLabel(ru, en) {
   $('buyBtn').innerHTML = bi(ru, en);
@@ -299,6 +319,8 @@ async function render() {
   }
 
   if (!session) {
+    // Поле промокода видно и гостю: код — повод завести аккаунт, а не наоборот.
+    $('promoBox').hidden = false;
     if (settings.payments_enabled) setBuyLabel('КУПИТЬ', 'BUY NOW');
     else payOff();
     return;
@@ -306,23 +328,177 @@ async function render() {
 
   // У владельца лицензии всегда «Играть» — независимо от того, работает ли
   // сейчас приём оплаты.
-  const owned = new Set((await getEntitlements()).map((e) => e.game_slug));
-  if (owned.has(GAME)) {
+  const mine = await getEntitlements();
+  const own = mine.find((e) => e.game_slug === GAME);
+  if (own) {
+    $('promoBox').hidden = true;
     $('price').textContent = '';
-    $('priceNote').innerHTML = bi('Игра уже на вашем аккаунте', 'Already on your account');
+    $('priceNote').innerHTML = own.expires_at
+      ? bi(`Доступ открыт до ${fmtDate(own.expires_at, 'ru')}`,
+           `Access open until ${fmtDate(own.expires_at, 'en')}`)
+      : bi('Игра уже на вашем аккаунте', 'Already on your account');
     $('buyBtn').outerHTML =
       `<a class="btn primary" href="/byte-blaster/game/">${
         bi('ИГРАТЬ<small>полная версия открыта</small>',
            'PLAY<small>full version unlocked</small>')}</a>`;
-    $('hint').innerHTML = bi(
-      'Лицензия действует на всех устройствах, где вы вошли в аккаунт.',
-      'Your licence works on every device where you sign in.');
+    $('hint').innerHTML = own.expires_at
+      ? bi('Это временный доступ по промокоду. Когда срок выйдет, игру можно купить насовсем.',
+           'This is temporary access from a promo code. When it runs out you can buy the game for good.')
+      : bi('Лицензия действует на всех устройствах, где вы вошли в аккаунт.',
+           'Your licence works on every device where you sign in.');
     return;
   }
 
+  $('promoBox').hidden = false;
   if (settings.payments_enabled) setBuyLabel('КУПИТЬ', 'BUY NOW');
   else payOff();
 }
+
+/* ── Промокод ───────────────────────────────────────────────────────────── */
+
+function fmtDate(iso, lang) {
+  try {
+    return new Date(iso).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-GB',
+      { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch { return String(iso).slice(0, 10); }
+}
+
+/** Сумма из копеек. Целое число рублей — без «,00» в хвосте. */
+function money(cents, cur) {
+  const v = cents / 100;
+  if (cur === 'RUB') {
+    return (Number.isInteger(v) ? v.toLocaleString('ru-RU')
+      : v.toLocaleString('ru-RU', { minimumFractionDigits: 2 })) + ' ₽';
+  }
+  return '$' + v.toFixed(2);
+}
+
+/** Дни в «7 дней» / «7 days» с правильным русским окончанием. */
+function daysText(n, lang) {
+  if (lang === 'en') return n === 1 ? '1 day' : `${n} days`;
+  const t = n % 100, o = n % 10;
+  if (t > 10 && t < 20) return `${n} дней`;
+  if (o === 1) return `${n} день`;
+  if (o >= 2 && o <= 4) return `${n} дня`;
+  return `${n} дней`;
+}
+
+const PROMO_REASONS = {
+  not_found:     ['Такого промокода нет', 'No such promo code'],
+  inactive:      ['Промокод отключён', 'This code is switched off'],
+  not_started:   ['Промокод ещё не действует', 'This code is not active yet'],
+  expired:       ['Срок действия промокода истёк', 'This code has expired'],
+  used_up:       ['Промокод уже разобрали', 'This code has run out'],
+  already_used:  ['Вы уже пользовались этим промокодом', 'You have already used this code'],
+  wrong_game:    ['Промокод для другой игры', 'This code is for another game'],
+  already_owned: ['Игра и так открыта на вашем аккаунте', 'The game is already on your account'],
+};
+
+function promoSay(ru, en, kind) {
+  $('promoRes').innerHTML = bi(ru, en);
+  $('promoRes').className = 'promo-res ' + kind;
+}
+
+/** Возвращает цену к полной: код сняли или он не подошёл. */
+function dropPromo(game) {
+  appliedPromo = null;
+  $('price').textContent = formatPrice(game, currency) || '—';
+  $('priceNote').innerHTML = bi('навсегда, без подписок', 'forever, no subscriptions');
+}
+
+async function applyPromo() {
+  const code = $('promoInput').value.trim().toUpperCase();
+  if (!code) {
+    promoSay('Введите промокод.', 'Enter a promo code.', 'err');
+    return;
+  }
+  if (!session) {
+    // Проверить код можно только от имени игрока: у кодов есть лимит на
+    // человека. Отправляем на вход и возвращаем сюда — код останется в адресе.
+    location.href = '/byte-blaster/account/?next=' +
+      encodeURIComponent(location.pathname + '?promo=' + encodeURIComponent(code));
+    return;
+  }
+
+  const btn = $('promoApply');
+  btn.disabled = true;
+  promoSay('Проверяем…', 'Checking…', '');
+
+  try {
+    const res = await promoPreview(code, GAME);
+
+    if (!res || !res.ok) {
+      const [ru, en] = PROMO_REASONS[res?.reason] ||
+        ['Промокод не подошёл', 'This code did not work'];
+      promoSay(ru, en, 'err');
+      const games = await getGames();
+      dropPromo(games.find((g) => g.slug === GAME) || {});
+      return;
+    }
+
+    // Код на доступ забираем сразу: игрок уже нажал «Применить», а лицензия —
+    // это и есть весь смысл такого кода. Платить ничего не нужно.
+    if (res.kind === 'license') {
+      const done = await promoRedeem(code, GAME);
+      if (!done || !done.ok) {
+        const [ru, en] = PROMO_REASONS[done?.reason] ||
+          ['Промокод не подошёл', 'This code did not work'];
+        promoSay(ru, en, 'err');
+        return;
+      }
+      const forever = !done.days;
+      say(forever
+        ? 'Готово — игра открыта на вашем аккаунте навсегда.'
+        : `Готово — доступ открыт до ${fmtDate(done.expires_at, 'ru')}.`,
+        forever
+          ? 'Done — the game is on your account forever.'
+          : `Done — access is open until ${fmtDate(done.expires_at, 'en')}.`, 'ok');
+      $('promoRes').innerHTML = '';
+      await render();
+      return;
+    }
+
+    // Скидка: цену пересчитала база, здесь только показываем итог.
+    appliedPromo = code;
+    $('price').innerHTML =
+      `<span class="price-was">${esc(money(res.amount_full, res.currency))}</span>` +
+      esc(money(res.amount, res.currency));
+    const off = res.percent_off
+      ? `−${res.percent_off}%`
+      : `−${money(res.amount_off, res.currency)}`;
+    $('priceNote').innerHTML = bi(
+      `промокод ${esc(code)} · ${esc(off)}`,
+      `promo code ${esc(code)} · ${esc(off)}`);
+    promoSay(`Промокод принят: ${off}. Скидка применится при оплате.`,
+             `Code accepted: ${off}. The discount applies at checkout.`, 'ok');
+  } catch (err) {
+    promoSay(esc(humanError(err)), 'Could not check the code. Please try again.', 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function openPromoForm(code = '') {
+  $('promoForm').hidden = false;
+  $('promoToggle').hidden = true;
+  if (code) $('promoInput').value = code;
+  $('promoInput').focus();
+}
+
+$('promoToggle').onclick = () => openPromoForm();
+$('promoApply').onclick = applyPromo;
+$('promoInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); applyPromo(); }
+});
+// Набранный код перестаёт действовать, пока его не проверили заново: иначе
+// игрок правил бы код в поле, а платил по старой, уже неверной скидке.
+$('promoInput').addEventListener('input', () => {
+  if (appliedPromo && $('promoInput').value.trim().toUpperCase() !== appliedPromo) {
+    getGames().then((games) => dropPromo(games.find((g) => g.slug === GAME) || {}));
+    promoSay('Нажмите «Применить», чтобы проверить код.',
+             'Press “Apply” to check the code.', '');
+  }
+});
 
 async function buy() {
   if (!session) {
@@ -335,7 +511,7 @@ async function buy() {
   btn.disabled = true;
   setBuyLabel('ГОТОВИМ ОПЛАТУ…', 'PREPARING PAYMENT…');
   try {
-    const { payment_url } = await startPayment(GAME);
+    const { payment_url } = await startPayment(GAME, appliedPromo);
     say('Открываем страницу оплаты…', 'Opening the payment page…', 'ok');
     location.href = payment_url;
   } catch (err) {
@@ -361,6 +537,14 @@ if (session) {
   } catch { /* оставим предварительную цену */ }
 }
 await render();
+
+// Код из адреса: сюда попадают и те, кого мы отправляли на вход, и переходы
+// по ссылке вида /buy/?promo=КОД из рассылки или ролика.
+const fromUrl = (new URLSearchParams(location.search).get('promo') || '').trim().toUpperCase();
+if (fromUrl && !$('promoBox').hidden) {
+  openPromoForm(fromUrl);
+  if (session) await applyPromo();
+}
 </script>
 
 </body>

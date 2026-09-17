@@ -57,10 +57,16 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authError } = await admin.auth.getUser(accessToken);
   if (authError || !user) return json({ error: 'invalid_token' }, 401);
 
-  let body: { game_slug?: string } = {};
+  let body: { game_slug?: string; promo_code?: string } = {};
   try { body = await req.json(); } catch { /* сработает проверка ниже */ }
   const gameSlug = body.game_slug;
   if (!gameSlug) return json({ error: 'no_game' }, 400);
+
+  // Промокод проверяет база: негодный код она просто игнорирует, и покупка
+  // идёт по полной цене. Ронять оплату из-за опечатки в коде нельзя.
+  const promo = typeof body.promo_code === 'string' && body.promo_code.trim()
+    ? body.promo_code.trim()
+    : null;
 
   // Заказ создаём от имени игрока: RPC сам проверит, что игра не куплена,
   // и подставит цену его региона.
@@ -72,11 +78,14 @@ Deno.serve(async (req) => {
 
   const { data: orderId, error: orderError } = await asUser.rpc('create_order', {
     p_game_slug: gameSlug,
+    p_promo: promo,
   });
   if (orderError) return json({ error: orderError.message }, 400);
 
   const { data: order } = await admin
-    .from('orders').select('id, currency, amount, game_slug').eq('id', orderId).single();
+    .from('orders')
+    .select('id, currency, amount, amount_full, promo_code, game_slug')
+    .eq('id', orderId).single();
   if (!order) return json({ error: 'order_not_found' }, 500);
 
   if (order.currency !== 'RUB') {
@@ -95,7 +104,10 @@ Deno.serve(async (req) => {
       Authorization: 'Basic ' + btoa(`${shopId}:${secretKey}`),
       'Content-Type': 'application/json',
       // Ключ идемпотентности — id заказа: повторное нажатие «Купить» не
-      // создаст второй платёж, ЮKassa вернёт уже существующий.
+      // создаст второй платёж, ЮKassa вернёт уже существующий. Если игрок
+      // передумал и ввёл промокод, create_order заводит новый заказ (старый
+      // уже привязан к платежу) — значит и ключ будет другим, а сумма в
+      // платеже сойдётся с суммой заказа.
       'Idempotence-Key': order.id,
     },
     body: JSON.stringify({
@@ -131,5 +143,15 @@ Deno.serve(async (req) => {
     return json({ error: 'no_payment_url', raw }, 502);
   }
 
-  return json({ ok: true, order_id: order.id, payment_url: payUrl });
+  return json({
+    ok: true,
+    order_id: order.id,
+    payment_url: payUrl,
+    // Сумму возвращаем, чтобы страница покупки показала, за сколько в итоге
+    // уходит игрок: применился промокод или нет — решала база, не браузер.
+    amount: order.amount,
+    amount_full: order.amount_full ?? order.amount,
+    currency: order.currency,
+    promo_code: order.promo_code ?? null,
+  });
 });

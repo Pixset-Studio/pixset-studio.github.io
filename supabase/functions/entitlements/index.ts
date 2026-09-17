@@ -101,11 +101,16 @@ Deno.serve(async (req) => {
     }, { onConflict: 'user_id,device_hash' });
   }
 
+  // Временные лицензии (промокод на N дней) отсеиваются здесь же: истёкшая
+  // лицензия не должна попадать в подписанный токен, иначе игра будет считать
+  // её действующей ещё три месяца — ровно столько живёт токен.
+  const nowIso = new Date().toISOString();
   const { data: licenses, error: licError } = await supabase
     .from('licenses')
-    .select('game_slug, source, granted_at')
+    .select('game_slug, source, granted_at, expires_at')
     .eq('user_id', user.id)
-    .is('revoked_at', null);
+    .is('revoked_at', null)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
 
   if (licError) return json({ error: 'db_error' }, 500);
 
@@ -123,6 +128,18 @@ Deno.serve(async (req) => {
     .eq('user_id', user.id);
 
   const now = Math.floor(Date.now() / 1000);
+
+  // Срок токена. Обычно это TOKEN_TTL_DAYS, но временная лицензия его
+  // укорачивает: игра проверяет подпись локально и верит токену до последнего
+  // дня, поэтому недельный доступ по промокоду с трёхмесячным токеном работал
+  // бы все три месяца. Берём ближайшее истечение среди временных лицензий.
+  let tokenExp = now + TOKEN_TTL_DAYS * 86400;
+  for (const l of licenses) {
+    if (!l.expires_at) continue;
+    const licExp = Math.floor(new Date(l.expires_at).getTime() / 1000);
+    if (licExp < tokenExp) tokenExp = licExp;
+  }
+
   const payload = {
     user_id: user.id,
     // Ник живёт в profiles: там его меняет сайт. user_metadata — запасной
@@ -136,11 +153,13 @@ Deno.serve(async (req) => {
       game: l.game_slug,
       source: l.source ?? null,
       granted_at: l.granted_at ?? null,
+      // null — навсегда; дата — доступ по временному промокоду.
+      valid_until: l.expires_at ?? null,
     })),
     devices: deviceCount ?? null,
     device_hash: body.device_hash ?? null,
     issued_at: now,
-    expires_at: now + TOKEN_TTL_DAYS * 86400,
+    expires_at: tokenExp,
   };
 
   const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));

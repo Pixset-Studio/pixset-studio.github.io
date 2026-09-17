@@ -226,6 +226,27 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         </h3>
         <div class="lib" id="lib"></div>
 
+        <!-- ── Промокод ────────────────────────────────────────────────────
+             Здесь активируются коды, дающие саму игру — насовсем или на срок.
+             Скидочные коды сюда не годятся: они работают при оплате, и об этом
+             сказано прямо, чтобы игрок не решил, что код сломался. -->
+        <h3 data-sect="games" style="margin-top:26px">
+          <span data-l="ru">Промокод</span><span data-l="en">Promo code</span>
+        </h3>
+        <p class="note">
+          <span data-l="ru">Код, открывающий игру, активируется здесь. Код со скидкой вводится при оплате — на <a href="/byte-blaster/buy/">странице покупки</a>.</span>
+          <span data-l="en">A code that unlocks a game is redeemed here. A discount code goes in at checkout, on the <a href="/byte-blaster/buy/">purchase page</a>.</span>
+        </p>
+        <div class="promo-row">
+          <select id="promoGame" hidden aria-label="Игра"></select>
+          <input id="promoInput" type="text" maxlength="32" autocomplete="off"
+                 spellcheck="false" placeholder="PROMOCODE" aria-label="Промокод">
+          <button class="btn small" id="promoBtn">
+            <span data-l="ru">АКТИВИРОВАТЬ</span><span data-l="en">REDEEM</span>
+          </button>
+        </div>
+        <div class="msg" id="promoMsg"></div>
+
         <h3 data-sect="games" style="margin-top:26px"><span data-l="ru">Покупки</span><span data-l="en">Purchases</span></h3>
         <div class="lib" id="orders"></div>
 
@@ -388,7 +409,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 
 <script src="/byte-blaster/assets/config.js"></script>
 <script src="/byte-blaster/assets/site.js"></script>
-<script src="/byte-blaster/assets/pixset-me.js?v=e9aea1bf"></script>
+<script src="/byte-blaster/assets/pixset-me.js?v=822f1690"></script>
 <script type="module">
 // Модуль аккаунтов лежит на сайте студии, домен тот же — сессия у сайта игры и
 // сайта студии общая, вход достаточно выполнить один раз.
@@ -396,18 +417,18 @@ import {
   supabase, register, login, logout, resetPassword,
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
-  deleteAccount, getMyOrders,
+  deleteAccount, getMyOrders, promoPreview, promoRedeem,
   updateAvatar, removeAvatar, avatarFromFile,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   verifyEmailCode, resendSignupCode, getMyBan,
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
-} from '/byte-blaster/assets/pixset-auth.js?v=e9aea1bf';
+} from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
   gameIconHtml, pageSections, countryName, countryFlag, countryOptions, nickSuggestAll,
-} from '/byte-blaster/assets/pixset-ui.js?v=e9aea1bf';
+} from '/byte-blaster/assets/pixset-ui.js?v=822f1690';
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => { el.hidden = false; };
@@ -1042,6 +1063,14 @@ async function renderProfile(user) {
   pageSections($('acctSections'));
   nickSuggestAll(document);   // поле «добавить друга» и всё, где вводится ник
 
+  await renderLibrary();
+  renderDevices();
+  renderFriends();
+  renderOrders();
+}
+
+/** Лицензии на аккаунте и выбор игры для промокода. */
+async function renderLibrary() {
   const [games, owned] = await Promise.all([getGames(), getEntitlements()]);
   const byslug = new Map(games.map((g) => [g.slug, g]));
   catalog = byslug;                       // покупкам нужны названия и иконки
@@ -1049,19 +1078,109 @@ async function renderProfile(user) {
   $('lib').innerHTML = owned.length
     ? owned.map((e) => {
         const g = byslug.get(e.game_slug) || { title: e.game_slug };
+        // Временный доступ по промокоду подписан датой: игрок должен видеть,
+        // что игра открыта не навсегда, ещё до того, как доступ пропадёт.
+        const till = e.expires_at ? fmtDate(e.expires_at) : null;
         return `<div class="item">${gameIconHtml(g.icon_url, g.title)}
           <b style="flex:1;min-width:0">${esc(g.title)}</b>
-          <span class="badge">${bi('ЛИЦЕНЗИЯ АКТИВНА', 'LICENCE ACTIVE')}</span></div>`;
+          <span class="badge">${till
+            ? bi('ДОСТУП ДО ' + esc(till.ru), 'ACCESS UNTIL ' + esc(till.en))
+            : bi('ЛИЦЕНЗИЯ АКТИВНА', 'LICENCE ACTIVE')}</span></div>`;
       }).join('')
     : `<div class="item"><span class="dim">${
         bi('Лицензий пока нет — первый мир доступен бесплатно.',
            'No licences yet — the first world is free to play.')}</span>
        <a class="btn small" href="/byte-blaster/buy/">${bi('КУПИТЬ', 'BUY')}</a></div>`;
 
-  renderDevices();
-  renderFriends();
-  renderOrders();
+  fillPromoGames(games);
 }
+
+/* ── Промокод ─────────────────────────────────────────────────────────────
+   Активируются только коды, дающие игру. Скидочные проверяются тем же
+   promo_preview, но применить их здесь нельзя — о них сообщаем словами и
+   отправляем на страницу покупки. */
+
+/** Дата в обоих языках сразу: подпись живёт в разметке и переключается CSS. */
+function fmtDate(iso) {
+  const opts = { day: 'numeric', month: 'long', year: 'numeric' };
+  try {
+    const d = new Date(iso);
+    return { ru: d.toLocaleDateString('ru-RU', opts), en: d.toLocaleDateString('en-GB', opts) };
+  } catch {
+    const s = String(iso).slice(0, 10);
+    return { ru: s, en: s };
+  }
+}
+
+const PROMO_REASONS = {
+  not_found:     ['Такого промокода нет', 'No such promo code'],
+  inactive:      ['Промокод отключён', 'This code is switched off'],
+  not_started:   ['Промокод ещё не действует', 'This code is not active yet'],
+  expired:       ['Срок действия промокода истёк', 'This code has expired'],
+  used_up:       ['Промокод уже разобрали', 'This code has run out'],
+  already_used:  ['Вы уже пользовались этим промокодом', 'You have already used this code'],
+  wrong_game:    ['Промокод для другой игры', 'This code is for another game'],
+  already_owned: ['Эта игра уже открыта на вашем аккаунте',
+                  'This game is already on your account'],
+};
+
+/** Выбор игры нужен, только когда игр больше одной. */
+function fillPromoGames(games) {
+  const sel = $('promoGame');
+  sel.innerHTML = games.map((g) =>
+    `<option value="${esc(g.slug)}">${esc(g.title)}</option>`).join('');
+  sel.hidden = games.length < 2;
+}
+
+async function redeemPromo() {
+  const code = $('promoInput').value.trim().toUpperCase();
+  const game = $('promoGame').value;
+  if (!code) { say($('promoMsg'), 'Введите промокод.', 'Enter a promo code.'); return; }
+  if (!game) {
+    say($('promoMsg'), 'Каталог игр ещё не загрузился — повторите через секунду.',
+        'The game catalogue is still loading — try again in a second.');
+    return;
+  }
+
+  const res = await promoPreview(code, game);
+  if (!res || !res.ok) {
+    const r = PROMO_REASONS[res?.reason] || ['Промокод не подошёл', 'This code did not work'];
+    say($('promoMsg'), r[0], r[1]);
+    return;
+  }
+
+  if (res.kind !== 'license') {
+    say($('promoMsg'),
+        'Это код со скидкой — его надо ввести при оплате, на странице покупки.',
+        'This is a discount code — enter it at checkout, on the purchase page.');
+    return;
+  }
+
+  const done = await promoRedeem(code, game);
+  if (!done || !done.ok) {
+    const r = PROMO_REASONS[done?.reason] || ['Промокод не подошёл', 'This code did not work'];
+    say($('promoMsg'), r[0], r[1]);
+    return;
+  }
+
+  const till = done.expires_at ? fmtDate(done.expires_at) : null;
+  say($('promoMsg'),
+      till ? 'Готово — доступ открыт до ' + till.ru + '.'
+           : 'Готово — игра открыта на вашем аккаунте навсегда.',
+      till ? 'Done — access is open until ' + till.en + '.'
+           : 'Done — the game is on your account forever.', 'ok');
+  $('promoInput').value = '';
+  await renderLibrary();
+}
+
+$('promoBtn').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('promoMsg'));
+  try { await redeemPromo(); }
+  catch (err) { fail($('promoMsg'), err); }
+});
+$('promoInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('promoBtn').click(); }
+});
 
 /** Каталог игр по слагу: покупки берут отсюда название и иконку. */
 let catalog = new Map();

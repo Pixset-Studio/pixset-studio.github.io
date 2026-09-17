@@ -13,7 +13,7 @@ export const SUPABASE_KEY = 'sb_publishable_1bj04J3qsO1EqsKPQeSbmg_cBDEtreK';
  * Пригодилось, когда браузер держал старую копию и загрузка сборок падала
  * «без причины»: страница молча работала на вчерашнем модуле.
  */
-export const SDK_VERSION = 'e9aea1bf';
+export const SDK_VERSION = '822f1690';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -452,8 +452,11 @@ export function formatPrice(game, currency) {
  * Создаёт заказ (или возвращает уже открытый) и отдаёт его id.
  * Валюту и сумму сервер берёт из профиля — клиент на них не влияет.
  */
-export async function createOrder(gameSlug) {
-  const { data, error } = await supabase.rpc('create_order', { p_game_slug: gameSlug });
+export async function createOrder(gameSlug, promoCode = null) {
+  const { data, error } = await supabase.rpc('create_order', {
+    p_game_slug: gameSlug,
+    p_promo: promoCode || null,
+  });
   if (error) throw error;
   return data;
 }
@@ -462,7 +465,7 @@ export async function createOrder(gameSlug) {
  * Создаёт заказ и платёж в ЮKassa, возвращает ссылку на оплату.
  * Цену и валюту считает сервер по региону аккаунта.
  */
-export async function startPayment(gameSlug) {
+export async function startPayment(gameSlug, promoCode = null) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('not_authenticated');
 
@@ -473,7 +476,7 @@ export async function startPayment(gameSlug) {
       'Content-Type': 'application/json',
       apikey: SUPABASE_KEY,
     },
-    body: JSON.stringify({ game_slug: gameSlug }),
+    body: JSON.stringify({ game_slug: gameSlug, promo_code: promoCode || null }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -488,8 +491,41 @@ export async function startPayment(gameSlug) {
 export async function getMyOrders() {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, game_slug, amount, currency, status, created_at')
+    .select('id, game_slug, amount, amount_full, promo_code, currency, status, created_at')
     .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+/* ── Промокоды ─────────────────────────────────────────────────────────── */
+
+/**
+ * Что даст код, если его применить. Ничего не меняет и ничего не расходует —
+ * это и есть предпросмотр под полем ввода.
+ *
+ * Успех: { ok: true, kind: 'discount', amount, amount_full, currency, … }
+ *        или { ok: true, kind: 'license', days, game } — days === null значит
+ *        «навсегда».
+ * Отказ:  { ok: false, reason: 'not_found' | 'expired' | 'used_up' |
+ *          'already_used' | 'inactive' | 'not_started' | 'wrong_game' }
+ */
+export async function promoPreview(code, gameSlug) {
+  const { data, error } = await supabase.rpc('promo_preview', {
+    p_code: code, p_game_slug: gameSlug,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Забирает лицензию по коду — для кодов вида «доступ на N дней» и «навсегда».
+ * Коды со скидкой сюда не годятся: у них ответ { ok: false,
+ * reason: 'not_a_license_code' }, их место — в оплате.
+ */
+export async function promoRedeem(code, gameSlug) {
+  const { data, error } = await supabase.rpc('promo_redeem', {
+    p_code: code, p_game_slug: gameSlug,
+  });
   if (error) throw error;
   return data;
 }
@@ -884,6 +920,54 @@ export async function adminMarkPaid(orderId) {
   if (error) throw error;
 }
 
+export async function adminPromoList() {
+  const { data, error } = await supabase.rpc('admin_promo_list');
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Заводит или переписывает код. kind — 'discount' или 'license'.
+ *
+ * Скидка задаётся ровно одним способом: percentOff (проценты) либо amountOff
+ * (копейки/центы). Лицензия: licenseDays — число дней или null, если код даёт
+ * игру навсегда. Пустой gameSlug — код годится для любой игры.
+ */
+export async function adminPromoSave({
+  code, kind, gameSlug = null, percentOff = null, amountOff = null,
+  licenseDays = null, maxUses = null, perUserLimit = 1,
+  startsAt = null, expiresAt = null, active = true, note = null,
+}) {
+  const { data, error } = await supabase.rpc('admin_promo_save', {
+    p_code: code,
+    p_kind: kind,
+    p_game_slug: gameSlug || null,
+    p_percent_off: percentOff,
+    p_amount_off: amountOff,
+    p_license_days: licenseDays,
+    p_max_uses: maxUses,
+    p_per_user_limit: perUserLimit,
+    p_starts_at: startsAt,
+    p_expires_at: expiresAt,
+    p_active: active,
+    p_note: note,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function adminPromoDelete(code) {
+  const { error } = await supabase.rpc('admin_promo_delete', { p_code: code });
+  if (error) throw error;
+}
+
+/** Кто и когда воспользовался кодом. */
+export async function adminPromoUses(code) {
+  const { data, error } = await supabase.rpc('admin_promo_uses', { p_code: code });
+  if (error) throw error;
+  return data || [];
+}
+
 /** Каталог опубликованных игр. Виден и гостям. */
 export async function getGames() {
   const { data, error } = await supabase
@@ -896,10 +980,15 @@ export async function getGames() {
 }
 
 /** Игры, на которые у текущего пользователя есть действующая лицензия. */
+/**
+ * Игры, открытые на аккаунте. expires_at — дата окончания временного доступа
+ * по промокоду; у купленных игр там null, то есть «навсегда». Истёкшие сюда
+ * не попадают: их отсекает сама витрина в базе.
+ */
 export async function getEntitlements() {
   const { data, error } = await supabase
     .from('my_entitlements')
-    .select('game_slug, granted_at');
+    .select('game_slug, granted_at, expires_at');
   if (error) throw error;
   return data;
 }

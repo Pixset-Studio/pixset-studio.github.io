@@ -173,10 +173,40 @@
     } catch (e) { return null; }
   }
 
+  /** Есть ли вообще сохранённая сессия — независимо от того, свежий ли токен.
+   *  Ключевое отличие от accessToken(): тот возвращает null и у просроченного
+   *  токена, а сессия при этом никуда не делась — её обновит supabase-js. */
+  function hasStoredSession() {
+    try {
+      var raw = localStorage.getItem('sb-zyjhvuhovimorpokiwty-auth-token');
+      if (!raw) return false;
+      if (raw.indexOf('base64-') === 0) raw = decodeURIComponent(escape(atob(raw.slice(7))));
+      var s = JSON.parse(raw);
+      return !!(s && s.refresh_token);
+    } catch (e) { return false; }
+  }
+
   /** Спрашивает сервер и обновляет кэш. Молча ничего не делает без входа. */
-  function refreshOwnership(done) {
+  function refreshOwnership(done, _retried) {
     var token = accessToken();
-    if (!token) { rememberOwns(false); if (done) done(false); return; }
+    if (!token) {
+      // Просроченный токен — НЕ то же самое, что «лицензии нет».
+      //
+      // Токен Supabase живёт около часа. После перезагрузки компьютера он в
+      // хранилище всегда просроченный: свежий появится, только когда
+      // supabase-js на странице обновит сессию — а он модуль и стартует позже
+      // нас. Прежний код в этот момент записывал own:false, и тема Byte Blaster
+      // слетала у владельца игры при каждой перезагрузке.
+      //
+      // Поэтому: сессии нет вовсе — честный own:false; сессия есть, но токен
+      // ещё не обновлён — ждём и спрашиваем ещё раз, кэш не трогаем.
+      if (hasStoredSession()) {
+        if (!_retried) { setTimeout(function () { refreshOwnership(done, true); }, 2500); return; }
+        if (done) done(ownsCached());
+        return;
+      }
+      rememberOwns(false); if (done) done(false); return;
+    }
     fetch(API + '/rest/v1/my_entitlements?select=game_slug', {
       headers: { apikey: PUBKEY, Authorization: 'Bearer ' + token },
     })
@@ -329,7 +359,10 @@
     // возврата покупки — сверяемся с сервером и, если права пропали, честно
     // возвращаем оформление по умолчанию.
     var wasBB = document.documentElement.getAttribute('data-theme') === 'byteblaster';
-    if (wasBB && !ownsCached()) apply('industrial', false);
+    // Снимать тему до ответа сервера можно только тогда, когда игрок точно
+    // не вошёл: иначе владелец игры видит мигание «неон → индустриальная →
+    // неон» на каждой странице, пока сессия обновляется.
+    if (wasBB && !ownsCached() && !hasStoredSession()) apply('industrial', false);
     if (!ownsFresh() || wasBB) {
       refreshOwnership(function (own) {
         repaintPicker();

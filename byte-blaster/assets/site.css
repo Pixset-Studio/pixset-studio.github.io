@@ -821,6 +821,61 @@ form button.btn,
 .msg.err { border-color: var(--red);   background: rgba(255,85,85,.08);  color: #ffb3b3; }
 .msg.ok  { border-color: var(--green); background: rgba(0,255,136,.08);  color: #9effc9; }
 
+/* ── Промокод ─────────────────────────────────────────────────────────────
+   Свёрнут в одну строчку-ссылку: тому, у кого кода нет, поле ввода на
+   странице покупки только мешает и заставляет гадать, не переплачивает ли он. */
+.promo { max-width: 420px; margin: 0 auto 20px; text-align: center; }
+.promo-toggle {
+  background: none; border: 0; padding: 4px 2px; cursor: pointer;
+  font-family: var(--mono); font-size: 13px; color: var(--dim);
+  border-bottom: 1px dashed var(--line);
+  transition: color .15s, border-color .15s;
+}
+.promo-toggle:hover { color: var(--cyan); border-bottom-color: var(--cyan); }
+.promo-form { display: flex; gap: 8px; margin-top: 12px; }
+.promo-form input {
+  flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: 11px 12px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--text); font-family: var(--mono); font-size: 15px;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.promo-form input::placeholder { color: var(--dim); letter-spacing: 1px; }
+.promo-form input:focus {
+  outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,255,255,.25);
+}
+/* min-width у .btn рассчитан на крупные кнопки героя — рядом с полем ввода
+   такая кнопка съедала бы всю строку. */
+.promo-form .btn {
+  flex: 0 0 auto; min-width: 0; padding: 12px 16px;
+  font-size: 10px; white-space: nowrap;
+}
+.promo-res {
+  margin-top: 10px; font-family: var(--mono); font-size: 13px; line-height: 1.55;
+}
+.promo-res.ok  { color: #9effc9; }
+.promo-res.err { color: #ffb3b3; }
+/* Зачёркнутая старая цена рядом с новой — в .price-big над блоком. */
+.price-was {
+  color: var(--dim); text-decoration: line-through;
+  font-size: .55em; margin-right: .6em; vertical-align: .18em;
+}
+
+/* Строка активации кода в кабинете: поле и кнопка в линию, на узком экране
+   кнопка уходит под поле, а не ужимается до нечитаемой. */
+.promo-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.promo-row input {
+  flex: 1 1 200px; min-width: 0; box-sizing: border-box; padding: 11px 12px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--text); font-family: var(--mono); font-size: 15px;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.promo-row input::placeholder { color: var(--dim); letter-spacing: 1px; }
+.promo-row input:focus {
+  outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,255,255,.25);
+}
+.promo-row select { flex: 0 1 auto; }
+.promo-row .btn { flex: 0 0 auto; min-width: 0; padding: 12px 18px; white-space: nowrap; }
+
 .who { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
 .who .ava {
   width: 56px; height: 56px; flex: 0 0 56px; display: grid; place-items: center;
