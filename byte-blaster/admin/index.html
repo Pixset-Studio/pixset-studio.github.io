@@ -995,22 +995,63 @@ async function loadGameIcon() {
   } catch { gameIcon = null; }
 }
 
+// Сроки лицензий. admin_list_players про них не знает, поэтому берём отдельным
+// вызовом и сопоставляем с игроком по почте. Не получилось (функция ещё не
+// накатана) — вернём null, и таблица нарисуется как раньше.
+async function loadLicenseMap() {
+  const { data, error } = await supabase.rpc('admin_list_licenses');
+  if (error) { console.warn('admin_list_licenses:', error.message); return null; }
+  const map = new Map();
+  for (const l of data || []) {
+    const key = String(l.email || '').toLowerCase();
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(l);
+  }
+  return map;
+}
+
+// «6 дн. 4 ч» / «5 ч 20 мин» / «12 мин».
+function leftText(sec) {
+  const m = Math.max(1, Math.ceil(Number(sec) / 60));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
+  if (d) return `${d} дн.${h ? ` ${h} ч` : ''}`;
+  if (h) return `${h} ч${min ? ` ${min} мин` : ''}`;
+  return `${min} мин`;
+}
+
+// Подпись под лицензией: у бессрочной её нет.
+function licenseNote(l) {
+  if (!l.active) return `было на аккаунте с ${day(l.granted_at)} по ${day(l.expires_at)}`;
+  if (l.expires_at) {
+    return `на аккаунте с ${day(l.granted_at)} · закончится через ${leftText(l.remaining_seconds)}`;
+  }
+  return '';
+}
+
+// Ячейка «Byte Blaster»: куплено / временная / истекла / нет.
+function bbCellHtml(p, licMap, icon) {
+  const chip = (text, off) => `<span class="chip ${off ? 'off' : ''}" style="display:inline-flex;align-items:center;gap:6px">${icon}${text}</span>`;
+  if (!licMap) return chip((p.games || []).includes(GAME) ? 'куплено' : 'нет', !(p.games || []).includes(GAME));
+  const l = (licMap.get(String(p.email || '').toLowerCase()) || []).find((x) => x.game_slug === GAME);
+  if (!l) return chip('нет', true);
+  const note = licenseNote(l);
+  const text = !l.active ? 'истекла' : (l.expires_at ? 'временная' : 'куплено');
+  return chip(text, !l.active) + (note
+    ? `<div class="dim" style="font-size:11px;margin-top:4px">${esc(note)}</div>` : '');
+}
+
 async function loadPlayers() {
-  const rows = await adminListPlayers();
+  const [rows, licMap] = await Promise.all([adminListPlayers(), loadLicenseMap()]);
   const icon = gameIconHtml(gameIcon, 'Byte Blaster', 18);
   $('playersTbl').innerHTML = rows.length
     ? '<tr><th>Регистрация</th><th>Ник</th><th>Почта</th><th>Byte Blaster</th></tr>' +
-      rows.map((p) => {
-        const owns = (p.games || []).includes(GAME);
-        return `<tr>
+      rows.map((p) => `<tr>
           <td>${day(p.created_at)}</td>
           <td data-nick="${esc(p.nickname)}">${esc(p.nickname)}${
               p.is_admin ? ' <span class="chip warn">админ</span>' : ''}</td>
           <td>${esc(p.email)}</td>
-          <td><span class="chip ${owns ? '' : 'off'}" style="display:inline-flex;align-items:center;gap:6px">${
-            icon}${owns ? 'куплено' : 'нет'}</span></td>
-        </tr>`;
-      }).join('')
+          <td>${bbCellHtml(p, licMap, icon)}</td>
+        </tr>`).join('')
     : '<tr><td class="dim">Игроков пока нет</td></tr>';
 
   // Бейджи у ников дорисовываем ПОСЛЕ таблицы: раньше вызов стоял внутри
