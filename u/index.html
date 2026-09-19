@@ -336,6 +336,71 @@ function gameCard(g) {
 const nickParam = new URLSearchParams(location.search).get('n');
 let loaded = null;               // ответ сервера: по нему перерисовываемся при смене языка
 
+// ── Игры в аккаунте ──────────────────────────────────────────────────────────
+// Три состояния строки:
+//   бессрочная          → «в аккаунте с …»
+//   временная, идёт     → то же + «закончится через …»
+//   временная, истекла  → «было в аккаунте с … по …», строка приглушена
+// Остаток считаем от remaining_seconds, который база посчитала в момент
+// загрузки, минус время, прошедшее на странице: часы зрителя не участвуют.
+let loadedAt = 0;           // когда пришёл ответ сервера (Date.now())
+let ownedTimer = 0;         // перерисовка, пока где-то тикает срок
+
+function secondsLeft(g) {
+  if (g.expires_at == null) return Infinity;                 // навсегда
+  return Number(g.remaining_seconds) - (Date.now() - loadedAt) / 1000;
+}
+
+// «6 дн. 4 ч» / «5 ч 20 мин» / «12 мин». Меньше минуты не показываем нулём.
+function fmtLeft(sec) {
+  const m = Math.max(1, Math.ceil(sec / 60));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
+  if (d) return L(`${d} дн.${h ? ` ${h} ч` : ''}`, `${d} d${h ? ` ${h} h` : ''}`);
+  if (h) return L(`${h} ч${min ? ` ${min} мин` : ''}`, `${h} h${min ? ` ${min} min` : ''}`);
+  return L(`${min} мин`, `${min} min`);
+}
+
+function ownedRowHtml(g) {
+  const from = fmtDate(g.granted_at);
+  const left = secondsLeft(g);
+  const expired = g.expires_at != null && left <= 0;
+
+  const notes = expired
+    ? [L(`было в аккаунте с ${from} по ${fmtDate(g.expires_at)}`,
+         `was on the account from ${from} to ${fmtDate(g.expires_at)}`)]
+    : [L(`в аккаунте с ${from}`, `owned since ${from}`)];
+  if (g.expires_at != null && !expired) {
+    notes.push(`<span style="color:var(--y)">${esc(L('закончится через ', 'ends in '))}${
+      esc(fmtLeft(left))}</span>`);
+  }
+  // Первая строка приходит текстом с датами (экранируем), вторая — уже разметка.
+  const noteHtml = notes.map((n, i) => (i === 0 ? esc(n) : n)).join('<br>');
+
+  return `<div class="row" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px${
+      expired ? ';opacity:.55;filter:grayscale(1)' : ''}">
+      ${gameIconHtml(g.icon_url, g.title || g.game_slug)}
+      <b style="flex:1 1 120px;min-width:0">${esc(g.title || g.game_slug)}</b>
+      <span class="dim mono" style="font-size:12px;text-align:right;margin-left:auto">${noteHtml}</span>
+    </div>`;
+}
+
+function paintOwned() {
+  clearTimeout(ownedTimer);
+  const list = Array.isArray(loaded && loaded.licenses) ? loaded.licenses : [];
+  const isOver = (g) => g.expires_at != null && secondsLeft(g) <= 0;
+  // Действующие выше истёкших; внутри группы порядок сервера.
+  const owned = list.slice().sort((a, b) => Number(isOver(a)) - Number(isOver(b)));
+
+  $('ownedBox').hidden = !owned.length;
+  $('owned').innerHTML = owned.map(ownedRowHtml).join('');
+
+  // Пока есть идущий срок, раз в полминуты обновляем остаток — и строка сама
+  // станет «было …», когда время выйдет, без перезагрузки страницы.
+  if (owned.some((g) => g.expires_at != null && !isOver(g))) {
+    ownedTimer = setTimeout(paintOwned, 30000);
+  }
+}
+
 function paintProfile() {
   if (!loaded) return;
   // Отдельный раздел: все бейджи, кроме скрытых для профиля (их отсекает база).
@@ -347,15 +412,7 @@ function paintProfile() {
   $('bio').textContent = loaded.bio || '';
   $('bio').hidden = !loaded.bio;
 
-  // Игры, на которые есть действующая лицензия.
-  const owned = Array.isArray(loaded.licenses) ? loaded.licenses : [];
-  $('ownedBox').hidden = !owned.length;
-  $('owned').innerHTML = owned.map((g) => `<div class="row" style="display:flex;align-items:center;gap:12px">
-      ${gameIconHtml(g.icon_url, g.title || g.game_slug)}
-      <b style="flex:1;min-width:0">${esc(g.title || g.game_slug)}</b>
-      <span class="dim mono" style="font-size:12px">${esc(L('в аккаунте с ', 'owned since '))}${
-        esc(fmtDate(g.granted_at))}</span>
-    </div>`).join('');
+  paintOwned();
 
   $('banned').hidden = !loaded.banned;
   $('bannedUntil').textContent = loaded.banned && loaded.banned_until
@@ -397,6 +454,7 @@ async function render() {
   if (!profile) { say(L('Игрок с таким ником не найден.', 'No player with that nickname.')); return; }
 
   loaded = profile;
+  loadedAt = Date.now();
   document.title = profile.nickname + ' — Pixset Studio';
   $('nick').textContent = profile.nickname;
 
