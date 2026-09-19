@@ -511,8 +511,67 @@ async function loadOrders() {
   });
 }
 
+// Сроки лицензий. admin_list_players про них не знает, поэтому берём отдельным
+// вызовом и сопоставляем с игроком по почте. Не получилось (функция ещё не
+// накатана) — вернём null, и таблица нарисуется как раньше.
+async function loadLicenseMap() {
+  const { data, error } = await supabase.rpc('admin_list_licenses');
+  if (error) { console.warn('admin_list_licenses:', error.message); return null; }
+  const map = new Map();
+  for (const l of data || []) {
+    const key = String(l.email || '').toLowerCase();
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(l);
+  }
+  return map;
+}
+
+// «6 дн. 4 ч» / «5 ч 20 мин» / «12 мин».
+function leftText(sec) {
+  const m = Math.max(1, Math.ceil(Number(sec) / 60));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
+  if (d) return `${d} дн.${h ? ` ${h} ч` : ''}`;
+  if (h) return `${h} ч${min ? ` ${min} мин` : ''}`;
+  return `${min} мин`;
+}
+
+// Подпись под лицензией: у бессрочной её нет.
+function licenseNote(l) {
+  if (!l.active) return `было на аккаунте с ${day(l.granted_at)} по ${day(l.expires_at)}`;
+  if (l.expires_at) {
+    return `на аккаунте с ${day(l.granted_at)} · закончится через ${leftText(l.remaining_seconds)}`;
+  }
+  return '';
+}
+
+// Действующие выше истёкших.
+const activeFirst = (a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1);
+
+function gameBadgeHtml(slug, active) {
+  const g = catalog.get(slug) || { title: slug };
+  const look = active ? '' : ';filter:grayscale(1);opacity:.7';
+  return `<span class="badge${active ? '' : ' mute'}" style="display:inline-flex;align-items:center;gap:6px${look}">${
+    gameIconHtml(g.icon_url, g.title, 18)}${esc(g.title)}</span>`;
+}
+
+function licensesCellHtml(p, licMap) {
+  // Без данных о сроках — как раньше, просто список игр.
+  if (!licMap) {
+    return p.games && p.games.length
+      ? p.games.map((slug) => gameBadgeHtml(slug, true)).join(' ')
+      : '<span class="badge mute">нет</span>';
+  }
+  const list = (licMap.get(String(p.email || '').toLowerCase()) || []).slice().sort(activeFirst);
+  if (!list.length) return '<span class="badge mute">нет</span>';
+  return list.map((l) => {
+    const note = licenseNote(l);
+    return `<div style="margin:0 0 6px">${gameBadgeHtml(l.game_slug, l.active)}${
+      note ? `<div class="dim mono" style="font-size:11px;margin-top:3px">${esc(note)}</div>` : ''}</div>`;
+  }).join('');
+}
+
 async function loadPlayers() {
-  const rows = await adminListPlayers();
+  const [rows, licMap] = await Promise.all([adminListPlayers(), loadLicenseMap()]);
   $('playersTbl').innerHTML = rows.length
     ? '<tr><th>Регистрация</th><th>Ник</th><th>Почта</th><th>Лицензии</th></tr>' +
       rows.map((p) => `
@@ -521,13 +580,7 @@ async function loadPlayers() {
           <td data-nick="${esc(p.nickname)}">${esc(p.nickname)}${
             p.is_admin ? ' <span class="badge">админ</span>' : ''}</td>
           <td>${esc(p.email)}</td>
-          <td>${p.games && p.games.length
-            ? p.games.map((slug) => {
-                const g = catalog.get(slug) || { title: slug };
-                return `<span class="badge" style="display:inline-flex;align-items:center;gap:6px">${
-                  gameIconHtml(g.icon_url, g.title, 18)}${esc(g.title)}</span>`;
-              }).join(' ')
-            : '<span class="badge mute">нет</span>'}</td>
+          <td>${licensesCellHtml(p, licMap)}</td>
         </tr>`).join('')
     : '<tr><td class="empty">Игроков пока нет</td></tr>';
   paintNickBadges($('playersTbl')).catch(() => {});
