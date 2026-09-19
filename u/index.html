@@ -338,9 +338,9 @@ let loaded = null;               // ответ сервера: по нему п�
 
 // ── Игры в аккаунте ──────────────────────────────────────────────────────────
 // Три состояния строки:
-//   бессрочная          → «в аккаунте с …»
+//   бессрочная          → «на аккаунте с …»
 //   временная, идёт     → то же + «закончится через …»
-//   временная, истекла  → «было в аккаунте с … по …», строка приглушена
+//   временная, истекла  → «было на аккаунте с … по …», строка приглушена
 // Остаток считаем от remaining_seconds, который база посчитала в момент
 // загрузки, минус время, прошедшее на странице: часы зрителя не участвуют.
 let loadedAt = 0;           // когда пришёл ответ сервера (Date.now())
@@ -366,9 +366,9 @@ function ownedRowHtml(g) {
   const expired = g.expires_at != null && left <= 0;
 
   const notes = expired
-    ? [L(`было в аккаунте с ${from} по ${fmtDate(g.expires_at)}`,
+    ? [L(`было на аккаунте с ${from} по ${fmtDate(g.expires_at)}`,
          `was on the account from ${from} to ${fmtDate(g.expires_at)}`)]
-    : [L(`в аккаунте с ${from}`, `owned since ${from}`)];
+    : [L(`на аккаунте с ${from}`, `owned since ${from}`)];
   if (g.expires_at != null && !expired) {
     notes.push(`<span style="color:var(--y)">${esc(L('закончится через ', 'ends in '))}${
       esc(fmtLeft(left))}</span>`);
