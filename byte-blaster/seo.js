@@ -97,7 +97,7 @@ function schemaFor(url, title, descr) {
       author: STUDIO,
       offers: {
         '@type': 'Offer',
-        price: '125',
+        price: '150',
         priceCurrency: 'RUB',
         availability: 'https://schema.org/InStock',
         url: HOST + '/byte-blaster/buy/',
