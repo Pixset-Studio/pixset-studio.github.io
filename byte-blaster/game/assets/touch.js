@@ -654,9 +654,21 @@
   }
 
   // ── Visibility loop ──────────────────────────────────────────────────────────
-  var isTouchDevice = ('ontouchstart' in window) ||
-                      (navigator.maxTouchPoints > 0) ||
-                      (navigator.msMaxTouchPoints > 0);
+  // Чем игрок пользуется ПРЯМО СЕЙЧАС: 'touch' — пальцем, 'keys' — клавиатурой,
+  // null — ещё ничем, решаем по устройству. Раньше здесь стояло
+  // `'ontouchstart' in window || navigator.maxTouchPoints > 0`, то есть «у
+  // устройства вообще есть сенсорный ввод». У ноутбука с сенсорным экраном это
+  // правда — и человеку с клавиатурой выкатывался экранный джойстик поверх игры.
+  var lastInput = null;
+
+  function deviceLooksTouch() {
+    if (typeof window.bbIsTouchDevice === 'function') return window.bbIsTouchDevice();
+    // Запасной путь, если game.js почему-то не загрузился.
+    try {
+      if (typeof window.matchMedia === 'function') return window.matchMedia('(pointer: coarse)').matches;
+    } catch (e) {}
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+  }
 
   function mode() {
     var m = (window.gameSettings && window.gameSettings.touchControls) || 'auto';
@@ -666,7 +678,12 @@
     var m = mode();
     if (m === 'off') return false;
     if (m === 'on') return true;
-    return isTouchDevice;                 // 'auto'
+    // 'auto': показываем то, чем играют. Планшет с клавиатурой и ноутбук с
+    // сенсорным экраном — одно и то же железо с разными привычками, и гадать по
+    // списку возможностей бессмысленно: надёжнее смотреть на последнее действие.
+    if (lastInput === 'touch') return true;
+    if (lastInput === 'keys') return false;
+    return deviceLooksTouch();
   }
   function gameIsPlaying() {
     try { return typeof gState !== 'undefined' && gState === 'playing'; }
@@ -700,9 +717,18 @@
     buildPad();
     refresh();
     setInterval(refresh, 120);            // cheap poll; gState has no event hook
-    // Re-evaluate device class if input method changes (e.g. tablet + keyboard).
+    // Способ ввода может смениться посреди игры — планшет кладут в чехол с
+    // клавиатурой, ноутбук-трансформер разворачивают экраном наружу. Поэтому
+    // следим за обоими направлениями, а не только за появлением касаний.
     window.addEventListener('pointerdown', function (e) {
-      if (e.pointerType === 'touch') isTouchDevice = true;
+      if (e.pointerType === 'touch') { lastInput = 'touch'; refresh(); }
+    }, { capture: true, passive: true });
+    window.addEventListener('keydown', function (e) {
+      // Нажатия по самим экранным кнопкам сюда не приходят — они шлют не
+      // клавиши, а вызовы setJoyKey. Значит, настоящая клавиша = настоящая
+      // клавиатура, и пад можно убрать.
+      if (!e || !e.isTrusted || !e.key || e.key === 'Unidentified') return;
+      if (lastInput !== 'keys') { lastInput = 'keys'; refresh(); }
     }, { capture: true, passive: true });
   }
 

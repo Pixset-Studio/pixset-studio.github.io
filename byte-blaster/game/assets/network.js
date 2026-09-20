@@ -239,8 +239,12 @@ const $gamePing    = document.getElementById('netGamePing');
     // controls measured 23px tall on a phone no matter what the CSS said. Below
     // this floor we stop shrinking and let the lobby scroll instead: a control
     // you can scroll to and actually hit beats one that fits but cannot be hit.
-    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
-                    (window.gameSettings && window.gameSettings.touchControls === 'on');
+    // «Играют пальцем?» — общий ответ из game.js (см. bbWantsTouchUI): у любого
+    // ноутбука с сенсорным экраном прежняя проверка была истинной.
+    const isTouch = (typeof window.bbWantsTouchUI === 'function')
+      ? window.bbWantsTouchUI()
+      : (('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
+         (window.gameSettings && window.gameSettings.touchControls === 'on'));
     const FLOOR = isTouch ? 0.62 : 0.4;
     const floored = k < FLOOR;
     if (floored) k = FLOOR;

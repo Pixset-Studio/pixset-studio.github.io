@@ -162,10 +162,12 @@
     };
   }
 
-  // Opening a link has to work in all three shells: Electron (external browser
-  // via the preload bridge), Android (Capacitor's Browser/window.open) and web.
+  // Магазин открывается прямо поверх игры: уводить игрока в другое приложение
+  // ровно в тот момент, когда он собрался покупать, — верный способ его
+  // потерять. Системный путь остаётся запасным, если модуль не загрузился.
   function openStore() {
     if (!URL) return;
+    if (window.BBBrowser) { window.BBBrowser.open(URL); return; }
     try {
       if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
         window.electronAPI.openExternal(URL);

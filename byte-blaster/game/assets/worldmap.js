@@ -44,6 +44,17 @@
     return order;
   }
 
+  /** Тот же порядок, что в cycleOrder, но с учётом демо-сборки: в демо часть миров
+   *  не существует. По нему ходят стрелки и по нему же гасятся их края. */
+  function browseOrder() {
+    let order = cycleOrder();
+    if (window.Demo && window.Demo.on) {
+      const lim = window.Demo.worldCount(order.length);
+      order = order.filter((id) => id === 11 || id < lim);
+    }
+    return order;
+  }
+
   // Localized world name (falls back to the English constant). Uses the shared
   // helper from index.html so the map matches the in-game watermark.
   function wName(world) {
@@ -1563,11 +1574,7 @@
     // but Prism Anomaly doesn't exist on the map at all until then.
     // Стрелки ходят по явному порядку, а не по номерам миров: пролог стоит
     // в списке последним (чтобы не сдвигать сохранения), а показывается первым.
-    let order = cycleOrder();
-    if (window.Demo && window.Demo.on) {
-      const lim = window.Demo.worldCount(order.length);
-      order = order.filter((id) => id === 11 || id < lim);
-    }
+    const order = browseOrder();
     const here = order.indexOf(MAP_STATE.activeWorld);
     // w приходит как «текущий ± 1» — переводим сдвиг в шаг по порядку.
     const delta = w - MAP_STATE.activeWorld;
@@ -1630,11 +1637,12 @@
     }
     const anyUnlockedInWorld = LEVELS.some(l => l.worldId === MAP_STATE.activeWorld && l.unlocked);
     const arrL = document.getElementById('mapArrowLeft'), arrR = document.getElementById('mapArrowRight');
-    if (arrL) arrL.style.opacity = MAP_STATE.activeWorld > 0 ? '1' : '0.25';
-    const _rainbowDone = (typeof rainbowCount === 'function') && rainbowCount() >= 10;
-    let _cycleLen = _rainbowDone ? WORLDS.length : WORLDS.length - 1;
-    if (window.Demo && window.Demo.on) _cycleLen = window.Demo.worldCount(_cycleLen);
-    if (arrR) arrR.style.opacity = MAP_STATE.activeWorld < _cycleLen - 1 ? '1' : '0.25';
+    // Края считаем по порядку стрелок, а не по номеру мира: пролог (мир 11) стоит
+    // в нём первым, и по номеру он выглядел бы «последним».
+    const _order = browseOrder();
+    const _pos = _order.indexOf(MAP_STATE.activeWorld);
+    if (arrL) arrL.style.opacity = _pos > 0 ? '1' : '0.25';
+    if (arrR) arrR.style.opacity = _pos < _order.length - 1 ? '1' : '0.25';
     if (!anyUnlockedInWorld && arrL) { /* still browsable, just visually locked via node state */ }
 
     document.getElementById('mapClearedCount').textContent = clearedCount;
@@ -1903,26 +1911,51 @@
     cleanupInput();
   }
 
+  /** Пролог пройден? Флаг ставит Tutorial.finish().
+   *
+   *  Игрок, у которого в кампании уже есть прогресс, считается прошедшим пролог
+   *  без флага: сохранения старше пролога не знают про него, и без этой
+   *  оговорки обновление закрыло бы такому игроку дорогу к его же прохождению.
+   *  Смотрим оба режима — пролог один на всех. */
+  function prologueCleared() {
+    try {
+      if (localStorage.getItem('bbTutorialDone') === '1') return true;
+      for (const key of ['bbAdv3', 'bbAdvH']) {
+        const save = JSON.parse(localStorage.getItem(key) || 'null');
+        if (save && ((Array.isArray(save.done) && save.done.length > 0) || save.max > 1)) return true;
+      }
+    } catch (e) { /* нечитаемое хранилище — считаем, что пролога не было */ }
+    return false;
+  }
+
   function loadProgress() {
+    // Пока пролог не пройден, карта открывается на нём, а первый мир закрыт:
+    // история начинается с лаборатории, а не с середины.
+    const cleared = prologueCleared();
+
     // Reset every node first so switching between Normal/Hardcore never leaks
     // the other mode's completion/unlock state into this view.
     for (const level of LEVELS) {
       level.completed = false;
       // Узел пролога (номер 0) открыт всегда — он вне кампании, и его
-      // прохождение хранится отдельным ключом, а не в списке done.
-      level.unlocked = (level.num === 1 || level.worldId === 11);
+      // прохождение хранится отдельным ключом, а не в списке done. Первый
+      // уровень кампании открывается только после него.
+      level.unlocked = (level.num === 1 && cleared) || level.worldId === 11;
       if (level.worldId === 11) {
         try { level.completed = localStorage.getItem('bbTutorialDone') === '1'; } catch (e) {}
       }
     }
-    MAP_STATE.currentLevelId = 'L1';
-    MAP_STATE.activeWorld = 0;
-    MAP_STATE.playerX = LEVELS[0].x;
-    MAP_STATE.playerY = LEVELS[0].y;
+    const first = cleared ? LEVELS.find(l => l.id === 'L1') : LEVELS.find(l => l.worldId === 11);
+    MAP_STATE.currentLevelId = first.id;
+    MAP_STATE.activeWorld = first.worldId;
+    MAP_STATE.playerX = first.x;
+    MAP_STATE.playerY = first.y;
     MAP_STATE.walk = null; // cancel any in-progress walk animation
 
     try {
-      const saved = localStorage.getItem(MAP_STATE.hard ? 'bbAdvH' : 'bbAdv3');
+      // Без пройденного пролога сохранение кампании не читаем: даже пустое
+      // (max: 1) оно открыло бы первый уровень в обход пролога.
+      const saved = cleared ? localStorage.getItem(MAP_STATE.hard ? 'bbAdvH' : 'bbAdv3') : null;
       if (saved) {
         const data = JSON.parse(saved);
         if (data && data.done && Array.isArray(data.done)) {
@@ -1965,7 +1998,9 @@
       for (const level of LEVELS) {
         if (level.num > window.Demo.levels) { level.unlocked = false; level.completed = false; }
       }
-      if (MAP_STATE.activeWorld >= window.Demo.worldCount(WORLDS.length)) {
+      // Пролог (мир 11) в демо остаётся: он открывает первый мир, поэтому под
+      // условие «мир за пределами демо» не попадает.
+      if (MAP_STATE.activeWorld !== 11 && MAP_STATE.activeWorld >= window.Demo.worldCount(WORLDS.length)) {
         MAP_STATE.activeWorld = 0;
         MAP_STATE.currentLevelId = 'L1';
         MAP_STATE.playerX = LEVELS[0].x;

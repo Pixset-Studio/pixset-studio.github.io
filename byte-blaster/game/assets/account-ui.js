@@ -41,9 +41,19 @@
         min-height:16px;max-width:460px;line-height:1.8}
       #bbAcc .acMsg.err{color:#f6a}
       #bbAcc .acMsg.ok{color:#6f9}
+      /* Ряд карточек. Каждая тянется, но не расплывается: 340px — ширина, на
+         которой строка «подпись … значение» ещё читается без переносов. */
+      #bbAcc .acCards{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;
+        justify-content:center;width:100%;max-width:1120px}
+      #bbAcc .acCards:empty{display:none}
       #bbAcc .acCard{font-family:'Share Tech Mono',monospace;font-size:calc(12px * var(--bbFix, 1));color:#9fd;
         border:1px solid #0ff4;background:#0ff08;padding:12px 16px;text-align:left;
-        min-width:280px;max-width:460px;line-height:1.9}
+        flex:1 1 340px;min-width:280px;max-width:420px;line-height:1.9}
+      /* Узкий экран — обратно в столбец: три колонки по 280px туда не влезут. */
+      @media (max-width:980px){
+        #bbAcc .acCards{flex-direction:column;align-items:center;max-width:460px}
+        #bbAcc .acCard{flex:0 0 auto;width:100%;max-width:460px}
+      }
       #bbAcc .acCard b{color:#0ff}
       #bbAcc .acCard .acDim{color:#7a94a8}
       #bbAcc .acCard .acLine:empty{display:none}
@@ -64,6 +74,8 @@
       #bbAcc .acHint.err{color:#f6a}
       #bbAcc .acHint.ok{color:#6f9}
       #bbAcc .acCloud{margin-top:2px}
+      /* Вторая половина карточки прогресса: линия вместо второй рамки. */
+      #bbAcc .acPart{margin-top:14px;padding-top:12px;border-top:1px solid #0ff3}
       #bbAcc .acCloudTitle{font-family:'Press Start 2P',monospace;font-size:calc(8px * var(--bbFix, 1));color:#0ff;
         letter-spacing:1px;margin-bottom:8px;text-shadow:0 0 8px #0ff}
       #bbAcc .acCloud .acRow{justify-content:flex-start;margin-top:0}
@@ -107,11 +119,17 @@
       '<input type="text" id="acEmail" autocomplete="username" placeholder="email">' +
       '<input type="password" id="acPass" autocomplete="current-password" placeholder="password">' +
       '<div class="acMsg" id="acMsg"></div>' +
+      // «Назад» живёт в нижнем ряду вместе с остальными кнопками экрана: в
+      // верхнем ряду она разрывала форму входа пополам, а на экране вошедшего
+      // висела одна посреди пустоты.
       '<div class="acRow">' +
         '<button class="acBtn" id="acLoginBtn"></button>' +
         '<button class="acBtn acBuy" id="acBuyBtn"></button>' +
-        '<button class="acBtn" id="acCloseBtn"></button>' +
       '</div>' +
+      // Три карточки стоят в ряд, а не столбиком: иначе на широком мониторе
+      // экран уезжает вниз за край и до кнопок приходится прокручивать, хотя
+      // справа и слева пусто. На узком экране ряд сам сворачивается в столбец.
+      '<div class="acCards" id="acCards">' +
       // Профиль вошедшего игрока: что за аккаунт, что куплено, где ещё открыт.
       '<div class="acCard" id="acCard" style="display:none">' +
         '<div id="acFields"></div>' +
@@ -124,37 +142,43 @@
           '<div class="acHint" id="acNickHint"></div>' +
         '</div>' +
       '</div>' +
-      // Прогресс в аккаунте: сохранить, забрать, включить автосохранение.
-      '<div class="acCard acCloud" id="acCloud" style="display:none">' +
-        '<div class="acCloudTitle" id="acCloudTitle"></div>' +
-        '<div class="acLine acDim" id="acCloudWhen"></div>' +
-        '<div class="acRow" style="margin-top:8px">' +
-          '<button class="acBtn acMini" id="acCloudSave"></button>' +
-          '<button class="acBtn acMini" id="acCloudLoad"></button>' +
+      // Обе половины прогресса — в одной карточке: и сохранение, и витрина
+      // говорят про одно и то же, просто одно приватно, а второе видят друзья.
+      // Порознь они занимали две колонки и выглядели как несвязанные разделы.
+      '<div class="acCard acCloud" id="acProgress" style="display:none">' +
+        // Прогресс в аккаунте: сохранить, забрать, включить автосохранение.
+        '<div id="acCloud">' +
+          '<div class="acCloudTitle" id="acCloudTitle"></div>' +
+          '<div class="acLine acDim" id="acCloudWhen"></div>' +
+          '<div class="acRow" style="margin-top:8px">' +
+            '<button class="acBtn acMini" id="acCloudSave"></button>' +
+            '<button class="acBtn acMini" id="acCloudLoad"></button>' +
+          '</div>' +
+          '<label class="acToggle"><input type="checkbox" id="acCloudAuto">' +
+            '<span id="acCloudAutoText"></span></label>' +
+          '<div class="acHint" id="acCloudMsg"></div>' +
         '</div>' +
-        '<label class="acToggle"><input type="checkbox" id="acCloudAuto">' +
-          '<span id="acCloudAutoText"></span></label>' +
-        '<div class="acHint" id="acCloudMsg"></div>' +
-      '</div>' +
-      // Витрина прогресса — отдельная от сохранения вещь, и кнопка тоже
-      // отдельная. Сохранение приватно, а это то, что видят друзья на сайте;
-      // раньше оно уезжало только заодно с сохранением, поэтому у игрока,
-      // не пользующегося облаком, профиль на сайте оставался пустым.
-      '<div class="acCard acCloud" id="acStats" style="display:none">' +
-        '<div class="acCloudTitle" id="acStatsTitle"></div>' +
-        '<div class="acLine acDim" id="acStatsWhat"></div>' +
-        '<div class="acRow" style="margin-top:8px">' +
-          '<button class="acBtn acMini" id="acStatsPublish"></button>' +
+        // Витрина прогресса. Сохранение приватно, а это то, что видят друзья
+        // на сайте; раньше оно уезжало только заодно с сохранением, поэтому у
+        // игрока, не пользующегося облаком, профиль на сайте оставался пустым.
+        '<div id="acStats" class="acPart">' +
+          '<div class="acCloudTitle" id="acStatsTitle"></div>' +
+          '<div class="acLine acDim" id="acStatsWhat"></div>' +
+          '<div class="acRow" style="margin-top:8px">' +
+            '<button class="acBtn acMini" id="acStatsPublish"></button>' +
+          '</div>' +
+          '<label class="acToggle"><input type="checkbox" id="acStatsAuto">' +
+            '<span id="acStatsAutoText"></span></label>' +
+          '<div class="acHint" id="acStatsMsg"></div>' +
         '</div>' +
-        '<label class="acToggle"><input type="checkbox" id="acStatsAuto">' +
-          '<span id="acStatsAutoText"></span></label>' +
-        '<div class="acHint" id="acStatsMsg"></div>' +
       '</div>' +
+      '</div>' +   // /acCards
       '<div class="acRow">' +
         '<button class="acBtn" id="acStatsBtn" style="display:none"></button>' +
         '<button class="acBtn" id="acSiteBtn" style="display:none"></button>' +
         '<button class="acBtn" id="acRefreshBtn" style="display:none"></button>' +
         '<button class="acBtn" id="acLogoutBtn" style="display:none"></button>' +
+        '<button class="acBtn" id="acCloseBtn"></button>' +
       '</div>';
     document.body.appendChild(ov);
 
@@ -233,10 +257,12 @@
     el.className = 'acMsg' + (kind ? ' ' + kind : '');
   }
 
-  // Ссылку надо уметь открыть во всех трёх оболочках: Electron (внешний
-  // браузер через мост preload), Android (Capacitor/window.open) и веб.
+  // Кабинет и магазин — наши же страницы, и открываются они внутри игры.
+  // Запасной путь на случай, если модуль браузера почему-то не загрузился:
+  // лучше выкинуть игрока наружу, чем не открыть ссылку вовсе.
   function openUrl(url) {
     if (!url) return;
+    if (window.BBBrowser) { window.BBBrowser.open(url); return; }
     if (window.SFX && window.SFX.menu) window.SFX.menu();
     try {
       if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
@@ -302,7 +328,11 @@
     const inAcc = window.License && window.License.loggedIn();
 
     ov.querySelector('#acTitle').textContent = T('accTitle');
-    ov.querySelector('#acSub').textContent = owns ? T('accSubOwned')
+    // У временного доступа своя подпись: «спасибо за поддержку студии» тому,
+    // кто пришёл по промокоду, говорить не за что, а вот про срок сказать надо.
+    const tempLic = owns && licenceEndsAt();
+    ov.querySelector('#acSub').textContent = tempLic ? T('accSubTemp')
+                                          : owns ? T('accSubOwned')
                                           : inAcc ? T('accSubNoLicense')
                                                   : T('accSubGuest');
     // Подсказка в поле — на языке игры: войти можно и по нику.
@@ -335,6 +365,27 @@
     renderCard(inAcc, owns);
     renderCloud(inAcc);
     renderStats(inAcc);
+
+    // Карточка прогресса состоит из двух половин, и каждая может отсутствовать
+    // (нет облака, нет витрины). Показываем её, только если есть хоть одна —
+    // пустая рамка выглядела бы поломкой.
+    const cloudOn = ov.querySelector('#acCloud').style.display !== 'none';
+    const statsOn = ov.querySelector('#acStats').style.display !== 'none';
+    ov.querySelector('#acProgress').style.display = (cloudOn || statsOn) ? 'block' : 'none';
+
+    // У гостя карточек нет вовсе — прячем и сам ряд, иначе пустой контейнер
+    // оставлял бы лишний отступ между формой входа и кнопками.
+    ov.querySelector('#acCards').style.display = inAcc ? '' : 'none';
+  }
+
+  /**
+   * Дата окончания доступа к игре — или null, если лицензия бессрочная.
+   * Бессрочная — это покупка и ручная выдача; срок бывает только у промокода.
+   */
+  function licenceEndsAt() {
+    const L = window.License;
+    const lic = L && L.licence ? L.licence('byte-blaster') : null;
+    return (lic && lic.valid_until) || null;
   }
 
   /** Дата в языке игры. Пустая строка, если сервер её не прислал. */
@@ -387,7 +438,18 @@
     if (lic) {
       const when = fmtDate(lic.granted_at);
       if (when) {
-        add(lic.source === 'manual' ? T('accGrantedManual') : T('accGrantedBuy'), when);
+        const how = lic.source === 'manual' ? T('accGrantedManual')
+          : lic.source === 'promo' ? T('accGrantedPromo')
+            : T('accGrantedBuy');
+        add(how, when);
+      }
+      // Доступ по промокоду кончается в известный день, и знать этот день
+      // игрок должен заранее — иначе полная версия однажды просто исчезнет.
+      // В последние дни строка становится жёлтой: это уже повод купить игру.
+      const till = fmtDate(lic.valid_until);
+      if (till) {
+        const leftDays = Math.ceil((Date.parse(lic.valid_until) - Date.now()) / 86400000);
+        add(T('accAccessUntil'), till, leftDays <= 3 ? 'warn' : '');
       }
     }
 
@@ -395,9 +457,9 @@
     if (devices) add(T('accDevices'), String(devices));
     add(T('accSince'), fmtDate(L.memberSince ? L.memberSince() : null));
 
-    // Дату окончания прав не показываем: лицензия у игрока навсегда, а срок
-    // токена — наша внутренняя кухня. Игра сама продлевает его при запуске,
-    // и видеть дату игроку незачем — она только пугает.
+    // Срок самого токена не показываем: у купленной игры лицензия бессрочна, а
+    // токен — наша внутренняя кухня, игра продлевает его при запуске. Дата выше
+    // относится к другому: к сроку самой лицензии, выданной промокодом.
 
     // Игровая часть профиля: то, ради чего в аккаунт и заходят.
     const snap = safeSnapshot();

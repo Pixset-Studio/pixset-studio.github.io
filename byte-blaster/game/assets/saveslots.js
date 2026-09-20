@@ -137,6 +137,134 @@
     window.removeEventListener('keydown', onKey);
   }
 
+  /* ── Кнопка активного слота в углу меню ──────────────────────────────────
+     Стоит рядом с кнопкой аккаунта: слот — это «чей прогресс сейчас идёт»,
+     такой же статус игрока, как и сам аккаунт. Раньше узнать, в каком слоте
+     играешь, можно было только зайдя в выбор сохранения. */
+
+  let slotBtn = null;
+  let stylesDone = false;
+
+  function ensureStyles() {
+    if (stylesDone) return;
+    stylesDone = true;
+    const css = document.createElement('style');
+    css.textContent = `
+      /* Прямой ребёнок body с position:fixed — как и кнопка аккаунта: иначе
+         масштабирование игрового поля утащит кнопку в леттербокс на телефоне. */
+      #bbSlotBtn{position:fixed;top:16px;left:16px;z-index:55;display:none;
+        flex-direction:column;align-items:stretch;justify-content:center;gap:6px;
+        padding:11px 16px;min-width:150px;
+        background:#0ff1;border:2px solid #0ff8;cursor:pointer;
+        transition:background .15s,box-shadow .15s,border-color .15s}
+      #bbSlotBtn:hover{background:#0ff3;border-color:#0ff;box-shadow:0 0 16px #0ff8}
+      #bbSlotBtn .sbName{font-family:'Press Start 2P',monospace;
+        font-size:calc(9px * var(--bbFix, 1));letter-spacing:1px;color:#0ff;
+        text-shadow:0 0 8px #0ff;white-space:nowrap}
+      #bbSlotBtn .sbWhat{font-family:'Share Tech Mono',monospace;
+        font-size:calc(10px * var(--bbFix, 1));letter-spacing:1px;color:#7a94a8;
+        text-transform:uppercase;white-space:nowrap;margin-top:-3px}
+      #bbSlotBtn .sbLine{display:flex;align-items:center;gap:8px}
+      #bbSlotBtn .sbBar{flex:1;height:calc(7px * var(--bbFix, 1));min-width:60px;
+        background:#04121c;border:1px solid #0ff6;overflow:hidden}
+      #bbSlotBtn .sbBar>i{display:block;height:100%;width:0;background:#0ff;
+        box-shadow:0 0 8px #0ff;transition:width .3s}
+      #bbSlotBtn .sbPct{font-family:'Share Tech Mono',monospace;
+        font-size:calc(11px * var(--bbFix, 1));color:#9fd;white-space:nowrap}
+      /* Пустой слот не хвастается нулём — он честно пишет, что пуст. */
+      #bbSlotBtn.empty{border-color:#4af8}
+      #bbSlotBtn.empty .sbName{color:#4af;text-shadow:0 0 8px #4af}
+      @media (max-width:640px){
+        #bbSlotBtn{top:10px;left:10px;padding:9px 12px;gap:4px;min-width:112px}
+        #bbSlotBtn .sbName{font-size:calc(7px * var(--bbFix, 1))}
+        #bbSlotBtn .sbWhat{font-size:calc(8px * var(--bbFix, 1))}
+        #bbSlotBtn .sbPct{font-size:calc(9px * var(--bbFix, 1))}
+      }`;
+    document.head.appendChild(css);
+  }
+
+  /**
+   * Процент прохождения — тот же, что на экране профиля: уровни, звёзды,
+   * кристаллы, достижения и записи поровну. Считать здесь по-своему нельзя:
+   * кнопка и профиль показывали бы разные числа про одно и то же.
+   */
+  function progressPct() {
+    try {
+      const P = window.Profile;
+      if (P && typeof P.snapshot === 'function' && typeof P.completion === 'function') {
+        return Math.round(P.completion(P.snapshot()) * 100);
+      }
+    } catch (e) { /* профиль ещё не загрузился — считаем по уровням */ }
+    try {
+      const s = window.SaveSlots.summary(window.SaveSlots.getActive());
+      if (s && !s.empty) return Math.round(100 * s.done / _slotTotal(s.done));
+    } catch (e) {}
+    return 0;
+  }
+
+  function buildSlotButton() {
+    ensureStyles();
+    slotBtn = document.createElement('div');
+    slotBtn.id = 'bbSlotBtn';
+    slotBtn.innerHTML =
+      '<span class="sbName"></span>' +
+      '<span class="sbWhat"></span>' +
+      '<span class="sbLine"><span class="sbBar"><i></i></span><span class="sbPct"></span></span>';
+    slotBtn.onclick = () => { sfx(); window.showSlots(); };
+    document.body.appendChild(slotBtn);
+    updateSlotButton();
+    // Тот же интервал, что у кнопки аккаунта: опрос дешевле, чем хуки на
+    // каждый переход между экранами игры.
+    setInterval(updateSlotButton, 400);
+  }
+
+  /**
+   * Показ и положение. Обе угловые кнопки живут по одному правилу: кнопка
+   * слота видна ровно тогда, когда видна кнопка аккаунта, — та уже умеет
+   * прятаться под открытыми поверх меню экранами. И встаёт она справа от неё,
+   * потому что ширина кнопки аккаунта зависит от длины ника.
+   */
+  function updateSlotButton() {
+    if (!slotBtn || !window.SaveSlots) return;
+
+    const acc = document.getElementById('bbAccBtn');
+    const main = document.getElementById('mainOv');
+    const visible = acc
+      ? getComputedStyle(acc).display !== 'none'
+      : !!main && getComputedStyle(main).display !== 'none';
+
+    slotBtn.style.display = visible ? 'flex' : 'none';
+    if (!visible) return;
+
+    if (acc) {
+      const r = acc.getBoundingClientRect();
+      slotBtn.style.left = Math.round(r.right + 10) + 'px';
+      slotBtn.style.top = Math.round(r.top) + 'px';
+      slotBtn.style.minHeight = Math.round(r.height) + 'px';
+    }
+
+    const i = window.SaveSlots.getActive();
+    const s = window.SaveSlots.summary(i);
+    const empty = !s || s.empty;
+    slotBtn.classList.toggle('empty', empty);
+    slotBtn.querySelector('.sbName').textContent = T('slot') + ' ' + (i + 1);
+    // Подпись под номером слота: без неё шкала читалась как что угодно —
+    // от здоровья до места в памяти. Ключ берём готовый, тот же, что у раздела
+    // профиля, — он уже переведён на все языки.
+    slotBtn.querySelector('.sbWhat').textContent = T('profileSecProgress');
+
+    const pct = empty ? 0 : progressPct();
+    slotBtn.querySelector('.sbBar > i').style.width = pct + '%';
+    slotBtn.querySelector('.sbPct').textContent = empty ? T('slotEmpty') : pct + '%';
+    slotBtn.title = T('selectSave');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', buildSlotButton, { once: true });
+  } else {
+    buildSlotButton();
+  }
+
   // Public: show the slot picker. Falls back to mode select if the engine is absent.
   window.showSlots = function () {
     if (!window.SaveSlots) { if (typeof showMode === 'function') showMode(); return; }

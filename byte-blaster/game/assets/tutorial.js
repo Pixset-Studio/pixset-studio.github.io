@@ -23,8 +23,12 @@
   const DONE_KEY = 'bbTutorialDone';      // обучение пройдено
   const HINTS_KEY = 'bbLvl1Hints';        // 'on' | 'off' | 'used'
 
-  const isTouch = () => ('ontouchstart' in root) || navigator.maxTouchPoints > 0 ||
-    (root.gameSettings && root.gameSettings.touchControls === 'on');
+  // «Играют пальцем?» — общий ответ из game.js (см. bbWantsTouchUI): иначе на
+  // ноутбуке с сенсорным экраном обучение показывало подсказки для пальцев.
+  const isTouch = () => (typeof root.bbWantsTouchUI === 'function')
+    ? root.bbWantsTouchUI()
+    : (('ontouchstart' in root) || navigator.maxTouchPoints > 0 ||
+       (root.gameSettings && root.gameSettings.touchControls === 'on'));
 
   /* ── Шаги ──────────────────────────────────────────────────────────────
      at   — точка в мире, к которой ведёт выноска

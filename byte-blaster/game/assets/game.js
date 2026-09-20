@@ -367,13 +367,53 @@ function prismFilter(hue,sat,bright){
 // призма, платформы, кирпичи, монеты, пружины, декор) работает в любом случае:
 // эти вещи не красятся фильтром поверх старого цвета, а сразу собираются из
 // спектра — градиентами и кэшированными спрайтами.
-const _prismIsTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+/* ── Это устройство управляется пальцем? ───────────────────────────────────
+   Раньше по всей игре стояла проверка `'ontouchstart' in window ||
+   navigator.maxTouchPoints > 0`. Она отвечает на вопрос «есть ли у устройства
+   сенсорный ввод ХОТЬ КАКОЙ-НИБУДЬ», а не «играют ли на нём пальцем». У любого
+   ноутбука с сенсорным экраном — а таких давно большинство — она истинна, и
+   человек с клавиатурой получал поверх игры экранный джойстик.
+
+   `(pointer: coarse)` спрашивает про ОСНОВНОЙ указатель. На телефоне это палец,
+   на ноутбуке с тачскрином — тачпад, то есть точный. Ровно то различие, которое
+   нам нужно. Старая проверка осталась запасной — на случай, если matchMedia
+   почему-то нет.
+
+   Вдобавок: если с устройства хоть раз нажали клавишу, клавиатура у него точно
+   есть, и экранные кнопки в автоматическом режиме не нужны. Это добирает
+   пограничные случаи — планшет с чехлом-клавиатурой, ноутбук-трансформер. */
+let _sawRealKeyboard=false;
+window.addEventListener('keydown',function(e){
+  // Игнорируем то, что шлёт сама система: интересны только настоящие нажатия.
+  if(e&&e.isTrusted&&e.key&&e.key!=='Unidentified')_sawRealKeyboard=true;
+},{capture:true,passive:true});
+
+function bbIsTouchDevice(){
+  try{
+    if(typeof window.matchMedia==='function'){
+      if(_sawRealKeyboard)return false;
+      return window.matchMedia('(pointer: coarse)').matches;
+    }
+  }catch(e){ /* старый движок — падаем на прежнюю проверку */ }
+  return ('ontouchstart' in window)||navigator.maxTouchPoints>0;
+}
+/** Показывать ли экранное управление с учётом настройки игрока. */
+function bbWantsTouchUI(){
+  const s=window.gameSettings;
+  const mode=s&&s.touchControls;
+  if(mode==='on')return true;
+  if(mode==='off')return false;
+  return bbIsTouchDevice();
+}
+window.bbIsTouchDevice=bbIsTouchDevice;
+window.bbWantsTouchUI=bbWantsTouchUI;
+
 function prismFxOn(){
   const s=window.gameSettings;
   const v=(s&&s.prismFx)||'auto';
   if(v==='on')return true;
   if(v==='off')return false;
-  if(_prismIsTouch||(s&&s.touchControls==='on'))return false;   // телефон/планшет
+  if(bbWantsTouchUI())return false;   // телефон/планшет
   const g=(s&&s.gfx)||{};                                        // слабый тир графики
   return !((g.glow!=null&&g.glow<0.6)||(g.bgDetail!=null&&g.bgDetail<0.6));
 }
@@ -869,6 +909,8 @@ function toggleAudio(){
   document.getElementById('audioBtn').textContent=audioOn?'🔊':'🔇';
   if(audioOn&&(gState==='playing'||gState==='paused'))startGameMusic();
   else if(!audioOn)stopMusic();
+  // Звук включили в главном меню: раньше музыка меню молчала, пока не перезайдёшь.
+  else if(!musicPlaying&&navScr==='main')startMenuMusic();
 }
 document.getElementById('audioBtn').onclick=()=>{initAudio();toggleAudio();};
 
@@ -930,13 +972,31 @@ document.addEventListener('keydown',ev=>{
   if(_gameKeys.includes(ev.code)||_bound.includes(ev.code))ev.preventDefault();
 });
 document.addEventListener('keyup',ev=>{K[ev.code]=false;});
-// First user gesture (click/tap) also unlocks audio + menu music (autoplay policy)
+// ── Музыка меню с самой первой секунды ──────────────────────────────────────
+// Браузер не пускает звук, пока игрок ничего не сделал, — это правило самой
+// страницы, обойти его нельзя. Поэтому два шага:
+//  1) на старте пробуем сразу (_bootAudio внизу файла): в .exe и в приложении
+//     на Android автозапуск разрешён, и музыка идёт с первой секунды;
+//  2) если звук «спит», ждём ПЕРВОГО действия игрока — любая клавиша, мышь или
+//     касание — и включаем музыку в этот момент. Раньше слушалась только мышь:
+//     клавиатура контекст будила, а музыку не включала, и меню молчало, пока
+//     не кликнешь.
+const _UNLOCK_EVENTS=['pointerdown','mousedown','touchstart','keydown','click'];
+function _menuMusicIfIdle(){
+  if(audioOn&&AC&&AC.state==='running'&&!musicPlaying&&navScr==='main')startMenuMusic();
+}
 function _audioUnlock(){
   initAudio();
-  if(AC&&AC.state==='suspended'){try{AC.resume();}catch(e){}}
-  if(audioOn&&!musicPlaying&&navScr==='main')startMenuMusic();
+  if(!AC)return;
+  if(AC.state==='running'){
+    _menuMusicIfIdle();
+    _UNLOCK_EVENTS.forEach(ev=>document.removeEventListener(ev,_audioUnlock,true));
+    return;
+  }
+  // resume() отвечает, когда браузер действительно разрешил звук.
+  try{AC.resume().then(_menuMusicIfIdle).catch(()=>{});}catch(e){}
 }
-document.addEventListener('pointerdown',_audioUnlock,{once:true});
+_UNLOCK_EVENTS.forEach(ev=>document.addEventListener(ev,_audioUnlock,true));
 
 function doEsc(){
   // Экран итогов обрабатывает Escape сам (уйти на карту / в меню). Без этой
@@ -1160,8 +1220,7 @@ let _vzX=W*0.5,_vzY=H*0.6;
 function _viewZoom(){
   const s=window.gameSettings;
   if(!s)return 1;
-  const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0||s.touchControls==='on';
-  if(!isTouch)return 1;
+  if(!bbWantsTouchUI())return 1;
   let z=s.mobileZoom;
   // 0 / unset = Auto: the smaller the screen, the more magnification it needs.
   if(!z||isNaN(+z)){
@@ -1191,6 +1250,18 @@ window._viewZoom=_viewZoom;
 // it). This accessor is the supported way to read the frame counter from
 // assets/*.js siblings — see the NaN gradient bug in status.js.
 window.__bbTick=function(){return tick;};
+// Снимок мира для проверок из консоли — по тому же принципу, что и __bbTick:
+// всё содержимое уровня живёт в скриптовых `let`, и снаружи его иначе не
+// увидеть. Отдаются сами массивы, а не копии: это диагностика, а не API, и
+// копирование тысяч объектов на каждый вызов было бы дороже самой проверки.
+// Используется в тестах генератора (см. docs/TESTING.md).
+window.__bbWorld=function(){
+  return {get platforms(){return platforms;},get blocks(){return blocks;},
+    get hazards(){return hazards;},get coins(){return coins;},
+    get dataShards(){return dataShards;},get enemies(){return enemies;},
+    get worldW(){return worldW;},get camX(){return camX;},
+    get flagX(){return flagX;},get W(){return W;},get H(){return H;}};
+};
 let _goNextTimer=0;        // handle for the level-advance timeout (cancellable)
 let player,platforms,blocks,coins,enemies,pBullets,eBullets,powerups,particles,decors;
 // Unique, ever-increasing id for every enemy created (initial level population AND
@@ -1813,7 +1884,10 @@ function eLand(e){
 // неё нет намеренно: комната достраивается к тому же миру за его правой
 // границей, и вход — это телепорт. Так работают все системы уровня без
 // изменений: камера, частицы, сохранение, сеть.
-const BONUS_TIME=900;   // 15 секунд
+// bonusT — признак «игрок внутри», а не обратный отсчёт. Комната была
+// пятнадцатисекундной, и таймер выдёргивал игрока посреди прыжка: считать
+// чужие секунды над полной комнатой монет — худшее, что можно сделать с
+// наградой. Теперь вход и выход только по дверям, времени нет.
 let bonusT=0,bonusBack=null,bonusFade=0,roomKind=0;
 // Переход в комнату и обратно идёт через полное затемнение: место меняется
 // ровно в тот кадр, когда экран чёрный, поэтому это читается как отдельный
@@ -1832,7 +1906,7 @@ function enterBonusRoom(door,p){
   p.vx=0;
   SFX.warp&&SFX.warp();
   bonusWipe(function(){
-    bonusT=BONUS_TIME;bonusTitle=1;
+    bonusT=1;bonusTitle=1;
     p.x=door.roomX+40;p.y=door.roomY-p.h;p.vx=0;p.vy=0;
     camX=Math.max(0,p.x-W*0.4);
   });
@@ -1866,11 +1940,9 @@ function updateBonusRoom(){
     if(player)player.vx=0;
     bonusFade=Math.max(0,bonusFade-BFADE);
     if(bonusFade<=0)bonusDir=0;
-    return;                              // таймер пока не идёт: экран ещё тёмный
   }
-  if(bonusT<=0)return;
-  bonusT--;
-  if(bonusT<=0)leaveBonusRoom();
+  // Ничего больше: комната ждёт, пока игрок сам дойдёт до двери выхода
+  // (см. bonusExit в цикле hazards).
 }
 // `p` не обязателен: по сети блок проявляется и у тех, кто его не бил, — им
 // толкать некого (см. netWorldApply).
@@ -2413,7 +2485,12 @@ function genLevel(diff,rng,advN){
       // хватало — лестница внутри поднимается на 266, по ней перелезали через
       // верх и уходили пешком прямо к финишу, пропуская остаток уровня.
       const roomH=340;
-      platforms.push({x:roomX-40,y:roomY,w:roomW+80,h:40,type:'ground',solid:true,gone:false});
+      // Пол уходит НИЖЕ края экрана. При высоте 40 под ним оставалась полоса
+      // в полсотни пикселей, сквозь которую светил фон уровня — комната от
+      // этого читалась как кусок декорации, висящий в воздухе, а не как
+      // отдельное место. Заливка платформы идёт на всю высоту (см.
+      // drawPlatforms), поэтому достаточно увеличить h.
+      platforms.push({x:roomX-40,y:roomY,w:roomW+80,h:H-roomY+240,type:'ground',solid:true,gone:false});
       blocks.push({x:roomX-60,y:roomY-roomH,w:24,h:roomH,type:'b',solid:true,used:true,bounce:0,origY:roomY-roomH});
       blocks.push({x:roomX+roomW+36,y:roomY-roomH,w:24,h:roomH,type:'b',solid:true,used:true,bounce:0,origY:roomY-roomH});
       blocks.push({x:roomX-60,y:roomY-roomH-24,w:roomW+120,h:24,
@@ -2469,6 +2546,41 @@ function genLevel(diff,rng,advN){
       const dx=Math.floor(nd.x+nd.w/2-16);
       hazards.push({type:'bonusDoor',x:dx,y:nd.y-44,w:32,h:44,used:false,anim:0,
         roomX:roomX,roomY:roomY});
+
+      // ── Выход ────────────────────────────────────────────────────────────
+      // Раньше комната закрывалась по таймеру: пятнадцать секунд — и игрока
+      // выдёргивало на середине прыжка. Считать чужие секунды, когда перед
+      // тобой полная комната монет, — худшее, что можно сделать с наградой.
+      // Теперь уходят сами, через дверь у дальней стены: чтобы дойти до неё,
+      // комнату всё равно надо пройти насквозь.
+      hazards.push({type:'bonusExit',x:roomX+roomW-24,y:roomY-46,w:34,h:46,anim:0});
+
+      // ── Второй кристалл данных ───────────────────────────────────────────
+      // Кристаллы раздаёт genLevelVariety (три на уровень), и он отработал
+      // выше — массив уже заполнен. Если на уровне есть комната, средний из
+      // трёх переезжает сюда: скрытый вход перестаёт быть просто мешком монет
+      // и становится единственным способом собрать уровень на три кристалла.
+      // Под кристаллом своя площадка: планировки разные, и рассчитывать на
+      // чужую геометрию нельзя — с голого пола до него было бы не допрыгнуть.
+      if(dataShards.length>=2){
+        // Высоты выбраны по худшему случаю — мутатору тяжёлой гравитации.
+        // Прыжок там поднимает на 67 пикселей (JV² / 2·0.9) вместо обычных 131,
+        // поэтому ступенька стоит на 58 над полом, а кристалл на 60 над ней:
+        // достаётся и с обычной физикой, и с тяжёлой. На 176, как было сначала,
+        // при тяжёлой гравитации кристалл превращался в недостижимый — то есть
+        // уровень нельзя было собрать на три.
+        const sx=roomX+Math.round(roomW*0.5)-8, sy=roomY-118;
+        // Планировок пять, и две из них ставят в центре комнаты блоки: кристалл
+        // оказался бы внутри и не собирался бы вовсе. Освобождаем место —
+        // убираем только содержимое самой комнаты (метка bonus), уровня это
+        // не касается.
+        const zone={x:sx-48,y:sy-34,w:104,h:112};
+        for(let i=blocks.length-1;i>=0;i--)if(blocks[i].bonus&&aabb(blocks[i],zone))blocks.splice(i,1);
+        for(let i=coins.length-1;i>=0;i--)if(coins[i].bonus&&aabb(coins[i],zone))coins.splice(i,1);
+        platforms.push({x:sx-34,y:roomY-58,w:84,h:PLH,type:'normal',solid:false,gone:false});
+        dataShards[1].x=sx; dataShards[1].y=sy; dataShards[1].id=`${sx}_${sy}`;
+        dataShards[1].inRoom=true;
+      }
       worldW=roomX+roomW+120;
     }
   }
@@ -4745,8 +4857,7 @@ function showMode(){
   // On phones/tablets there is no second keyboard, so 2-player local makes no
   // sense — hide the 1/2 toggle and force single player. (Re-evaluated each open
   // because the "Touch controls: On" setting can change at runtime.)
-  const touchLike=('ontouchstart' in window)||navigator.maxTouchPoints>0||
-                  (window.gameSettings&&window.gameSettings.touchControls==='on');
+  const touchLike=bbWantsTouchUI();
   const pToggle=document.getElementById('playerToggle');
   const p2h=document.getElementById('p2hint');
   if(touchLike){
@@ -4914,10 +5025,12 @@ function showNetRooms(){
 window.showNetRooms=showNetRooms;
 
 // Карточки Play Type
+// Слот больше не спрашивается на пути в игру: он виден и меняется кнопкой в
+// углу меню (saveslots.js). Лишний экран стоял между «хочу играть» и игрой,
+// хотя слот у большинства один и тот же.
 document.getElementById('soloCard').onclick=()=>{
   SFX.menu();
-  if(window.showSlots) window.showSlots();
-  else showMode();
+  showMode();
 };
 document.getElementById('onlineCard').onclick=function(){
   if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}
@@ -4947,8 +5060,13 @@ document.getElementById('netRoomsBackBtn').onclick=()=>{SFX.back();showNetType()
 
 // PLAY теперь ведёт на экран выбора Solo/Online
 document.getElementById('mainBtn').onclick=()=>{SFX.menu();showPlayType();};
-// Exit the game. Electron quits the app; Capacitor (Android .apk) calls the App
-// plugin's exitApp(); the browser falls back to window.close().
+// Выход из игры. Electron закрывает приложение, Android зовёт exitApp().
+//
+// В браузере window.close() РАБОТАЕТ ТОЛЬКО для вкладки, открытой скриптом:
+// вкладку, в которую игрок пришёл по ссылке или из закладок, закрыть нельзя —
+// это запрет самого браузера, и кнопка просто ничего не делала. Поэтому в вебе
+// выход означает «вернуться на сайт игры»: close() пробуем, и если вкладка
+// через мгновение жива, уходим на страницу игры.
 document.getElementById('exitBtn').onclick=()=>{SFX.menu();
   if(window.electronAPI&&window.electronAPI.quit){window.electronAPI.quit();return;}
   const Cap=window.Capacitor;
@@ -4956,7 +5074,19 @@ document.getElementById('exitBtn').onclick=()=>{SFX.menu();
   // Direct native bridge call — works on Android even without the JS plugin proxy.
   if(Cap&&typeof Cap.nativeCallback==='function'){try{Cap.nativeCallback('App','exitApp',{});return;}catch(e){}}
   if(navigator.app&&navigator.app.exitApp){navigator.app.exitApp();return;}
+
   try{window.close();}catch(e){}
+  setTimeout(()=>{
+    if(window.closed)return;                       // вкладку всё-таки закрыли
+    // Если игрок пришёл с нашего сайта — возвращаем его туда же, откуда пришёл.
+    const home=(window.BB_SITE_URL||'https://pixset-studio.github.io/byte-blaster/');
+    try{
+      if(document.referrer&&new URL(document.referrer).origin===location.origin){
+        location.href=document.referrer;return;
+      }
+    }catch(e){}
+    location.href=home;
+  },180);
 };
 
 function setPlayers(n){
@@ -5007,61 +5137,10 @@ function buildMap(){
 // ════════════════════════════════════════════════
 //  GAME START FUNCTIONS
 // ════════════════════════════════════════════════
-function startInf(fresh=true){
-  if(fresh){score=0;lives=3;level=1;coinsTotal=0;_coinsHpStep=0;}
-  advMode=false;CT=THEMES[Math.min(Math.floor((level-1)/10),9)];
-  player=mkPlayer();
-  const diff=Math.min(Math.floor((level-1)/5)+1,14);
-  genLevel(diff,()=>Math.random(),null);
-  player.x=spawnX;player.y=spawnY;
-  timeLeft=lvlTime(level)*1.5;timMax=timeLeft;
-  hideAll();gState='playing';navScr='game';tick=0;
-  document.getElementById('ui').style.display='flex';
-  updModeLabel();startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
-}
-function startAdv(n,freshLives=false){
-  // Серия убийств не переезжает между уровнями.
-  if(window.Juice)window.Juice.comboBreak();
-  // В хардкоре запас общий на весь мир и переносится между уровнями;
-  // в обычном режиме — свой на каждый заход.
-  if(hardMode&&advMode){
-    _hardEnterWorld(n);
-    if(freshLives)cpSave=null;
-    lives=hardWorldLives;
-  } else if(freshLives){lives=3;cpSave=null;} // fresh entry (e.g. from map) → no carried checkpoint
-  // Reset coin progress when starting fresh adventure from level 1
-  if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
-  advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
-  player=mkPlayer();
-  const diff=Math.min(Math.floor((n-1)/6)+1,14);
-  genLevel(diff,mkRNG(n*9001+12345),n);
-  player.x=spawnX;player.y=spawnY;
-  // Resume at a previously-reached checkpoint when retrying this same seeded level.
-  if(cpSave&&cpSave.lvl===n&&checkpoints.length){
-    const cp=checkpoints[0];
-    cp.taken=true;cp.color=cpSave.color||'#4af';
-    spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
-    player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
-    player.cpX=spawnX;player.cpY=spawnY;
-    camX=Math.max(0,Math.min(spawnX-W*.38,worldW-W));
-    // Keep crystals collected before the checkpoint (see _doRunLevel for the live path).
-    if(cpSave.shards){
-      for(let i=0;i<dataShards.length&&i<cpSave.shards.length;i++)dataShards[i].got=cpSave.shards[i];
-      dataShardsGot=cpSave.shardsGot||dataShards.filter(s=>s.got).length;
-      shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
-    }
-    _restoreCpWorld();
-  }
-  timeLeft=lvlTime(n);timMax=timeLeft;
-  hideAll();gState='playing';navScr='game';tick=0;
-  document.getElementById('ui').style.display='flex';
-  updModeLabel();
-
-  // Top-center modifier/archetype banner (persists for the whole level).
-  showModBanner();
-
-  startGameMusic();if(raf)cancelAnimationFrame(raf);loop();
-}
+// (Здесь была первая копия startInf; объявление ниже по файлу перекрывало её при разборе
+// скрипта, так что она не вызывалась. Рабочая цепочка: startInf → patchedStartInf.)
+// (Здесь была первая копия startAdv. Объявление ниже по файлу перекрывало её при разборе
+// скрипта, так что она не вызывалась. Рабочая цепочка: startAdv → patchedStartAdv → _doRunLevel.)
 function updModeLabel(){
   document.getElementById('modeUI').style.display='flex';
   const e=document.getElementById('modeEl');
@@ -5421,6 +5500,13 @@ function updatePlayer(){
     // Вход в бонус-комнату — по касанию.
     if(hz.type==='bonusDoor'){
       if(!hz.used&&aabb(p,hz))enterBonusRoom(hz,p);
+      continue;
+    }
+    // Выход из бонус-комнаты. Срабатывает только изнутри: снаружи до этой
+    // двери не дойти (комната стоит за границей мира), но проверка дешевле
+    // рассуждений о том, куда игрока может занести.
+    if(hz.type==='bonusExit'){
+      if(inBonusRoom()&&aabb(p,hz))leaveBonusRoom();
       continue;
     }
     if(hz.type==='spikes'&&aabb(p,hz)&&p.inv<=0){
@@ -7773,19 +7859,18 @@ function drawBonusRoomUi(){
     ctx.fillText(T('bonusRoom')||'БОНУС-КОМНАТА',W/2,H*0.30);
     ctx.restore();
   }
+  // Полосы обратного отсчёта здесь больше нет: комната не закрывается сама.
+  // Вместо неё — короткая подсказка про выход, она тает вместе с названием.
   if(bonusT<=0)return;
-  const r=bonusT/BONUS_TIME;
-  const bw=Math.round(W*0.4),bx=Math.round((W-bw)/2),by=Math.round(H*0.06);
-  ctx.save();
-  ctx.fillStyle='#0a1a26';ctx.fillRect(bx,by,bw,12);
-  // Под конец полоса мигает — время уходит.
-  const warn=r<0.25&&Math.floor(tick/6)%2===0;
-  ctx.fillStyle=warn?'#ff6b6b':'#ffd24a';
-  ctx.shadowBlur=10;ctx.shadowColor=ctx.fillStyle;
-  ctx.fillRect(bx,by,Math.round(bw*r),12);
-  ctx.shadowBlur=0;
-  ctx.strokeStyle='#9fd';ctx.lineWidth=1.5;ctx.strokeRect(bx,by,bw,12);
-  ctx.restore();
+  if(bonusTitle>0&&bonusFade<0.9){
+    ctx.save();
+    ctx.globalAlpha=Math.min(1,bonusTitle*2.2)*(1-bonusFade)*0.85;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=Math.round(H*0.022)+'px "Share Tech Mono", monospace';
+    ctx.fillStyle='#bfffd8';
+    ctx.fillText(T('bonusRoomExit')||'ВЫХОД — ДВЕРЬ В ДАЛЬНЕМ КОНЦЕ',W/2,H*0.385);
+    ctx.restore();
+  }
 }
 function drawTimerBar(){
   if(gState!=='playing'&&gState!=='levelclear')return;
@@ -8301,7 +8386,7 @@ function drawHazards(){
   // чтобы не звать туда второй раз.
   for(const hz of hazards){
     if(hz.type!=='bonusDoor')continue;
-    hz.anim=(hz.anim||0)+0.06;
+    hz.anim=(hz.anim||0)+0.06*(window.BB_animK?window.BB_animK():1);
     ctx.save();
     const a=hz.used?0.18:0.55+Math.sin(hz.anim)*0.25;
     ctx.globalAlpha=a;
@@ -8310,6 +8395,29 @@ function drawHazards(){
     ctx.strokeRect(hz.x,hz.y,hz.w,hz.h);
     ctx.globalAlpha=a*0.35;
     ctx.fillStyle='#0a2a3a';ctx.fillRect(hz.x+3,hz.y+3,hz.w-6,hz.h-6);
+    ctx.restore();
+  }
+  // Выход из бонус-комнаты. Зелёный, а не голубой, как вход: два одинаковых
+  // проёма в одной комнате читались бы как «куда-то ещё», а этот ведёт назад.
+  // Стрелка внутри показывает направление — наружу.
+  for(const hz of hazards){
+    if(hz.type!=='bonusExit')continue;
+    hz.anim=(hz.anim||0)+0.05*(window.BB_animK?window.BB_animK():1);
+    const a=0.6+Math.sin(hz.anim)*0.22;
+    ctx.save();
+    ctx.globalAlpha=a;
+    ctx.strokeStyle='#5cff9d';ctx.lineWidth=3;
+    ctx.shadowBlur=16;ctx.shadowColor='#5cff9d';
+    ctx.strokeRect(hz.x,hz.y,hz.w,hz.h);
+    ctx.globalAlpha=a*0.30;ctx.shadowBlur=0;
+    ctx.fillStyle='#0a3a20';ctx.fillRect(hz.x+3,hz.y+3,hz.w-6,hz.h-6);
+    ctx.globalAlpha=a;
+    ctx.strokeStyle='#bfffd8';ctx.lineWidth=2;
+    const cx=hz.x+hz.w/2,cy=hz.y+hz.h/2;
+    ctx.beginPath();
+    ctx.moveTo(cx-7,cy);ctx.lineTo(cx+7,cy);
+    ctx.moveTo(cx+2,cy-6);ctx.lineTo(cx+8,cy);ctx.lineTo(cx+2,cy+6);
+    ctx.stroke();
     ctx.restore();
   }
   const vLeft=camX-40,vRight=camX+W+40;
@@ -8574,9 +8682,28 @@ function genLevelVariety(rng, lvl, nodes, hit, add){
 }
 
 // ── Per-frame motion + collision for the variety hazards ──────────────────
-function _hazardHurt(p,isP2){
+// Ловушки уровня в «Спокойном» режиме не убивают с одного касания: они сносят ровно
+// одну стадию робота, как обычный враг — с усилением → без усиления → «сломан»,
+// и только удар по сломанному роботу отнимает жизнь (это делает enemyHitPlayer).
+// Список задан явно, а не «все ловушки»: шипы (их обрабатывает updatePlayer) и
+// падения остаются смертельными, и новая ловушка не станет мягкой сама собой.
+// В хардкоре всё как было. Критерий режима — тот же, что у мягкого падения в
+// doHurtPlayer.
+const _SOFT_HAZARDS=new Set(['saw','pendulum','geyser','icicle','toxin','lightning']);
+function _hazardIsSoft(type){
+  return _SOFT_HAZARDS.has(type)&&!hardMode&&
+    !!(window.gameSettings&&window.gameSettings.gameMode==='easy');
+}
+function _hazardHurt(p,isP2,type){
   if(!p||p.inv>0||p.starMode||p.respawning||p.fallRespawning)return;
-  if(isP2)doHurtPlayer2(false);else doHurtPlayer(false);
+  if(_hazardIsSoft(type)){
+    // src = null: никакого статуса от пилы или шара не вешаем.
+    if(isP2)enemyHitPlayer2(null);else enemyHitPlayer(null);
+  } else {
+    if(isP2)doHurtPlayer2(false);else doHurtPlayer(false);
+  }
+  // Отброс от лезвия — иначе игрок остался бы в нём и получил второй удар, как
+  // только кончатся кадры неуязвимости.
   if(p){p.vy=-7;p.vx=(p.facing||1)*-3;}
   camShake=Math.max(camShake,8);
 }
@@ -8636,8 +8763,8 @@ function updateHazards(){
       default: active=false;      // 'spikes' are handled inside updatePlayer
     }
     if(!active)continue;
-    if(player&&!hurtP1&&aabb(player,box)){_hazardHurt(player,false);hurtP1=true;}
-    if(player2&&!hurtP2&&aabb(player2,box)){_hazardHurt(player2,true);hurtP2=true;}
+    if(player&&!hurtP1&&aabb(player,box)){_hazardHurt(player,false,hz.type);hurtP1=true;}
+    if(player2&&!hurtP2&&aabb(player2,box)){_hazardHurt(player2,true,hz.type);hurtP2=true;}
   }
 }
 
@@ -11173,6 +11300,10 @@ function _advanceLogic(maxClamp){
   return steps;
 }
 function loop(){
+  // Сторож отрисовки заводится с первым же кадром игры и живёт дальше сам —
+  // так он покрывает все точки запуска цикла, а не только ту, откуда пришли.
+  // Повторные вызовы отсекает сам сторож, поэтому здесь просто зовём его.
+  if(typeof startDrawWatchdog==='function')startDrawWatchdog();
   // Optional FPS limiter (provided by settings.js). Skips work but keeps one RAF chain.
   if(typeof window._fpsShouldSkip==='function'&&window._fpsShouldSkip()){raf=requestAnimationFrame(loop);return;}
   if(typeof window._fpsTick==='function')window._fpsTick();
@@ -11236,6 +11367,42 @@ function _bgTick(){
   // ~1 Hz in a hidden tab, so without this the host's snapshots would lag badly.
   if(typeof window.netStateTick==='function') window.netStateTick();
 }
+/* ── Сторож отрисовки ──────────────────────────────────────────────────────
+   Отдельная история от тикера выше: тот спасает ЛОГИКУ сетевой комнаты, а этот
+   спасает КАРТИНКУ в любой игре, включая одиночную.
+
+   Откуда берётся чёрный экран на телефоне. Экран поражения гасит цепочку
+   кадров (`cancelAnimationFrame` в showGameover), и пока он открыт, rAF не
+   работает вовсе. На телефоне в этот момент игру обычно сворачивают — прочесть
+   сообщение, ответить на звонок. Android после возврата отдаёт кадры не сразу,
+   и если игрок жмёт «Заново» в эту паузу, loop() успевает очистить холст
+   (_resetCanvasState) и записаться в очередь rAF, а первый кадр не приходит:
+   цепочка не стартует, а холст уже чистый — то есть чёрный.
+
+   Сторож это ловит: раз в секунду смотрит, идёт ли игра и давно ли рисовался
+   настоящий кадр. Если игра идёт, а кадров нет дольше секунды — перезапускает
+   цикл. Когда rAF жив, проверка выходит на первой строке и не стоит ничего. */
+let _drawWatchdog=0;
+function _watchdogTick(){
+  if(gState!=='playing'&&gState!=='levelclear'&&gState!=='paused') return;
+  if(document.hidden) return;                 // свёрнутое окно и должно стоять
+  if(performance.now()-_bgRAFSeen < 1000) return;
+  // Кадров нет секунду при живой игре — цепочка оборвалась. Заводим заново.
+  try{ if(raf) cancelAnimationFrame(raf); }catch(e){}
+  raf=0;
+  _bgRAFSeen=performance.now();               // чтобы не перезапускать каждую секунду
+  try{ loop(); }catch(e){ try{console.error('[watchdog] loop restart failed:',e);}catch(_){} }
+}
+function startDrawWatchdog(){
+  if(_drawWatchdog) return;
+  _drawWatchdog=setInterval(_watchdogTick,1000);
+  // Возврат из фона — самый частый случай: проверяем сразу, не ожидая секунды.
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden) setTimeout(_watchdogTick,250);
+  });
+}
+window.startDrawWatchdog=startDrawWatchdog;
+
 function startBgTicker(){
   if(_bgWorker||_bgIntervalFallback) return;
   try{
@@ -11303,39 +11470,9 @@ function patchedStartInf(fresh=true){
 // cutscene engine (search "Wrap patchedStartAdv" → _doRunLevel). The live
 // checkpoint-resume logic lives in _doRunLevel; keep this in sync but know it
 // does not run at runtime.
-function patchedStartAdv(n,freshLives=false){
-  // В хардкоре запас общий на весь мир и переносится между уровнями;
-  // в обычном режиме — свой на каждый заход.
-  if(hardMode&&advMode){
-    _hardEnterWorld(n);
-    if(freshLives)cpSave=null;
-    lives=hardWorldLives;
-  } else if(freshLives){lives=3;cpSave=null;}
-  if(freshLives&&n===1){coinsTotal=0;_coinsHpStep=0;}
-  if(infiniteLives)lives=99;
-  advMode=true;advLevel=n;CT=THEMES[Math.floor((n-1)/10)];level=n;
-  player=mkPlayer();
-  const diff=Math.min(Math.floor((n-1)/6)+1,14);
-  genLevel(diff,mkRNG(n*9001+12345),n);fixDrones();
-  player.x=spawnX;player.y=spawnY;
-  player.lastGndX=spawnX;player.lastGndY=spawnY;
-  if(cpSave&&cpSave.lvl===n&&checkpoints.length){
-    const cp=checkpoints[0];
-    cp.taken=true;cp.color=cpSave.color||'#4af';
-    spawnX=Math.round(cp.x+cp.w/2-player.w/2);spawnY=cp.baseY-player.h;
-    player.x=spawnX;player.y=spawnY;player.lastGndX=spawnX;player.lastGndY=spawnY;
-    player.cpX=spawnX;player.cpY=spawnY;
-    _restoreCpWorld();
-  }
-  initP2();
-  timeLeft=lvlTime(n);timMax=timeLeft;
-  hideAll();gState='playing';navScr='game';tick=0;
-  document.getElementById('ui').style.display='flex';
-  updModeLabel();
-  showModBanner();
-  if(boss){showBossIntro(boss);}else{startGameMusic();}
-  if(raf)cancelAnimationFrame(raf);loop();
-}
+// (Прежняя копия patchedStartAdv жила здесь и не вызывалась ни разу: ниже её подменяла
+// обёртка, а логика запуска давно в _doRunLevel. Правки, внесённые в мёртвую копию, не
+// доходили до игры — так и потерялся _restoreCpWorld. Копия удалена.)
 // Replace references
 document.getElementById('infCard').onclick=function(){
   if(window.Demo&&window.Demo.on){window.Demo.refuse(this);return;}
@@ -13253,7 +13390,8 @@ function _csFire(id,wi,cb){
 }
 
 // ── Wrap patchedStartAdv ───────────────────────
-patchedStartAdv=function(n,freshLives){
+// Единственная реализация запуска уровня кампании: startAdv → patchedStartAdv → _doRunLevel.
+function patchedStartAdv(n,freshLives){
   if(freshLives===undefined)freshLives=false;
   var wi=Math.floor((n-1)/10);
   var lvInWorld=((n-1)%10)+1; // 1-10
@@ -13265,7 +13403,7 @@ patchedStartAdv=function(n,freshLives){
     return;
   }
   _doRunLevel(n,freshLives);
-};
+}
 
 function _doRunLevel(n,freshLives){
   // Demo build: the last line of defence for "this level isn't in this build".
@@ -13319,6 +13457,11 @@ function _doRunLevel(n,freshLives){
       // bonus was earned on the first run — don't let it fire (or block) again.
       shardBonusGiven=(dataShardsTotal>0&&dataShardsGot>=dataShardsTotal);
     }
+    // Убитые враги и собранные монеты остаются убитыми и собранными. Раньше
+    // этот вызов был только в startAdv и patchedStartAdv, а живой путь запуска
+    // идёт через _doRunLevel — поэтому после возрождения на чек-поинте всё, что
+    // игрок уже прошёл, появлялось снова.
+    _restoreCpWorld();
   }
   initP2();
   if(window.Ghost)window.Ghost.begin({kind:'level',level:n,hardcore:!!hardMode});
@@ -13557,7 +13700,12 @@ function playEndingCinematic(onDone){
     }
   }
 
-  let t=0,raf2=0,done=false;
+  // Время сцены считается в шестидесятых долях секунды, а не в кадрах: на
+  // мониторе 165 Гц счёт по кадрам прокручивал бы весь финал за четыре секунды
+  // вместо одиннадцати. `k` — сколько таких долей прошло с прошлой отрисовки,
+  // с потолком 4 на случай, когда окно сворачивали.
+  let t=0,raf2=0,done=false,last=performance.now();
+  let fwAcc=0,skipShown=false;   // накопитель для залпов и разовый показ «пропустить»
   const DUR=60*11; // ~11 seconds
   function finish(){
     if(done)return;done=true;
@@ -13570,7 +13718,9 @@ function playEndingCinematic(onDone){
   function onKey(){finish();}
 
   function frame(){
-    t++;
+    const now=performance.now();
+    const k=Math.min(4,Math.max(0,(now-last)/(1000/60)));
+    last=now; t+=k;
     // background gradient
     const g=c.createLinearGradient(0,0,0,H);
     g.addColorStop(0,'#04081e');g.addColorStop(0.55,'#070314');g.addColorStop(1,'#0a0208');
@@ -13579,11 +13729,13 @@ function playEndingCinematic(onDone){
     for(const s of stars){const a=0.4+0.5*Math.sin(t*0.05+s.p);c.globalAlpha=a;c.fillStyle='#cfe9ff';c.fillRect(s.x,s.y,s.r,s.r);}
     c.globalAlpha=1;
 
-    // periodic fireworks
-    if(t%26===0)spawnFirework(120+Math.random()*(W-240),80+Math.random()*(H*0.4));
+    // periodic fireworks — по накопителю, а не по остатку от номера кадра:
+    // при дробном счёте времени `t%26===0` не сработало бы ни разу.
+    fwAcc+=k;
+    if(fwAcc>=26){fwAcc-=26;spawnFirework(120+Math.random()*(W-240),80+Math.random()*(H*0.4));}
     for(let i=fireworks.length-1;i>=0;i--){
       const p=fireworks[i];
-      p.x+=p.vx;p.y+=p.vy;p.vy+=0.045;p.vx*=0.99;p.life-=0.012;
+      p.x+=p.vx*k;p.y+=p.vy*k;p.vy+=0.045*k;p.vx*=Math.pow(0.99,k);p.life-=0.012*k;
       if(p.life<=0){fireworks.splice(i,1);continue;}
       c.globalAlpha=Math.max(0,p.life);
       c.fillStyle=p.col;c.shadowBlur=10;c.shadowColor=p.col;
@@ -13593,7 +13745,7 @@ function playEndingCinematic(onDone){
 
     // confetti
     for(const cf of confetti){
-      cf.x+=cf.vx;cf.y+=cf.vy;cf.rot+=cf.vr;
+      cf.x+=cf.vx*k;cf.y+=cf.vy*k;cf.rot+=cf.vr*k;
       if(cf.y>H+10){cf.y=-10;cf.x=Math.random()*W;}
       c.save();c.translate(cf.x,cf.y);c.rotate(cf.rot);c.fillStyle=cf.col;c.globalAlpha=0.85;
       c.fillRect(-cf.s/2,-cf.s/2,cf.s,cf.s*0.6);c.restore();
@@ -13648,7 +13800,7 @@ function playEndingCinematic(onDone){
       c.globalAlpha=1;c.shadowBlur=0;
     }
 
-    if(t===90)skipEl.style.opacity='0.85';
+    if(!skipShown&&t>=90){skipShown=true;skipEl.style.opacity='0.85';}
     if(t>=DUR){finish();return;}
     raf2=requestAnimationFrame(frame);
   }
@@ -13706,4 +13858,22 @@ for(let i=0;i<110;i++){const s=document.createElement('div');s.className='star';
 // ── INIT ─────────────────────────────────────────
 CT=THEMES[0];showMain();
 if(window.__chk)window.__chk('game.js: bottom of file reached, showMain() called');
+
+// Пробуем включить звук сразу, не дожидаясь игрока (см. _audioUnlock выше).
+// Контекст создаём заранее: пока он «спит», mp3 меню уже декодируются, и к
+// первому нажатию музыка готова. Как только контекст оживает — по любой причине —
+// statechange включает музыку меню, если она ещё не идёт.
+(function _bootAudio(){
+  // Автозапуск звука — приятное дополнение, а не условие запуска игры: любая
+  // осечка здесь (старый Safari без addEventListener у AudioContext и т.п.) не должна
+  // ронять загрузку, поэтому всё в try. Звук тогда включится по первому действию игрока.
+  try{
+    initAudio();
+    if(!AC)return;
+    if(AC.addEventListener)AC.addEventListener('statechange',_menuMusicIfIdle);
+    else AC.onstatechange=_menuMusicIfIdle;
+    AC.resume().then(_menuMusicIfIdle).catch(()=>{});
+    _menuMusicIfIdle();
+  }catch(e){}
+})();
 

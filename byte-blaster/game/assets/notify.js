@@ -289,7 +289,11 @@
   }
 
   function showAnnouncement(a) {
+    // Ссылка из уведомления может вести куда угодно, в том числе на чужой
+    // сайт. Встроенный браузер сам решит: страницу покажет внутри, файл и
+    // сайт, запрещающий встраивание, отдаст системе.
     const go = a.url ? () => {
+      if (window.BBBrowser) { window.BBBrowser.open(a.url); return; }
       try {
         if (window.electronAPI && window.electronAPI.openExternal) window.electronAPI.openExternal(a.url);
         else window.open(a.url, '_blank', 'noopener');

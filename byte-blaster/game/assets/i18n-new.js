@@ -259,6 +259,18 @@
     applyLanguage(lang);
   };
 
+  /** Шрифтовая добавка (арабский, иероглифы, тайский…) подключается по требованию: DOM
+   *  подхватывает её сам, а canvas рисует только тем, что уже загружено. Просим заранее,
+   *  чтобы первый кадр на новом языке не мелькнул системным шрифтом. */
+  function preloadScriptFonts() {
+    try {
+      if (!document.fonts || !document.fonts.load) return;
+      const sample = String(CURRENT.langName || '') + String(CURRENT.gameModeNote || '') + String(CURRENT.tabAudio || '');
+      document.fonts.load('16px "Press Start 2P"', sample).catch(() => {});
+      document.fonts.load('12px "Share Tech Mono"', sample).catch(() => {});
+    } catch (e) { /* без шрифтов игра работает, просто с системным */ }
+  }
+
   /** Ставит уже загруженный язык активным и обновляет всё, что его показывает. */
   function applyLanguage(lang) {
     LANG = lang;
@@ -269,6 +281,7 @@
       localStorage.setItem('bbSettings', JSON.stringify(s));
     } catch (e) {}
     if (window.gameSettings) window.gameSettings.language = LANG;
+    preloadScriptFonts();
     applyDOM();
     if (typeof window.refreshDynamicUI === 'function') window.refreshDynamicUI();
     if (typeof window.refreshLanguagePicker === 'function') window.refreshLanguagePicker();

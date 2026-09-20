@@ -144,7 +144,13 @@
     ov.style.display = 'block';
   }
 
+  /**
+   * Страница «Скачать» открывается внутри игры, а сам файл сборки — системой:
+   * загрузка внутри встроенного окна либо не начнётся, либо уедет неизвестно
+   * куда. Разбирается с этим сам BBBrowser — он смотрит на расширение.
+   */
   function openExternal(url) {
+    if (window.BBBrowser) { window.BBBrowser.open(url); return; }
     try {
       if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
         window.electronAPI.openExternal(url);

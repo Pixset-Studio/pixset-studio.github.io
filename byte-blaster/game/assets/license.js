@@ -51,6 +51,39 @@
     return seen;
   }
 
+  /**
+   * Убирает права, у которых вышел СВОЙ срок (`valid_until` — доступ по
+   * промокоду на N дней).
+   *
+   * Офлайн-запас придуман для купленной игры: лежащий сервер не должен
+   * отнимать её у игрока. Но к временному доступу тот же запас — подарок:
+   * недельный код работал бы больше месяца, стоило просто не выходить в сеть.
+   * Поэтому запас растягивает только бессрочные лицензии, а срочные кончаются
+   * ровно тогда, когда написано в токене.
+   *
+   * Битую дату трактуем в пользу игрока: отнимать доступ из-за неразобранной
+   * строки нельзя.
+   */
+  function dropExpired(payload) {
+    if (!payload || !Array.isArray(payload.licences)) return payload;
+
+    const t = now();
+    const dead = payload.licences
+      .filter((l) => {
+        if (!l || !l.valid_until) return false;         // навсегда
+        const till = Math.floor(Date.parse(l.valid_until) / 1000);
+        return Number.isFinite(till) && till <= t;
+      })
+      .map((l) => l.game);
+
+    if (!dead.length) return payload;
+
+    const alive = Object.assign({}, payload);
+    alive.games = (payload.games || []).filter((g) => dead.indexOf(g) === -1);
+    alive.licences = payload.licences.filter((l) => dead.indexOf(l.game) === -1);
+    return alive;
+  }
+
   /* ── Подпись ───────────────────────────────────────────────────────── */
   let keyPromise = null;
   function publicKey() {
@@ -107,7 +140,7 @@
         // Токен НЕ удаляем: без сети его нечем заменить, а выбросив его, мы
         // потеряли бы и имя, и аватарку, и саму память о входе.
         lastKnown = payload;
-        if (now() <= payload.expires_at + OFFLINE_GRACE_DAYS * 86400) ent = payload;
+        if (now() <= payload.expires_at + OFFLINE_GRACE_DAYS * 86400) ent = dropExpired(payload);
       }
     }
 
@@ -282,7 +315,10 @@
     if (!payload) throw new Error('bad_signature');
 
     store.set(K_TOKEN, JSON.stringify(signed));
-    ent = payload;
+    // Свежий токен истёкших лицензий не содержит — сервер их уже отсеял.
+    // Фильтр всё равно применяем: игра может стоять открытой сутками, и на
+    // долгой сессии срок способен выйти между двумя обновлениями.
+    ent = dropExpired(payload);
     lastKnown = payload;
     ready = true;
     lastError = null;

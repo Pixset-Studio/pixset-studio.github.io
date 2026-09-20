@@ -7,6 +7,18 @@
 
   console.log('⚙️ Loading settings system...');
 
+  /* «Играют ли на этом устройстве пальцем» — один ответ на всю игру, живёт в
+     game.js. Здесь короткие обёртки: если game.js почему-то не загрузился,
+     остаётся прежняя (грубая) проверка, чтобы настройки не сломались совсем.
+       touchDevice()  — про само устройство;
+       wantsTouchUI() — с поправкой на выбор игрока в «Сенсорное управление». */
+  const touchDevice = () => (typeof window.bbIsTouchDevice === 'function')
+    ? window.bbIsTouchDevice()
+    : (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+  const wantsTouchUI = () => (typeof window.bbWantsTouchUI === 'function')
+    ? window.bbWantsTouchUI()
+    : (touchDevice() || !!(window.gameSettings && window.gameSettings.touchControls === 'on'));
+
   // ── Non-blocking confirm ──────────────────────────────────────────
   // window.confirm() blocks the whole JS thread until the user clicks — and a
   // blocking dialog on a network HOST freezes the enemy AI for the entire room
@@ -236,10 +248,9 @@
     // desktop one and must fill a high-DPI screen. Without this, an octa-core
     // budget phone rides its core count up to 'high' and stutters. Pull it down so
     // weak phones land on low/verylow (the "runs on a microwave" goal).
-    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-    const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const coarse = touchDevice();
     const smallVp = Math.min(window.innerWidth || 9999, window.innerHeight || 9999) < 480;
-    if (isTouch || coarse) score -= 2;
+    if (coarse) score -= 2;
     if (smallVp) score -= 1;
 
     // Micro-benchmark: real 2D-canvas gradient-fill throughput. Best proxy for the
@@ -543,9 +554,7 @@
       if (!vpW || vpW < 100) vpW = document.documentElement.clientWidth  || window.innerWidth  || 800;
       if (!vpH || vpH < 100) vpH = document.documentElement.clientHeight || window.innerHeight || 420;
 
-      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-      const forceTouch = window.gameSettings && window.gameSettings.touchControls === 'on';
-      const mobile = !!stage && (isTouch || forceTouch || vpW < 760);
+      const mobile = !!stage && (wantsTouchUI() || vpW < 760);
 
       if (mobile) {
         // MOBILE: render the whole UI at a fixed "desktop reference" size, then
@@ -806,9 +815,8 @@
     if (m === 'on') return true;
     if (m === 'off') return false;
     // 'auto': default on for touch / low-RAM devices, off for desktops.
-    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     const lowRam = (navigator.deviceMemory || 8) <= 4;
-    return isTouch || lowRam;
+    return touchDevice() || lowRam;
   }
 
   // Rebuild the live GFX from the player's saved values × the current step factor.
@@ -886,8 +894,7 @@
       // On touch devices cap the AUTO tier at 'high': 'ultra' (2.5× render scale,
       // 1.8× particles) is meant for desktop GPUs and just burns battery / drops
       // frames on phones for no visible gain. The player can still pick it manually.
-      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-      if (isTouch && (q === 'ultra' || q === 'veryhigh')) q = 'high';
+      if (touchDevice() && (q === 'ultra' || q === 'veryhigh')) q = 'high';
       if (settings.graphicsQuality === 'auto') settings.graphicsQuality = q;
       if (!settings.gfx) settings.gfx = Object.assign({}, tiers[q] || tiers.high || {});
       saveSettings(settings);
@@ -1486,8 +1493,7 @@
     // replaced by "Game Magnification" — the control that actually addresses
     // "the game is tiny on my screen".
     function _syncDisplayRows() {
-      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
-                      (window.gameSettings && window.gameSettings.touchControls === 'on');
+      const isTouch = wantsTouchUI();
       const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
       show('mobileZoomRow', isTouch);
       show('windowResRow', !isTouch);

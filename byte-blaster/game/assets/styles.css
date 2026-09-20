@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+/* Шрифты лежат в assets/fonts и собираются tools/build-fonts.py: пиксельный Press Start 2P /
+   Share Tech Mono + добавка GNU Unifont для языков, которых в них нет. Без обращения к сети —
+   в офлайн-версиях (Windows, Android) прежний @import с Google Fonts просто не загружался. */
+@import url('fonts/fonts.css');
 /* Flag-emoji font: Windows/Chromium renders country-flag emoji as plain letters
    ("RU") because Segoe UI Emoji omits flag glyphs. This Twemoji subset font
    supplies ONLY the flag glyphs, so listing it first in font-family fixes flags

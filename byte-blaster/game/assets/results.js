@@ -21,8 +21,13 @@
 
   const T = (k, ...a) => (typeof window.t === 'function' ? window.t(k, ...a) : k);
   const sfx = (n) => { try { if (window.SFX && window.SFX[n]) window.SFX[n](); } catch (e) {} };
-  const isTouch = () => ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
-    (window.gameSettings && window.gameSettings.touchControls === 'on');
+  // «Играют пальцем?» — общий ответ из game.js (см. bbWantsTouchUI): у любого
+  // ноутбука с сенсорным экраном прежняя проверка была истинной, и подсказка
+  // по клавишам пропадала у тех, кто как раз с клавиатурой и играет.
+  const isTouch = () => (typeof window.bbWantsTouchUI === 'function')
+    ? window.bbWantsTouchUI()
+    : (('ontouchstart' in window) || navigator.maxTouchPoints > 0 ||
+       (window.gameSettings && window.gameSettings.touchControls === 'on'));
 
   let ov = null, onKeyBound = null, raf = 0;
 
