@@ -230,6 +230,7 @@ import {
   supabase, getGames, getEntitlements, getProfile, getSettings,
   detectCountry, formatPrice, humanError,
 } from '/assets/pixset-auth.js?v=822f1690';
+import { loadSales, salePriceHtml, saleBadgeHtml } from '/assets/pixset-sales.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -261,6 +262,8 @@ let currency = detectCountry() === 'RU' ? 'RUB' : 'USD';
    не страшно, платит он всё равно в валюте аккаунта. */
 let country = detectCountry();
 let session = null;
+// Действующие распродажи: «игра:валюта» → цена и срок (см. assets/pixset-sales.js).
+let sales = new Map();
 let settings = { payments_enabled: false, support_email: 'pixset.studio.offical@gmail.com' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -272,12 +275,13 @@ function say(text, kind = 'err') {
 }
 
 function tile(game, owned, isHero) {
+  const sale = sales.get(game.slug + ':' + currency) || null;
   const price = formatPrice(game, currency);
   // Долларовая цена мало что говорит тому, кто считает в тенге или злотых —
   // рядом ставим примерную сумму по сегодняшнему курсу. Для рублей не нужно:
   // там цена и так своя.
   const local = (currency === 'USD' && window.PixsetRates)
-    ? window.PixsetRates.hint(game.price_usd, country, L('ru', 'en')) : '';
+    ? window.PixsetRates.hint(sale ? sale.price_sale : game.price_usd, country, L('ru', 'en')) : '';
   const feats = (FEATURES[game.slug] || []).map((f) => `<li>${esc(L(f[0], f[1]))}</li>`).join('');
   const cover = COVERS[game.slug];
   const href = OWN_PAGES[game.slug] || '#';
@@ -296,10 +300,12 @@ function tile(game, owned, isHero) {
         ${owned
           ? `<span class="badge solid">${esc(L('Куплено', 'Owned'))}</span>
              <a class="btn quiet" href="/byte-blaster/game/">${esc(L('Играть', 'Play'))}</a>`
-          : `<span class="price">${price || '—'}${
+          : `<span class="price">${sale ? salePriceHtml(sale, currency) : (price || '—')}${
                local ? ` <small class="dim" style="font-size:13px">(${esc(local)})</small>` : ''}</span>
              <a class="btn solid" href="${esc(href)}">${esc(L('Купить', 'Buy'))}</a>`}
       </div>
+      ${!owned && sale ? `<div class="note" style="margin-top:4px;font-size:14px"><b>${saleBadgeHtml(sale)}</b>${
+        sale.title ? ` · ${esc(sale.title)}` : ''}</div>` : ''}
       ${!owned && !settings.payments_enabled ? offlineNote() : ''}
     </div>`;
 }
@@ -317,7 +323,8 @@ function offlineNote() {
 }
 
 async function render() {
-  const games = await getGames();
+  const [games, salesMap] = await Promise.all([getGames(), loadSales()]);
+  sales = salesMap;
   let owned = new Set();
   if (session) {
     try { owned = new Set((await getEntitlements()).map((e) => e.game_slug)); }

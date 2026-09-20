@@ -342,6 +342,53 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <div class="msg" id="banMsg"></div>
       <div class="rows" id="banList" style="margin-top:12px"></div>
 
+      <!-- ── Распродажи ──────────────────────────────────────────────────
+           Временная скидка на одну или несколько игр сразу. Цену считает
+           база при создании заказа; на сайте у игры появляется «Распродажа
+           до …» и зачёркнутая старая цена. С промокодом не суммируется:
+           игрок платит меньшую из двух цен. -->
+      <h3 data-sect="sales" style="margin-top:32px">Распродажи</h3>
+      <p class="dim" style="font-size:14px">
+        Скидка процентом либо суммой (суммой — сразу в рублях и в долларах: заказ
+        выставляется в валюте аккаунта). Идёт с начала первого дня по конец
+        последнего. Сохранение существующей распродажи переписывает её условия.
+      </p>
+      <div class="grantbox">
+        <input type="hidden" id="slId">
+        <div class="field">
+          <label for="slTitle">Название</label>
+          <input type="text" id="slTitle" maxlength="80" placeholder="Летняя распродажа">
+        </div>
+        <div class="field">
+          <label for="slPercent">Скидка, %</label>
+          <input type="number" id="slPercent" min="1" max="99" placeholder="30">
+        </div>
+        <div class="field">
+          <label for="slRub">…или суммой, ₽</label>
+          <input type="number" id="slRub" min="1" step="1" placeholder="30">
+        </div>
+        <div class="field">
+          <label for="slUsd">…и в долларах, $</label>
+          <input type="number" id="slUsd" min="0.01" step="0.01" placeholder="0.50">
+        </div>
+        <div class="field">
+          <label for="slStart">С даты (пусто — сразу)</label>
+          <input type="date" id="slStart">
+        </div>
+        <div class="field">
+          <label for="slEnd">По дату включительно</label>
+          <input type="date" id="slEnd">
+        </div>
+        <div class="field">
+          <label>Игры — можно выбрать несколько</label>
+          <div id="slGames" style="display:flex;flex-wrap:wrap;gap:8px 20px;padding:6px 0"></div>
+        </div>
+        <button class="btn solid" id="slSave">Сохранить распродажу</button>
+        <button class="btn quiet" id="slReset">Очистить форму</button>
+      </div>
+      <div class="msg" id="slMsg"></div>
+      <div class="rows" id="slList" style="margin-top:14px"></div>
+
       <!-- ── Промокоды ───────────────────────────────────────────────────
            Два разных зверя под одной вывеской. «Скидка» живёт до оплаты:
            база пересчитывает сумму заказа и засчитывает код только после
@@ -1442,11 +1489,168 @@ $('pcSave').onclick = async () => {
   finally { $('pcSave').disabled = false; }
 };
 
+/* ── Распродажи ──────────────────────────────────────────────────────────
+   Панель только собирает карточку: проверки и расчёт цены живут в базе
+   (admin_sale_save, _sale_best, create_order). Тексты ошибок оттуда приходят
+   готовыми и показываются как есть. */
+
+const SALE_STATUS = {
+  live: 'идёт', scheduled: 'запланирована', ended: 'закончилась', off: 'выключена',
+};
+
+function slSay(text, kind = 'err') {
+  const box = $('slMsg');
+  box.textContent = text;
+  box.className = `msg show ${kind}`;
+  if (kind === 'ok') setTimeout(() => { box.className = 'msg'; }, 4000);
+}
+
+/** Галочки по всем играм каталога; selected — слаги, которые нужно отметить. */
+function paintSaleGames(selected = []) {
+  const chosen = new Set(selected);
+  const boxes = [...catalog.values()].map((g) =>
+    `<label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+       <input type="checkbox" value="${esc(g.slug)}"${chosen.has(g.slug) ? ' checked' : ''}>
+       ${esc(g.title)}
+     </label>`).join('');
+  $('slGames').innerHTML = boxes || '<span class="dim">Игр пока нет</span>';
+}
+
+const pickedSaleGames = () =>
+  [...$('slGames').querySelectorAll('input:checked')].map((i) => i.value);
+
+/** Дата в поле ввода — по местному времени, как её и вводили. */
+function localDay(iso) {
+  const d = new Date(iso);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
+function clearSaleForm() {
+  ['slId', 'slTitle', 'slPercent', 'slRub', 'slUsd', 'slStart', 'slEnd']
+    .forEach((id) => { $(id).value = ''; });
+  paintSaleGames([]);
+}
+
+function saleGives(s) {
+  if (s.percent_off) return `−${s.percent_off}%`;
+  return `−${(s.amount_off_rub / 100).toLocaleString('ru-RU')} ₽ / −$${(s.amount_off_usd / 100).toFixed(2)}`;
+}
+
+async function loadSalesAdmin() {
+  const { data, error } = await supabase.rpc('admin_sales_list');
+  if (error) {
+    $('slList').innerHTML = `<div class="row"><span class="dim">${esc(humanError(error))}</span></div>`;
+    return;
+  }
+  const rows = data || [];
+  if (!rows.length) {
+    $('slList').innerHTML = '<div class="row"><span class="dim">Распродаж пока нет</span></div>';
+    return;
+  }
+
+  $('slList').innerHTML = rows.map((s) => {
+    const games = (s.games || []).map((g) => catalog.get(g)?.title || g).join(', ') || '—';
+    const dim = s.status === 'live' ? '' : ' class="dim"';
+    return `
+      <div class="row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <b style="min-width:160px">${esc(s.title)}</b>
+        <span${dim}>${esc(saleGives(s))}</span>
+        <span class="dim" style="flex:1;min-width:0;font-size:13px">${
+          esc(games)} · ${esc(day(s.starts_at))} — ${esc(day(s.ends_at))} · ${
+          esc(SALE_STATUS[s.status] || s.status)}</span>
+        <button class="btn quiet" data-sl-edit="${esc(s.id)}">В форму</button>
+        <button class="btn quiet" data-sl-toggle="${esc(s.id)}">${s.active ? 'Выключить' : 'Включить'}</button>
+        <button class="btn quiet" data-sl-del="${esc(s.id)}">Удалить</button>
+      </div>`;
+  }).join('');
+
+  const byId = new Map(rows.map((s) => [s.id, s]));
+
+  $('slList').querySelectorAll('[data-sl-edit]').forEach((btn) => {
+    btn.onclick = () => {
+      const s = byId.get(btn.dataset.slEdit);
+      if (!s) return;
+      $('slId').value = s.id;
+      $('slTitle').value = s.title;
+      $('slPercent').value = s.percent_off ?? '';
+      $('slRub').value = s.amount_off_rub ? s.amount_off_rub / 100 : '';
+      $('slUsd').value = s.amount_off_usd ? s.amount_off_usd / 100 : '';
+      $('slStart').value = localDay(s.starts_at);
+      // Конец задан как 23:59:59 последнего дня — в поле показываем именно этот день.
+      $('slEnd').value = localDay(s.ends_at);
+      paintSaleGames(s.games || []);
+      $('slTitle').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+  });
+
+  $('slList').querySelectorAll('[data-sl-toggle]').forEach((btn) => {
+    btn.onclick = async () => {
+      const s = byId.get(btn.dataset.slToggle);
+      if (!s) return;
+      btn.disabled = true;
+      const { error: err } = await supabase.rpc('admin_sale_set_active',
+        { p_id: s.id, p_active: !s.active });
+      if (err) { slSay(humanError(err)); btn.disabled = false; return; }
+      await loadSalesAdmin();
+    };
+  });
+
+  $('slList').querySelectorAll('[data-sl-del]').forEach((btn) => {
+    btn.onclick = async () => {
+      const s = byId.get(btn.dataset.slDel);
+      if (!s || !confirm(`Удалить распродажу «${s.title}»?`)) return;
+      btn.disabled = true;
+      const { error: err } = await supabase.rpc('admin_sale_delete', { p_id: s.id });
+      if (err) { slSay(humanError(err)); btn.disabled = false; return; }
+      if ($('slId').value === s.id) clearSaleForm();
+      await loadSalesAdmin();
+    };
+  });
+}
+
+$('slReset').onclick = clearSaleForm;
+
+$('slSave').onclick = async () => {
+  const percent = $('slPercent').value.trim();
+  const rub = $('slRub').value.trim();
+  const usd = $('slUsd').value.trim();
+
+  // Форму проверяет и база, но дешевле сказать сразу, что не так с полями.
+  if (!$('slTitle').value.trim()) { slSay('Укажите название распродажи.'); return; }
+  if (percent && (rub || usd)) { slSay('Скидка задаётся чем-то одним: процентами или суммой.'); return; }
+  if (!percent && !(rub && usd)) {
+    slSay('Укажите проценты либо сумму скидки сразу в рублях и в долларах.'); return;
+  }
+  if (!$('slEnd').value) { slSay('Укажите, когда распродажа закончится.'); return; }
+  if (!pickedSaleGames().length) { slSay('Выберите хотя бы одну игру.'); return; }
+
+  $('slSave').disabled = true;
+  try {
+    const { error } = await supabase.rpc('admin_sale_save', {
+      p_id: $('slId').value || null,
+      p_title: $('slTitle').value.trim(),
+      p_percent_off: percent ? Number(percent) : null,
+      p_amount_off_rub: rub ? Math.round(Number(rub) * 100) : null,
+      p_amount_off_usd: usd ? Math.round(Number(usd) * 100) : null,
+      p_starts_at: dayEdge($('slStart').value, false),
+      p_ends_at: dayEdge($('slEnd').value, true),
+      p_active: true,
+      p_games: pickedSaleGames(),
+    });
+    if (error) { slSay(humanError(error)); return; }
+    slSay('Распродажа сохранена.', 'ok');
+    clearSaleForm();
+    await loadSalesAdmin();
+  } catch (err) { slSay(humanError(err)); }
+  finally { $('slSave').disabled = false; }
+};
+
 async function refresh() {
   await Promise.all([
     loadOrders(), loadPlayers(), loadEvents(),
     loadPayToggle(), loadChannels(), loadReleases(), loadAnnouncements(),
-    loadBadges(), loadRegionRequests(), loadBans(), loadPromos(),
+    loadBadges(), loadRegionRequests(), loadBans(), loadPromos(), loadSalesAdmin(),
   ]);
 }
 
@@ -1469,6 +1673,7 @@ async function fillGames() {
   $('pcGame').innerHTML = '<option value="">— любая игра —</option>' + options;
   paintBadgeRule();
   paintPromoKind();
+  paintSaleGames();
 }
 
 async function withGrant(fn, okText) {

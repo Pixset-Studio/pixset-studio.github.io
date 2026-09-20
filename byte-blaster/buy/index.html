@@ -226,6 +226,7 @@ import {
   supabase, getGames, getEntitlements, getProfile, startPayment, getSettings,
   detectCountry, formatPrice, humanError, promoPreview, promoRedeem,
 } from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
+import { loadSales, salePriceHtml, saleBadgeHtml } from '/byte-blaster/assets/pixset-sales.js';
 
 const $ = (id) => document.getElementById(id);
 const GAME = 'byte-blaster';
@@ -249,6 +250,21 @@ let settings = { payments_enabled: false, support_email: 'pixset.studio.offical@
 // сервере — здесь только строка, которую надо приложить к оплате.
 let appliedPromo = null;
 
+// Распродажа на эту игру (карта «игра:валюта»). Цену и срок отдаёт база.
+let salesMap = new Map();
+
+/** Цена и подпись под ней: с распродажей — старая зачёркнута, рядом плашка. */
+function paintPrice(game) {
+  const sale = salesMap.get(GAME + ':' + currency);
+  if (!sale) {
+    $('price').textContent = formatPrice(game, currency) || '—';
+    $('priceNote').innerHTML = bi('навсегда, без подписок', 'forever, no subscriptions');
+    return;
+  }
+  $('price').innerHTML = salePriceHtml(sale, currency);
+  $('priceNote').innerHTML = `<b>${saleBadgeHtml(sale)}</b> · ` + bi('навсегда, без подписок', 'forever, no subscriptions');
+}
+
 function setBuyLabel(ru, en) {
   $('buyBtn').innerHTML = bi(ru, en);
 }
@@ -258,7 +274,8 @@ async function render() {
   const game = games.find((g) => g.slug === GAME);
   if (!game) { say('Игра пока не продаётся.', 'The game is not on sale yet.'); return; }
 
-  $('price').textContent = formatPrice(game, currency) || '—';
+  salesMap = await loadSales();
+  paintPrice(game);
 
   // Пока приём оплаты выключен, кнопка заменяется на почту студии: лучше
   // честная инструкция, чем кнопка, которая упрётся в ошибку. Проверяем это
@@ -402,8 +419,7 @@ function promoSay(ru, en, kind) {
 /** Возвращает цену к полной: код сняли или он не подошёл. */
 function dropPromo(game) {
   appliedPromo = null;
-  $('price').textContent = formatPrice(game, currency) || '—';
-  $('priceNote').innerHTML = bi('навсегда, без подписок', 'forever, no subscriptions');
+  paintPrice(game);
 }
 
 async function applyPromo() {
@@ -455,6 +471,17 @@ async function applyPromo() {
           : `Done — access is open until ${fmtDate(done.expires_at, 'en')}.`, 'ok');
       $('promoRes').innerHTML = '';
       await render();
+      return;
+    }
+
+    // Распродажа выгоднее кода (или не хуже): заказ пойдёт по ней, а код останется
+    // неистраченным. Цену и это решение принимает база — здесь только объясняем.
+    if (res.sale_wins) {
+      appliedPromo = null;
+      const games = await getGames();
+      paintPrice(games.find((g) => g.slug === GAME) || {});
+      promoSay('Сейчас идёт распродажа — она выгоднее этого промокода, поэтому действует её цена. Код не потрачен.',
+               'A sale is running and it beats this code, so the sale price applies. Your code stays unused.', 'ok');
       return;
     }
 

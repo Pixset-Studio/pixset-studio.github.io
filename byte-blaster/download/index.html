@@ -69,6 +69,11 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 </header>
 
 <main class="wrap" style="padding-top:34px;padding-bottom:60px">
+  <style>
+    /* Две кнопки в одной карточке (Android): прижаты к низу вместе, а не каждая по отдельности. */
+    .dl .card .dl-btns { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+    .dl .card .dl-btns .btn { margin-top: 0; }
+  </style>
 
   <h1><span data-l="ru">СКАЧАТЬ</span><span data-l="en">DOWNLOAD</span></h1>
   <p class="lead" data-l="ru">Игра работает на трёх платформах из одной и той же сборки. Самый быстрый способ — просто открыть её в браузере.</p>
@@ -85,20 +90,15 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <a class="btn primary" href="/byte-blaster/game/"><span data-l="ru">▶ ИГРАТЬ СЕЙЧАС</span><span data-l="en">▶ PLAY NOW</span></a>
       </div>
 
-      <div class="card">
-        <div class="ico">📱</div>
-        <h3><span data-l="ru">Android<span class="badge">RuStore</span></span><span data-l="en">Android<span class="badge">RuStore</span></span></h3>
-        <p data-l="ru">Нативное приложение: работает без интернета, поддерживает сенсорное управление с настраиваемой раскладкой. Обновления приходят через магазин.</p>
-        <p data-l="en">A native app: works offline and supports touch controls with a configurable layout. Updates arrive through the store.</p>
-        <a class="btn" href="https://www.rustore.ru/catalog/app/com.pixsetstudio.byteblaster" target="_blank" rel="noopener"><span data-l="ru">⬇ ОТКРЫТЬ В RuStore</span><span data-l="en">⬇ OPEN IN RuStore</span></a>
-      </div>
-
       <div class="card" id="dlAndroid">
-        <div class="ico">🤖</div>
-        <h3><span data-l="ru">Android<span class="badge">файл .apk</span></span><span data-l="en">Android<span class="badge">.apk file</span></span></h3>
-        <p data-l="ru">Тот же файл напрямую, без магазина — если RuStore недоступен. Разрешите установку из этого источника, когда телефон спросит.</p>
-        <p data-l="en">The same file directly, without a store — handy if RuStore is unavailable. Allow installs from this source when your phone asks.</p>
-        <span class="btn disabled" id="apkBtn" aria-disabled="true"><span data-l="ru">ПРОВЕРЯЕМ…</span><span data-l="en">CHECKING…</span></span>
+        <div class="ico">📱</div>
+        <h3>Android</h3>
+        <p data-l="ru">Нативное приложение: работает без интернета, поддерживает сенсорное управление с настраиваемой раскладкой. Ставьте из RuStore — обновления приходят через магазин — или скачайте файл .apk напрямую, если RuStore недоступен. Для .apk разрешите установку из этого источника, когда телефон спросит.</p>
+        <p data-l="en">A native app: works offline and supports touch controls with a configurable layout. Install it from RuStore — updates arrive through the store — or download the .apk file directly if RuStore is unavailable. For the .apk, allow installs from this source when your phone asks.</p>
+        <div class="dl-btns">
+          <a class="btn" id="rustoreBtn" href="https://www.rustore.ru/catalog/app/com.pixsetstudio.byteblaster" target="_blank" rel="noopener"><span data-l="ru">⬇ ОТКРЫТЬ В RuStore</span><span data-l="en">⬇ OPEN IN RuStore</span></a>
+          <span class="btn disabled" id="apkBtn" aria-disabled="true"><span data-l="ru">ПРОВЕРЯЕМ…</span><span data-l="en">CHECKING…</span></span>
+        </div>
         <p class="dim" style="font-size:13px;margin-top:10px" id="apkNote"></p>
       </div>
 
@@ -253,18 +253,20 @@ import { supabase, getCurrentReleases, downloadRelease, getEntitlements, getSett
 const channels = await getSettings();
 const off = (key) => channels[key] === false;
 
+// Выключенный способ подписываем его именем: «временно недоступно» без
+// подлежащего игрок не может отнести ни к чему, и непонятно, есть ли обходной путь.
+const unavailable = (ru, en) => Object.assign(document.createElement('span'), {
+  className: 'btn disabled', innerHTML:
+    `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`,
+});
 if (off('channel_web')) {
   document.querySelectorAll('a[href*="/game/"]').forEach((a) => {
-    a.replaceWith(Object.assign(document.createElement('span'), {
-      className: 'btn disabled', textContent: 'ВРЕМЕННО НЕДОСТУПНО',
-    }));
+    a.replaceWith(unavailable('ВЕБ-ВЕРСИЯ ВРЕМЕННО НЕДОСТУПНА', 'BROWSER VERSION TEMPORARILY UNAVAILABLE'));
   });
 }
 if (off('channel_rustore')) {
   document.querySelectorAll('a[href*="rustore.ru"]').forEach((a) => {
-    a.replaceWith(Object.assign(document.createElement('span'), {
-      className: 'btn disabled', textContent: 'ВРЕМЕННО НЕДОСТУПНО',
-    }));
+    a.replaceWith(unavailable('RuStore ВРЕМЕННО НЕДОСТУПЕН', 'RuStore TEMPORARILY UNAVAILABLE'));
   });
 }
 
@@ -285,6 +287,9 @@ const PLATFORMS = [
     pausedEn: 'Windows downloads are paused for now.',
     soonRu: 'Сборка для Windows ещё не опубликована.',
     soonEn: 'The Windows build is not published yet.',
+    // Что именно недоступно — на самой кнопке, а не только в примечании под ней.
+    pausedBtnRu: 'УСТАНОВЩИК WINDOWS ВРЕМЕННО НЕДОСТУПЕН', pausedBtnEn: 'WINDOWS INSTALLER TEMPORARILY UNAVAILABLE',
+    soonBtnRu: 'УСТАНОВЩИК WINDOWS ПОКА НЕДОСТУПЕН', soonBtnEn: 'WINDOWS INSTALLER NOT AVAILABLE YET',
   },
   {
     id: 'android', channel: 'channel_android',
@@ -292,8 +297,10 @@ const PLATFORMS = [
     labelRu: '⬇ СКАЧАТЬ .APK', labelEn: '⬇ DOWNLOAD .APK',
     pausedRu: 'Скачивание .apk приостановлено. Попробуйте RuStore.',
     pausedEn: 'Direct .apk downloads are paused. Try RuStore instead.',
-    soonRu: 'Файл .apk ещё не опубликован.',
-    soonEn: 'The .apk file is not published yet.',
+    soonRu: 'Файл .apk ещё не опубликован. Пока можно установить из RuStore.',
+    soonEn: 'The .apk file is not published yet. You can install from RuStore in the meantime.',
+    pausedBtnRu: 'ФАЙЛ .APK ВРЕМЕННО НЕДОСТУПЕН', pausedBtnEn: '.APK FILE TEMPORARILY UNAVAILABLE',
+    soonBtnRu: 'ФАЙЛ .APK ПОКА НЕДОСТУПЕН', soonBtnEn: '.APK FILE NOT AVAILABLE YET',
   },
 ];
 
@@ -323,12 +330,12 @@ for (const p of PLATFORMS) {
   const rel = releases.find((r) => r.platform === p.id);
 
   if (off(p.channel)) {
-    btn.innerHTML = bi('ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
+    btn.innerHTML = bi(p.pausedBtnRu, p.pausedBtnEn);
     note.innerHTML = bi(p.pausedRu, p.pausedEn);
     continue;
   }
   if (!rel) {
-    btn.innerHTML = bi('ПОКА НЕДОСТУПНО', 'NOT AVAILABLE YET');
+    btn.innerHTML = bi(p.soonBtnRu, p.soonBtnEn);
     note.innerHTML = bi(p.soonRu, p.soonEn);
     continue;
   }

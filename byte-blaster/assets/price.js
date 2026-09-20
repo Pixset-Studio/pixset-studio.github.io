@@ -29,8 +29,8 @@
       var map = {};
       rows.forEach(function (r) { map[r.key] = r.value; });
 
-      if (map.channel_web === false) disable('a[href*="/game/"]', 'ВЕБ-ВЕРСИЯ ЗАКРЫТА', 'BROWSER VERSION CLOSED');
-      if (map.channel_rustore === false) disable('a[href*="rustore.ru"]', 'ВРЕМЕННО НЕДОСТУПНО', 'TEMPORARILY UNAVAILABLE');
+      if (map.channel_web === false) disable('a[href*="/game/"]', 'ВЕБ-ВЕРСИЯ ВРЕМЕННО НЕДОСТУПНА', 'BROWSER VERSION TEMPORARILY UNAVAILABLE');
+      if (map.channel_rustore === false) disable('a[href*="rustore.ru"]', 'RuStore ВРЕМЕННО НЕДОСТУПЕН', 'RuStore TEMPORARILY UNAVAILABLE');
     })
     .catch(function () { /* не ответили — оставляем как есть */ });
 
@@ -92,19 +92,69 @@
   var slots = document.querySelectorAll('.bbPrice');
   if (!slots.length) return;
 
-  fetch(API + '/rest/v1/games?slug=eq.byte-blaster&select=price_rub,price_usd', {
-    headers: { apikey: KEY },
+  /* Распродажа. Цену со скидкой считает база (active_sales) — здесь её только
+     показывают. Не ответила — остаётся обычная цена. */
+  var salesReq = fetch(API + '/rest/v1/rpc/active_sales', {
+    method: 'POST',
+    headers: { apikey: KEY, 'Content-Type': 'application/json' },
+    body: '{}',
   })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (rows) {
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .catch(function () { return []; });
+
+  function saleFor(sales, cur) {
+    for (var i = 0; i < sales.length; i++) {
+      if (sales[i].game_slug === 'byte-blaster' && sales[i].currency === cur) return sales[i];
+    }
+    return null;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function until(iso, lang) {
+    try {
+      return new Date(iso).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-GB', { day: 'numeric', month: 'long' });
+    } catch (e) { return String(iso).slice(0, 10); }
+  }
+
+  function offText(sale) {
+    return '\u2212' + Math.max(1, Math.round((1 - sale.price_sale / sale.price_full) * 100)) + '%';
+  }
+
+  Promise.all([
+    fetch(API + '/rest/v1/games?slug=eq.byte-blaster&select=price_rub,price_usd', {
+      headers: { apikey: KEY },
+    }).then(function (r) { return r.ok ? r.json() : null; }),
+    salesReq,
+  ])
+    .then(function (res) {
+      var rows = res[0], sales = res[1] || [];
       if (!rows || !rows.length) return;
       var g = rows[0];
-      var text;
+      var text, sale;
       if (isRussia() && g.price_rub != null) {
-        text = (g.price_rub / 100).toLocaleString('ru-RU') + ' ₽ · навсегда, на все устройства';
+        sale = saleFor(sales, 'RUB');
+        if (sale) {
+          var rub = function (c) { return (c / 100).toLocaleString('ru-RU') + ' \u20BD'; };
+          showHtml('<s style="opacity:.6">' + esc(rub(sale.price_full)) + '</s> ' + esc(rub(sale.price_sale))
+            + ' \u00B7 \uD83D\uDD25 ' + esc(offText(sale)) + ' до ' + esc(until(sale.ends_at, 'ru')));
+          return;
+        }
+        text = (g.price_rub / 100).toLocaleString('ru-RU') + ' \u20BD \u00B7 навсегда, на все устройства';
         show(text);
       } else if (g.price_usd != null) {
-        text = '$' + (g.price_usd / 100).toFixed(2) + ' · forever, on every device';
+        sale = saleFor(sales, 'USD');
+        if (sale) {
+          var usd = function (c) { return '$' + (c / 100).toFixed(2); };
+          showHtml('<s style="opacity:.6">' + esc(usd(sale.price_full)) + '</s> ' + esc(usd(sale.price_sale))
+            + ' \u00B7 \uD83D\uDD25 SALE ' + esc(offText(sale)) + ' until ' + esc(until(sale.ends_at, 'en')));
+          return;
+        }
+        text = '$' + (g.price_usd / 100).toFixed(2) + ' \u00B7 forever, on every device';
         // Доллары мало что говорят тому, кто считает в тенге или злотых —
         // рядом ставим примерную сумму по сегодняшнему курсу (pixset-rates.js).
         var rates = window.PixsetRates;
@@ -114,12 +164,15 @@
           var local = rates.hint(g.price_usd, country,
             document.documentElement.getAttribute('data-site-lang') || 'ru');
           show(local ? '$' + (g.price_usd / 100).toFixed(2) + ' (' + local + ')'
-                     + ' · forever, on every device' : text);
+                     + ' \u00B7 forever, on every device' : text);
         });
       }
 
       function show(value) {
         for (var i = 0; i < slots.length; i++) slots[i].textContent = value;
+      }
+      function showHtml(html) {
+        for (var i = 0; i < slots.length; i++) slots[i].innerHTML = html;
       }
     })
     .catch(function () { /* оставляем текст из разметки */ });
