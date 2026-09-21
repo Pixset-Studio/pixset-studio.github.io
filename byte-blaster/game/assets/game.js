@@ -5282,10 +5282,12 @@ function updatePlayer(){
   // In single-player the arrow keys also work, as a universal convenience.
   const c1=(window.gameSettings&&window.gameSettings.controls)||{};
   const solo=!twoPlayer;
-  const L=K[c1.p1Left]||(solo&&K['ArrowLeft']);
-  const R=K[c1.p1Right]||(solo&&K['ArrowRight']);
-  const J=K[c1.p1Jump]||(solo&&K['ArrowUp']);
-  const S=K[c1.p1Shoot];
+  // Геймпад (assets/gamepad.js) читается наравне с клавишами: они не мешают друг другу.
+  const pad1=(window.Pad&&window.Pad.p1)||{};
+  const L=K[c1.p1Left]||(solo&&K['ArrowLeft'])||pad1.left;
+  const R=K[c1.p1Right]||(solo&&K['ArrowRight'])||pad1.right;
+  const J=K[c1.p1Jump]||(solo&&K['ArrowUp'])||pad1.jump;
+  const S=K[c1.p1Shoot]||pad1.shoot;
 
   // Status effects scale the base speed (CHILL stiffens the servos).
   const psp1=(p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP)*(window.Status?Status.speedMul(p):1);
@@ -5944,9 +5946,10 @@ function updatePlayer2(){
 
   // P2 keys come from the rebindable control map (settings → CONTROLS).
   const c2=(window.gameSettings&&window.gameSettings.controls)||{};
-  const L=K[c2.p2Left],R=K[c2.p2Right];
-  const J=K[c2.p2Jump];
-  const S=K[c2.p2Shoot];
+  const pad2=(window.Pad&&window.Pad.p2)||{};
+  const L=K[c2.p2Left]||pad2.left,R=K[c2.p2Right]||pad2.right;
+  const J=K[c2.p2Jump]||pad2.jump;
+  const S=K[c2.p2Shoot]||pad2.shoot;
 
   const psp2=(p.starMode?PSP*1.4:p.boots?PSP*1.55:PSP)*(window.Status?Status.speedMul(p):1);
   if(L){p.vx=Math.max(p.vx-1.3,-psp2);p.facing=-1;}

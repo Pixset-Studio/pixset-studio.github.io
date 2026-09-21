@@ -146,7 +146,12 @@
       p2Left: 'ArrowLeft',
       p2Right: 'ArrowRight',
       p2Jump: 'ArrowUp',
-      p2Shoot: 'Period'
+      p2Shoot: 'Period',
+      // Геймпад: номера кнопок (стандартная раскладка Gamepad API: 0=A, 1=B, 2=X, 3=Y, …) строкой
+      // через запятую. Несколько — значит «любая из них». Пустая строка — не назначено.
+      padJump: '0,3',
+      padShoot: '2,1,7,5',
+      padPause: '9'
     }
   };
 
@@ -1334,6 +1339,31 @@
             </div>
           </div>
 
+          <!-- Геймпад: номера кнопок лежат в controls.padJump / padShoot / padPause -->
+          <div id="ctrlPadSection" style="margin-bottom: 24px;">
+            <h3 data-i18n="ctrlPadTitle" style="color: #39ff14; font-size: calc(12px * var(--bbText, 1)); margin-bottom: 12px; text-shadow: 0 0 8px #39ff14;">🎮 GAMEPAD</h3>
+            <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(10px * var(--bbText, 1)); color: #aaa; line-height: 2.2;">
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
+                <span data-i18n="ctrlPadFound" style="color: #4af;">Gamepads connected:</span>
+                <b id="padCount" style="color: #39ff14;">0</b>
+              </div>
+              <div id="padNone" data-i18n="ctrlPadNone" style="display: none; color: #ffb000; padding: 4px 0; line-height: 1.6;">No gamepad found — connect one and press any button</div>
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
+                <span data-i18n="ctrlJump" style="color: #4af;">Jump (Double Jump):</span>
+                <button class="padBtn" data-pad="padJump" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #39ff14; border: 1px solid #39ff14; border-radius: 3px; cursor: pointer;">—</button>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
+                <span data-i18n="ctrlShoot" style="color: #4af;">Shoot (Blaster):</span>
+                <button class="padBtn" data-pad="padShoot" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #39ff14; border: 1px solid #39ff14; border-radius: 3px; cursor: pointer;">—</button>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a2a; align-items: center;">
+                <span data-i18n="ctrlPause" style="color: #4af;">Pause:</span>
+                <button class="padBtn" data-pad="padPause" style="min-width: 80px; padding: 4px 8px; font-family: 'Press Start 2P', monospace; font-size: calc(8px * var(--bbText, 1)); background: #0a0a20; color: #39ff14; border: 1px solid #39ff14; border-radius: 3px; cursor: pointer;">—</button>
+              </div>
+            </div>
+            <div data-i18n="ctrlPadHint" style="margin-top: 10px; font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #39ff14; line-height: 1.8;">💡 Click an action, then press the new gamepad button (ESC cancels)</div>
+          </div>
+
           <div style="padding: 12px; background: rgba(0, 255, 255, 0.05); border: 1px solid #0ff4; border-radius: 4px; margin-bottom: 12px;">
             <div style="font-family: 'Share Tech Mono', monospace; font-size: calc(8px * var(--bbText, 1)); color: #0ff; line-height: 1.8;">
               <div data-i18n="ctrlRebindHint">💡 Click a key, then press the new key to bind it (ESC cancels)</div>
@@ -1916,9 +1946,91 @@
         stopListening();
         pendingControls = { ...defaultSettings.controls };
         refreshKeyLabels();
+        if (typeof refreshPadLabels === 'function') refreshPadLabels();
         if (window.SFX && window.SFX.menu) window.SFX.menu();
       };
     }
+
+    // ── Controls: gamepad button rebinding ────────────────────────────────
+    // Та же схема, что у клавиш: правки идут в pendingControls и попадают в игру только по «Сохранить».
+    // Следующую нажатую кнопку отдаёт assets/gamepad.js (Pad.capture); ESC на клавиатуре отменяет.
+    const PAD_KEYS = ['padJump', 'padShoot', 'padPause'];
+    const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'BACK', 'START', 'L3', 'R3', '↑', '↓', '←', '→', 'HOME'];
+    const padButtons = overlay.querySelectorAll('.padBtn');
+    const padCountEl = document.getElementById('padCount');
+    const padNoneEl = document.getElementById('padNone');
+    let listeningPad = null;
+    let activePadOnKey = null;
+
+    const padList = v => (v === '' || v == null) ? [] : String(v).split(',').filter(x => x !== '');
+    function padLabel(v) {
+      const list = padList(v);
+      return list.length ? list.map(n => PAD_NAMES[+n] || ('#' + n)).join(' / ') : '—';
+    }
+    function refreshPadLabels() {
+      padButtons.forEach(b => {
+        if (b === listeningPad) return;
+        b.textContent = padLabel(pendingControls[b.getAttribute('data-pad')]);
+      });
+    }
+    function refreshPadStatus() {
+      const n = (window.Pad && window.Pad.count) || 0;
+      if (padCountEl) padCountEl.textContent = String(n);
+      if (padNoneEl) padNoneEl.style.display = n ? 'none' : 'block';
+    }
+    function stopListeningPad() {
+      if (window.Pad && window.Pad.cancelCapture) window.Pad.cancelCapture();
+      if (activePadOnKey) { document.removeEventListener('keydown', activePadOnKey, true); activePadOnKey = null; }
+      if (listeningPad) listeningPad.style.boxShadow = 'none';
+      listeningPad = null;
+      refreshPadLabels();
+    }
+
+    padButtons.forEach(btn => {
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        if (listeningPad === btn) { stopListeningPad(); return; } // ещё раз — отмена
+        stopListeningPad();
+        refreshPadStatus();
+        if (!window.Pad || !window.Pad.capture || !window.Pad.count) return; // нет геймпада — подсказка уже на экране
+        listeningPad = btn;
+        btn.textContent = '? ? ?';
+        btn.style.boxShadow = '0 0 12px currentColor';
+        if (window.SFX && window.SFX.menu) window.SFX.menu();
+        const action = btn.getAttribute('data-pad');
+
+        window.Pad.capture(function (index) {
+          // Одна кнопка — одно действие: снимаем её с остальных.
+          PAD_KEYS.forEach(k => {
+            if (k === action) return;
+            const left = padList(pendingControls[k]).filter(x => +x !== index);
+            pendingControls[k] = left.join(',');
+          });
+          pendingControls[action] = String(index);
+          if (activePadOnKey) { document.removeEventListener('keydown', activePadOnKey, true); activePadOnKey = null; }
+          btn.style.boxShadow = 'none';
+          listeningPad = null;
+          refreshPadLabels();
+          if (window.SFX && window.SFX.menu) window.SFX.menu();
+        });
+
+        // ESC с клавиатуры отменяет — раньше, чем игра увидит его как «закрыть настройки».
+        activePadOnKey = function (ev) {
+          if (ev.code !== 'Escape') return;
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          stopListeningPad();
+        };
+        document.addEventListener('keydown', activePadOnKey, true);
+      };
+    });
+
+    ['gamepadconnected', 'gamepaddisconnected'].forEach(evt => {
+      // Счётчик считает assets/gamepad.js на своём такте — даём ему успеть.
+      window.addEventListener(evt, () => setTimeout(refreshPadStatus, 80));
+    });
+    refreshPadLabels();
+    refreshPadStatus();
 
     // On-screen button layout: "Arrange" closes Settings and enters drag mode on
     // the live gamepad; "Reset" restores the default positions.
@@ -1946,8 +2058,11 @@
     window._commitControls = function () { window.gameSettings.controls = { ...pendingControls }; };
     window._syncControlsForm = function () {
       stopListening();
+      stopListeningPad();
       pendingControls = { ...defaultSettings.controls, ...(window.gameSettings.controls || {}) };
       refreshKeyLabels();
+      refreshPadLabels();
+      refreshPadStatus();
     };
     refreshKeyLabels();
 

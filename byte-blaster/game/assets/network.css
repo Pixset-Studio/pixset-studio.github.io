@@ -124,7 +124,7 @@
   scrollbar-width:thin;scrollbar-color:#0ff5 transparent;
 }
 #netChat::-webkit-scrollbar{width:5px}
-#netChat::-webkit-scrollbar-thumb{background:#0ff5;border-radius:3px}
+#netChat::-webkit-scrollbar-thumb{background:#0ff5;border-radius:3px;border:0;box-shadow:none}
 .net-chat-msg{font-size:calc(5px * var(--bbText, 1));color:#adf;line-height:1.6;word-break:break-word;animation:netChatIn .18s ease-out}
 @keyframes netChatIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .net-chat-msg .who{color:#ff0}
