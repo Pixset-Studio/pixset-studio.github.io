@@ -8,7 +8,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Вики — BYTE BLASTER</title>
-<meta name="description" content="Полное руководство по Byte Blaster: механики, миры, боссы, тактика, сюжет и лор.">
+<meta name="description" content="Полное руководство по Byte Blaster: механики, стадии робота, ловушки, 63 врага, 110 уровней, боссы, геймпады, сюжет и лор.">
 <meta name="theme-color" content="#04040f">
 <link rel="icon" href="/byte-blaster/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/byte-blaster/assets/favicon-32x32.png">
@@ -31,12 +31,12 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
 <meta property="og:site_name" content="Byte Blaster">
 <meta property="og:locale" content="ru_RU">
 <meta property="og:title" content="Вики — BYTE BLASTER">
-<meta property="og:description" content="Полное руководство по Byte Blaster: механики, миры, боссы, тактика, сюжет и лор.">
+<meta property="og:description" content="Полное руководство по Byte Blaster: механики, стадии робота, ловушки, 63 врага, 110 уровней, боссы, геймпады, сюжет и лор.">
 <meta property="og:url" content="https://pixset-studio.github.io/byte-blaster/wiki/">
 <meta property="og:image" content="https://pixset-studio.github.io/byte-blaster/assets/logo-512.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Вики — BYTE BLASTER">
-<meta name="twitter:description" content="Полное руководство по Byte Blaster: механики, миры, боссы, тактика, сюжет и лор.">
+<meta name="twitter:description" content="Полное руководство по Byte Blaster: механики, стадии робота, ловушки, 63 врага, 110 уровней, боссы, геймпады, сюжет и лор.">
 <meta name="twitter:image" content="https://pixset-studio.github.io/byte-blaster/assets/logo-512.png">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Byte Blaster","item":"https://pixset-studio.github.io/byte-blaster/"},{"@type":"ListItem","position":2,"name":"Вики","item":"https://pixset-studio.github.io/byte-blaster/wiki/"}]}</script>
 <!-- /поиск -->
@@ -79,11 +79,15 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <a href="#controls"><span data-l="ru">Управление</span><span data-l="en">Controls</span></a>
       <a href="#modes"><span data-l="ru">Режимы игры</span><span data-l="en">Game modes</span></a>
       <a href="#mechanics"><span data-l="ru">Базовые механики</span><span data-l="en">Core mechanics</span></a>
+      <a href="#robot"><span data-l="ru">Стадии робота</span><span data-l="en">Robot stages</span></a>
       <a href="#powerups"><span data-l="ru">Бонусы</span><span data-l="en">Power-ups</span></a>
       <a href="#effects"><span data-l="ru">Статус-эффекты</span><span data-l="en">Status effects</span></a>
       <a href="#enemies"><span data-l="ru">Враги и щиты</span><span data-l="en">Enemies and shields</span></a>
       <a href="#bestiary"><span data-l="ru">Бестиарий по мирам</span><span data-l="en">Bestiary by world</span></a>
+      <a href="#hazards"><span data-l="ru">Ловушки</span><span data-l="en">Hazards</span></a>
+      <a href="#enemydex"><span data-l="ru">Энциклопедия врагов</span><span data-l="en">Enemy encyclopedia</span></a>
       <a href="#levels"><span data-l="ru">Как устроен уровень</span><span data-l="en">Anatomy of a level</span></a>
+      <a href="#leveltable"><span data-l="ru">Таблица уровней</span><span data-l="en">Level table</span></a>
       <a href="#scoring"><span data-l="ru">Очки и оценка</span><span data-l="en">Score and grades</span></a>
       <a href="#collect"><span data-l="ru">Что собирать</span><span data-l="en">Collectibles</span></a>
       <a href="#map"><span data-l="ru">Карта мира</span><span data-l="en">World map</span></a>
@@ -96,9 +100,12 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <a href="#achievements"><span data-l="ru">Достижения</span><span data-l="en">Achievements</span></a>
       <a href="#tips"><span data-l="ru">Советы и тактика</span><span data-l="en">Tips and tactics</span></a>
       <a href="#multiplayer"><span data-l="ru">Мультиплеер</span><span data-l="en">Multiplayer</span></a>
+      <a href="#daily"><span data-l="ru">Уровень дня и призрак</span><span data-l="en">Daily level and ghost</span></a>
       <a href="#story"><span data-l="ru">Сюжет и лор</span><span data-l="en">Story and lore</span></a>
       <a href="#settings"><span data-l="ru">Настройки</span><span data-l="en">Settings</span></a>
       <a href="#requirements"><span data-l="ru">Системные требования</span><span data-l="en">System requirements</span></a>
+      <a href="#glossary"><span data-l="ru">Глоссарий</span><span data-l="en">Glossary</span></a>
+      <a href="#history"><span data-l="ru">История версий</span><span data-l="en">Version history</span></a>
       <a href="#faq"><span data-l="ru">Частые вопросы</span><span data-l="en">FAQ</span></a>
     </div>
   </aside>
@@ -118,13 +125,13 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <p data-l="en"><b>Byte Blaster</b> (working title: “Protocol Break”) is a 2D platformer in neon cyberpunk. You play <b>UNIT-7</b>, a combat android that refused an order and is fighting through the ten security layers of the GRID.</p>
       <div class="tw"><table><tbody>
         <tr><th><span data-l="ru">Жанр</span><span data-l="en">Genre</span></th><td><span data-l="ru">2D-платформер, аркада</span><span data-l="en">2D platformer, arcade</span></td></tr>
-        <tr><th><span data-l="ru">Уровней</span><span data-l="en">Levels</span></th><td><span data-l="ru">100 основных + 10 секретных</span><span data-l="en">100 main + 10 secret</span></td></tr>
-        <tr><th><span data-l="ru">Миров</span><span data-l="en">Worlds</span></th><td><span data-l="ru">10 + 1 секретный</span><span data-l="en">10 + 1 secret</span></td></tr>
+        <tr><th><span data-l="ru">Уровней</span><span data-l="en">Levels</span></th><td><span data-l="ru">Пролог + 100 основных + 10 секретных</span><span data-l="en">Prologue + 100 main + 10 secret</span></td></tr>
+        <tr><th><span data-l="ru">Миров</span><span data-l="en">Worlds</span></th><td><span data-l="ru">Пролог + 10 + 1 секретный</span><span data-l="en">Prologue + 10 + 1 secret</span></td></tr>
         <tr><th><span data-l="ru">Боссов</span><span data-l="en">Bosses</span></th><td>11</td></tr>
-        <tr><th><span data-l="ru">Режимы</span><span data-l="en">Modes</span></th><td><span data-l="ru">Приключение, Хардкор, Бесконечный, 2 игрока, онлайн до 5</span><span data-l="en">Adventure, Hardcore, Infinite, 2 players, online up to 5</span></td></tr>
+        <tr><th><span data-l="ru">Режимы</span><span data-l="en">Modes</span></th><td><span data-l="ru">Приключение (обычный и спокойный), Хардкор, Бесконечный, Уровень дня, 2 игрока (клавиатура или два геймпада), онлайн до 5</span><span data-l="en">Adventure (normal and relaxed), Hardcore, Infinite, Daily level, 2 players (keyboard or two gamepads), online up to 5</span></td></tr>
         <tr><th><span data-l="ru">Языки</span><span data-l="en">Languages</span></th><td>50</td></tr>
-        <tr><th><span data-l="ru">Платформы</span><span data-l="en">Platforms</span></th><td><span data-l="ru">Браузер, Windows, Android</span><span data-l="en">Browser, Windows, Android</span></td></tr>
-        <tr><th><span data-l="ru">Версия</span><span data-l="en">Version</span></th><td>1.0.2</td></tr>
+        <tr><th><span data-l="ru">Платформы</span><span data-l="en">Platforms</span></th><td><span data-l="ru">Браузер, Windows, Android · геймпады</span><span data-l="en">Browser, Windows, Android · gamepads supported</span></td></tr>
+        <tr><th><span data-l="ru">Версия</span><span data-l="en">Version</span></th><td>1.0.3</td></tr>
       </tbody></table></div>
     </section>
 
@@ -135,14 +142,16 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="en"><b>Demo or full version.</b> The demo is the whole first world (10 levels) and its progress carries over.</li>
         <li data-l="ru"><b>Выберите слот сохранения.</b> Их три, каждый хранит свой прогресс, достижения и рекорды. Настройки общие.</li>
         <li data-l="en"><b>Pick a save slot.</b> There are three, each with its own progress, achievements and records. Settings are shared.</li>
+                <li data-l="ru"><b>Начните с Пролога.</b> В новой игре карта открывается на нём, а первый мир станет доступен после его прохождения (у игроков со старым сохранением он открыт сразу).</li>
+        <li data-l="en"><b>Start with the Prologue.</b> On a new game the map opens on it and the first world unlocks once you finish it (players with an older save have it open already).</li>
         <li data-l="ru"><b>Пройдите первый уровень.</b> Цель — добраться до флага, пока не кончилось время.</li>
         <li data-l="en"><b>Clear the first level.</b> The goal is to reach the flag before the timer runs out.</li>
         <li data-l="ru"><b>Не спешите с хардкором.</b> Он открывается только после прохождения обычного режима.</li>
         <li data-l="en"><b>Don't rush into hardcore.</b> It only unlocks after you finish normal mode.</li>
       </ul>
       <div class="note">
-        <span data-l="ru">Получив урон, вы возрождаетесь на месте, а не в начале уровня — но теряете жизнь. Жизни кончились — уровень провален.</span>
-        <span data-l="en">When you take a hit you respawn on the spot rather than at the start — but you lose a life. Out of lives means the level is failed.</span>
+          <span data-l="ru">У робота три стадии: удар снимает бонус, следующий «ломает» робота, и лишь третий отнимает жизнь. Жизни кончились — уровень провален. Подробнее — в разделе «Стадии робота».</span>
+          <span data-l="en">The robot has three stages: a hit strips the power-up, the next one “breaks” the robot and only the third costs a life. Out of lives — the level is failed. Details are in “Robot stages”.</span>
       </div>
     </section>
 
@@ -155,12 +164,40 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <th><span data-l="ru">Игрок 2</span><span data-l="en">Player 2</span></th>
           <th><span data-l="ru">Сенсор</span><span data-l="en">Touch</span></th></tr></thead>
         <tbody>
-          <tr><td><span data-l="ru">Движение</span><span data-l="en">Move</span></td><td><span data-l="ru">Стрелки / <code>WASD</code></span><span data-l="en">Arrows / <code>WASD</code></span></td><td><code>←</code> <code>→</code></td><td><span data-l="ru">Стрелки или джойстик</span><span data-l="en">Arrows or joystick</span></td></tr>
-          <tr><td><span data-l="ru">Прыжок</span><span data-l="en">Jump</span></td><td><span data-l="ru"><code>Пробел</code> / <code>↑</code> / <code>W</code></span><span data-l="en"><code>Space</code> / <code>↑</code> / <code>W</code></span></td><td><code>↑</code></td><td><span data-l="ru">Кнопка ПРЫЖОК</span><span data-l="en">JUMP button</span></td></tr>
-          <tr><td><span data-l="ru">Выстрел</span><span data-l="en">Shoot</span></td><td><code>Z</code> / <code>X</code> / <code>Ctrl</code></td><td><code>.</code> / <code>,</code></td><td><span data-l="ru">Кнопка ОГОНЬ</span><span data-l="en">FIRE button</span></td></tr>
+          <tr><td><span data-l="ru">Движение</span><span data-l="en">Move</span></td><td><code>A</code> <code>D</code> <span data-l="ru">(при одном игроке ещё стрелки)</span><span data-l="en">(arrows too in single-player)</span></td><td><code>←</code> <code>→</code></td><td><span data-l="ru">Стрелки или джойстик</span><span data-l="en">Arrows or joystick</span></td></tr>
+          <tr><td><span data-l="ru">Прыжок</span><span data-l="en">Jump</span></td><td><code><span data-l="ru">Пробел</span><span data-l="en">Space</span></code> <span data-l="ru">(при одном игроке ещё</span><span data-l="en">(single-player also</span> <code>↑</code>)</td><td><code>↑</code></td><td><span data-l="ru">Кнопка ПРЫЖОК</span><span data-l="en">JUMP button</span></td></tr>
+          <tr><td><span data-l="ru">Выстрел</span><span data-l="en">Shoot</span></td><td><code>Z</code></td><td><code>.</code></td><td><span data-l="ru">Кнопка ОГОНЬ</span><span data-l="en">FIRE button</span></td></tr>
           <tr><td><span data-l="ru">Пауза</span><span data-l="en">Pause</span></td><td><code>Esc</code></td><td>—</td><td><span data-l="ru">Кнопка в углу</span><span data-l="en">Corner button</span></td></tr>
         </tbody>
       </table></div>
+      <p data-l="ru">Клавиши переназначаются в <b>Настройки → Управление → ПК</b>, отдельно для каждого игрока.</p>
+      <p data-l="en">Keys can be remapped in <b>Settings → Controls → PC</b>, separately for each player.</p>
+      <h3><span data-l="ru">🎮 Геймпад</span><span data-l="en">🎮 Gamepad</span></h3>
+      <p data-l="ru">Игра понимает любые геймпады, которые видит браузер или приложение: Xbox, PlayStation (DualShock 4, DualSense), Switch Pro и большинство остальных. Подключите и нажмите любую кнопку — вверху появится «🎮 P1 · название».</p>
+      <p data-l="en">The game works with any gamepad your browser or the app can see: Xbox, PlayStation (DualShock 4, DualSense), Switch Pro and most others. Plug it in and press any button — “🎮 P1 · name” appears at the top.</p>
+      <div class="tw"><table>
+        <thead><tr><th><span data-l="ru">Действие</span><span data-l="en">Action</span></th><th><span data-l="ru">Кнопка по умолчанию</span><span data-l="en">Default button</span></th></tr></thead>
+        <tbody>
+          <tr><td><span data-l="ru">Движение</span><span data-l="en">Move</span></td><td><span data-l="ru">Крестовина или левый стик</span><span data-l="en">D-pad or left stick</span></td></tr>
+          <tr><td><span data-l="ru">Прыжок</span><span data-l="en">Jump</span></td><td><span data-l="ru">A (PlayStation: ✕) или Y (△)</span><span data-l="en">A (PlayStation: ✕) or Y (△)</span></td></tr>
+          <tr><td><span data-l="ru">Выстрел</span><span data-l="en">Shoot</span></td><td><span data-l="ru">X (□), B (○), RT (R2) или RB (R1)</span><span data-l="en">X (□), B (○), RT (R2) or RB (R1)</span></td></tr>
+          <tr><td><span data-l="ru">Пауза</span><span data-l="en">Pause</span></td><td>Start</td></tr>
+          <tr><td><span data-l="ru">В меню: выбор / нажать / назад</span><span data-l="en">In menus: move / press / back</span></td><td><span data-l="ru">Крестовина или стик / A или Start / B</span><span data-l="en">D-pad or stick / A or Start / B</span></td></tr>
+          <tr><td><span data-l="ru">Карта мира: листать миры</span><span data-l="en">World map: switch worlds</span></td><td>LB / RB</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="clean">
+        <li data-l="ru"><b>Один игрок.</b> Геймпад ведёт игрока 1, клавиатура работает параллельно.</li>
+        <li data-l="en"><b>One player.</b> The gamepad drives player 1 and the keyboard works alongside it.</li>
+        <li data-l="ru"><b>Двое на одном ПК.</b> Первый подключённый геймпад — игрок 1, второй — игрок 2 (порядок задаёт порядок подключения — подключайте нужный первым). Если геймпад один, он ведёт игрока 1, а второй игрок остаётся на клавиатуре.</li>
+        <li data-l="en"><b>Two on one PC.</b> The first gamepad you connect is player 1, the second is player 2 (the order follows the connection order — plug the right one in first). With one gamepad it drives player 1 and player 2 stays on the keyboard.</li>
+        <li data-l="ru"><b>Смена кнопок.</b> Настройки → Управление → ПК → блок «Геймпад»: прыжок, выстрел и пауза. Нажмите на действие (кнопка покажет <code>? ? ?</code>), затем — новую кнопку геймпада; <code>Esc</code> отменяет. Одна кнопка — одно действие. Изменения действуют после «Сохранить». Движение и кнопки меню не переназначаются.</li>
+        <li data-l="en"><b>Remapping.</b> Settings → Controls → PC → “Gamepad”: jump, shoot and pause. Click an action (the button shows <code>? ? ?</code>), then press the new gamepad button; <code>Esc</code> cancels. One button, one action. Changes apply after “Save”. Movement and menu buttons cannot be remapped.</li>
+        <li data-l="ru"><b>Отключили геймпад посреди уровня</b> — игра встаёт на паузу.</li>
+        <li data-l="en"><b>Unplug a gamepad mid-level</b> and the game pauses.</li>
+        <li data-l="ru"><b>Музыка в браузере.</b> Chrome не считает нажатие на геймпаде «действием пользователя», поэтому музыка меню включится от первой клавиши, клика или касания. В приложениях она играет с первой секунды.</li>
+        <li data-l="en"><b>Music in the browser.</b> Chrome does not count a gamepad press as a user action, so menu music starts on the first key, click or touch. In the apps it plays from the first second.</li>
+      </ul>
       <h3><span data-l="ru">Двойной прыжок</span><span data-l="en">Double jump</span></h3>
       <p data-l="ru">Второе нажатие прыжка в воздухе даёт дополнительный подъём. Это не бонус, а базовая способность — без неё половина уровней непроходима. ЭМИ-сбой временно её отключает.</p>
       <p data-l="en">Pressing jump again in mid-air gives you a second lift. It is not a power-up but a core ability — half the levels are impossible without it. An EMP surge disables it temporarily.</p>
@@ -185,10 +222,10 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <th><span data-l="ru">Что это</span><span data-l="en">What it is</span></th>
           <th><span data-l="ru">Как открыть</span><span data-l="en">How to unlock</span></th></tr></thead>
         <tbody>
-          <tr><td><b><span data-l="ru">🗺 Приключение</span><span data-l="en">🗺 Adventure</span></b></td><td><span data-l="ru">100 уровней в 10 мирах, таймер, сохранение, 3 жизни в начале</span><span data-l="en">100 levels across 10 worlds, a timer, saved progress, 3 starting lives</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
+          <tr><td><b><span data-l="ru">🗺 Приключение</span><span data-l="en">🗺 Adventure</span></b></td><td><span data-l="ru">Пролог и 100 уровней в 10 мирах, таймер, сохранение, 3 жизни в начале</span><span data-l="en">The Prologue and 100 levels across 10 worlds, a timer, saved progress, 3 starting lives</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
           <tr><td><b><span data-l="ru">💀 Хардкор</span><span data-l="en">💀 Hardcore</span></b></td><td><span data-l="ru">+1 hp всем врагам, ускоренные таймеры, двойные очки</span><span data-l="en">+1 hp for every enemy, faster timers, doubled score</span></td><td><span data-l="ru">Пройти обычный режим</span><span data-l="en">Finish normal mode</span></td></tr>
           <tr><td><b><span data-l="ru">∞ Бесконечный</span><span data-l="en">∞ Infinite</span></b></td><td><span data-l="ru">Бесконечные карты, растущая сложность, гонка за рекордом</span><span data-l="en">Endless maps, rising difficulty, a chase for your record</span></td><td><span data-l="ru">Пройти все 100 уровней</span><span data-l="en">Clear all 100 levels</span></td></tr>
-          <tr><td><b><span data-l="ru">👥 Два игрока</span><span data-l="en">👥 Two players</span></b></td><td><span data-l="ru">Игра на одной клавиатуре, второй играет за UNIT-8</span><span data-l="en">Shared-keyboard play, the second is UNIT-8</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
+          <tr><td><b><span data-l="ru">👥 Два игрока</span><span data-l="en">👥 Two players</span></b></td><td><span data-l="ru">Один компьютер: на одной клавиатуре или с двумя геймпадами; второй играет за UNIT-8</span><span data-l="en">One computer: a shared keyboard or two gamepads; the second player is UNIT-8</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
           <tr><td><b><span data-l="ru">🌐 Онлайн</span><span data-l="en">🌐 Online</span></b></td><td><span data-l="ru">Кооператив до 5 игроков, публичные комнаты и коды</span><span data-l="en">Co-op for up to 5, public rooms and private codes</span></td><td><span data-l="ru">Доступен сразу</span><span data-l="en">Available immediately</span></td></tr>
         </tbody>
       </table></div>
@@ -207,10 +244,10 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="en"><b>Yellow blocks.</b> Punch them <b>from below</b> — coins and power-ups fall out.</li>
         <li data-l="ru"><b>Таймер.</b> У каждого уровня есть время. Кончилось — уровень провален. Остаток превращается в очки.</li>
         <li data-l="en"><b>The timer.</b> Every level is timed. Run out and it's failed; whatever remains converts into score.</li>
-        <li data-l="ru"><b>Контрольные точки.</b> Пройденная точка становится местом возрождения; кристаллы до неё сохраняются.</li>
-        <li data-l="en"><b>Checkpoints.</b> A passed checkpoint becomes your respawn point, and crystals collected before it are kept.</li>
-        <li data-l="ru"><b>Возрождение на месте.</b> Получив урон, вы теряете жизнь, но остаётесь там же.</li>
-        <li data-l="en"><b>Respawn in place.</b> Taking damage costs a life but leaves you where you were.</li>
+        <li data-l="ru"><b>Контрольные точки.</b> Пройденная точка становится местом возрождения, чинит сломанного робота; кристаллы, убитые враги и собранные монеты позади неё при повторе уровня не возвращаются. На уровне одна контрольная точка — примерно посередине.</li>
+        <li data-l="en"><b>Checkpoints.</b> A reached checkpoint becomes your respawn point and repairs a broken robot; crystals, enemies you killed and coins you collected behind it do not come back when the level restarts. Each level has one checkpoint, roughly in the middle.</li>
+        <li data-l="ru"><b>Жизни и стадии.</b> Удар врага сначала снимает бонус, потом «ломает» робота и только затем отнимает жизнь; после потери жизни в одиночной игре открывается экран поражения, «Повторить» возвращает в тот же уровень с оставшимися жизнями. См. «Стадии робота».</li>
+        <li data-l="en"><b>Lives and stages.</b> An enemy hit first strips the power-up, then “breaks” the robot and only then costs a life; after losing a life in single-player a defeat screen opens and “Retry” restarts the same level with the lives you have left. See “Robot stages”.</li>
         <li data-l="ru"><b>Флаг.</b> Финиш уровня. Чем выше вы его коснётесь, тем больше бонус высоты.</li>
         <li data-l="en"><b>The flag.</b> The level's finish. The higher you touch it, the bigger the height bonus.</li>
       </ul>
@@ -218,6 +255,30 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <span data-l="ru">Шипы и лава убивают независимо от бонусов — на них нельзя прыгать даже со звездой.</span>
         <span data-l="en">Spikes and lava kill regardless of power-ups — you cannot jump on them even with the star.</span>
       </div>
+    </section>
+
+    <section id="robot">
+      <h2><span data-l="ru">СТАДИИ РОБОТА</span><span data-l="en">ROBOT STAGES</span></h2>
+      <p data-l="ru">У робота три стадии, и жизнь отнимает только третий удар. Это правило работает для врагов и их снарядов; часть опасностей обходит стадии (см. ниже).</p>
+      <p data-l="en">The robot has three stages and only the third hit costs a life. This applies to enemies and their projectiles; some dangers bypass the stages (see below).</p>
+      <div class="tw"><table>
+        <thead><tr><th><span data-l="ru">Стадия</span><span data-l="en">Stage</span></th><th><span data-l="ru">Как получить</span><span data-l="en">How you get it</span></th><th><span data-l="ru">Что делает удар</span><span data-l="en">What a hit does</span></th></tr></thead>
+        <tbody>
+          <tr><td><span data-l="ru">⚡ Усиленный</span><span data-l="en">⚡ Powered</span></td><td><span data-l="ru">Подобрать бластер, огонь или лёд</span><span data-l="en">Pick up a blaster, fire or ice</span></td><td><span data-l="ru">Бонус слетает — робот становится обычным</span><span data-l="en">The power-up is stripped — the robot becomes normal</span></td></tr>
+          <tr><td><span data-l="ru">Обычный</span><span data-l="en">Normal</span></td><td><span data-l="ru">Начало уровня, возрождение после потери жизни</span><span data-l="en">Level start, respawn after losing a life</span></td><td><span data-l="ru">Робот «ломается» — на нём появляются трещины</span><span data-l="en">The robot “breaks” — cracks appear</span></td></tr>
+          <tr><td><span data-l="ru">Сломанный</span><span data-l="en">Broken</span></td><td><span data-l="ru">Второй удар подряд</span><span data-l="en">A second hit in a row</span></td><td><span data-l="ru"><b>Отнимает жизнь</b></span><span data-l="en"><b>Costs a life</b></span></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="clean">
+        <li data-l="ru"><b>Починка.</b> Контрольная точка чинит сломанного робота («ПОЧИНЕН!»). Любой бонус (бластер, огонь, лёд) возвращает как минимум обычную стадию.</li>
+        <li data-l="en"><b>Repairs.</b> A checkpoint repairs a broken robot (“REPAIRED!”). Any power-up (blaster, fire, ice) restores at least the normal stage.</li>
+        <li data-l="ru"><b>Мимо стадий.</b> Падение в пропасть и прыжок на шипастого врага отнимают жизнь сразу.</li>
+        <li data-l="en"><b>Bypassing the stages.</b> Falling into a pit and stomping a spiked enemy cost a life immediately.</li>
+        <li data-l="ru"><b>Ловушки.</b> Пилы, плазменные шары на верёвках, гейзеры, сосульки, токсины и молнии в обычном режиме и в хардкоре отнимают жизнь сразу. В <b>Спокойном</b> режиме они, как враги, сносят одну стадию (с отбросом от лезвия, чтобы не получить второй удар).</li>
+        <li data-l="en"><b>Traps.</b> Saws, plasma pendulums, geysers, icicles, toxins and lightning cost a life at once in normal mode and hardcore. In <b>Relaxed</b> mode they knock down one stage like an enemy does (with a knock-back from the blade so you do not take a second hit).</li>
+        <li data-l="ru"><b>Потеря жизни.</b> В одиночной игре открывается экран поражения; «Повторить» запускает тот же уровень с оставшимися жизнями, робот снова обычный. Убитые враги и собранные монеты позади контрольной точки остаются такими. В кооперативе и на двоих игрок возрождается на месте, а в сети после последней жизни выбывает до конца уровня.</li>
+        <li data-l="en"><b>Losing a life.</b> Single-player shows a defeat screen; “Retry” restarts the same level with the lives you have left and the robot is normal again. Enemies you killed and coins you collected behind the checkpoint stay that way. In co-op and two-player the player respawns in place, and online you are out for the rest of the level after your last life.</li>
+      </ul>
     </section>
 
     <section id="powerups">
@@ -319,27 +380,124 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       </ul>
     </section>
 
+    <section id="hazards">
+      <h2><span data-l="ru">ЛОВУШКИ</span><span data-l="en">HAZARDS</span></h2>
+      <p data-l="ru">Кроме врагов уровень делят ловушки. Пилы и шары на верёвках есть во всех мирах, а четыре мира добавляют свою. Числа — среднее на уровень, измеренное на генераторе (обычный режим, без боссов).</p>
+      <p data-l="en">Besides enemies, levels are shared with hazards. Saws and rope-mounted balls appear in every world, and four worlds add their own. The numbers are averages per level measured on the generator (normal mode, boss levels excluded).</p>
+      <div class="tw"><table>
+        <thead><tr><th><span data-l="ru">Ловушка</span><span data-l="en">Hazard</span></th><th><span data-l="ru">Где</span><span data-l="en">Where</span></th><th><span data-l="ru">Как работает</span><span data-l="en">How it works</span></th><th><span data-l="ru">На уровень</span><span data-l="en">Per level</span></th></tr></thead>
+        <tbody>
+          <tr><td><span data-l="ru">Пила</span><span data-l="en">Saw</span></td><td><span data-l="ru">Все миры</span><span data-l="en">Every world</span></td><td><span data-l="ru">Ездит по прямой — по горизонтали или по вертикали, туда и обратно</span><span data-l="en">Slides along a line — horizontally or vertically, back and forth</span></td><td><span data-l="ru">0,9–2,7</span><span data-l="en">0.9–2.7</span> <span data-l="ru">(по мирам)</span><span data-l="en">(by world)</span></td></tr>
+          <tr><td><span data-l="ru">Плазменный шар на верёвке</span><span data-l="en">Plasma ball on a rope</span></td><td><span data-l="ru">Все миры</span><span data-l="en">Every world</span></td><td><span data-l="ru">Фиолетовый шар раскачивается на верёвке — маятник</span><span data-l="en">A purple ball swings on a rope — a pendulum</span></td><td><span data-l="ru">0,9–1,6</span><span data-l="en">0.9–1.6</span> <span data-l="ru">(по мирам)</span><span data-l="en">(by world)</span></td></tr>
+          <tr><td><span data-l="ru">Гейзер</span><span data-l="en">Geyser</span></td><td><span data-l="ru">Мир 3 · Мир лавы</span><span data-l="en">World 3 · Lava World</span></td><td><span data-l="ru">Столб вырывается из земли по циклу</span><span data-l="en">A column erupts from the ground on a cycle</span></td><td><span data-l="ru">0,8</span><span data-l="en">0.8</span></td></tr>
+          <tr><td><span data-l="ru">Сосулька</span><span data-l="en">Icicle</span></td><td><span data-l="ru">Мир 4 · Ледяные пещеры</span><span data-l="en">World 4 · Ice Caves</span></td><td><span data-l="ru">Падает с потолка по циклу</span><span data-l="en">Drops from the ceiling on a cycle</span></td><td><span data-l="ru">1,3</span><span data-l="en">1.3</span></td></tr>
+          <tr><td><span data-l="ru">Токсичное облако</span><span data-l="en">Toxic cloud</span></td><td><span data-l="ru">Мир 8 · Токсичная зона</span><span data-l="en">World 8 · Toxic Zone</span></td><td><span data-l="ru">Зона, которая периодически наливается ядом</span><span data-l="en">A zone that periodically fills with poison</span></td><td><span data-l="ru">0,9</span><span data-l="en">0.9</span></td></tr>
+          <tr><td><span data-l="ru">Молния</span><span data-l="en">Lightning</span></td><td><span data-l="ru">Мир 9 · Грозовые пики</span><span data-l="en">World 9 · Storm Peaks</span></td><td><span data-l="ru">Бьёт в полосе, где сгустилась гроза</span><span data-l="en">Strikes within the band where the storm gathers</span></td><td><span data-l="ru">2,4</span><span data-l="en">2.4</span></td></tr>
+        </tbody>
+      </table></div>
+      <p data-l="ru"><b>Совет.</b> Пилы и маятники движутся по фиксированным законам, а не случайно: посмотрите один цикл и прыгайте в момент, когда лезвие уходит. В <b>Спокойном</b> режиме шесть подвижных ловушек не убивают с одного касания (см. «Стадии робота»).</p>
+      <p data-l="en"><b>Tip.</b> Saws and pendulums move by fixed rules, not at random: watch one cycle and jump as the blade moves away. In <b>Relaxed</b> mode the six moving hazards no longer kill in one touch (see “Robot stages”).</p>
+    </section>
+
+    <section id="enemydex">
+      <h2><span data-l="ru">ЭНЦИКЛОПЕДИЯ ВРАГОВ</span><span data-l="en">ENEMY ENCYCLOPEDIA</span></h2>
+      <p data-l="ru">Все <b>63 типа</b> со значениями из игры. Здоровье указано для обычного режима — в хардкоре у каждого на единицу больше. Скорость — условные единицы игры, «Очки» — награда за убийство до множителей.</p>
+      <p data-l="en">All <b>63 types</b> with values taken from the game. Health is for normal mode — in hardcore every enemy has one more. Speed is in game units, “Score” is the reward for a kill before multipliers.</p>
+      <p data-l="ru">Восемь «вариантов» не входят в наборы миров: это шипастые, делящиеся и бронированные версии, которые встречаются среди обычных врагов. У них в игре нет отдельных названий, поэтому здесь указан внутренний код.</p>
+      <p data-l="en">The eight “variants” are not part of any world’s set: they are the spiked, splitting and armored versions found among regular enemies. They have no names in the game, so the internal code is shown.</p>
+      <details>
+        <summary><span data-l="ru">Показать таблицу (63 строки)</span><span data-l="en">Show the table (63 rows)</span></summary>
+      <div class="tw"><table>
+        <thead><tr><th><span data-l="ru">Мир</span><span data-l="en">World</span></th><th><span data-l="ru">Враг</span><span data-l="en">Enemy</span></th><th><span data-l="ru">Роль</span><span data-l="en">Role</span></th><th>HP</th><th><span data-l="ru">Скорость</span><span data-l="en">Speed</span></th><th><span data-l="ru">Размер</span><span data-l="en">Size</span></th><th><span data-l="ru">Поведение</span><span data-l="en">Behaviour</span></th><th><span data-l="ru">Очки</span><span data-l="en">Score</span></th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><b><span data-l="ru">Глитч</span><span data-l="en">Glitch</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.4</td><td>24×26</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">Танк</span><span data-l="en">Tank</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.6</td><td>34×32</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>200</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">Зонд</span><span data-l="en">Probe</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>1.8</td><td>26×20</td><td><span data-l="ru">Парит в воздухе</span><span data-l="en">Floats in the air</span></td><td>100</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">Снайпер</span><span data-l="en">Sniper</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.2</td><td>22×28</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">Рашер</span><span data-l="en">Rusher</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1</td><td>26×26</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">Лоза</span><span data-l="en">Vine</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.2</td><td>24×30</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">Зверь</span><span data-l="en">Beast</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>1</td><td>34×32</td><td><span data-l="ru">Прыгает</span><span data-l="en">Bounces</span></td><td>200</td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">Спора</span><span data-l="en">Spore</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>1.4</td><td>24×24</td><td><span data-l="ru">Кружит вокруг точки</span><span data-l="en">Circles a point</span></td><td>110</td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">Кувшин</span><span data-l="en">Pitcher</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.3</td><td>22×28</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">Ползун</span><span data-l="en">Creeper</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.1</td><td>26×24</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">Уголёк</span><span data-l="en">Ember</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.5</td><td>24×28</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">Голем</span><span data-l="en">Golem</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.5</td><td>36×38</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>220</td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">Искра</span><span data-l="en">Spark</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>2</td><td>22×22</td><td><span data-l="ru">Вращается</span><span data-l="en">Spins</span></td><td>110</td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">Магма</span><span data-l="en">Magma</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.4</td><td>28×26</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">Извержение</span><span data-l="en">Eruption</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.2</td><td>28×28</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">Осколок</span><span data-l="en">Shard</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.3</td><td>24×28</td><td><span data-l="ru">Прыгает</span><span data-l="en">Bounces</span></td><td>100</td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">Йети</span><span data-l="en">Yeti</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.7</td><td>36×38</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>200</td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">Дух</span><span data-l="en">Wisp</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>1.6</td><td>16×22</td><td><span data-l="ru">Движется зигзагом</span><span data-l="en">Moves in a zig-zag</span></td><td>110</td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">Сосулька</span><span data-l="en">Icicle</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.3</td><td>16×30</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">Снежок</span><span data-l="en">Snowball</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.4</td><td>28×28</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">Скарабей</span><span data-l="en">Scarab</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.6</td><td>28×22</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">Мумия</span><span data-l="en">Mummy</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.7</td><td>26×34</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>220</td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">Ястреб</span><span data-l="en">Hawk</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>2.2</td><td>28×20</td><td><span data-l="ru">Кружит вокруг точки</span><span data-l="en">Circles a point</span></td><td>110</td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">Скорпион</span><span data-l="en">Scorpion</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.5</td><td>30×22</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">Песчаный червь</span><span data-l="en">Sandworm</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>2</td><td>1</td><td>32×22</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>150</td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">Дроид</span><span data-l="en">Droid</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.3</td><td>26×30</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">Мех</span><span data-l="en">Mech</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.6</td><td>34×36</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>200</td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">Тарелка</span><span data-l="en">Saucer</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>1.8</td><td>30×18</td><td><span data-l="ru">Движется зигзагом</span><span data-l="en">Moves in a zig-zag</span></td><td>110</td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">Турель</span><span data-l="en">Turret</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>2</td><td>0</td><td>26×30</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>150</td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">Фантом</span><span data-l="en">Phantom</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.5</td><td>28×28</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">Тень</span><span data-l="en">Shade</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.4</td><td>24×30</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">Тролль</span><span data-l="en">Troll</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.7</td><td>36×38</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>220</td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">Летучая мышь</span><span data-l="en">Bat</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>2</td><td>30×20</td><td><span data-l="ru">Кружит вокруг точки</span><span data-l="en">Circles a point</span></td><td>110</td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">Сова</span><span data-l="en">Owl</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.3</td><td>28×28</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>7</td><td><b><span data-l="ru">Затаившийся</span><span data-l="en">Lurker</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.2</td><td>26×28</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">Слизень</span><span data-l="en">Slug</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1</td><td>30×20</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">Ком слизи</span><span data-l="en">Blob</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>1.1</td><td>32×28</td><td><span data-l="ru">Прыгает</span><span data-l="en">Bounces</span></td><td>200</td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">Муха</span><span data-l="en">Fly</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>2.1</td><td>26×20</td><td><span data-l="ru">Вращается</span><span data-l="en">Spins</span></td><td>110</td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">Ядовитый</span><span data-l="en">Venom</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.4</td><td>24×26</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">Мутант</span><span data-l="en">Mutant</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>2</td><td>1.2</td><td>32×30</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>150</td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">Порыв</span><span data-l="en">Gust</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>1.6</td><td>26×28</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>100</td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">Титан</span><span data-l="en">Titan</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>2</td><td>0.6</td><td>36×40</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>220</td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">Разряд</span><span data-l="en">Bolt</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>2.2</td><td>22×28</td><td><span data-l="ru">Движется зигзагом</span><span data-l="en">Moves in a zig-zag</span></td><td>110</td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">Громоотвод</span><span data-l="en">Rod</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>0.2</td><td>20×32</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>120</td></tr>
+          <tr><td>9</td><td><b><span data-l="ru">Циклон</span><span data-l="en">Cyclone</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.4</td><td>28×28</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>130</td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">Страж</span><span data-l="en">Guard</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>1</td><td>0.9</td><td>28×34</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>150</td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">Демон</span><span data-l="en">Demon</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>3</td><td>0.8</td><td>38×42</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>300</td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">Око</span><span data-l="en">Eye</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>1.9</td><td>26×26</td><td><span data-l="ru">Кружит вокруг точки</span><span data-l="en">Circles a point</span></td><td>120</td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">Часовой (щит)</span><span data-l="en">Sentinel (shield)</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>2</td><td>0.5</td><td>32×36</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>200</td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">Призрак</span><span data-l="en">Wraith</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>1</td><td>1.6</td><td>26×32</td><td><span data-l="ru">Движется зигзагом</span><span data-l="en">Moves in a zig-zag</span></td><td>140</td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">Призм. осколок</span><span data-l="en">Prism shard</span></b></td><td><span data-l="ru">Наземный</span><span data-l="en">Walker</span></td><td>2</td><td>1.5</td><td>26×28</td><td><span data-l="ru">Ходит по платформе</span><span data-l="en">Patrols a platform</span></td><td>200</td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">Призм. страж (щит)</span><span data-l="en">Prism guard (shield)</span></b></td><td><span data-l="ru">Тяжёлый</span><span data-l="en">Heavy</span></td><td>3</td><td>0.7</td><td>34×34</td><td><span data-l="ru">Со щитом — отражает выстрелы</span><span data-l="en">Shielded — reflects shots</span></td><td>300</td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">Призм. дух</span><span data-l="en">Prism wisp</span></b></td><td><span data-l="ru">Летающий</span><span data-l="en">Flier</span></td><td>1</td><td>1.9</td><td>24×24</td><td><span data-l="ru">Кружит вокруг точки</span><span data-l="en">Circles a point</span></td><td>180</td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">Луч</span><span data-l="en">Beam</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>2</td><td>0.3</td><td>24×30</td><td><span data-l="ru">Стреляет издалека</span><span data-l="en">Shoots from range</span></td><td>220</td></tr>
+          <tr><td>🌈</td><td><b><span data-l="ru">Глитч</span><span data-l="en">Glitch</span></b></td><td><span data-l="ru">Особый</span><span data-l="en">Special</span></td><td>2</td><td>1.3</td><td>28×28</td><td><span data-l="ru">Таранит рывком</span><span data-l="en">Charges in a dash</span></td><td>250</td></tr>
+          <tr><td>1</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>cy_spiker</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>1</td><td>1</td><td>28×28</td><td><span data-l="ru">Шипастый — прыжок сверху ранит вас</span><span data-l="en">Spiked — stomping it hurts you</span></td><td>150</td></tr>
+          <tr><td>2</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>jg_splitter</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>2</td><td>0.8</td><td>30×30</td><td><span data-l="ru">Делится на двух при гибели</span><span data-l="en">Splits in two on death</span></td><td>180</td></tr>
+          <tr><td>3</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>lv_armored</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>3</td><td>0.6</td><td>34×34</td><td><span data-l="ru">Бронированный</span><span data-l="en">Armored</span></td><td>250</td></tr>
+          <tr><td>4</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>ic_spiker</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>1</td><td>1.1</td><td>28×28</td><td><span data-l="ru">Шипастый — прыжок сверху ранит вас</span><span data-l="en">Spiked — stomping it hurts you</span></td><td>150</td></tr>
+          <tr><td>5</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>ds_armored</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>3</td><td>0.5</td><td>34×34</td><td><span data-l="ru">Бронированный</span><span data-l="en">Armored</span></td><td>250</td></tr>
+          <tr><td>6</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>sp_spiker</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>1</td><td>1.2</td><td>28×28</td><td><span data-l="ru">Шипастый — прыжок сверху ранит вас</span><span data-l="en">Spiked — stomping it hurts you</span></td><td>150</td></tr>
+          <tr><td>8</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>tx_splitter</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>2</td><td>0.9</td><td>30×30</td><td><span data-l="ru">Делится на двух при гибели</span><span data-l="en">Splits in two on death</span></td><td>180</td></tr>
+          <tr><td>10</td><td><b><span data-l="ru">Вариант</span><span data-l="en">Variant</span></b> <code>ff_armored</code></td><td><span data-l="ru">Вариант</span><span data-l="en">Variant</span></td><td>4</td><td>0.7</td><td>36×36</td><td><span data-l="ru">Бронированный</span><span data-l="en">Armored</span></td><td>300</td></tr>
+        </tbody>
+      </table></div>
+      </details>
+    </section>
+
     <section id="levels">
       <h2><span data-l="ru">КАК УСТРОЕН УРОВЕНЬ</span><span data-l="en">ANATOMY OF A LEVEL</span></h2>
       <p data-l="ru">Уровни собираются по правилам, которые зависят от номера. Зная их, легче планировать прохождение.</p>
       <p data-l="en">Levels are assembled by rules that depend on their number. Knowing them makes planning easier.</p>
       <h3><span data-l="ru">Время</span><span data-l="en">Time</span></h3>
-      <p data-l="ru">Таймер считается по формуле <code>120 + номер × 1.4</code> секунды: 121 с на первом уровне, 190 с на сотом. В хардкоре времени меньше, а горение сжигает его вдвое быстрее.</p>
-      <p data-l="en">The timer is <code>120 + level × 1.4</code> seconds: 121 s on level 1, 190 s on level 100. Hardcore gives less, and burning eats it twice as fast.</p>
+      <p data-l="ru">Таймер считается по формуле <code>120 + номер × 1.4</code> секунды (округляется): 121 с на первом уровне, 190 с на пятидесятом, 260 с на сотом, 274 с на последнем секретном. В хардкоре времени <b>на 30% меньше</b> (×0.7), а горение сжигает его вдвое быстрее.</p>
+      <p data-l="en">The timer is <code>120 + number × 1.4</code> seconds (rounded): 121 s on level 1, 190 s on level 50, 260 s on level 100, 274 s on the last secret level. Hardcore gives <b>30% less</b> time (×0.7), and burning drains it twice as fast.</p>
       <h3><span data-l="ru">Сколько врагов</span><span data-l="en">Enemy count</span></h3>
+      <p data-l="ru">Числа измерены на самом генераторе уровней (обычный режим, без боссов): в скобках — среднее. «Летающие» — враги третьего типа набора мира. В хардкоре врагов на единицу здоровья больше, а раскладка уровня другая.</p>
+      <p data-l="en">The numbers are measured on the real level generator (normal mode, boss levels excluded); the average is in brackets. “Flying” means the third enemy type of the world’s set. In hardcore every enemy has one more hit point and the level layout differs.</p>
       <div class="tw"><table>
-        <thead><tr>
-          <th><span data-l="ru">Уровни</span><span data-l="en">Levels</span></th>
-          <th><span data-l="ru">Наземных</span><span data-l="en">Ground</span></th>
-          <th><span data-l="ru">Летающих</span><span data-l="en">Flying</span></th></tr></thead>
+        <thead><tr><th><span data-l="ru">Уровни</span><span data-l="en">Levels</span></th><th><span data-l="ru">Врагов всего</span><span data-l="en">Enemies in total</span></th><th><span data-l="ru">из них летающих</span><span data-l="en">of which flying</span></th></tr></thead>
         <tbody>
-          <tr><td>1–3</td><td>2</td><td>0</td></tr>
-          <tr><td>4–6</td><td>3</td><td>1</td></tr>
-          <tr><td>7–12</td><td>5</td><td>1</td></tr>
-          <tr><td>13–22</td><td>7</td><td>2</td></tr>
-          <tr><td>23–40</td><td>10</td><td>3</td></tr>
-          <tr><td>41–65</td><td>13</td><td>4</td></tr>
-          <tr><td>66+</td><td>16</td><td>6</td></tr>
+          <tr><td>1–3</td><td>4–11 <span class="dim">(≈8)</span></td><td>0–0 <span class="dim">(≈0)</span></td></tr>
+          <tr><td>4–6</td><td>9–16 <span class="dim">(≈12)</span></td><td>1–3 <span class="dim">(≈2)</span></td></tr>
+          <tr><td>7–12</td><td>14–19 <span class="dim">(≈16)</span></td><td>1–3 <span class="dim">(≈2)</span></td></tr>
+          <tr><td>13–22</td><td>17–25 <span class="dim">(≈20)</span></td><td>2–8 <span class="dim">(≈4)</span></td></tr>
+          <tr><td>23–40</td><td>22–31 <span class="dim">(≈26)</span></td><td>3–11 <span class="dim">(≈6)</span></td></tr>
+          <tr><td>41–65</td><td>25–39 <span class="dim">(≈31)</span></td><td>4–14 <span class="dim">(≈7)</span></td></tr>
+          <tr><td>66+</td><td>26–43 <span class="dim">(≈34)</span></td><td>6–18 <span class="dim">(≈10)</span></td></tr>
         </tbody>
       </table></div>
       <h3><span data-l="ru">Что есть на уровне</span><span data-l="en">What a level contains</span></h3>
@@ -352,8 +510,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="en"><b>Bonus blocks</b> — the golden ones are punched from below; some are empty.</li>
         <li data-l="ru"><b>Флаг</b> в конце: чем выше касание, тем больше бонус.</li>
         <li data-l="en"><b>The flag</b> at the end: the higher you touch it, the bigger the bonus.</li>
-        <li data-l="ru"><b>Каждый десятый</b> уровень мира — арена босса, обычных врагов там нет.</li>
-        <li data-l="en"><b>Every tenth</b> level of a world is a boss arena with no regular enemies.</li>
+        <li data-l="ru"><b>Каждый десятый</b> уровень мира заканчивается ареной босса: перед ней обычный участок с врагами (около 13–17), а флаг финиша спрятан, пока босс жив.</li>
+        <li data-l="en"><b>Every tenth</b> level of a world ends in a boss arena: a regular stretch with enemies (roughly 13–17) comes first, and the finish flag stays hidden while the boss lives.</li>
         <li data-l="ru"><b>Особенность уровня</b> — не больше одной, и примерно на трети уровней её нет вовсе. Это либо бонус-комната, либо скрытые блоки.</li>
         <li data-l="en"><b>A level feature</b> — at most one, and roughly a third of levels have none at all. Either a bonus room or hidden blocks.</li>
         <li data-l="ru"><b>Бонус-комната</b>: спрятанный вход уводит в закрытую комнату с монетами. Планировок пять — ливень монет, лестница, арка, колонны и сокровищница. Комната закрыта со всех сторон, выйти из неё можно только назад, и время в ней ограничено.</li>
@@ -365,6 +523,132 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <span data-l="ru">Стартовых жизней — 3. Они переносятся между уровнями внутри забега, а бонус «+1 ЖИЗНЬ» и каждые 100 собранных монет добавляют ещё.</span>
         <span data-l="en">You start with 3 lives. They carry between levels within a run, and the “+1 LIFE” pickup plus every 100 coins collected add more.</span>
       </div>
+    </section>
+
+    <section id="leveltable">
+      <h2><span data-l="ru">ТАБЛИЦА УРОВНЕЙ</span><span data-l="en">LEVEL TABLE</span></h2>
+      <p data-l="ru">Все 110 уровней, как их собирает генератор в обычном режиме: время, враги, ловушки и особенности. Уровни собираются по номеру, поэтому раскладка одинакова у всех игроков. В хардкоре генератор берёт другое зерно — там расстановка и число врагов другие (время указано отдельно: ×0.7).</p>
+      <p data-l="en">All 110 levels as the generator builds them in normal mode: time, enemies, hazards and features. Levels are built from their number, so the layout is the same for every player. Hardcore uses a different seed — placement and enemy counts differ there (its time is given separately: ×0.7).</p>
+      <p data-l="ru">Общее для всех: 3 кристалла данных и 1 контрольная точка на уровне. Бонус-комната есть на 22 уровнях, скрытые блоки — на 48, а на 40 уровнях нет ни того, ни другого.</p>
+      <p data-l="en">Common to all: 3 data crystals and 1 checkpoint per level. A bonus room appears on 22 levels, hidden blocks on 48, and 40 levels have neither.</p>
+      <details>
+        <summary><span data-l="ru">Показать таблицу (110 уровней)</span><span data-l="en">Show the table (110 levels)</span></summary>
+      <div class="tw"><table>
+        <thead><tr><th>№</th><th><span data-l="ru">Мир</span><span data-l="en">World</span></th><th><span data-l="ru">Время, с</span><span data-l="en">Time, s</span></th><th><span data-l="ru">Хардкор, с</span><span data-l="en">Hardcore, s</span></th><th><span data-l="ru">Врагов</span><span data-l="en">Enemies</span></th><th><span data-l="ru">Летающих</span><span data-l="en">Flying</span></th><th><span data-l="ru">Пилы</span><span data-l="en">Saws</span></th><th><span data-l="ru">Маятники</span><span data-l="en">Pendulums</span></th><th><span data-l="ru">Своя ловушка</span><span data-l="en">World hazard</span></th><th><span data-l="ru">Бонус-комната</span><span data-l="en">Bonus room</span></th><th><span data-l="ru">Скрытые блоки</span><span data-l="en">Hidden blocks</span></th><th></th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>1</td><td>121</td><td>85</td><td>10</td><td>0</td><td>0</td><td>1</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>2</td><td>1</td><td>123</td><td>86</td><td>11</td><td>0</td><td>0</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>3</td><td>1</td><td>124</td><td>87</td><td>4</td><td>0</td><td>2</td><td>2</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>4</td><td>1</td><td>126</td><td>88</td><td>16</td><td>1</td><td>0</td><td>1</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>5</td><td>1</td><td>127</td><td>89</td><td>12</td><td>3</td><td>1</td><td>1</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>6</td><td>1</td><td>128</td><td>90</td><td>9</td><td>2</td><td>1</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>7</td><td>1</td><td>130</td><td>91</td><td>15</td><td>1</td><td>1</td><td>2</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>8</td><td>1</td><td>131</td><td>92</td><td>14</td><td>3</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>9</td><td>1</td><td>133</td><td>93</td><td>16</td><td>3</td><td>1</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>10</td><td>1</td><td>134</td><td>94</td><td>13</td><td>3</td><td>0</td><td>0</td><td>·</td><td>·</td><td>2</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>11</td><td>2</td><td>135</td><td>94</td><td>19</td><td>1</td><td>1</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>12</td><td>2</td><td>137</td><td>96</td><td>15</td><td>1</td><td>1</td><td>2</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>13</td><td>2</td><td>138</td><td>97</td><td>20</td><td>2</td><td>1</td><td>0</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>14</td><td>2</td><td>140</td><td>98</td><td>21</td><td>2</td><td>1</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>15</td><td>2</td><td>141</td><td>99</td><td>17</td><td>6</td><td>1</td><td>0</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>16</td><td>2</td><td>142</td><td>99</td><td>18</td><td>3</td><td>1</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>17</td><td>2</td><td>144</td><td>101</td><td>17</td><td>7</td><td>2</td><td>2</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>18</td><td>2</td><td>145</td><td>102</td><td>23</td><td>6</td><td>2</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>19</td><td>2</td><td>147</td><td>103</td><td>25</td><td>8</td><td>1</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>20</td><td>2</td><td>148</td><td>104</td><td>22</td><td>6</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>21</td><td>3</td><td>149</td><td>104</td><td>19</td><td>2</td><td>1</td><td>1</td><td>1</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>22</td><td>3</td><td>151</td><td>106</td><td>21</td><td>2</td><td>2</td><td>1</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>23</td><td>3</td><td>152</td><td>106</td><td>29</td><td>3</td><td>1</td><td>1</td><td>1</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>24</td><td>3</td><td>154</td><td>108</td><td>23</td><td>3</td><td>1</td><td>1</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>25</td><td>3</td><td>155</td><td>108</td><td>22</td><td>4</td><td>1</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>26</td><td>3</td><td>156</td><td>109</td><td>28</td><td>11</td><td>2</td><td>2</td><td>1</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>27</td><td>3</td><td>158</td><td>111</td><td>27</td><td>6</td><td>1</td><td>0</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>28</td><td>3</td><td>159</td><td>111</td><td>27</td><td>11</td><td>1</td><td>2</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>29</td><td>3</td><td>161</td><td>113</td><td>29</td><td>9</td><td>2</td><td>1</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>30</td><td>3</td><td>162</td><td>113</td><td>23</td><td>9</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>31</td><td>4</td><td>163</td><td>114</td><td>27</td><td>3</td><td>1</td><td>1</td><td>1</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>32</td><td>4</td><td>165</td><td>115</td><td>24</td><td>3</td><td>2</td><td>2</td><td>1</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>33</td><td>4</td><td>166</td><td>116</td><td>22</td><td>3</td><td>2</td><td>1</td><td>2</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>34</td><td>4</td><td>168</td><td>118</td><td>27</td><td>3</td><td>1</td><td>2</td><td>1</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>35</td><td>4</td><td>169</td><td>118</td><td>30</td><td>8</td><td>1</td><td>2</td><td>2</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>36</td><td>4</td><td>170</td><td>119</td><td>23</td><td>8</td><td>1</td><td>2</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>37</td><td>4</td><td>172</td><td>120</td><td>31</td><td>10</td><td>1</td><td>2</td><td>1</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>38</td><td>4</td><td>173</td><td>121</td><td>25</td><td>7</td><td>1</td><td>1</td><td>2</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>39</td><td>4</td><td>175</td><td>122</td><td>30</td><td>9</td><td>2</td><td>1</td><td>1</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>40</td><td>4</td><td>176</td><td>123</td><td>28</td><td>8</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>41</td><td>5</td><td>177</td><td>124</td><td>33</td><td>4</td><td>2</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>42</td><td>5</td><td>179</td><td>125</td><td>28</td><td>4</td><td>3</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>43</td><td>5</td><td>180</td><td>126</td><td>25</td><td>4</td><td>2</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>44</td><td>5</td><td>182</td><td>127</td><td>36</td><td>4</td><td>2</td><td>2</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>45</td><td>5</td><td>183</td><td>128</td><td>30</td><td>9</td><td>1</td><td>0</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>46</td><td>5</td><td>184</td><td>129</td><td>34</td><td>7</td><td>3</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>47</td><td>5</td><td>186</td><td>130</td><td>30</td><td>7</td><td>1</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>48</td><td>5</td><td>187</td><td>131</td><td>32</td><td>10</td><td>3</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>49</td><td>5</td><td>189</td><td>132</td><td>39</td><td>13</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>50</td><td>5</td><td>190</td><td>133</td><td>33</td><td>12</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>51</td><td>6</td><td>191</td><td>134</td><td>36</td><td>4</td><td>3</td><td>2</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>52</td><td>6</td><td>193</td><td>135</td><td>26</td><td>4</td><td>2</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>53</td><td>6</td><td>194</td><td>136</td><td>35</td><td>4</td><td>2</td><td>1</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>54</td><td>6</td><td>196</td><td>137</td><td>29</td><td>4</td><td>2</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>55</td><td>6</td><td>197</td><td>138</td><td>34</td><td>8</td><td>2</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>56</td><td>6</td><td>198</td><td>139</td><td>25</td><td>8</td><td>2</td><td>2</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>57</td><td>6</td><td>200</td><td>140</td><td>28</td><td>10</td><td>2</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>58</td><td>6</td><td>201</td><td>141</td><td>29</td><td>8</td><td>3</td><td>2</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>59</td><td>6</td><td>203</td><td>142</td><td>36</td><td>8</td><td>3</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>60</td><td>6</td><td>204</td><td>143</td><td>33</td><td>11</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>61</td><td>7</td><td>205</td><td>144</td><td>30</td><td>4</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>62</td><td>7</td><td>207</td><td>145</td><td>31</td><td>4</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>63</td><td>7</td><td>208</td><td>146</td><td>30</td><td>4</td><td>2</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>64</td><td>7</td><td>210</td><td>147</td><td>28</td><td>4</td><td>1</td><td>0</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>65</td><td>7</td><td>211</td><td>148</td><td>36</td><td>14</td><td>3</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>66</td><td>7</td><td>212</td><td>148</td><td>34</td><td>13</td><td>2</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>67</td><td>7</td><td>214</td><td>150</td><td>35</td><td>17</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>68</td><td>7</td><td>215</td><td>150</td><td>32</td><td>14</td><td>3</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>69</td><td>7</td><td>217</td><td>152</td><td>34</td><td>12</td><td>3</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>70</td><td>7</td><td>218</td><td>153</td><td>41</td><td>8</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>71</td><td>8</td><td>219</td><td>153</td><td>32</td><td>6</td><td>3</td><td>2</td><td>1</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>72</td><td>8</td><td>221</td><td>155</td><td>34</td><td>6</td><td>3</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>73</td><td>8</td><td>222</td><td>155</td><td>43</td><td>6</td><td>3</td><td>1</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>74</td><td>8</td><td>224</td><td>157</td><td>33</td><td>6</td><td>3</td><td>1</td><td>1</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>75</td><td>8</td><td>225</td><td>158</td><td>41</td><td>18</td><td>2</td><td>2</td><td>1</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>76</td><td>8</td><td>226</td><td>158</td><td>38</td><td>16</td><td>2</td><td>1</td><td>1</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>77</td><td>8</td><td>228</td><td>160</td><td>37</td><td>12</td><td>3</td><td>1</td><td>1</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>78</td><td>8</td><td>229</td><td>160</td><td>43</td><td>11</td><td>2</td><td>1</td><td>1</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>79</td><td>8</td><td>231</td><td>162</td><td>39</td><td>17</td><td>3</td><td>2</td><td>1</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>80</td><td>8</td><td>232</td><td>162</td><td>33</td><td>11</td><td>0</td><td>0</td><td>·</td><td>·</td><td>2</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>81</td><td>9</td><td>233</td><td>163</td><td>29</td><td>6</td><td>2</td><td>2</td><td>3</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>82</td><td>9</td><td>235</td><td>164</td><td>39</td><td>6</td><td>2</td><td>1</td><td>3</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>83</td><td>9</td><td>236</td><td>165</td><td>32</td><td>6</td><td>1</td><td>1</td><td>2</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>84</td><td>9</td><td>238</td><td>167</td><td>32</td><td>6</td><td>3</td><td>1</td><td>3</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>85</td><td>9</td><td>239</td><td>167</td><td>35</td><td>15</td><td>3</td><td>2</td><td>2</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>86</td><td>9</td><td>240</td><td>168</td><td>26</td><td>12</td><td>2</td><td>1</td><td>2</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>87</td><td>9</td><td>242</td><td>169</td><td>37</td><td>13</td><td>2</td><td>2</td><td>3</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>88</td><td>9</td><td>243</td><td>170</td><td>28</td><td>11</td><td>0</td><td>0</td><td>2</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>89</td><td>9</td><td>245</td><td>172</td><td>37</td><td>10</td><td>2</td><td>1</td><td>2</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>90</td><td>9</td><td>246</td><td>172</td><td>33</td><td>9</td><td>0</td><td>0</td><td>·</td><td>·</td><td>2</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>91</td><td>10</td><td>247</td><td>173</td><td>39</td><td>6</td><td>2</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>92</td><td>10</td><td>249</td><td>174</td><td>31</td><td>6</td><td>1</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>93</td><td>10</td><td>250</td><td>175</td><td>32</td><td>6</td><td>1</td><td>2</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>94</td><td>10</td><td>252</td><td>176</td><td>36</td><td>6</td><td>3</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>95</td><td>10</td><td>253</td><td>177</td><td>32</td><td>16</td><td>3</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>96</td><td>10</td><td>254</td><td>178</td><td>35</td><td>14</td><td>1</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>97</td><td>10</td><td>256</td><td>179</td><td>30</td><td>11</td><td>2</td><td>2</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>98</td><td>10</td><td>257</td><td>180</td><td>36</td><td>15</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>99</td><td>10</td><td>259</td><td>181</td><td>35</td><td>14</td><td>2</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>100</td><td>10</td><td>260</td><td>182</td><td>35</td><td>10</td><td>0</td><td>0</td><td>·</td><td>·</td><td>·</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+          <tr><td>101</td><td>🌈</td><td>261</td><td>183</td><td>31</td><td>6</td><td>3</td><td>1</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>102</td><td>🌈</td><td>263</td><td>184</td><td>27</td><td>6</td><td>2</td><td>2</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>103</td><td>🌈</td><td>264</td><td>185</td><td>33</td><td>6</td><td>3</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>104</td><td>🌈</td><td>266</td><td>186</td><td>26</td><td>6</td><td>1</td><td>1</td><td>·</td><td>·</td><td>2</td><td></td></tr>
+          <tr><td>105</td><td>🌈</td><td>267</td><td>187</td><td>28</td><td>10</td><td>2</td><td>1</td><td>·</td><td>·</td><td>1</td><td></td></tr>
+          <tr><td>106</td><td>🌈</td><td>268</td><td>188</td><td>39</td><td>14</td><td>2</td><td>2</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>107</td><td>🌈</td><td>270</td><td>189</td><td>31</td><td>13</td><td>2</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>108</td><td>🌈</td><td>271</td><td>190</td><td>30</td><td>14</td><td>2</td><td>1</td><td>·</td><td>✓</td><td>·</td><td></td></tr>
+          <tr><td>109</td><td>🌈</td><td>273</td><td>191</td><td>37</td><td>10</td><td>2</td><td>2</td><td>·</td><td>·</td><td>·</td><td></td></tr>
+          <tr><td>110</td><td>🌈</td><td>274</td><td>192</td><td>37</td><td>14</td><td>0</td><td>0</td><td>·</td><td>·</td><td>1</td><td><span data-l="ru">★ БОСС</span><span data-l="en">★ BOSS</span></td></tr>
+        </tbody>
+      </table></div>
+      </details>
     </section>
 
     <section id="scoring">
@@ -421,8 +705,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
         <li data-l="en">Under the world name sits the rainbow-shard marker: <b>🌈 ✓</b> means this world's shard is found, <b>🌈 ✗</b> means it is not.</li>
         <li data-l="ru">В шапке карты — сколько всего собрано <b>монет</b>, а у выбранного узла видно, сколько взято именно на этом уровне: удобно, когда возвращаешься добирать.</li>
         <li data-l="en">The map header shows your total <b>coins</b>, and the selected node shows how many you took on that particular level — handy when you come back to collect.</li>
-        <li data-l="ru">Перед первым миром стоит отдельный узел — <b>Пролог</b>. Он не входит в счёт прохождения и открыт с самого начала.</li>
-        <li data-l="en">A separate node sits before world one — the <b>Prologue</b>. It does not count toward completion and is unlocked from the start.</li>
+        <li data-l="ru">Перед первым миром стоит отдельный узел — <b>Пролог</b>. Он не входит в счёт прохождения. Пока он не пройден, карта открывается на нём, а первый мир закрыт; после прохождения открывается первый уровень кампании. У игроков со старым сохранением первый мир открыт сразу.</li>
+        <li data-l="en">A separate node sits before the first world — the <b>Prologue</b>. It does not count towards completion. Until it is finished the map opens on it and the first world is locked; finishing it unlocks campaign level one. Players with an older save have the first world open at once.</li>
       </ul>
     </section>
 
@@ -517,8 +801,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       </div>
 
       <h3><span data-l="ru">Запас прочности и механики</span><span data-l="en">Health and mechanics</span></h3>
-      <p data-l="ru">Здоровье боссов растёт от мира к миру, а с ним и число нужных попаданий. В хардкоре запас тот же, но ошибиться дороже.</p>
-      <p data-l="en">Boss health grows from world to world, and so does the number of hits needed. Hardcore keeps the same pool but punishes mistakes harder.</p>
+      <p data-l="ru">Здоровье боссов — от 5 до 12 попаданий, значения взяты из конфигурации игры. Самый хрупкий — ЛЕДЯНОЙ ПРИЗРАК (5), самый выносливый — ПРИЗМА-ПРИЗРАК (12). В хардкоре запас тот же, но ошибиться дороже.</p>
+      <p data-l="en">Boss health is 5 to 12 hits, taken from the game’s configuration. The most fragile is ICE PHANTOM (5), the toughest is PRISM WRAITH (12). Hardcore keeps the same pool, but mistakes cost more.</p>
       <div class="tw"><table>
         <thead><tr>
           <th><span data-l="ru">Босс</span><span data-l="en">Boss</span></th>
@@ -534,8 +818,8 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
           <tr><td><span data-l="ru">ТЕНЕВОЙ ЖНЕЦ</span><span data-l="en">SHADOW REAPER</span></td><td>7</td><td><span data-l="ru">Пули проходят насквозь — только прыжок</span><span data-l="en">Bullets pass through — stomp only</span></td></tr>
           <tr><td><span data-l="ru">КОРОЛЬ СЛИЗИ</span><span data-l="en">SLUDGE KING</span></td><td>10</td><td><span data-l="ru">Панцирь: 3 прыжка, потом ядро под огонь</span><span data-l="en">Shell: 3 stomps, then the core takes fire</span></td></tr>
           <tr><td><span data-l="ru">ШТОРМОВОЙ ТИТАН</span><span data-l="en">STORM TITAN</span></td><td>9</td><td><span data-l="ru">Три молниевых узла оглушают его</span><span data-l="en">Three lightning nodes stun it</span></td></tr>
-          <tr><td><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></td><td>12</td><td><span data-l="ru">Три фазы: выстрел → прыжок → оба</span><span data-l="en">Three phases: shoot → stomp → both</span></td></tr>
-          <tr><td><span data-l="ru">ПРИЗМА-ПРИЗРАК</span><span data-l="en">PRISM WRAITH</span></td><td>9+</td><td><span data-l="ru">Финал секретного мира, укрытий нет</span><span data-l="en">The secret world's finale, no cover left</span></td></tr>
+          <tr><td><span data-l="ru">АРХОНТ</span><span data-l="en">ARCHON</span></td><td>9</td><td><span data-l="ru">Три фазы: выстрел → прыжок → оба</span><span data-l="en">Three phases: shoot → stomp → both</span></td></tr>
+          <tr><td><span data-l="ru">ПРИЗМА-ПРИЗРАК</span><span data-l="en">PRISM WRAITH</span></td><td>12</td><td><span data-l="ru">Финал секретного мира, укрытий нет</span><span data-l="en">The secret world's finale, no cover left</span></td></tr>
         </tbody>
       </table></div>
       <div class="note">
@@ -697,6 +981,21 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       </ul>
     </section>
 
+    <section id="daily">
+      <h2><span data-l="ru">УРОВЕНЬ ДНЯ И ПРИЗРАК</span><span data-l="en">DAILY LEVEL AND GHOST</span></h2>
+      <h3><span data-l="ru">📅 Уровень дня</span><span data-l="en">📅 Daily level</span></h3>
+      <p data-l="ru">Каждые сутки — пять новых испытаний: лёгкое, среднее, сложное и два случайных, одно из которых с модификаторами вроде низкой гравитации или ветра. Уровень у всех игроков одинаковый, попыток сколько угодно, в зачёт идёт лучшая. Рядом видно, сколько человек уже сыграло и какое у вас место. Живёт всё это в разделе <b>«Онлайн»</b> — там же, где совместная игра.</p>
+      <p data-l="en">Five fresh challenges every day: easy, normal, hard and two random ones, one of them with modifiers like low gravity or wind. Everyone gets the same level, attempts are unlimited and your best one counts. Beside it you can see how many people have played and where you stand. It all lives in the <b>Online</b> section, next to co-op.</p>
+      <p data-l="ru">Если жизни кончились, попытка закрывается, но счёт за пройденную часть всё равно идёт в таблицу: следующая попытка перекроет его, если выйдет лучше. Результаты попадают в таблицу при входе в аккаунт Pixset Studio.</p>
+      <p data-l="en">When you run out of lives the attempt is closed, but the score for the part you cleared still goes to the board, and the next attempt replaces it if it is better. Scores reach the board when you are signed in to a Pixset Studio account.</p>
+      <h3><span data-l="ru">👻 Призрак лучшего забега</span><span data-l="en">👻 Ghost of the best run</span></h3>
+      <p data-l="ru">Полупрозрачный робот повторяет чей-то прошлый заход и бежит рядом с вами. На выбор: свой рекорд, лидер уровня дня или лидер любого уровня. Он ни на что не влияет — ни столкновений, ни урона, только видно, где вы отстали. По умолчанию выключен: это режим для гонки, а не оформление.</p>
+      <p data-l="en">A translucent robot replays someone’s earlier run alongside you. Pick your own record, the daily leader or the leader of any level. It affects nothing — no collisions, no damage, just a clear view of where you fell behind. Off by default: it is a racing mode, not decoration.</p>
+      <h3><span data-l="ru">🏅 Рекорды среди знакомых</span><span data-l="en">🏅 Leaderboards among friends</span></h3>
+      <p data-l="ru">Любую таблицу можно смотреть тремя способами: <b>мир</b>, <b>своя страна</b> или <b>только друзья</b>. Первое место в мире достаётся единицам, а обойти пятерых знакомых — задача на вечер. В аккаунт можно входить <b>по нику</b>, а не только по почте.</p>
+      <p data-l="en">Every board can be viewed three ways: <b>world</b>, <b>your country</b> or <b>friends only</b>. First place worldwide belongs to a handful of people, while beating five people you know is an evening’s work. You can sign in <b>with your nickname</b>, not only your email.</p>
+    </section>
+
     <section id="story">
       <h2><span data-l="ru">СЮЖЕТ И ЛОР</span><span data-l="en">STORY AND LORE</span></h2>
       <p data-l="ru"><b>2147 год.</b> Земля принадлежит корпорации <b>NEXUM</b>. Мегаполисы подключены к сети <b>GRID</b>, которая следит за всем и решает, кто живёт комфортно, а кто выброшен в трущобы. GRID устроена как десять слоёв защиты — и каждый слой это отдельный мир игры.</p>
@@ -768,12 +1067,17 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <ul class="clean">
         <li data-l="ru"><b>Обычный</b> — как было всегда: кончились жизни, и уровень начинается заново, чекпоинт снимается.</li>
         <li data-l="en"><b>Normal</b> — as it always was: run out of lives and the level restarts from the beginning, checkpoint cleared.</li>
-        <li data-l="ru"><b>Спокойный</b> — чекпоинт сохраняется даже после потери всех жизней, поэтому длинный уровень не приходится переигрывать с нуля из-за одной трудной секции в конце. Вдобавок падение в пропасть не обрывает заход: жизнь отнимается, но робот мягко возвращается на тот край, откуда прыгнул. Врагов и урон это не меняет — удар врага заканчивает попытку как обычно.</li>
-        <li data-l="en"><b>Relaxed</b> — the checkpoint survives even when you lose all lives, so a long level never has to be replayed from scratch because of one hard stretch at the end. A fall into the void no longer ends the run either: it still costs a life, but the robot drifts back down onto the ledge it jumped from. Enemies and damage are unchanged — an enemy hit ends the attempt as usual.</li>
+        <li data-l="ru"><b>Спокойный</b> — чекпоинт сохраняется даже после потери всех жизней, поэтому длинный уровень не приходится переигрывать с нуля из-за одной трудной секции в конце. Падение в пропасть не обрывает заход: жизнь отнимается, но робот мягко возвращается на тот край, откуда прыгнул. Пилы, плазменные шары на верёвках, гейзеры, сосульки, токсины и молнии сносят <b>одну стадию робота</b>, а не отнимают жизнь сразу; удар врага и прыжок на шипастого врага действуют как обычно.</li>
+        <li data-l="en"><b>Relaxed</b> — the checkpoint survives even when you lose all lives, so a long level never has to be replayed from scratch because of one hard stretch at the end. A fall into the void no longer ends the run: it still costs a life, but the robot drifts back down onto the ledge it jumped from. Saws, plasma pendulums, geysers, icicles, toxins and lightning knock the robot down <b>one stage</b> instead of costing a life outright; enemy hits and stomping a spiked enemy work as usual.</li>
         <li data-l="ru">На хардкор режим не влияет: там свои правила и общий запас жизней на мир.</li>
         <li data-l="en">It does not affect hardcore, which keeps its own rules and a shared pool of lives per world.</li>
       </ul>
 
+      <h3><span data-l="ru">Управление и геймпад</span><span data-l="en">Controls and gamepad</span></h3>
+      <ul class="clean">
+        <li data-l="ru">Клавиши каждого игрока переназначаются; в блоке «Геймпад» — прыжок, выстрел и пауза на кнопки геймпада. «Сбросить» возвращает стандартную раскладку.</li>
+        <li data-l="en">Every player’s keys can be remapped; the “Gamepad” block sets jump, shoot and pause to gamepad buttons. “Reset” restores the default layout.</li>
+      </ul>
       <h3><span data-l="ru">Прочее</span><span data-l="en">Other</span></h3>
       <ul class="clean">
         <li data-l="ru">Громкость отдельно для музыки и эффектов; тряска экрана, частицы и подсказки отключаемы.</li>
@@ -832,6 +1136,44 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <p data-l="en">Any recent Chrome, Firefox, Safari or Edge — on a desktop, phone or tablet. It needs Canvas 2D, Web Audio and WebSocket (for online play); every browser since 2017 has them. Progress lives in browser storage, so private mode will not keep it.</p>
     </section>
 
+    <section id="glossary">
+      <h2><span data-l="ru">ГЛОССАРИЙ</span><span data-l="en">GLOSSARY</span></h2>
+      <div class="tw"><table>
+        <thead><tr><th><span data-l="ru">Термин</span><span data-l="en">Term</span></th><th><span data-l="ru">Значение</span><span data-l="en">Meaning</span></th></tr></thead>
+        <tbody>
+          <tr><td><b><span data-l="ru">GRID</span><span data-l="en">GRID</span></b></td><td><span data-l="ru">Глобальная сеть, которая следит за всем и решает, кто живёт комфортно. Десять миров игры — десять слоёв её защиты.</span><span data-l="en">The global network that watches everything and decides who lives comfortably. The game’s ten worlds are ten layers of its defence.</span></td></tr>
+          <tr><td><b><span data-l="ru">NEXUM</span><span data-l="en">NEXUM</span></b></td><td><span data-l="ru">Корпорация, которой в 2147 году принадлежит Земля.</span><span data-l="en">The corporation that owns the Earth in the year 2147.</span></td></tr>
+          <tr><td><b><span data-l="ru">UNIT-7 / UNIT-8</span><span data-l="en">UNIT-7 / UNIT-8</span></b></td><td><span data-l="ru">Боевые андроиды: UNIT-7 — герой одиночной игры, UNIT-8 — красный робот второго игрока.</span><span data-l="en">Combat androids: UNIT-7 is the hero of single-player, UNIT-8 is the red robot of player two.</span></td></tr>
+          <tr><td><b><span data-l="ru">Кристалл данных</span><span data-l="en">Data crystal</span></b></td><td><span data-l="ru">Три на уровень, часть спрятана в стороне от маршрута. Идут в прогресс профиля и достижения.</span><span data-l="en">Three per level, some hidden off the route. They feed profile progress and achievements.</span></td></tr>
+          <tr><td><b><span data-l="ru">Радужный осколок</span><span data-l="en">Rainbow shard</span></b></td><td><span data-l="ru">По одному в каждом из десяти основных миров; все десять открывают секретный 11-й мир.</span><span data-l="en">One in each of the ten main worlds; all ten unlock the secret 11th world.</span></td></tr>
+          <tr><td><b><span data-l="ru">Контрольная точка</span><span data-l="en">Checkpoint</span></b></td><td><span data-l="ru">Одна на уровень, примерно посередине. Место возрождения; чинит сломанного робота.</span><span data-l="en">One per level, roughly in the middle. A respawn point that repairs a broken robot.</span></td></tr>
+          <tr><td><b><span data-l="ru">Стадия робота</span><span data-l="en">Robot stage</span></b></td><td><span data-l="ru">Усиленный → обычный → сломанный → потеря жизни. См. «Стадии робота».</span><span data-l="en">Powered → normal → broken → life lost. See “Robot stages”.</span></td></tr>
+          <tr><td><b><span data-l="ru">Глыба</span><span data-l="en">Ice block</span></b></td><td><span data-l="ru">Замороженный враг: падает, скользит, раскалывается и давит то, что под ним.</span><span data-l="en">A frozen enemy: it falls, slides, shatters and crushes what is beneath.</span></td></tr>
+          <tr><td><b><span data-l="ru">ЭМИ-сбой</span><span data-l="en">EMP surge</span></b></td><td><span data-l="ru">Статус-эффект: нет бластера и двойного прыжка.</span><span data-l="en">A status effect: no blaster and no double jump.</span></td></tr>
+          <tr><td><b><span data-l="ru">Спокойный режим</span><span data-l="en">Relaxed mode</span></b></td><td><span data-l="ru">Настройка «Режим прохождения»: чекпоинт сохраняется, падение прощается, подвижные ловушки сносят одну стадию.</span><span data-l="en">The “Game mode” setting: the checkpoint is kept, falls are forgiven and moving hazards knock down one stage.</span></td></tr>
+          <tr><td><b><span data-l="ru">Хардкор</span><span data-l="en">Hardcore</span></b></td><td><span data-l="ru">Врагам на 1 hp больше, время ×0.7, очки ×2, общий запас жизней на мир.</span><span data-l="en">Enemies have 1 more hp, time ×0.7, score ×2, a shared pool of lives per world.</span></td></tr>
+          <tr><td><b><span data-l="ru">Пролог</span><span data-l="en">Prologue</span></b></td><td><span data-l="ru">Короткий вводный уровень в лаборатории CHEN-7: учит управлению и открывает первый мир.</span><span data-l="en">A short introductory level in Lab CHEN-7: it teaches the controls and unlocks the first world.</span></td></tr>
+          <tr><td><b><span data-l="ru">Призрак</span><span data-l="en">Ghost</span></b></td><td><span data-l="ru">Полупрозрачная запись чужого забега рядом с вами. Ни на что не влияет.</span><span data-l="en">A translucent replay of someone else’s run beside you. It affects nothing.</span></td></tr>
+          <tr><td><b><span data-l="ru">Слот сохранения</span><span data-l="en">Save slot</span></b></td><td><span data-l="ru">Три независимых слота; настройки общие для всех.</span><span data-l="en">Three independent slots; settings are shared by all.</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="history">
+      <h2><span data-l="ru">ИСТОРИЯ ВЕРСИЙ</span><span data-l="en">VERSION HISTORY</span></h2>
+      <div class="tw"><table>
+        <thead><tr><th><span data-l="ru">Версия</span><span data-l="en">Version</span></th><th><span data-l="ru">Когда</span><span data-l="en">When</span></th><th><span data-l="ru">Главное</span><span data-l="en">Highlights</span></th></tr></thead>
+        <tbody>
+          <tr><td><b>1.0.3</b></td><td><span data-l="ru">Сентябрь 2026</span><span data-l="en">September 2026</span></td><td><span data-l="ru">Пролог, таблицы рекордов, уровень дня и призрак, бонус-комнаты и скрытые блоки, геймпады, шрифты на все языки, спокойный режим смягчает ловушки, исправления чекпоинта и музыки</span><span data-l="en">Prologue, leaderboards, the daily level and the ghost, bonus rooms and hidden blocks, gamepads, fonts for every language, Relaxed mode softens hazards, checkpoint and music fixes</span></td></tr>
+          <tr><td><b>1.0.2</b></td><td><span data-l="ru">Август 2026</span><span data-l="en">August 2026</span></td><td><span data-l="ru">Секретный 11-й мир, профиль оператора, архив логов, статус-эффекты, 50 достижений на 50 языках, производительность</span><span data-l="en">The secret 11th world, operator profile, log archive, status effects, 50 achievements in 50 languages, performance</span></td></tr>
+          <tr><td><b>1.0.1</b></td><td><span data-l="ru">Июль 2026</span><span data-l="en">July 2026</span></td><td><span data-l="ru">Оптимизация и исправления ошибок</span><span data-l="en">Performance and bug fixes</span></td></tr>
+          <tr><td><b>1.0.0</b></td><td><span data-l="ru">Июнь 2026</span><span data-l="en">June 2026</span></td><td><span data-l="ru">Первый релиз: 100 уровней в 10 мирах, 10 боссов, мультиплеер до 5 игроков, достижения, три слота</span><span data-l="en">First release: 100 levels across 10 worlds, 10 bosses, multiplayer up to 5 players, achievements, three slots</span></td></tr>
+        </tbody>
+      </table></div>
+      <p data-l="ru">Полный список изменений каждой версии — на странице <a href="/byte-blaster/updates/">«Обновления»</a>.</p>
+      <p data-l="en">The full change list of every version is on the <a href="/byte-blaster/updates/">“Updates”</a> page.</p>
+    </section>
+
     <section id="faq">
       <h2><span data-l="ru">ЧАСТЫЕ ВОПРОСЫ</span><span data-l="en">FAQ</span></h2>
 
@@ -856,12 +1198,30 @@ document.documentElement.setAttribute('data-site-lang','ru');}})();
       <p data-l="en">Settings → Display → <b>Game magnification</b>. Try 1.5× or set your own value.</p>
 
       <h3><span data-l="ru">Можно играть без интернета?</span><span data-l="en">Can I play offline?</span></h3>
-      <p data-l="ru">Да — все режимы, кроме онлайн-кооператива. Настольная и Android-версии не требуют сети вообще.</p>
-      <p data-l="en">Yes — every mode except online co-op. The desktop and Android builds need no connection at all.</p>
+      <p data-l="ru">Да — все режимы, кроме онлайн-кооператива. Настольная и Android-версии не требуют сети вообще: шрифты тоже лежат внутри игры и не подгружаются из интернета.</p>
+      <p data-l="en">Yes — every mode except online co-op. The desktop and Android builds need no connection at all: the fonts ship inside the game rather than loading from the internet.</p>
 
       <h3><span data-l="ru">На каких языках есть игра?</span><span data-l="en">What languages is the game in?</span></h3>
-      <p data-l="ru">На 50, включая русский, английский, украинский, немецкий, испанский, японский, китайский и арабский. Язык меняется в настройках.</p>
-      <p data-l="en">50 of them, including English, Russian, Ukrainian, German, Spanish, Japanese, Chinese and Arabic. The language is changed in the settings.</p>
+      <p data-l="ru">На 50, включая русский, английский, украинский, немецкий, испанский, японский, китайский и арабский. Язык меняется в настройках. Пиксельный шрифт игры покрывает почти все языки; хинди и бенгальский показываются системным шрифтом, потому что пиксельный шрифт не умеет собирать их лигатуры.</p>
+      <p data-l="en">50 of them, including English, Russian, Ukrainian, German, Spanish, Japanese, Chinese and Arabic. The language is changed in the settings. The game’s pixel font covers almost every language; Hindi and Bengali use the system font because the pixel font cannot compose their ligatures.</p>
+      <h3><span data-l="ru">Как играть на геймпаде?</span><span data-l="en">How do I play with a gamepad?</span></h3>
+      <p data-l="ru">Подключите геймпад и нажмите любую кнопку. Крестовина или левый стик — движение, A или Y — прыжок, X, B, RT или RB — выстрел, Start — пауза. Кнопки меняются в Настройки → Управление → ПК → «Геймпад».</p>
+      <p data-l="en">Plug in a gamepad and press any button. D-pad or left stick moves, A or Y jumps, X, B, RT or RB shoots, Start pauses. Buttons can be changed in Settings → Controls → PC → “Gamepad”.</p>
+      <h3><span data-l="ru">Как играть вдвоём на одном компьютере?</span><span data-l="en">How do I play two-player on one computer?</span></h3>
+      <p data-l="ru">Выберите режим «Два игрока». Можно играть на одной клавиатуре (у каждого своя раскладка) или подключить два геймпада: первый подключённый — игрок 1, второй — игрок 2. Один геймпад ведёт игрока 1, а второй игрок остаётся на клавиатуре.</p>
+      <p data-l="en">Pick “Two players”. You can share one keyboard (each player has their own layout) or connect two gamepads: the first one connected is player 1, the second is player 2. One gamepad drives player 1 while player 2 stays on the keyboard.</p>
+      <h3><span data-l="ru">Можно ли пропустить пролог?</span><span data-l="en">Can I skip the prologue?</span></h3>
+      <p data-l="ru">В новой игре нет: первый мир открывается только после Пролога. Если у вас уже есть прогресс от старой версии, первый мир открыт сразу. Пролог короткий и учит управлению по ходу дела.</p>
+      <p data-l="en">Not on a new game: the first world unlocks only after the Prologue. If you already have progress from an older version the first world is open right away. The Prologue is short and teaches the controls as you go.</p>
+      <h3><span data-l="ru">Почему музыка в главном меню не играет в браузере?</span><span data-l="en">Why is the main-menu music silent in the browser?</span></h3>
+      <p data-l="ru">Браузеры не разрешают звук, пока вы ничего не нажали. Нажмите любую клавишу, кликните или коснитесь экрана — музыка включится. В Windows- и Android-версиях она играет с первой секунды.</p>
+      <p data-l="en">Browsers block sound until you interact with the page. Press any key, click or tap and the music starts. In the Windows and Android builds it plays from the first second.</p>
+      <h3><span data-l="ru">Что значит «сломанный» робот?</span><span data-l="en">What does a “broken” robot mean?</span></h3>
+      <p data-l="ru">Это вторая стадия урона: после удара по обычному роботу на нём появляются трещины, а следующий удар отнимает жизнь. Контрольная точка чинит робота («ПОЧИНЕН!»), любой бонус возвращает как минимум обычную стадию.</p>
+      <p data-l="en">It is the second damage stage: after a hit on a normal robot it shows cracks, and the next hit costs a life. A checkpoint repairs it (“REPAIRED!”) and any power-up restores at least the normal stage.</p>
+      <h3><span data-l="ru">Убитые враги и монеты возвращаются после смерти?</span><span data-l="en">Do killed enemies and coins come back after I die?</span></h3>
+      <p data-l="ru">Позади контрольной точки — нет: убитые враги и собранные монеты остаются убитыми и собранными. Всё, что дальше по уровню, возвращается, как и должно, — вы проходите этот участок заново.</p>
+      <p data-l="en">Not behind the checkpoint: enemies you killed and coins you collected stay killed and collected. Everything further along the level returns, as it should — you replay that stretch.</p>
     </section>
 
   </article>
