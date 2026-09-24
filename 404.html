@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru" data-title-ru="404 — страница не найдена · Pixset Studio" data-title-en="404 — page not found · Pixset Studio">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  GitHub Pages отдаёт custom-404 ТОЛЬКО из корня сайта: файл вроде
+  /byte-blaster/404.html никогда не сработает сам по себе на битой ссылке
+  вида /byte-blaster/что-угодно — такую ссылку GitHub Pages сверяет только с
+  этим, корневым файлом. Он сработает для любого несуществующего адреса на
+  ВСЁМ домене pixset-studio.github.io, включая /byte-blaster/*.
+
+  Поэтому здесь развилка. Для /byte-blaster/* нужно оформление сайта игры —
+  оно уже готово в byte-blaster/404.html (открывается напрямую по этому
+  адресу, но раньше НИКОГДА не открывалось само по себе на случайной битой
+  ссылке — вот и был баг). Перенаправляем туда СРАЗУ, до того как страница
+  начнёт что-либо ещё грузить, — иначе на миг мелькнёт чужое оформление.
+  Для всех прочих адресов страница остаётся собой: 404 в стиле Pixset Studio.
+-->
+<script>
+if (location.pathname.indexOf('/byte-blaster/') === 0) {
+  location.replace('/byte-blaster/404.html');
+}
+</script>
+<title>404 — страница не найдена · Pixset Studio</title>
+<meta name="description" content="Такой страницы нет. Возможно, ссылка устарела или адрес набран с опечаткой.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/studio.css">
+<script>
+(function(){var d=document.documentElement;
+try{var t=localStorage.getItem('pixsetTheme');
+var own=false;try{var o=JSON.parse(localStorage.getItem('pixsetOwnsBB')||'null');own=!!(o&&o.own);}catch(e2){}
+if(t==='byteblaster'&&!own)t='industrial';
+if(t!=='arcade'&&t!=='minimal'&&t!=='industrial'&&t!=='byteblaster')t='industrial';
+d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial');}
+try{var l=localStorage.getItem('pixsetSiteLang')||localStorage.getItem('bbSiteLang');
+if(l!=='ru'&&l!=='en'){var b=(navigator.languages&&navigator.languages[0])||navigator.language||'ru';
+l=/^(ru|uk|be|kk|ky|uz|tg|tk|az|hy)/i.test(b)?'ru':'en';}
+d.setAttribute('data-site-lang',l);d.setAttribute('lang',l);}
+catch(e){d.setAttribute('data-site-lang','ru');}})();
+</script>
+<style>
+  /* Absolute paths on purpose: this file is GitHub Pages' one and only site-wide
+     404, served for missing URLs at any depth — relative links would resolve
+     against that fake path and break. */
+  .err404 { padding: 90px 0 70px; text-align: center; }
+  .err404 .code { font-family: 'Press Start 2P', monospace; font-size: clamp(52px, 14vw, 128px);
+    line-height: 1; color: var(--y); text-shadow: 0 0 26px var(--y), 0 0 60px var(--y-warm); margin-bottom: 18px; }
+  .err404 .lead { max-width: 560px; margin: 0 auto 30px; }
+  .err404 .btns { justify-content: center; }
+  .err404 .path { font-family: var(--mono, monospace); font-size: 13px; color: var(--dim);
+    word-break: break-all; margin-top: 28px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="" width="30" height="30">Pixset Studio</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+    <nav class="main">
+      <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+      <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+      <a href="/byte-blaster/">Byte Blaster</a>
+      <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+      <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
+      <a href="/store" class="cta"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+      <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
+    </nav>
+  </div>
+</header>
+
+<div id="mobileNav">
+  <a href="/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a>
+  <a href="/byte-blaster/">Byte Blaster</a>
+  <a href="/players/"><span data-l="ru">Игроки</span><span data-l="en">Players</span></a>
+  <a href="/online/"><span data-l="ru">Онлайн</span><span data-l="en">Online</span></a>
+  <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a>
+  <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a>
+</div>
+
+<main>
+<section class="err404">
+  <div class="wrap">
+    <div class="code">404</div>
+    <h1 style="font-size:clamp(16px,4vw,24px)"><span data-l="ru">Такой страницы нет</span><span data-l="en">This page doesn't exist</span></h1>
+    <p class="lead dim">
+      <span data-l="ru">Ссылка устарела, страница переехала, или в адресе опечатка. Загляните на главную — оттуда есть путь куда угодно на сайте.</span>
+      <span data-l="en">The link is outdated, the page has moved, or there's a typo in the address. Head to the homepage — everything else on the site is reachable from there.</span>
+    </p>
+    <div class="btns">
+      <a class="btn" href="/"><span data-l="ru">← НА ГЛАВНУЮ</span><span data-l="en">← HOME</span></a>
+      <a class="btn" href="/store"><span data-l="ru">В МАГАЗИН</span><span data-l="en">GO TO STORE</span></a>
+    </div>
+    <p class="path" id="err404Path"></p>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="row">
+      <div>
+        <div class="mono" style="color:var(--y);letter-spacing:2px">PIXSET STUDIO</div>
+        <div><span data-l="ru">© 2022–2026 Pixset Studio. Все права защищены.</span><span data-l="en">© 2022–2026 Pixset Studio. All rights reserved.</span></div>
+      </div>
+      <div>
+        <a href="/store"><span data-l="ru">Магазин</span><span data-l="en">Store</span></a> ·
+        <a href="/account"><span data-l="ru">Аккаунт</span><span data-l="en">Account</span></a> ·
+        <a href="/wikipedia"><span data-l="ru">Вики</span><span data-l="en">Wiki</span></a> ·
+        <a href="https://github.com/pixset" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </div>
+  <!-- legal -->
+    <div class="legal-line">
+      <a href="/legal/offer/"><span data-l="ru">Оферта</span><span data-l="en">Offer</span></a>
+      <a href="/legal/terms/"><span data-l="ru">Соглашение</span><span data-l="en">Terms</span></a>
+      <a href="/legal/privacy/"><span data-l="ru">Конфиденциальность</span><span data-l="en">Privacy</span></a>
+      <a href="/legal/contacts/"><span data-l="ru">Контакты и реквизиты</span><span data-l="en">Contacts</span></a>
+    </div>
+  <!-- /legal -->
+</footer>
+
+<script src="/assets/studio.js"></script>
+<script>
+  var p = document.getElementById('err404Path');
+  if (p) p.textContent = location.pathname + location.search;
+</script>
+
+</body>
+</html>

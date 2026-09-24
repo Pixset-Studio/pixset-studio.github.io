@@ -497,6 +497,21 @@ export async function getMyOrders() {
   return data;
 }
 
+/**
+ * Один заказ по id — для страницы «Спасибо за покупку» после оплаты.
+ * RLS ("own orders") и так не даёт увидеть чужой заказ: пустой результат тут
+ * означает либо неверный id, либо заказ принадлежит не этому игроку.
+ */
+export async function getOrder(orderId) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, game_slug, amount, amount_full, currency, status, paid_at')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 /* ── Промокоды ─────────────────────────────────────────────────────────── */
 
 /**

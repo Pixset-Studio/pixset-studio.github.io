@@ -100,6 +100,23 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
       <h3 data-sect="sales" data-sect-title="Магазин" style="margin-top:26px">Приём оплаты</h3>
       <div class="rows" id="payToggle"></div>
 
+      <h3 data-sect="sales" style="margin-top:32px">Подтверждение оплаты</h3>
+      <p class="dim" style="font-size:14px">
+        Автоматически — лицензия выдаётся сразу после того, как платёж
+        подтвердит сама ЮKassa (webhook перепроверяет это напрямую её ключом,
+        браузеру тут не доверяют). Вручную — платёж всё равно проверяется
+        так же, но лицензия не выдаётся сама: заказ попадает в очередь ниже,
+        и её выдаёт кнопка «Выдать».
+      </p>
+      <div class="rows" id="payAutoToggle"></div>
+
+      <h3 data-sect="sales" style="margin-top:32px">Ожидают подтверждения</h3>
+      <p class="dim" style="font-size:14px" id="pendingHint">
+        Появляется, только если подтверждение выше переключено на «вручную»:
+        оплаченные заказы, у которых ещё нет лицензии.
+      </p>
+      <div class="rows" id="pendingOrders"></div>
+
       <h3 data-sect="sales" style="margin-top:32px">Способы получить игру</h3>
       <p class="dim" style="font-size:14px">
         Выключённый способ исчезает со страницы скачивания и перестаёт
@@ -681,6 +698,89 @@ async function loadPayToggle() {
       await loadPayToggle();
     } catch (err) { say(humanError(err)); btn.disabled = false; }
   };
+}
+
+// Переключатель «оплата подтверждается автоматически / вручную». Значение
+// читается из той же app_settings, что и payments_enabled выше — если строки
+// payments_auto_grant ещё нет (миграция 0030 не накатана), getSettings её
+// просто не вернёт, и код ниже читает это как «включено»: тот же безопасный
+// умолчательный выбор, что и в вебхуке (см. supabase/functions/yookassa-webhook).
+async function loadPayAutoToggle() {
+  const s = await getSettings();
+  const auto = s.payments_auto_grant !== false;
+
+  $('payAutoToggle').innerHTML = `
+    <div class="row">
+      <div>
+        <b>${auto ? 'Автоматически' : 'Вручную'}</b>
+        <div class="dim" style="font-size:14px">
+          ${auto
+            ? 'Лицензия выдаётся сама, как только ЮKassa подтвердит платёж.'
+            : 'Оплаченные заказы ждут кнопки «Выдать» в очереди ниже.'}
+        </div>
+      </div>
+      <button class="btn ${auto ? 'quiet' : 'solid'}" id="payAutoBtn">
+        ${auto ? 'Переключить на вручную' : 'Переключить на автоматически'}
+      </button>
+    </div>`;
+
+  $('payAutoBtn').onclick = async () => {
+    const btn = $('payAutoBtn');
+    btn.disabled = true;
+    try {
+      await adminSetSetting('payments_auto_grant', !auto);
+      say(auto ? 'Подтверждение оплаты переключено на ручное.' : 'Подтверждение оплаты снова автоматическое.', 'ok');
+      await loadPayAutoToggle();
+      await loadPendingOrders();
+    } catch (err) { say(humanError(err)); btn.disabled = false; }
+  };
+}
+
+// Заказы, которые ЮKassa подтвердила, а лицензии по ним ещё нет — то есть
+// «вручную» с предыдущего блока и ждёт кнопки. При автоматическом режиме
+// список почти всегда пуст: заказ попадает сюда и тут же покидает список.
+async function loadPendingOrders() {
+  const box = $('pendingOrders');
+  let rows;
+  try {
+    const { data, error } = await supabase.rpc('admin_pending_orders');
+    if (error) throw error;
+    rows = data || [];
+  } catch (err) {
+    // Тот же смысл, что и у пустого списка, — не пугать пользователя ошибкой
+    // ради функции, которой ещё может не быть (миграция 0030 не накатана).
+    box.innerHTML = `<div class="row"><span class="dim">${esc(humanError(err))}</span></div>`;
+    return;
+  }
+
+  $('pendingHint').style.display = rows.length ? 'none' : '';
+  if (!rows.length) { box.innerHTML = ''; return; }
+
+  box.innerHTML = rows.map((o) => `
+    <div class="row" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <b>${esc(o.nickname || o.email)}</b>
+        <span class="dim" style="font-size:13px">${esc(o.email)}</span><br>
+        <span class="dim" style="font-size:13px">
+          ${esc(catalog.get(o.game_slug)?.title || o.game_slug)} ·
+          ${esc(money(o.amount, o.currency))}${o.promo_code ? ' · промокод ' + esc(o.promo_code) : ''} ·
+          ${o.paid_at ? esc(day(o.paid_at)) : '—'}
+        </span>
+      </div>
+      <button class="btn solid" data-confirm="${esc(o.id)}">Выдать</button>
+    </div>`).join('');
+
+  box.querySelectorAll('[data-confirm]').forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const { error } = await supabase.rpc('admin_confirm_order', { p_order_id: btn.dataset.confirm });
+        if (error) throw error;
+        say('Лицензия выдана.', 'ok');
+        await loadPendingOrders();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
 }
 
 // ── Сборки ──────────────────────────────────────────────────────────────
@@ -1649,7 +1749,8 @@ $('slSave').onclick = async () => {
 async function refresh() {
   await Promise.all([
     loadOrders(), loadPlayers(), loadEvents(),
-    loadPayToggle(), loadChannels(), loadReleases(), loadAnnouncements(),
+    loadPayToggle(), loadPayAutoToggle(), loadPendingOrders(),
+    loadChannels(), loadReleases(), loadAnnouncements(),
     loadBadges(), loadRegionRequests(), loadBans(), loadPromos(), loadSalesAdmin(),
   ]);
 }

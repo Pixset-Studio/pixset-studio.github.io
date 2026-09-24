@@ -102,9 +102,28 @@ Deno.serve(async (req) => {
       return OK({ ok: true, amount_mismatch: true });
     }
 
+    // Деньги действительно пришли — это факт независимо от режима подтверждения
+    // ниже, поэтому статус заказа обновляем всегда.
     await supabase.from('orders')
       .update({ status: 'paid', paid_at: new Date().toISOString() })
       .eq('id', order.id);
+
+    // Автоматическая выдача — как и было — либо ручная, через кнопку в
+    // админке (admin_confirm_order). Переключатель — app_settings.payments_
+    // auto_grant. Строка может отсутствовать (миграция ещё не накатана) или
+    // значение может быть непривычного типа — в обоих случаях по умолчанию
+    // ведём себя как раньше (автоматически), чтобы включение этой миграции
+    // само по себе не поставило продажи на паузу.
+    const { data: settingRow } = await supabase
+      .from('app_settings').select('value').eq('key', 'payments_auto_grant').maybeSingle();
+    const rawSetting = settingRow?.value;
+    const autoGrant = !(rawSetting === false || rawSetting === 'false');
+
+    if (!autoGrant) {
+      // Заказ остаётся в очереди «Ожидают подтверждения» в админке: лицензию
+      // выдаст admin_confirm_order по нажатию кнопки владельцем студии.
+      return OK({ ok: true, paid: true, granted: false, awaiting_manual_confirm: true });
+    }
 
     // Повторная доставка того же уведомления не должна ломать выдачу —
     // отсюда onConflict: лицензия просто остаётся активной.

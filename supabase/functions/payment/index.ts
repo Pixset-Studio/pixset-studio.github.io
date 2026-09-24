@@ -28,13 +28,25 @@ const json = (body: unknown, status = 200) =>
     status, headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-/** Куда ЮKassa вернёт игрока после оплаты. */
-function returnUrl(gameSlug: string) {
+/** Куда ЮKassa вернёт игрока после оплаты.
+ *
+ * По умолчанию — специальная страница «Спасибо за покупку»: в навигации её
+ * нет и в поиск она не попадает (noindex), а открывшись, она сверяет заказ
+ * по ?order= с базой и показывает что-то только тогда, когда заказ
+ * действительно принадлежит вошедшему игроку. Просто ссылку без реального
+ * заказа за ней открыть можно, но показывать там нечего — страница отправит
+ * на витрину.
+ *
+ * YOOKASSA_RETURN_URL в секретах — override, если нужна другая страница;
+ * order_id к нему не приписывается, потому что чужая страница может не
+ * ожидать такого параметра. */
+function returnUrl(gameSlug: string, orderId: string) {
   const custom = Deno.env.get('YOOKASSA_RETURN_URL');
   if (custom) return custom;
-  return gameSlug === 'byte-blaster'
-    ? 'https://pixset-studio.github.io/byte-blaster/account/'
-    : 'https://pixset-studio.github.io/account/';
+  const base = gameSlug === 'byte-blaster'
+    ? 'https://pixset-studio.github.io/byte-blaster/thank-you/'
+    : 'https://pixset-studio.github.io/thank-you/';
+  return `${base}?order=${encodeURIComponent(orderId)}`;
 }
 
 Deno.serve(async (req) => {
@@ -113,7 +125,7 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       amount: { value, currency: 'RUB' },
       capture: true,                       // списываем сразу, без двухстадийности
-      confirmation: { type: 'redirect', return_url: returnUrl(order.game_slug) },
+      confirmation: { type: 'redirect', return_url: returnUrl(order.game_slug, order.id) },
       description: `${game?.title ?? order.game_slug} — лицензия Pixset Studio`,
       // По metadata вебхук находит заказ. Это надёжнее, чем поиск по почте.
       metadata: { order_id: order.id, user_id: user.id, game_slug: order.game_slug },
