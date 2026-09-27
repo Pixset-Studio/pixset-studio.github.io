@@ -226,6 +226,47 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
         </h3>
         <div class="lib" id="lib"></div>
 
+        <!-- ── Баланс и баллы ──────────────────────────────────────────────
+             Баланс — пополняемый «магазинный кредит»: закинул один раз,
+             дальше расплачиваешься им за любую игру каталога без нового
+             платежа. Баллы — 10% с КАЖДОЙ покупки игры (не с пополнения) —
+             списываются скидкой на будущую покупку, на странице оплаты. -->
+        <h3 data-sect="games" style="margin-top:26px" id="wallet">
+          <span data-l="ru">Баланс и баллы</span><span data-l="en">Balance and points</span>
+        </h3>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:14px">
+          <div>
+            <div class="dim" style="font-size:12px"><span data-l="ru">БАЛАНС</span><span data-l="en">BALANCE</span></div>
+            <div class="mono" id="walletBalance" style="font-size:20px;color:var(--y)">—</div>
+          </div>
+          <div>
+            <div class="dim" style="font-size:12px"><span data-l="ru">БАЛЛЫ</span><span data-l="en">POINTS</span></div>
+            <div class="mono" id="pointsBalance" style="font-size:20px;color:var(--y)">—</div>
+          </div>
+        </div>
+        <p class="note">
+          <span data-l="ru">Баланс тратится только на игры каталога — вывести или передать другому нельзя. Баллы — бонус 10% с каждой покупки игры (пополнение баллов не даёт); списать их можно скидкой на <a href="/byte-blaster/buy/">странице покупки</a>.</span>
+          <span data-l="en">Balance can only be spent on games in the catalog — it can't be withdrawn or transferred. Points are a 10% bonus on every game purchase (topping up doesn't earn points); redeem them as a discount on the <a href="/byte-blaster/buy/">purchase page</a>.</span>
+        </p>
+        <div id="topupBox" hidden>
+          <div class="field" style="max-width:240px">
+            <label for="topupAmount"><span data-l="ru">ПОПОЛНИТЬ, ₽</span><span data-l="en">TOP UP, ₽</span></label>
+            <input type="number" id="topupAmount" min="100" step="50" value="500" inputmode="numeric">
+          </div>
+          <button class="btn small" id="topupBtn">
+            <span data-l="ru">ПОПОЛНИТЬ БАЛАНС</span><span data-l="en">TOP UP BALANCE</span>
+          </button>
+          <p class="note" style="margin-top:6px">
+            <span data-l="ru">Минимум 100 ₽. Оплата — через ЮKassa, как при покупке игры.</span>
+            <span data-l="en">Minimum 100 ₽. Paid through YooKassa, same as buying a game.</span>
+          </p>
+        </div>
+        <p class="note" id="topupCurrencyNote" hidden>
+          <span data-l="ru">Пополнение баланса пока доступно только рублёвым аккаунтам.</span>
+          <span data-l="en">Topping up is currently only available for RUB accounts.</span>
+        </p>
+        <div class="msg" id="walletMsg"></div>
+
         <!-- ── Промокод ────────────────────────────────────────────────────
              Здесь активируются коды, дающие саму игру — насовсем или на срок.
              Скидочные коды сюда не годятся: они работают при оплате, и об этом
@@ -424,6 +465,7 @@ import {
   getMyBadges, pinBadge, setCountryVisibility,
   requestRegionChange, cancelRegionRequest, getMyRegionRequest,
   humanError, NICKNAME_RE,
+  getWallet, getPoints, startWalletTopup,
 } from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
 import {
   badgeRowHtml, badgeChipHtml, paintNickBadges, forgetNickBadges,
@@ -437,6 +479,17 @@ const hide = (el) => { el.hidden = true; };
 /** Двуязычная вставка: переключатель языка в шапке работает и для неё. */
 const bi = (ru, en) =>
   `<span data-l="ru">${ru}</span><span data-l="en">${en}</span>`;
+
+/** Копейки/центы → «150 ₽» / «$2.00». Без деления $1.50 показывался бы как
+ *  «$150.00» — так же считает страница покупки. */
+function money(cents, cur) {
+  const v = cents / 100;
+  if (cur === 'RUB') {
+    return (Number.isInteger(v) ? v.toLocaleString('ru-RU')
+      : v.toLocaleString('ru-RU', { minimumFractionDigits: 2 })) + ' ₽';
+  }
+  return '$' + v.toFixed(2);
+}
 
 /* Простой текст на языке страницы.
    bi() возвращает РАЗМЕТКУ — оба языка сразу, лишний прячется через CSS. Это
@@ -1033,6 +1086,29 @@ $('deleteAcc').onclick = (e) => {
   });
 };
 
+// ── Баланс и баллы ──────────────────────────────────────────────────────
+async function renderWallet(user) {
+  let currency = 'RUB';
+  try {
+    const profile = await getProfile(user.id);
+    if (profile.currency) currency = profile.currency;
+  } catch { /* оставим RUB по умолчанию — тот же выбор, что и в других местах */ }
+
+  try {
+    const [wallet, points] = await Promise.all([getWallet(), getPoints()]);
+    $('walletBalance').textContent = money(wallet.balance, currency);
+    $('pointsBalance').textContent = money(points.balance, currency);
+  } catch {
+    $('walletBalance').textContent = '—';
+    $('pointsBalance').textContent = '—';
+  }
+
+  // Пополнение сейчас доступно только рублёвым аккаунтам — так же, как
+  // обычная оплата: ЮKassa принимает только российские карты.
+  if (currency === 'RUB') { show($('topupBox')); hide($('topupCurrencyNote')); }
+  else { hide($('topupBox')); show($('topupCurrencyNote')); }
+}
+
 // ── Профиль ─────────────────────────────────────────────────────────────
 async function renderProfile(user) {
   $('mail').textContent = user.email;
@@ -1067,6 +1143,7 @@ async function renderProfile(user) {
   renderDevices();
   renderFriends();
   renderOrders();
+  renderWallet(user);
 }
 
 /** Лицензии на аккаунте и выбор игры для промокода. */
@@ -1173,6 +1250,19 @@ async function redeemPromo() {
   await renderLibrary();
 }
 
+$('topupBtn').onclick = (e) => busy(e.currentTarget, async () => {
+  clear($('walletMsg'));
+  const rub = Number($('topupAmount').value);
+  if (!rub || rub < 100) {
+    say($('walletMsg'), 'Минимум пополнения — 100 ₽.', 'The minimum top-up is 100 ₽.');
+    return;
+  }
+  try {
+    const { payment_url } = await startWalletTopup(Math.round(rub * 100));
+    location.href = payment_url;             // дальше — ЮKassa, как при покупке игры
+  } catch (err) { fail($('walletMsg'), err); }
+});
+
 $('promoBtn').onclick = (e) => busy(e.currentTarget, async () => {
   clear($('promoMsg'));
   try { await redeemPromo(); }
@@ -1200,15 +1290,34 @@ async function renderOrders() {
   $('orders').innerHTML = orders.length
     ? orders.map((o) => {
         const s = STATUS[o.status] || [o.status, o.status];
-        // orders.amount хранится в копейках/центах — так его пишет сервер и так
-        // же делит функция оплаты. Без деления $1.50 показывался как «$150.00».
-        const sum = o.currency === 'RUB'
-          ? Math.round(o.amount / 100).toLocaleString('ru-RU') + ' ₽'
-          : '$' + (Number(o.amount) / 100).toFixed(2);
+        const sum = money(o.amount, o.currency);
+
+        // Пополнение баланса — своя иконка вместо иконки игры (её тут и нет,
+        // game_slug у такого заказа пустой).
+        if (o.kind === 'wallet_topup') {
+          return `<div class="item">
+            <span style="font-size:22px;width:36px;text-align:center;flex-shrink:0">💳</span>
+            <b style="flex:1;min-width:0">${bi('Пополнение баланса', 'Balance top-up')}</b>
+            <span class="dim">${sum}</span>
+            <span class="dim">${new Date(o.created_at).toLocaleDateString()}</span>
+            <span class="badge">${bi(s[0], s[1])}</span>
+          </div>`;
+        }
+
         const g = catalog.get(o.game_slug) || { title: o.game_slug };
+        // Баллы — списанные (скидка на эту покупку) и начисленные (кешбэк
+        // с неё) — видны прямо в строке заказа, а не только в общем балансе.
+        const ptsBits = [];
+        if (o.points_used > 0) ptsBits.push('−' + money(o.points_used, o.currency) + ' ' + bi('баллами', 'in points'));
+        if (o.points_earned > 0) ptsBits.push('+' + money(o.points_earned, o.currency) + ' ' + bi('баллов', 'points earned'));
+        const pts = ptsBits.length
+          ? `<div class="dim" style="font-size:12px">${ptsBits.join(' · ')}</div>` : '';
         return `<div class="item">
           ${gameIconHtml(g.icon_url, g.title)}
-          <b style="flex:1;min-width:0">${sum}</b>
+          <div style="flex:1;min-width:0">
+            <b>${sum}</b>
+            ${pts}
+          </div>
           <span class="dim">${new Date(o.created_at).toLocaleDateString()}</span>
           <span class="badge">${bi(s[0], s[1])}</span>
         </div>`;

@@ -98,6 +98,23 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
     <div class="promo-res" id="promoRes"></div>
   </div>
 
+  <!-- Баллы — бонус 10% с прошлых покупок игр (не с пополнений баланса).
+       Скидывают цену сверху распродажи/промокода, а не вместо них. -->
+  <div class="promo" id="pointsBox" hidden style="margin-top:10px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;justify-content:center">
+      <input type="checkbox" id="pointsToggle">
+      <span id="pointsLabel"></span>
+    </label>
+  </div>
+  <p class="dim" id="pointsEarnHint" style="font-size:13px" hidden></p>
+
+  <!-- Кошелёк: если баланса хватает на всю сумму, платёж не нужен вовсе —
+       ни ЮKassa, ни ожидания. -->
+  <div id="walletBox" hidden style="margin-top:6px">
+    <button type="button" class="btn" id="walletBtn"></button>
+    <p class="dim" id="walletNote" style="font-size:13px;margin-top:6px"></p>
+  </div>
+
   <div class="btns">
     <button class="btn primary" id="buyBtn"><span data-l="ru">КУПИТЬ</span><span data-l="en">BUY NOW</span></button>
     <a class="btn" href="/byte-blaster/game/">
@@ -225,6 +242,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 import {
   supabase, getGames, getEntitlements, getProfile, startPayment, getSettings,
   detectCountry, formatPrice, humanError, promoPreview, promoRedeem,
+  getWallet, getPoints, payWithWallet,
 } from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
 import { loadSales, salePriceHtml, saleBadgeHtml } from '/byte-blaster/assets/pixset-sales.js';
 
@@ -253,16 +271,95 @@ let appliedPromo = null;
 // Распродажа на эту игру (карта «игра:валюта»). Цену и срок отдаёт база.
 let salesMap = new Map();
 
+// Баланс и баллы — только у вошедших. usePoints — хочет ли игрок списать их
+// сейчас; baseAmountForPoints — цена ДО скидки баллами (после распродажи или
+// промокода — что уже применено), чтобы посчитать скидку и итог тем же
+// способом, каким её посчитает create_order на самой оплате.
+let wallet = { balance: 0 };
+let points = { balance: 0 };
+let usePoints = false;
+let baseAmountForPoints = null;
+let currentGame = null;
+
+function pointsDiscount() {
+  if (!usePoints || !baseAmountForPoints) return 0;
+  return Math.min(points.balance, Math.max(0, baseAmountForPoints - 100));
+}
+
+/** Показывает переключатель баллов, подсказку «начислим N» и кнопку
+ *  «Оплатить с баланса» — пересчитывается при любой смене цены. */
+function renderPointsAndWallet() {
+  const discount = pointsDiscount();
+  const finalAmount = baseAmountForPoints == null ? null : baseAmountForPoints - discount;
+
+  if (session && points.balance > 0 && baseAmountForPoints != null) {
+    $('pointsBox').hidden = false;
+    $('pointsToggle').checked = usePoints;
+    const previewDiscount = usePoints ? discount
+      : Math.min(points.balance, Math.max(0, baseAmountForPoints - 100));
+    $('pointsLabel').innerHTML = bi(
+      `Списать баллы (${esc(money(points.balance, currency))}) — скидка ${esc(money(previewDiscount, currency))}`,
+      `Redeem points (${esc(money(points.balance, currency))}) — ${esc(money(previewDiscount, currency))} off`);
+  } else {
+    $('pointsBox').hidden = true;
+  }
+
+  if (session && finalAmount != null) {
+    const earn = Math.floor(finalAmount * 0.10);
+    $('pointsEarnHint').hidden = earn <= 0;
+    if (earn > 0) {
+      $('pointsEarnHint').innerHTML = bi(
+        `После покупки начислим ${esc(money(earn, currency))} баллами.`,
+        `You'll earn ${esc(money(earn, currency))} in points after this purchase.`);
+    }
+  } else {
+    $('pointsEarnHint').hidden = true;
+  }
+
+  if (session && currency === 'RUB' && wallet.balance > 0 && finalAmount != null) {
+    $('walletBox').hidden = false;
+    if (wallet.balance >= finalAmount) {
+      $('walletBtn').disabled = false;
+      $('walletBtn').innerHTML = bi(
+        `ОПЛАТИТЬ С БАЛАНСА · ${esc(money(finalAmount, currency))}`,
+        `PAY FROM BALANCE · ${esc(money(finalAmount, currency))}`);
+      $('walletNote').innerHTML = bi(
+        `На балансе ${esc(money(wallet.balance, currency))}. Без ЮKassa — игра откроется сразу.`,
+        `Balance: ${esc(money(wallet.balance, currency))}. No YooKassa — the game unlocks right away.`);
+    } else {
+      $('walletBtn').disabled = true;
+      $('walletBtn').innerHTML = bi('ОПЛАТИТЬ С БАЛАНСА', 'PAY FROM BALANCE');
+      $('walletNote').innerHTML = bi(
+        `На балансе ${esc(money(wallet.balance, currency))} — не хватает ${esc(money(finalAmount - wallet.balance, currency))}. ` +
+          `<a href="/byte-blaster/account/#wallet">Пополнить</a>`,
+        `Balance: ${esc(money(wallet.balance, currency))} — ${esc(money(finalAmount - wallet.balance, currency))} short. ` +
+          `<a href="/byte-blaster/account/#wallet">Top up</a>`);
+    }
+  } else {
+    $('walletBox').hidden = true;
+  }
+}
+
 /** Цена и подпись под ней: с распродажей — старая зачёркнута, рядом плашка. */
 function paintPrice(game) {
+  currentGame = game;
+  // Промокод, если применён, сам держит свою цену в $('price') и сам обновляет
+  // baseAmountForPoints (applyPromo) — эта функция его не трогает, чтобы не
+  // затирать более точную (уже проверенную сервером) скидку кода.
+  if (appliedPromo) { renderPointsAndWallet(); return; }
+
   const sale = salesMap.get(GAME + ':' + currency);
   if (!sale) {
     $('price').textContent = formatPrice(game, currency) || '—';
     $('priceNote').innerHTML = bi('навсегда, без подписок', 'forever, no subscriptions');
+    baseAmountForPoints = currency === 'RUB' ? game.price_rub : game.price_usd;
+    renderPointsAndWallet();
     return;
   }
   $('price').innerHTML = salePriceHtml(sale, currency);
   $('priceNote').innerHTML = `<b>${saleBadgeHtml(sale)}</b> · ` + bi('навсегда, без подписок', 'forever, no subscriptions');
+  baseAmountForPoints = sale.price_sale;
+  renderPointsAndWallet();
 }
 
 function setBuyLabel(ru, en) {
@@ -498,6 +595,8 @@ async function applyPromo() {
       `promo code ${esc(code)} · ${esc(off)}`);
     promoSay(`Промокод принят: ${off}. Скидка применится при оплате.`,
              `Code accepted: ${off}. The discount applies at checkout.`, 'ok');
+    baseAmountForPoints = res.amount;
+    renderPointsAndWallet();
   } catch (err) {
     promoSay(esc(humanError(err)), 'Could not check the code. Please try again.', 'err');
   } finally {
@@ -550,6 +649,29 @@ async function buy() {
 
 $('buyBtn').onclick = buy;
 
+$('pointsToggle').onchange = () => {
+  usePoints = $('pointsToggle').checked;
+  if (currentGame) paintPrice(currentGame);
+  else renderPointsAndWallet();
+};
+
+async function payWallet() {
+  const btn = $('walletBtn');
+  btn.disabled = true;
+  const label = btn.innerHTML;
+  btn.innerHTML = bi('ОПЛАЧИВАЕМ…', 'PAYING…');
+  try {
+    const { order_id } = await payWithWallet(GAME, appliedPromo, usePoints);
+    location.href = '/byte-blaster/thank-you/?order=' + encodeURIComponent(order_id);
+  } catch (err) {
+    say(humanError(err), 'Could not pay from balance. Please try again later.');
+    btn.disabled = false;
+    btn.innerHTML = label;
+  }
+}
+$('walletBtn').onclick = payWallet;
+
+
 const [{ data }, loadedSettings] = await Promise.all([
   supabase.auth.getSession(),
   getSettings(),
@@ -562,6 +684,10 @@ if (session) {
     const profile = await getProfile(session.user.id);
     if (profile.currency) currency = profile.currency;
   } catch { /* оставим предварительную цену */ }
+  // Баланс и баллы не критичны для показа цены — если запрос не удался,
+  // страница просто не покажет эти блоки, но купить игру всё равно можно.
+  try { [wallet, points] = await Promise.all([getWallet(), getPoints()]); }
+  catch { /* оставим нули по умолчанию */ }
 }
 await render();
 

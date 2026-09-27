@@ -35,12 +35,13 @@ const json = (body: unknown, status = 200) =>
  * по ?order= с базой и показывает что-то только тогда, когда заказ
  * действительно принадлежит вошедшему игроку. Просто ссылку без реального
  * заказа за ней открыть можно, но показывать там нечего — страница отправит
- * на витрину.
+ * на витрину. Пополнение баланса ведёт туда же: страница сама разбирает вид
+ * заказа (order.kind) и показывает нужный текст.
  *
  * YOOKASSA_RETURN_URL в секретах — override, если нужна другая страница;
  * order_id к нему не приписывается, потому что чужая страница может не
  * ожидать такого параметра. */
-function returnUrl(gameSlug: string, orderId: string) {
+function returnUrl(gameSlug: string | null, orderId: string) {
   const custom = Deno.env.get('YOOKASSA_RETURN_URL');
   if (custom) return custom;
   const base = gameSlug === 'byte-blaster'
@@ -69,10 +70,11 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authError } = await admin.auth.getUser(accessToken);
   if (authError || !user) return json({ error: 'invalid_token' }, 401);
 
-  let body: { game_slug?: string; promo_code?: string } = {};
+  let body: { game_slug?: string; promo_code?: string; use_points?: boolean; topup_amount?: number } = {};
   try { body = await req.json(); } catch { /* сработает проверка ниже */ }
   const gameSlug = body.game_slug;
-  if (!gameSlug) return json({ error: 'no_game' }, 400);
+  const topupAmount = body.topup_amount;
+  if (!gameSlug && !topupAmount) return json({ error: 'no_game' }, 400);
 
   // Промокод проверяет база: негодный код она просто игнорирует, и покупка
   // идёт по полной цене. Ронять оплату из-за опечатки в коде нельзя.
@@ -81,22 +83,26 @@ Deno.serve(async (req) => {
     : null;
 
   // Заказ создаём от имени игрока: RPC сам проверит, что игра не куплена,
-  // и подставит цену его региона.
+  // и подставит цену его региона (или, для пополнения, проверит валюту и
+  // границы суммы).
   const asUser = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { global: { headers: { Authorization: `Bearer ${accessToken}` } } },
   );
 
-  const { data: orderId, error: orderError } = await asUser.rpc('create_order', {
-    p_game_slug: gameSlug,
-    p_promo: promo,
-  });
+  const { data: orderId, error: orderError } = gameSlug
+    ? await asUser.rpc('create_order', {
+        p_game_slug: gameSlug,
+        p_promo: promo,
+        p_use_points: body.use_points === true,
+      })
+    : await asUser.rpc('create_wallet_topup', { p_amount: Math.round(Number(topupAmount)) });
   if (orderError) return json({ error: orderError.message }, 400);
 
   const { data: order } = await admin
     .from('orders')
-    .select('id, currency, amount, amount_full, promo_code, game_slug')
+    .select('id, currency, amount, amount_full, promo_code, game_slug, kind')
     .eq('id', orderId).single();
   if (!order) return json({ error: 'order_not_found' }, 500);
 
@@ -107,8 +113,13 @@ Deno.serve(async (req) => {
   // Сумма в рублях с копейками: в базе она хранится в копейках.
   const value = (order.amount / 100).toFixed(2);
 
-  const { data: game } = await admin
-    .from('games').select('title').eq('slug', order.game_slug).single();
+  let fullDescription: string;
+  if (order.kind === 'wallet_topup') {
+    fullDescription = `Пополнение баланса Pixset Studio на ${value} ₽`;
+  } else {
+    const { data: game } = await admin.from('games').select('title').eq('slug', order.game_slug).single();
+    fullDescription = `${game?.title ?? order.game_slug} — лицензия Pixset Studio`;
+  }
 
   const res = await fetch(YOOKASSA_URL, {
     method: 'POST',
@@ -126,9 +137,9 @@ Deno.serve(async (req) => {
       amount: { value, currency: 'RUB' },
       capture: true,                       // списываем сразу, без двухстадийности
       confirmation: { type: 'redirect', return_url: returnUrl(order.game_slug, order.id) },
-      description: `${game?.title ?? order.game_slug} — лицензия Pixset Studio`,
+      description: fullDescription,
       // По metadata вебхук находит заказ. Это надёжнее, чем поиск по почте.
-      metadata: { order_id: order.id, user_id: user.id, game_slug: order.game_slug },
+      metadata: { order_id: order.id, user_id: user.id, game_slug: order.game_slug ?? '' },
     }),
   });
 

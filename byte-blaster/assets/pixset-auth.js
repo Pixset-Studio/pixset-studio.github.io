@@ -465,7 +465,12 @@ export async function createOrder(gameSlug, promoCode = null) {
  * Создаёт заказ и платёж в ЮKassa, возвращает ссылку на оплату.
  * Цену и валюту считает сервер по региону аккаунта.
  */
-export async function startPayment(gameSlug, promoCode = null) {
+/**
+ * `usePoints` — списать доступные баллы скидкой на эту покупку (см.
+ * create_order в 0031_wallet_and_points.sql). Реальную сумму скидки считает
+ * база, не эта функция: подменить её с клиента нельзя.
+ */
+export async function startPayment(gameSlug, promoCode = null, usePoints = false) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('not_authenticated');
 
@@ -476,7 +481,113 @@ export async function startPayment(gameSlug, promoCode = null) {
       'Content-Type': 'application/json',
       apikey: SUPABASE_KEY,
     },
-    body: JSON.stringify({ game_slug: gameSlug, promo_code: promoCode || null }),
+    body: JSON.stringify({ game_slug: gameSlug, promo_code: promoCode || null, use_points: !!usePoints }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.payment_url) {
+    const err = new Error(data.error || 'payment_failed');
+    err.details = data;
+    throw err;
+  }
+  return data;
+}
+
+/**
+ * Оплата с баланса кошелька — без ЮKassa: сумма уже наша, ждать нечего.
+ * create_order считает цену (промокод/распродажа/баллы — как при обычной
+ * оплате), pay_order_with_wallet списывает баланс и тут же выдаёт лицензию.
+ * Бросает ошибку с человекочитаемым текстом (её и показывает humanError),
+ * если баланса не хватает или что-то другое пошло не так.
+ */
+export async function payWithWallet(gameSlug, promoCode = null, usePoints = false) {
+  const { data: orderId, error: orderErr } = await supabase.rpc('create_order', {
+    p_game_slug: gameSlug,
+    p_promo: promoCode || null,
+    p_use_points: !!usePoints,
+  });
+  if (orderErr) throw orderErr;
+
+  const { error: payErr } = await supabase.rpc('pay_order_with_wallet', { p_order_id: orderId });
+  if (payErr) throw payErr;
+
+  return { order_id: orderId };
+}
+
+/** Баланс кошелька в копейках/центах — null, если строки ещё нет (ничего не
+ *  пополняли). RLS отдаёт только свою запись, чужую прочитать нельзя. */
+export async function getWallet() {
+  const { data, error } = await supabase.from('wallets').select('balance, updated_at').maybeSingle();
+  if (error) throw error;
+  return data ?? { balance: 0, updated_at: null };
+}
+
+/**
+ * Пришло ли зачисление именно по ЭТОМУ заказу пополнения — точный сигнал
+ * для страницы «Спасибо за покупку»: смотреть на дельту баланса ненадёжно
+ * (сравнивать не с чем, если зачисление уже произошло к первому опросу), а
+ * по order_id однозначно.
+ */
+export async function walletTopupLanded(orderId) {
+  const { data, error } = await supabase
+    .from('wallet_transactions')
+    .select('id')
+    .eq('order_id', orderId)
+    .eq('kind', 'topup')
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+/** Баланс баллов — тоже в минимальных единицах валюты аккаунта (1 балл =
+ *  1 копейка/цент скидки), а не в «штуках»: так его проще сравнивать с
+ *  суммой заказа при списании. */
+export async function getPoints() {
+  const { data, error } = await supabase.from('points').select('balance, updated_at').maybeSingle();
+  if (error) throw error;
+  return data ?? { balance: 0, updated_at: null };
+}
+
+/** История начислений и списаний баланса — для страницы аккаунта. */
+export async function getWalletHistory(limit = 30) {
+  const { data, error } = await supabase
+    .from('wallet_transactions')
+    .select('id, kind, amount, balance_after, order_id, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+/** То же для баллов. */
+export async function getPointsHistory(limit = 30) {
+  const { data, error } = await supabase
+    .from('points_transactions')
+    .select('id, kind, amount, balance_after, order_id, note, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Пополнение баланса. Сумма — в копейках (1 ₽ = 100). Сейчас доступно только
+ * рублёвым аккаунтам — так же, как обычная оплата (ЮKassa не принимает
+ * нерублёвые платежи); create_wallet_topup сам откажет с понятным текстом,
+ * если валюта другая или сумма вне допустимых границ.
+ */
+export async function startWalletTopup(amountRubKopecks) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('not_authenticated');
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/payment`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+    },
+    body: JSON.stringify({ topup_amount: amountRubKopecks }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -491,7 +602,7 @@ export async function startPayment(gameSlug, promoCode = null) {
 export async function getMyOrders() {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, game_slug, amount, amount_full, promo_code, currency, status, created_at')
+    .select('id, kind, game_slug, amount, amount_full, promo_code, points_used, points_earned, currency, status, created_at')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data;
@@ -505,7 +616,7 @@ export async function getMyOrders() {
 export async function getOrder(orderId) {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, game_slug, amount, amount_full, currency, status, paid_at')
+    .select('id, kind, game_slug, amount, amount_full, currency, status, paid_at')
     .eq('id', orderId)
     .maybeSingle();
   if (error) throw error;

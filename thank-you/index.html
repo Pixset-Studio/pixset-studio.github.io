@@ -141,7 +141,7 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
 // него своя страница на его собственном сайте (byte-blaster/thank-you/);
 // здесь — любая другая игра каталога, поэтому название и ссылка берутся из
 // games по game_slug заказа, а не зашиты в текст.
-import { getSession, getOrder, getEntitlements, getGames } from '/assets/pixset-auth.js?v=822f1690';
+import { getSession, getOrder, getEntitlements, getGames, walletTopupLanded } from '/assets/pixset-auth.js?v=822f1690';
 
 const $ = (id) => document.getElementById(id);
 const show = (id) => { $(id).hidden = false; };
@@ -187,6 +187,31 @@ function empty(titleRu, titleEn, textRu, textEn) {
         'Если это неожиданность — напишите в поддержку.',
         'If this is unexpected, please contact support.',
       );
+      return;
+    }
+
+    if (order.kind === 'wallet_topup') {
+      try {
+        // order.status может стать paid раньше, чем реально произойдёт
+        // зачисление — например, пока владелец студии не нажал «Выдать» в
+        // ручном режиме подтверждения. Смотрим на сам факт зачисления по
+        // этому заказу, а не гадаем по дельте баланса.
+        if (await walletTopupLanded(order.id)) {
+          $('tyChecking').hidden = true; $('tyWaiting').hidden = true;
+          $('tyDoneText').innerHTML =
+            '<span data-l="ru">Баланс пополнен. Теперь им можно расплатиться за любую игру каталога.</span>' +
+            '<span data-l="en">Your balance is topped up. Use it to pay for any game in the catalog.</span>';
+          $('tyGameLink').href = '/store';
+          $('tyGameLink').innerHTML =
+            '<span data-l="ru">В МАГАЗИН</span><span data-l="en">GO TO STORE</span>';
+          show('tyDone');
+          return;
+        }
+      } catch (e) { /* попробуем на следующем шаге опроса */ }
+      $('tyChecking').hidden = true;
+      show('tyWaiting');
+      if (!warnedLong && Date.now() - started > TIMEOUT_MS) { warnedLong = true; $('tyWaitingLong').hidden = false; }
+      setTimeout(poll, 3000);
       return;
     }
 

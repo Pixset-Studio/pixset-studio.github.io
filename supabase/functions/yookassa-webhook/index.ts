@@ -66,10 +66,10 @@ Deno.serve(async (req) => {
 
   // Заказ ищем по metadata, которую сами положили при создании платежа.
   let order:
-    | { id: string; user_id: string; game_slug: string; amount: number; promo_code: string | null }
+    | { id: string; user_id: string; game_slug: string | null; amount: number; promo_code: string | null; kind: string }
     | null = null;
   const orderId = payment?.metadata?.order_id ? String(payment.metadata.order_id) : null;
-  const ORDER_FIELDS = 'id, user_id, game_slug, amount, promo_code';
+  const ORDER_FIELDS = 'id, user_id, game_slug, amount, promo_code, kind';
 
   if (orderId) {
     const { data } = await supabase
@@ -120,32 +120,19 @@ Deno.serve(async (req) => {
     const autoGrant = !(rawSetting === false || rawSetting === 'false');
 
     if (!autoGrant) {
-      // Заказ остаётся в очереди «Ожидают подтверждения» в админке: лицензию
-      // выдаст admin_confirm_order по нажатию кнопки владельцем студии.
+      // Заказ остаётся в очереди «Ожидают подтверждения» в админке: выдаст
+      // её admin_confirm_order по нажатию кнопки владельцем студии.
       return OK({ ok: true, paid: true, granted: false, awaiting_manual_confirm: true });
     }
 
-    // Повторная доставка того же уведомления не должна ломать выдачу —
-    // отсюда onConflict: лицензия просто остаётся активной.
-    //
-    // expires_at сбрасывается намеренно: покупка даёт игру навсегда, и если у
-    // игрока была временная лицензия по промокоду, оплата должна снять срок,
-    // а не оставить купленное истекающим.
-    await supabase.from('licenses').upsert({
-      user_id: order.user_id,
-      game_slug: order.game_slug,
-      order_id: order.id,
-      source: 'purchase',
-      revoked_at: null,
-      expires_at: null,
-    }, { onConflict: 'user_id,game_slug' });
-
-    // Промокод засчитываем только теперь: до оплаты он был лишь обещанием
-    // скидки, и брошенные заказы не должны съедать лимит использований.
-    // Функция сама молчит, если кода не было или его уже засчитали.
-    if (order.promo_code) {
-      const { error: promoErr } = await supabase.rpc('promo_mark_used', { p_order_id: order.id });
-      if (promoErr) console.error('promo_mark_used failed', order.id, promoErr.message);
+    // Дальше — общая для покупки игры и пополнения баланса функция: сама
+    // разбирает order.kind (лицензия + баллы либо зачисление на баланс) и
+    // сама идемпотентна, так что повторная доставка того же уведомления не
+    // приведёт к двойной выдаче.
+    const { error: grantErr } = await supabase.rpc('grant_paid_order', { p_order_id: order.id });
+    if (grantErr) {
+      console.error('grant_paid_order failed', order.id, grantErr.message);
+      return OK({ ok: true, granted: false, grant_error: grantErr.message });
     }
 
     return OK({ ok: true, granted: true });
@@ -153,9 +140,11 @@ Deno.serve(async (req) => {
 
   if (refunded) {
     await supabase.from('orders').update({ status: 'refunded' }).eq('id', order.id);
-    await supabase.from('licenses')
-      .update({ revoked_at: new Date().toISOString() })
-      .eq('user_id', order.user_id).eq('game_slug', order.game_slug);
+    // Снимает лицензию (покупка) или списывает обратно зачисленный баланс
+    // (пополнение), а заодно отыгрывает начисленные и потраченные баллы —
+    // см. комментарий в самой функции.
+    const { error: revokeErr } = await supabase.rpc('revoke_paid_order', { p_order_id: order.id });
+    if (revokeErr) console.error('revoke_paid_order failed', order.id, revokeErr.message);
 
     return OK({ ok: true, revoked: true });
   }

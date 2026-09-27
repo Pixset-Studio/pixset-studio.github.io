@@ -762,7 +762,7 @@ async function loadPendingOrders() {
         <b>${esc(o.nickname || o.email)}</b>
         <span class="dim" style="font-size:13px">${esc(o.email)}</span><br>
         <span class="dim" style="font-size:13px">
-          ${esc(catalog.get(o.game_slug)?.title || o.game_slug)} ·
+          ${o.kind === 'wallet_topup' ? '💳 Пополнение баланса' : esc(catalog.get(o.game_slug)?.title || o.game_slug)} ·
           ${esc(money(o.amount, o.currency))}${o.promo_code ? ' · промокод ' + esc(o.promo_code) : ''} ·
           ${o.paid_at ? esc(day(o.paid_at)) : '—'}
         </span>
