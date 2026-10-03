@@ -62,7 +62,12 @@ Deno.serve(async (req) => {
 
   const status = String(payment.status ?? '');
   const paid = status === 'succeeded' && payment.paid === true;
-  const refunded = status === 'canceled' || Number(payment?.refunded_amount?.value ?? 0) > 0;
+  // canceled — платёж так и не был оплачен (игрок ушёл, банк отказал, истёк срок);
+  // refunded — деньги были получены и возвращены. Это разные истории: у отменённого
+  // нечего откатывать, надо просто освободить заказ и вернуть зарезервированные
+  // баллы, а «возврат» в истории покупок игроку показывать незачем.
+  const canceled = status === 'canceled';
+  const refunded = !canceled && Number(payment?.refunded_amount?.value ?? 0) > 0;
 
   // Заказ ищем по metadata, которую сами положили при создании платежа.
   let order:
@@ -136,6 +141,17 @@ Deno.serve(async (req) => {
     }
 
     return OK({ ok: true, granted: true });
+  }
+
+  if (canceled) {
+    // _close_pending_order сам проверяет, что заказ ещё pending: отмена не может
+    // «понизить» уже оплаченный заказ.
+    const { error: closeErr } = await supabase.rpc('_close_pending_order', {
+      p_order_id: order.id,
+      p_note: 'платёж отменён — баллы вернулись',
+    });
+    if (closeErr) console.error('_close_pending_order failed', order.id, closeErr.message);
+    return OK({ ok: true, canceled: true });
   }
 
   if (refunded) {

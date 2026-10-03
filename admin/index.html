@@ -112,8 +112,9 @@ d.setAttribute('data-theme',t);}catch(e){d.setAttribute('data-theme','industrial
 
       <h3 data-sect="sales" style="margin-top:32px">Ожидают подтверждения</h3>
       <p class="dim" style="font-size:14px" id="pendingHint">
-        Появляется, только если подтверждение выше переключено на «вручную»:
-        оплаченные заказы, у которых ещё нет лицензии.
+        Оплаченные заказы, которые ещё не обработаны: при ручном подтверждении —
+        ждущие «Выдать»; в любом режиме — дубли (повторная оплата игры, которая
+        уже есть у игрока) с пометкой, что нужен возврат.
       </p>
       <div class="rows" id="pendingOrders"></div>
 
@@ -759,6 +760,7 @@ async function loadPendingOrders() {
   box.innerHTML = rows.map((o) => `
     <div class="row" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:220px">
+        ${o.duplicate ? '<div class="dim" style="color:var(--y-warm,#ffa300);font-size:13px;margin-bottom:4px">⚠ ДУБЛЬ: игра уже есть у игрока. Верните оплату в кабинете ЮKassa — после возврата запись исчезнет сама. «Скрыть» уберёт её без возврата.</div>' : ''}
         <b>${esc(o.nickname || o.email)}</b>
         <span class="dim" style="font-size:13px">${esc(o.email)}</span><br>
         <span class="dim" style="font-size:13px">
@@ -767,7 +769,7 @@ async function loadPendingOrders() {
           ${o.paid_at ? esc(day(o.paid_at)) : '—'}
         </span>
       </div>
-      <button class="btn solid" data-confirm="${esc(o.id)}">Выдать</button>
+      <button class="btn ${o.duplicate ? 'quiet' : 'solid'}" data-confirm="${esc(o.id)}">${o.duplicate ? 'Скрыть' : 'Выдать'}</button>
     </div>`).join('');
 
   box.querySelectorAll('[data-confirm]').forEach((btn) => {
@@ -776,7 +778,7 @@ async function loadPendingOrders() {
       try {
         const { error } = await supabase.rpc('admin_confirm_order', { p_order_id: btn.dataset.confirm });
         if (error) throw error;
-        say('Лицензия выдана.', 'ok');
+        say('Готово.', 'ok');
         await loadPendingOrders();
       } catch (err) { say(humanError(err)); btn.disabled = false; }
     };

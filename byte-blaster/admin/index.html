@@ -370,6 +370,62 @@
            платежа — брошенная корзина лимит не съедает. «Игра» выдаёт лицензию
            сразу, без денег: навсегда или на срок. Набор тот же, что в админке
            студии: коды общие на все игры. -->
+      <h2 data-sect="sales" style="margin-top:34px">ПОДТВЕРЖДЕНИЕ ОПЛАТЫ</h2>
+      <p class="dim" style="font-size:13px;max-width:640px">
+        Автоматически — лицензия и баллы выдаются сразу после того, как платёж
+        подтвердит сама ЮKassa. Вручную — платёж проверяется так же, но заказ
+        ждёт кнопки «Выдать» в очереди ниже.
+      </p>
+      <div id="gaPayAuto"></div>
+
+      <h2 data-sect="sales" style="margin-top:34px">ОЖИДАЮТ ПОДТВЕРЖДЕНИЯ</h2>
+      <p class="dim" style="font-size:13px;max-width:640px" id="gaPendingHint">
+        Оплаченные заказы, ещё не обработанные: при ручном подтверждении — ждут
+        «Выдать»; в любом режиме — дубли (повторная оплата уже открытой игры) с
+        пометкой, что нужен возврат в кабинете ЮKassa.
+      </p>
+      <div id="gaPending"></div>
+
+      <h2 data-sect="sales" style="margin-top:34px">РАСПРОДАЖИ</h2>
+      <p class="dim" style="font-size:13px;max-width:640px">
+        Временная скидка процентом либо суммой (сразу в рублях и в долларах —
+        заказ идёт в валюте аккаунта). С промокодом не суммируется: игрок платит
+        меньшую из двух цен.
+      </p>
+      <div class="gaGrid" style="max-width:640px">
+        <input type="hidden" id="gaSlId">
+        <div>
+          <label class="gaLabel">НАЗВАНИЕ</label>
+          <input type="text" id="gaSlTitle" class="gaInput" maxlength="80" placeholder="Осенняя распродажа">
+        </div>
+        <div>
+          <label class="gaLabel">СКИДКА, %</label>
+          <input type="number" id="gaSlPercent" class="gaInput" min="1" max="99" placeholder="30">
+        </div>
+        <div>
+          <label class="gaLabel">…ИЛИ СУММОЙ, ₽</label>
+          <input type="number" id="gaSlRub" class="gaInput" min="1" step="1" placeholder="30">
+        </div>
+        <div>
+          <label class="gaLabel">…И В ДОЛЛАРАХ, $</label>
+          <input type="number" id="gaSlUsd" class="gaInput" min="0.01" step="0.01" placeholder="0.50">
+        </div>
+        <div>
+          <label class="gaLabel">С ДАТЫ (ПУСТО — СРАЗУ)</label>
+          <input type="date" id="gaSlStart" class="gaInput">
+        </div>
+        <div>
+          <label class="gaLabel">ПО ДАТУ ВКЛЮЧИТЕЛЬНО</label>
+          <input type="date" id="gaSlEnd" class="gaInput">
+        </div>
+      </div>
+      <p style="margin-top:14px">
+        <button class="btn solid" id="gaSlSave" type="button">СОХРАНИТЬ РАСПРОДАЖУ</button>
+        <button class="btn ghost" id="gaSlReset" type="button">ОЧИСТИТЬ ФОРМУ</button>
+      </p>
+      <div class="msg" id="gaSlMsg"></div>
+      <div class="tw" style="margin-top:14px"><table id="gaSalesTbl"></table></div>
+
       <h2 data-sect="sales" style="margin-top:34px">ПРОМОКОДЫ</h2>
       <p class="dim" style="font-size:14px">
         Код со скидкой игрок вводит на странице покупки, код на игру — в своём
@@ -461,6 +517,8 @@
              border:1px solid var(--line); border-radius:3px; color:var(--text);
              font-family:var(--mono); font-size:14px; }
   .gaInput:focus { outline:none; border-color:var(--cyan); }
+  .gaGrid { display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; margin-top:14px; }
+  @media (max-width:560px) { .gaGrid { grid-template-columns:1fr; } }
   #gameAdmin table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; }
   #gameAdmin th { text-align:left; padding:9px 10px; color:var(--dim); font-weight:normal;
                   border-bottom:1px solid var(--line); white-space:nowrap; }
@@ -714,7 +772,9 @@ function say(text, kind = 'err') {
   if (kind === 'ok') setTimeout(() => { box.style.display = 'none'; }, 4000);
 }
 
-const money = (kop) => (kop / 100).toLocaleString('ru-RU') + ' ₽';
+const money = (kop, cur = 'RUB') => cur === 'RUB'
+  ? (kop / 100).toLocaleString('ru-RU') + ' ₽'
+  : '$' + (kop / 100).toFixed(2);
 const mb = (b) => b ? (b / 1048576).toFixed(1) + ' МБ' : '—';
 const day = (iso) => new Date(iso).toLocaleDateString('ru-RU');
 
@@ -1058,6 +1118,177 @@ async function loadPlayers() {
   // построения строк — то есть до того, как в таблице появилась хоть одна.
   paintNickBadges($('playersTbl')).catch(() => {});
 }
+
+// ── Подтверждение оплаты: автоматически / вручную ──────────────────────────
+// Тот же переключатель (app_settings.payments_auto_grant), что и на студийной
+// админке — он один на весь сайт, здесь просто своя карточка для него.
+async function loadPayAutoToggle() {
+  const s = await getSettings();
+  const auto = s.payments_auto_grant !== false;
+  $('gaPayAuto').innerHTML = `<div class="rowline">
+      <span>${auto ? 'Автоматически' : 'Вручную'}</span>
+      <button class="btn ${auto ? 'ghost' : 'primary'}" id="gaPayAutoBtn">
+        ${auto ? 'ПЕРЕКЛЮЧИТЬ НА ВРУЧНУЮ' : 'ПЕРЕКЛЮЧИТЬ НА АВТОМАТИЧЕСКИ'}
+      </button>
+    </div>`;
+  $('gaPayAutoBtn').onclick = () => toggle($('gaPayAutoBtn'), 'payments_auto_grant', !auto)
+    .then(() => Promise.all([loadPayAutoToggle(), loadPendingOrders()]));
+}
+
+// ── Очередь «Ожидают подтверждения» ─────────────────────────────────────────
+// Показывает и покупки Byte Blaster, и пополнения баланса — оба вида заказа
+// идут через один и тот же payments_auto_grant.
+async function loadPendingOrders() {
+  let rows;
+  try {
+    const { data, error } = await supabase.rpc('admin_pending_orders');
+    if (error) throw error;
+    rows = (data || []).filter((o) => o.kind === 'wallet_topup' || o.game_slug === GAME);
+  } catch (err) {
+    $('gaPending').innerHTML = `<div class="rowline"><span class="dim">${esc(humanError(err))}</span></div>`;
+    return;
+  }
+
+  $('gaPendingHint').style.display = rows.length ? 'none' : '';
+  if (!rows.length) { $('gaPending').innerHTML = ''; return; }
+
+  $('gaPending').innerHTML = rows.map((o) => `
+    <div class="rowline" style="align-items:flex-start">
+      <div>
+        ${o.duplicate ? '<div class="dim" style="color:#ffa300;font-size:12px;margin-bottom:4px">⚠ ДУБЛЬ — игра уже есть у игрока, верните оплату в кабинете ЮKassa</div>' : ''}
+        <b>${esc(o.nickname || o.email)}</b>
+        <span class="dim">${esc(o.email)}</span><br>
+        <span class="dim" style="font-size:12px">
+          ${o.kind === 'wallet_topup' ? '💳 Пополнение баланса' : 'Byte Blaster'} ·
+          ${esc(money(o.amount, o.currency))}${o.promo_code ? ' · промокод ' + esc(o.promo_code) : ''} ·
+          ${o.paid_at ? esc(day(o.paid_at)) : '—'}
+        </span>
+      </div>
+      <button class="btn ${o.duplicate ? 'ghost' : 'primary'}" data-confirm="${esc(o.id)}">${o.duplicate ? 'СКРЫТЬ' : 'ВЫДАТЬ'}</button>
+    </div>`).join('');
+
+  $('gaPending').querySelectorAll('[data-confirm]').forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const { error } = await supabase.rpc('admin_confirm_order', { p_order_id: btn.dataset.confirm });
+        if (error) throw error;
+        say('Готово.', 'ok');
+        await loadPendingOrders();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+}
+
+// ── Распродажи — только на Byte Blaster: игру за игроков выбирать не нужно ──
+function saleGives(s) {
+  if (s.percent_off) return `−${s.percent_off}%`;
+  return `−${(s.amount_off_rub / 100).toLocaleString('ru-RU')} ₽ / −$${(s.amount_off_usd / 100).toFixed(2)}`;
+}
+function localDay(iso) {
+  const d = new Date(iso);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function clearSaleForm() {
+  ['gaSlId', 'gaSlTitle', 'gaSlPercent', 'gaSlRub', 'gaSlUsd', 'gaSlStart', 'gaSlEnd']
+    .forEach((id) => { $(id).value = ''; });
+}
+async function loadSalesAdmin() {
+  const { data, error } = await supabase.rpc('admin_sales_list');
+  if (error) {
+    $('gaSalesTbl').innerHTML = `<tr><td class="dim">${esc(humanError(error))}</td></tr>`;
+    return;
+  }
+  const rows = (data || []).filter((s) => (s.games || []).includes(GAME));
+  const status = { live: 'идёт', scheduled: 'запланирована', ended: 'закончилась', off: 'выключена' };
+  $('gaSalesTbl').innerHTML = rows.length
+    ? '<tr><th>Название</th><th>Скидка</th><th>Период</th><th>Статус</th><th></th></tr>' +
+      rows.map((s) => `<tr>
+          <td>${esc(s.title)}</td>
+          <td>${esc(saleGives(s))}</td>
+          <td>${esc(day(s.starts_at))} — ${esc(day(s.ends_at))}</td>
+          <td><span class="chip ${s.status === 'live' ? '' : 'off'}">${esc(status[s.status] || s.status)}</span></td>
+          <td>
+            <button class="btn ghost" data-sl-edit="${esc(s.id)}">В ФОРМУ</button>
+            <button class="btn ghost" data-sl-toggle="${esc(s.id)}">${s.active ? 'ВЫКЛЮЧИТЬ' : 'ВКЛЮЧИТЬ'}</button>
+            <button class="btn ghost" data-sl-del="${esc(s.id)}">УДАЛИТЬ</button>
+          </td>
+        </tr>`).join('')
+    : '<tr><td class="dim">Распродаж пока нет</td></tr>';
+
+  const byId = new Map(rows.map((s) => [s.id, s]));
+  $('gaSalesTbl').querySelectorAll('[data-sl-edit]').forEach((btn) => {
+    btn.onclick = () => {
+      const s = byId.get(btn.dataset.slEdit);
+      if (!s) return;
+      $('gaSlId').value = s.id;
+      $('gaSlTitle').value = s.title;
+      $('gaSlPercent').value = s.percent_off ?? '';
+      $('gaSlRub').value = s.amount_off_rub ? s.amount_off_rub / 100 : '';
+      $('gaSlUsd').value = s.amount_off_usd ? s.amount_off_usd / 100 : '';
+      $('gaSlStart').value = localDay(s.starts_at);
+      $('gaSlEnd').value = localDay(s.ends_at);
+      $('gaSlTitle').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+  });
+  $('gaSalesTbl').querySelectorAll('[data-sl-toggle]').forEach((btn) => {
+    btn.onclick = async () => {
+      const s = byId.get(btn.dataset.slToggle);
+      if (!s) return;
+      btn.disabled = true;
+      try {
+        const { error: err } = await supabase.rpc('admin_sale_set_active', { p_id: s.id, p_active: !s.active });
+        if (err) throw err;
+        await loadSalesAdmin();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+  $('gaSalesTbl').querySelectorAll('[data-sl-del]').forEach((btn) => {
+    btn.onclick = async () => {
+      const s = byId.get(btn.dataset.slDel);
+      if (!s || !confirm(`Удалить распродажу «${s.title}»?`)) return;
+      btn.disabled = true;
+      try {
+        const { error: err } = await supabase.rpc('admin_sale_delete', { p_id: s.id });
+        if (err) throw err;
+        if ($('gaSlId').value === s.id) clearSaleForm();
+        await loadSalesAdmin();
+      } catch (err) { say(humanError(err)); btn.disabled = false; }
+    };
+  });
+}
+$('gaSlReset').onclick = clearSaleForm;
+$('gaSlSave').onclick = async () => {
+  const percent = $('gaSlPercent').value.trim();
+  const rub = $('gaSlRub').value.trim();
+  const usd = $('gaSlUsd').value.trim();
+  if (!$('gaSlTitle').value.trim()) { say('Укажите название распродажи.'); return; }
+  if (percent && (rub || usd)) { say('Скидка — что-то одно: проценты или сумма.'); return; }
+  if (!percent && !(rub && usd)) { say('Укажите проценты либо сумму сразу в рублях и в долларах.'); return; }
+  if (!$('gaSlEnd').value) { say('Укажите, когда распродажа закончится.'); return; }
+
+  $('gaSlSave').disabled = true;
+  try {
+    const { error } = await supabase.rpc('admin_sale_save', {
+      p_id: $('gaSlId').value || null,
+      p_title: $('gaSlTitle').value.trim(),
+      p_percent_off: percent ? Number(percent) : null,
+      p_amount_off_rub: rub ? Math.round(Number(rub) * 100) : null,
+      p_amount_off_usd: usd ? Math.round(Number(usd) * 100) : null,
+      p_starts_at: $('gaSlStart').value ? new Date($('gaSlStart').value).toISOString() : null,
+      p_ends_at: $('gaSlEnd').value
+        ? new Date($('gaSlEnd').value + 'T23:59:59').toISOString() : null,
+      p_active: true,
+      p_games: [GAME],
+    });
+    if (error) throw error;
+    say('Распродажа сохранена.', 'ok');
+    clearSaleForm();
+    await loadSalesAdmin();
+  } catch (err) { say(humanError(err)); }
+  finally { $('gaSlSave').disabled = false; }
+};
 
 async function loadOrders() {
   const rows = (await adminListOrders()).filter((o) => o.game_slug === GAME);
@@ -1848,7 +2079,8 @@ async function refreshAll() {
   await loadGameIcon();                    // иконку берёт таблица игроков
   await fillPromoGames();                  // названия игр нужны списку кодов
   await Promise.all([loadStats(), loadChannels(), loadReleases(), loadPlayers(), loadOrders(),
-    loadAnnouncements(), loadBadges(), loadRegionRequests(), loadBans(), loadPromos()]);
+    loadAnnouncements(), loadBadges(), loadRegionRequests(), loadBans(), loadPromos(),
+    loadPayAutoToggle(), loadPendingOrders(), loadSalesAdmin()]);
 }
 
 // График подстраивается под ширину окна — перерисовываем без перезапроса.

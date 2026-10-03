@@ -264,6 +264,49 @@ catch(e){d.setAttribute('data-site-lang','ru');}})();
         </h3>
         <div class="rows" id="lib"></div>
 
+        <!-- ── Баланс и баллы ──────────────────────────────────────────────
+             Общий кошелёк и баллы для всего каталога Pixset Studio — не
+             привязаны к одной игре. Баланс — пополняемый «магазинный кредит»:
+             закинул один раз, дальше расплачиваешься им за любую игру без
+             нового платежа. Баллы — 10% с КАЖДОЙ покупки игры (не с
+             пополнения) — списываются скидкой на будущую покупку, на
+             странице оплаты нужной игры. -->
+        <h3 data-sect="games" style="margin-top:26px" id="wallet">
+          <span data-l="ru">Баланс и баллы</span><span data-l="en">Balance and points</span>
+        </h3>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:14px">
+          <div>
+            <div class="dim" style="font-size:12px"><span data-l="ru">БАЛАНС</span><span data-l="en">BALANCE</span></div>
+            <div class="mono" id="walletBalance" style="font-size:20px;color:var(--y)">—</div>
+          </div>
+          <div>
+            <div class="dim" style="font-size:12px"><span data-l="ru">БАЛЛЫ</span><span data-l="en">POINTS</span></div>
+            <div class="mono" id="pointsBalance" style="font-size:20px;color:var(--y)">—</div>
+          </div>
+        </div>
+        <p class="dim" style="font-size:13px;margin-bottom:12px">
+          <span data-l="ru">Баланс тратится только на игры каталога — вывести или передать другому нельзя. Баллы — бонус 10% с каждой покупки игры (пополнение баллов не даёт); списать их можно скидкой на странице покупки нужной игры.</span>
+          <span data-l="en">Balance can only be spent on games in the catalog — it can't be withdrawn or transferred. Points are a 10% bonus on every game purchase (topping up doesn't earn points); redeem them as a discount on that game's purchase page.</span>
+        </p>
+        <div id="topupBox" hidden>
+          <div class="field" style="max-width:240px">
+            <label for="topupAmount"><span data-l="ru">ПОПОЛНИТЬ, ₽</span><span data-l="en">TOP UP, ₽</span></label>
+            <input type="number" id="topupAmount" min="100" step="50" value="500" inputmode="numeric">
+          </div>
+          <button class="btn" id="topupBtn">
+            <span data-l="ru">Пополнить баланс</span><span data-l="en">Top up balance</span>
+          </button>
+          <p class="dim" style="font-size:13px;margin-top:6px">
+            <span data-l="ru">Минимум 100 ₽. Оплата — через ЮKassa, как при покупке игры.</span>
+            <span data-l="en">Minimum 100 ₽. Paid through YooKassa, same as buying a game.</span>
+          </p>
+        </div>
+        <p class="dim" style="font-size:13px" id="topupCurrencyNote" hidden>
+          <span data-l="ru">Пополнение баланса пока доступно только рублёвым аккаунтам.</span>
+          <span data-l="en">Topping up is currently only available for RUB accounts.</span>
+        </p>
+        <div class="msg" id="walletMsg"></div>
+
         <!-- ── Промокод ────────────────────────────────────────────────────
              Здесь активируются коды, которые дают саму игру — насовсем или на
              срок. Коды со скидкой сюда не годятся: они работают при оплате, и
@@ -507,6 +550,7 @@ import {
   getProfile, getGames, getEntitlements, getDevices, revokeDevice,
   updateNickname, updateBio, BIO_MAX, changeEmail, changePassword, requestPasswordCode,
   deleteAccount, getMyOrders, promoPreview, promoRedeem,
+  getWallet, getPoints, startWalletTopup,
   searchPlayers, sendFriendRequest, acceptFriend, removeFriend, getFriends,
   updateAvatar, removeAvatar, avatarFromFile,
   humanError, NICKNAME_RE,
@@ -1068,6 +1112,7 @@ async function renderLibrary() {
   const byslug = new Map(games.map((g) => [g.slug, g]));
   catalog = byslug;                       // покупкам нужны названия и иконки
   renderOrders();
+  renderWallet();
 
   // Тема оформления Byte Blaster открывается владельцу лицензии. Сообщаем об
   // этом сразу после входа, иначе она появилась бы в меню тем только на
@@ -1177,6 +1222,19 @@ $('promoBtn').onclick = () => busy($('promoBtn'), async () => {
   try { await redeemPromo(); }
   catch (err) { say($('promoMsg'), humanError(err)); }
 });
+
+$('topupBtn').onclick = () => busy($('topupBtn'), async () => {
+  clear($('walletMsg'));
+  const rub = Number($('topupAmount').value);
+  if (!rub || rub < 100) {
+    say($('walletMsg'), L('Минимум пополнения — 100 ₽.', 'The minimum top-up is 100 ₽.'));
+    return;
+  }
+  try {
+    const { payment_url } = await startWalletTopup(Math.round(rub * 100));
+    location.href = payment_url;             // дальше — ЮKassa, как при покупке игры
+  } catch (err) { say($('walletMsg'), humanError(err)); }
+});
 $('promoInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); $('promoBtn').click(); }
 });
@@ -1217,7 +1275,25 @@ async function renderOrders() {
     };
     $('orders').innerHTML = orders.length
       ? orders.map((o) => {
+          // Пополнение баланса — своя иконка вместо иконки игры (её и нет,
+          // game_slug у такого заказа пустой).
+          if (o.kind === 'wallet_topup') {
+            return `
+            <div class="row" style="display:flex;align-items:center;gap:12px">
+              <span style="font-size:22px;width:36px;text-align:center;flex-shrink:0">💳</span>
+              <div style="flex:1;min-width:0">
+                <b>${esc(L('Пополнение баланса', 'Balance top-up'))}</b>
+                <div class="dim" style="font-size:14px">
+                  ${new Date(o.created_at).toLocaleDateString(locale())} · ${money(o.amount, o.currency)}
+                </div>
+              </div>
+              <span class="badge ${o.status === 'paid' ? '' : 'mute'}">${status[o.status] || o.status}</span>
+            </div>`;
+          }
           const g = catalog.get(o.game_slug) || { title: o.game_slug };
+          const ptsBits = [];
+          if (o.points_used > 0) ptsBits.push('−' + money(o.points_used, o.currency) + ' ' + L('баллами', 'in points'));
+          if (o.points_earned > 0) ptsBits.push('+' + money(o.points_earned, o.currency) + ' ' + L('баллов', 'points earned'));
           return `
           <div class="row" style="display:flex;align-items:center;gap:12px">
             ${gameIconHtml(g.icon_url, g.title)}
@@ -1226,6 +1302,7 @@ async function renderOrders() {
               <div class="dim" style="font-size:14px">
                 ${new Date(o.created_at).toLocaleDateString(locale())} · ${money(o.amount, o.currency)}
               </div>
+              ${ptsBits.length ? `<div class="dim" style="font-size:12px">${esc(ptsBits.join(' · '))}</div>` : ''}
             </div>
             <span class="badge ${o.status === 'paid' ? '' : 'mute'}">${status[o.status] || o.status}</span>
           </div>`;
@@ -1236,6 +1313,31 @@ async function renderOrders() {
     $('orders').innerHTML = `<div class="row"><span class="dim">${esc(L(
       'Не удалось загрузить покупки.', 'Could not load your purchases.'))}</span></div>`;
   }
+}
+
+/** Баланс и баллы — общие для всего каталога, не привязаны к одной игре. */
+async function renderWallet() {
+  const money = (a, c) => c === 'USD' ? '$' + (a / 100).toFixed(2)
+                                      : (a / 100).toLocaleString(locale()) + ' ₽';
+  let currency = 'RUB';
+  try {
+    const profile = await getProfile(session.user.id);
+    if (profile.currency) currency = profile.currency;
+  } catch { /* оставим RUB по умолчанию — тот же выбор, что и в других местах */ }
+
+  try {
+    const [wallet, points] = await Promise.all([getWallet(), getPoints()]);
+    $('walletBalance').textContent = money(wallet.balance, currency);
+    $('pointsBalance').textContent = money(points.balance, currency);
+  } catch {
+    $('walletBalance').textContent = '—';
+    $('pointsBalance').textContent = '—';
+  }
+
+  // Пополнение сейчас доступно только рублёвым аккаунтам — так же, как обычная
+  // оплата: ЮKassa принимает только российские карты.
+  if (currency === 'RUB') { show($('topupBox')); $('topupCurrencyNote').hidden = true; }
+  else { $('topupBox').hidden = true; show($('topupCurrencyNote')); }
 }
 
 // ── Настройки профиля ───────────────────────────────────────────────────
