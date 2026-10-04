@@ -242,7 +242,7 @@ window.PIXSET_ACCOUNT_URL = '/byte-blaster/account/';
 import {
   supabase, getGames, getEntitlements, getProfile, startPayment, getSettings,
   detectCountry, formatPrice, humanError, promoPreview, promoRedeem,
-  getWallet, getPoints, payWithWallet,
+  getWallet, getPoints, payWithWallet, hasPaidPendingOrder,
 } from '/byte-blaster/assets/pixset-auth.js?v=822f1690';
 import { loadSales, salePriceHtml, saleBadgeHtml } from '/byte-blaster/assets/pixset-sales.js';
 
@@ -280,6 +280,19 @@ let points = { balance: 0 };
 let usePoints = false;
 let baseAmountForPoints = null;
 let currentGame = null;
+
+// Пока идёт любая попытка оплаты (картой или с баланса), обе кнопки и чекбокс
+// баллов заблокированы: двойной клик или «карта, а потом ещё и баланс» не должны
+// породить два заказа. Серверная защита в create_order всё равно есть — это
+// первая линия, чтобы даже не ходить за отказом.
+let busy = false;
+function lockPurchase(on) {
+  busy = on;
+  for (const id of ['buyBtn', 'walletBtn', 'pointsToggle']) {
+    const el = $(id);
+    if (el) el.disabled = on;
+  }
+}
 
 function pointsDiscount() {
   if (!usePoints || !baseAmountForPoints) return 0;
@@ -371,6 +384,59 @@ async function render() {
   const game = games.find((g) => g.slug === GAME);
   if (!game) { say('Игра пока не продаётся.', 'The game is not on sale yet.'); return; }
 
+  // Владение проверяем ПЕРВЫМ делом — до цены, распродажи, баллов и баланса.
+  // Раньше это было наоборот: paintPrice() уже успевала показать цену и
+  // включить блоки баллов/кошелька, а «уже куплено» просто пряталось поверх
+  // части из них (promoBox, кнопка) — pointsBox/walletBox оставались висеть
+  // как ни в чём не бывало. Теперь для владельца лицензии вся эта работа
+  // просто не выполняется.
+  if (session) {
+    const mine = await getEntitlements();
+    const own = mine.find((e) => e.game_slug === GAME);
+    if (own) {
+      $('promoBox').hidden = true;
+      $('pointsBox').hidden = true;
+      $('walletBox').hidden = true;
+      $('pointsEarnHint').hidden = true;
+      $('price').textContent = '';
+      $('priceNote').innerHTML = own.expires_at
+        ? bi(`Доступ открыт до ${fmtDate(own.expires_at, 'ru')}`,
+             `Access open until ${fmtDate(own.expires_at, 'en')}`)
+        : bi('Игра уже на вашем аккаунте', 'Already on your account');
+      $('buyBtn').outerHTML =
+        `<a class="btn primary" href="/byte-blaster/game/">${
+          bi('ИГРАТЬ<small>полная версия открыта</small>',
+             'PLAY<small>full version unlocked</small>')}</a>`;
+      $('hint').innerHTML = own.expires_at
+        ? bi('Это временный доступ по промокоду. Когда срок выйдет, игру можно купить насовсем.',
+             'This is temporary access from a promo code. When it runs out you can buy the game for good.')
+        : bi('Лицензия действует на всех устройствах, где вы вошли в аккаунт.',
+             'Your licence works on every device where you sign in.');
+      return;
+    }
+  }
+
+  // Оплата уже прошла, а игра ещё не выдана: второй платёж только потратил бы
+  // деньги. Форму покупки не показываем совсем — вместо неё объяснение.
+  if (session) {
+    let waiting = false;
+    try { waiting = await hasPaidPendingOrder(GAME); } catch { /* не критично — сервер всё равно откажет */ }
+    if (waiting) {
+      $('promoBox').hidden = true;
+      $('pointsBox').hidden = true;
+      $('walletBox').hidden = true;
+      $('pointsEarnHint').hidden = true;
+      $('price').textContent = '';
+      $('priceNote').innerHTML = bi('Оплата получена — открываем игру', 'Payment received — unlocking your copy');
+      $('buyBtn').outerHTML =
+        `<a class="btn primary" href="/byte-blaster/account/">${bi('В АККАУНТ', 'GO TO ACCOUNT')}</a>`;
+      $('hint').innerHTML = bi(
+        'Платить ещё раз не нужно. Если игра не откроется в течение часа, напишите в поддержку.',
+        'No need to pay again. If the game does not unlock within an hour, contact support.');
+      return;
+    }
+  }
+
   salesMap = await loadSales();
   paintPrice(game);
 
@@ -437,29 +503,6 @@ async function render() {
     $('promoBox').hidden = false;
     if (settings.payments_enabled) setBuyLabel('КУПИТЬ', 'BUY NOW');
     else payOff();
-    return;
-  }
-
-  // У владельца лицензии всегда «Играть» — независимо от того, работает ли
-  // сейчас приём оплаты.
-  const mine = await getEntitlements();
-  const own = mine.find((e) => e.game_slug === GAME);
-  if (own) {
-    $('promoBox').hidden = true;
-    $('price').textContent = '';
-    $('priceNote').innerHTML = own.expires_at
-      ? bi(`Доступ открыт до ${fmtDate(own.expires_at, 'ru')}`,
-           `Access open until ${fmtDate(own.expires_at, 'en')}`)
-      : bi('Игра уже на вашем аккаунте', 'Already on your account');
-    $('buyBtn').outerHTML =
-      `<a class="btn primary" href="/byte-blaster/game/">${
-        bi('ИГРАТЬ<small>полная версия открыта</small>',
-           'PLAY<small>full version unlocked</small>')}</a>`;
-    $('hint').innerHTML = own.expires_at
-      ? bi('Это временный доступ по промокоду. Когда срок выйдет, игру можно купить насовсем.',
-           'This is temporary access from a promo code. When it runs out you can buy the game for good.')
-      : bi('Лицензия действует на всех устройствах, где вы вошли в аккаунт.',
-           'Your licence works on every device where you sign in.');
     return;
   }
 
@@ -633,16 +676,19 @@ async function buy() {
     return;
   }
 
+  if (busy) return;                     // второй клик, пока первый идёт, ничего не делает
   const btn = $('buyBtn');
-  btn.disabled = true;
+  lockPurchase(true);
   setBuyLabel('ГОТОВИМ ОПЛАТУ…', 'PREPARING PAYMENT…');
   try {
-    const { payment_url } = await startPayment(GAME, appliedPromo);
+    // usePoints обязателен: без него скидка баллами показывалась бы на странице,
+    // но не применялась бы к платежу.
+    const { payment_url } = await startPayment(GAME, appliedPromo, usePoints);
     say('Открываем страницу оплаты…', 'Opening the payment page…', 'ok');
-    location.href = payment_url;
+    location.href = payment_url;        // кнопки остаются заблокированными до ухода со страницы
   } catch (err) {
     say(humanError(err), 'Could not create the payment. Please try again later.');
-    btn.disabled = false;
+    lockPurchase(false);
     setBuyLabel('КУПИТЬ', 'BUY NOW');
   }
 }
@@ -656,17 +702,19 @@ $('pointsToggle').onchange = () => {
 };
 
 async function payWallet() {
+  if (busy) return;
   const btn = $('walletBtn');
-  btn.disabled = true;
   const label = btn.innerHTML;
+  lockPurchase(true);
   btn.innerHTML = bi('ОПЛАЧИВАЕМ…', 'PAYING…');
   try {
     const { order_id } = await payWithWallet(GAME, appliedPromo, usePoints);
     location.href = '/byte-blaster/thank-you/?order=' + encodeURIComponent(order_id);
   } catch (err) {
     say(humanError(err), 'Could not pay from balance. Please try again later.');
-    btn.disabled = false;
+    lockPurchase(false);
     btn.innerHTML = label;
+    renderPointsAndWallet();
   }
 }
 $('walletBtn').onclick = payWallet;

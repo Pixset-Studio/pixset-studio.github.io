@@ -113,20 +113,20 @@ Deno.serve(async (req) => {
       .update({ status: 'paid', paid_at: new Date().toISOString() })
       .eq('id', order.id);
 
-    // Автоматическая выдача — как и было — либо ручная, через кнопку в
-    // админке (admin_confirm_order). Переключатель — app_settings.payments_
-    // auto_grant. Строка может отсутствовать (миграция ещё не накатана) или
-    // значение может быть непривычного типа — в обоих случаях по умолчанию
-    // ведём себя как раньше (автоматически), чтобы включение этой миграции
-    // само по себе не поставило продажи на паузу.
-    const { data: settingRow } = await supabase
-      .from('app_settings').select('value').eq('key', 'payments_auto_grant').maybeSingle();
-    const rawSetting = settingRow?.value;
-    const autoGrant = !(rawSetting === false || rawSetting === 'false');
-
-    if (!autoGrant) {
-      // Заказ остаётся в очереди «Ожидают подтверждения» в админке: выдаст
-      // её admin_confirm_order по нажатию кнопки владельцем студии.
+    // Автоматическая выдача — либо ручная, через кнопку «Выдать» в админке
+    // (admin_confirm_order). payments_auto_grant() — отдельная функция (0033):
+    // раньше настройка писалась
+    // через общую admin_set_setting, и похоже, что для нового ключа она тихо не
+    // срабатывала (обновление не находило строки, которой ещё не было). Теперь и
+    // чтение, и запись идут через код, который я полностью контролирую.
+    const { data: autoGrant, error: autoErr } = await supabase.rpc('payments_auto_grant');
+    if (autoErr) {
+      // Сбой самой проверки — не повод задержать игроку доступ, за который он
+      // уже заплатил: выдаём как при автоматическом режиме (это и есть
+      // поведение по умолчанию, когда настройки вовсе нет) и просто
+      // записываем ошибку в лог, чтобы её можно было заметить и разобрать.
+      console.error('payments_auto_grant check failed', order.id, autoErr.message);
+    } else if (autoGrant === false) {
       return OK({ ok: true, paid: true, granted: false, awaiting_manual_confirm: true });
     }
 

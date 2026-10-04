@@ -701,14 +701,17 @@ async function loadPayToggle() {
   };
 }
 
-// Переключатель «оплата подтверждается автоматически / вручную». Значение
-// читается из той же app_settings, что и payments_enabled выше — если строки
-// payments_auto_grant ещё нет (миграция 0030 не накатана), getSettings её
-// просто не вернёт, и код ниже читает это как «включено»: тот же безопасный
-// умолчательный выбор, что и в вебхуке (см. supabase/functions/yookassa-webhook).
+// Переключатель «оплата подтверждается автоматически / вручную». Раньше писался
+// через общую adminSetSetting и, похоже, тихо не срабатывал для этого ключа
+// (0033) — теперь чтение и запись идут через отдельные функции, которые я
+// полностью контролирую: payments_auto_grant() / admin_set_payments_auto_grant().
 async function loadPayAutoToggle() {
-  const s = await getSettings();
-  const auto = s.payments_auto_grant !== false;
+  const { data, error } = await supabase.rpc('payments_auto_grant');
+  if (error) {
+    $('payAutoToggle').innerHTML = `<div class="row"><span class="dim">${esc(humanError(error))}</span></div>`;
+    return;
+  }
+  const auto = data !== false;
 
   $('payAutoToggle').innerHTML = `
     <div class="row">
@@ -729,7 +732,8 @@ async function loadPayAutoToggle() {
     const btn = $('payAutoBtn');
     btn.disabled = true;
     try {
-      await adminSetSetting('payments_auto_grant', !auto);
+      const { error: setErr } = await supabase.rpc('admin_set_payments_auto_grant', { p_auto: !auto });
+      if (setErr) throw setErr;
       say(auto ? 'Подтверждение оплаты переключено на ручное.' : 'Подтверждение оплаты снова автоматическое.', 'ok');
       await loadPayAutoToggle();
       await loadPendingOrders();

@@ -609,6 +609,24 @@ export async function getMyOrders() {
 }
 
 /**
+ * Есть ли по игре оплаченный, но ещё не обработанный заказ — то есть игрок уже
+ * заплатил, а лицензия ждёт выдачи (ручное подтверждение или задержка вебхука).
+ * Пока это так, платить за игру ещё раз нельзя: create_order откажет, а страница
+ * покупки не должна даже предлагать.
+ */
+export async function hasPaidPendingOrder(gameSlug) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('game_slug', gameSlug)
+    .eq('status', 'paid')
+    .is('handled_at', null)
+    .limit(1);
+  if (error) throw error;
+  return (data || []).length > 0;
+}
+
+/**
  * Один заказ по id — для страницы «Спасибо за покупку» после оплаты.
  * RLS ("own orders") и так не даёт увидеть чужой заказ: пустой результат тут
  * означает либо неверный id, либо заказ принадлежит не этому игроку.

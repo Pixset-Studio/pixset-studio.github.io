@@ -487,6 +487,13 @@
       <h2 data-sect="sales" style="margin-top:34px">ЗАКАЗЫ</h2>
       <div class="tw"><table id="ordersTbl"></table></div>
 
+      <h2 data-sect="sales" style="margin-top:34px">СОБЫТИЯ ОПЛАТ</h2>
+      <p class="dim" style="font-size:13px;max-width:640px">
+        Уведомления от ЮKassa как есть. «Не найден» значит, что оплата пришла,
+        но заказ по ней не определился — лицензию нужно выдать вручную.
+      </p>
+      <div class="tw"><table id="gaEventsTbl"></table></div>
+
       <p style="margin-top:26px">
         <button class="btn ghost" id="gaRefresh" type="button">↻ ОБНОВИТЬ ДАННЫЕ</button>
       </p>
@@ -1120,19 +1127,34 @@ async function loadPlayers() {
 }
 
 // ── Подтверждение оплаты: автоматически / вручную ──────────────────────────
-// Тот же переключатель (app_settings.payments_auto_grant), что и на студийной
-// админке — он один на весь сайт, здесь просто своя карточка для него.
+// Тот же переключатель, что и на студийной админке — он один на весь сайт,
+// здесь просто своя карточка. Раньше писался через общую adminSetSetting и,
+// похоже, тихо не срабатывал для этого ключа — теперь свои функции
+// (payments_auto_grant() / admin_set_payments_auto_grant()), которые я
+// полностью контролирую, вместо общего механизма toggle().
 async function loadPayAutoToggle() {
-  const s = await getSettings();
-  const auto = s.payments_auto_grant !== false;
+  const { data, error } = await supabase.rpc('payments_auto_grant');
+  if (error) {
+    $('gaPayAuto').innerHTML = `<div class="rowline"><span class="dim">${esc(humanError(error))}</span></div>`;
+    return;
+  }
+  const auto = data !== false;
   $('gaPayAuto').innerHTML = `<div class="rowline">
       <span>${auto ? 'Автоматически' : 'Вручную'}</span>
       <button class="btn ${auto ? 'ghost' : 'primary'}" id="gaPayAutoBtn">
         ${auto ? 'ПЕРЕКЛЮЧИТЬ НА ВРУЧНУЮ' : 'ПЕРЕКЛЮЧИТЬ НА АВТОМАТИЧЕСКИ'}
       </button>
     </div>`;
-  $('gaPayAutoBtn').onclick = () => toggle($('gaPayAutoBtn'), 'payments_auto_grant', !auto)
-    .then(() => Promise.all([loadPayAutoToggle(), loadPendingOrders()]));
+  $('gaPayAutoBtn').onclick = async () => {
+    const btn = $('gaPayAutoBtn');
+    btn.disabled = true;
+    try {
+      const { error: setErr } = await supabase.rpc('admin_set_payments_auto_grant', { p_auto: !auto });
+      if (setErr) throw setErr;
+      say('Готово.', 'ok');
+      await Promise.all([loadPayAutoToggle(), loadPendingOrders()]);
+    } catch (err) { say(humanError(err)); btn.disabled = false; }
+  };
 }
 
 // ── Очередь «Ожидают подтверждения» ─────────────────────────────────────────

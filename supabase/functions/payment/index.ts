@@ -91,6 +91,35 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: `Bearer ${accessToken}` } } },
   );
 
+  // Сверка зависших платежей. Если игрок открыл платёж, ушёл и вернулся, у него
+  // остаётся pending-заказ с уже созданным платежом, и create_order не даст
+  // оформить заказ на другую сумму, пока тот не завершён. Срок жизни такого
+  // платежа мы не знаем, поэтому не гадаем по времени, а спрашиваем ЮKassa:
+  // если платёж уже отменён — освобождаем заказ и возвращаем баллы, и игрок
+  // может оформить заново. Ошибка сверки не фатальна — просто пойдём дальше.
+  try {
+    const { data: openOrders } = await admin
+      .from('orders')
+      .select('id, provider_ref')
+      .eq('user_id', user.id).eq('status', 'pending').eq('provider', 'yookassa')
+      .not('provider_ref', 'is', null)
+      .limit(10);
+    for (const o of openOrders ?? []) {
+      const r = await fetch(`${YOOKASSA_URL}/${o.provider_ref}`, {
+        headers: { Authorization: 'Basic ' + btoa(`${shopId}:${secretKey}`) },
+      });
+      if (!r.ok) continue;
+      const p = await r.json().catch(() => null);
+      if (p?.status === 'canceled') {
+        await admin.rpc('_close_pending_order', {
+          p_order_id: o.id, p_note: 'платёж отменён — баллы вернулись',
+        });
+      }
+    }
+  } catch (e) {
+    console.error('reconcile failed', e);
+  }
+
   const { data: orderId, error: orderError } = gameSlug
     ? await asUser.rpc('create_order', {
         p_game_slug: gameSlug,
@@ -154,6 +183,14 @@ Deno.serve(async (req) => {
 
   const payUrl = raw?.confirmation?.confirmation_url ?? null;
   const paymentId = raw?.id ? String(raw.id) : null;
+
+  // create_order вернул уже существующий заказ, и ЮKassa по тому же ключу
+  // идемпотентности отдала тот самый платёж — а он к этому моменту уже оплачен.
+  // Ссылки на оплату у оплаченного платежа нет, и это не ошибка: деньги пришли,
+  // вебхук вот-вот выдаст игру.
+  if (raw?.status === 'succeeded') {
+    return json({ error: 'Оплата уже прошла — доступ откроется в течение минуты.' }, 409);
+  }
 
   if (paymentId) {
     await admin.from('orders')
